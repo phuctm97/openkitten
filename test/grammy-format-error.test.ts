@@ -1,0 +1,37 @@
+import { convert } from "telegram-markdown-v2";
+import { assert, expect, test, vi } from "vitest";
+import { grammyFormatError } from "~/lib/grammy-format-error";
+
+vi.mock("telegram-markdown-v2", { spy: true });
+
+test("formats error with stack trace", () => {
+  const error = new Error("something broke");
+  const chunks = grammyFormatError(error);
+  expect(chunks.length).toBeGreaterThan(0);
+  const text = chunks.map((c) => c.text).join("\n");
+  expect(text).toContain("❌");
+  expect(text).toContain("An error occurred");
+  expect(text).toContain("something broke");
+  const chunk = chunks.at(0);
+  assert.isDefined(chunk);
+  assert.isDefined(chunk.markdown);
+  expect(chunk.markdown).toContain("```trace\n");
+});
+
+test("formats non-Error value", () => {
+  const chunks = grammyFormatError("raw string error");
+  const text = chunks.map((c) => c.text).join("\n");
+  expect(text).toContain("❌");
+  expect(text).toContain("An error occurred");
+  expect(text).toContain("raw string error");
+});
+
+test("falls back to plain text when conversion fails", () => {
+  vi.mocked(convert).mockImplementationOnce(() => {
+    throw new Error("conversion failed");
+  });
+  const chunks = grammyFormatError(new Error("fail"));
+  expect(chunks.length).toBeGreaterThan(0);
+  expect(chunks[0]?.markdown).toBeUndefined();
+  expect(chunks[0]?.text).toContain("An error occurred");
+});

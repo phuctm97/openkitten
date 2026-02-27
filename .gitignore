@@ -1,0 +1,12 @@
+__MACOSX
+.DS_Store
+node_modules
+*.tsbuildinfo
+*.db
+*.db-wal
+*.db-shm
+.env.local
+.env.*.local
+dist
+coverage
+.vendor

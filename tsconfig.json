@@ -1,0 +1,22 @@
+{
+  "include": [
+    "prepare.ts",
+    "drizzle.config.ts",
+    "vitest.config.ts",
+    "lib",
+    "test"
+  ],
+  "extends": "@tsconfig/bun/tsconfig.json",
+  "compilerOptions": {
+    "incremental": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "exactOptionalPropertyTypes": true,
+    "allowImportingTsExtensions": false,
+    "paths": {
+      "~/*": ["./*"]
+    }
+  }
+}
