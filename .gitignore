@@ -3,3 +3,5 @@ __MACOSX
 node_modules
 *.tsbuildinfo
 dist
+.env.local
+.env.*.local
