@@ -1,0 +1,13 @@
+{
+	"name": "@openkitten/bot",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"start": "bun run lib/index.ts"
+	},
+	"dependencies": {
+		"@opencode-ai/sdk": "^1.1.21",
+		"grammy": "^1.39.2"
+	}
+}
