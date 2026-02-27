@@ -1,8 +1,17 @@
+import type { BotCommand } from "@grammyjs/types";
 import type { Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { stopTyping } from "~/lib/events";
 import { getClient } from "~/lib/opencode";
 import * as state from "~/lib/state";
+
+export const BOT_COMMANDS: BotCommand[] = [
+	{ command: "start", description: "Connect to a project" },
+	{ command: "new", description: "Create a new session" },
+	{ command: "sessions", description: "List and switch sessions" },
+	{ command: "stop", description: "Abort the current request" },
+	{ command: "help", description: "Show help message" },
+];
 
 export function registerCommands(
 	bot: Bot,
@@ -98,5 +107,23 @@ export function registerCommands(
 		}
 
 		await ctx.reply("Sessions:", { reply_markup: keyboard });
+	});
+
+	bot.command("help", async (ctx) => {
+		await ctx.reply(
+			[
+				"OpenKitten - AI agent on Telegram",
+				"",
+				"Send any text message to chat with the AI.",
+				"The AI can browse the web, read/write files, and run commands.",
+				"",
+				"Commands:",
+				"/start - Connect to a project",
+				"/new - Create a new session",
+				"/sessions - List and switch sessions",
+				"/stop - Abort the current request",
+				"/help - Show this message",
+			].join("\n"),
+		);
 	});
 }

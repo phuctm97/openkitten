@@ -1,7 +1,8 @@
+import { autoRetry } from "@grammyjs/auto-retry";
 import type { Event } from "@opencode-ai/sdk/v2";
 import { createOpencodeServer } from "@opencode-ai/sdk/v2/server";
 import { Bot } from "grammy";
-import { registerCommands } from "~/lib/commands";
+import { BOT_COMMANDS, registerCommands } from "~/lib/commands";
 import { processEvent, stopTyping } from "~/lib/events";
 import { handleCallbackQuery, handleCustomTextInput } from "~/lib/handlers";
 import {
@@ -12,13 +13,40 @@ import {
 } from "~/lib/opencode";
 import * as state from "~/lib/state";
 
-async function main() {
-	const token = process.env.TELEGRAM_BOT_TOKEN;
-	const userId = Number(process.env.TELEGRAM_USER_ID);
+const BUSY_TIMEOUT_MS = 5 * 60 * 1000;
+const SESSION_LOCKED_RETRY_DELAY_MS = 1000;
+const SESSION_LOCKED_MAX_RETRIES = 3;
 
-	if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
-	if (!userId || Number.isNaN(userId))
-		throw new Error("TELEGRAM_USER_ID is required");
+function validateEnv(): { token: string; userId: number } {
+	const token = process.env.TELEGRAM_BOT_TOKEN;
+	if (!token) {
+		console.error(
+			"Missing TELEGRAM_BOT_TOKEN. Get one from @BotFather on Telegram.",
+		);
+		process.exit(1);
+	}
+
+	const rawUserId = process.env.TELEGRAM_USER_ID;
+	if (!rawUserId) {
+		console.error(
+			"Missing TELEGRAM_USER_ID. Send /start to @userinfobot on Telegram to find your numeric user ID.",
+		);
+		process.exit(1);
+	}
+
+	const userId = Number(rawUserId);
+	if (Number.isNaN(userId) || userId <= 0) {
+		console.error(
+			`Invalid TELEGRAM_USER_ID: "${rawUserId}". Must be a positive integer.`,
+		);
+		process.exit(1);
+	}
+
+	return { token, userId };
+}
+
+async function main() {
+	const { token, userId } = validateEnv();
 
 	console.log("[bot] Starting OpenCode server...");
 	const server = await createOpencodeServer({ port: 4096 });
@@ -27,6 +55,12 @@ async function main() {
 	initClient(server.url);
 
 	const bot = new Bot(token);
+
+	// Auto-retry on Telegram 429 flood waits
+	bot.api.config.use(autoRetry());
+
+	// Register command menu in Telegram
+	await bot.api.setMyCommands(BOT_COMMANDS);
 
 	// SSE event subscription management
 	let eventChatId: number | null = null;
@@ -53,6 +87,34 @@ async function main() {
 
 	// Callback queries
 	bot.on("callback_query:data", handleCallbackQuery);
+
+	// Busy timeout safety valve
+	let busyTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function startBusyTimeout(chatId: number) {
+		clearBusyTimeout();
+		busyTimer = setTimeout(() => {
+			if (state.isBusy()) {
+				console.warn("[bot] Busy timeout reached, resetting state");
+				stopTyping();
+				state.clearAccumulatedText();
+				state.setBusy(false);
+				bot.api
+					.sendMessage(
+						chatId,
+						"Request timed out after 5 minutes. You can send a new message.",
+					)
+					.catch(() => {});
+			}
+		}, BUSY_TIMEOUT_MS);
+	}
+
+	function clearBusyTimeout() {
+		if (busyTimer) {
+			clearTimeout(busyTimer);
+			busyTimer = null;
+		}
+	}
 
 	// Text messages
 	bot.on("message:text", async (ctx) => {
@@ -94,32 +156,50 @@ async function main() {
 		}
 
 		state.setBusy(true);
+		startBusyTimeout(ctx.chat.id);
 
-		// Fire-and-forget: do NOT await so grammY can continue polling
-		getClient()
-			.session.prompt({
+		// Fire-and-forget with SessionLockedError retry
+		const prompt = async (retries = 0): Promise<void> => {
+			const { error } = await getClient().session.prompt({
 				sessionID: session.id,
 				directory: session.directory,
 				parts: [{ type: "text", text: ctx.message.text }],
-			})
-			.then(({ error }) => {
-				if (error) {
-					console.error("[bot] prompt error:", error);
-					stopTyping();
-					bot.api
-						.sendMessage(ctx.chat.id, "Error sending prompt.")
-						.catch(() => {});
-					state.setBusy(false);
-				}
-			})
-			.catch((err) => {
-				console.error("[bot] prompt error:", err);
-				stopTyping();
-				bot.api
-					.sendMessage(ctx.chat.id, "Error sending prompt.")
-					.catch(() => {});
-				state.setBusy(false);
 			});
+
+			if (error) {
+				const errMsg =
+					typeof error === "object" && "message" in error
+						? (error as { message: string }).message
+						: String(error);
+
+				if (
+					errMsg.includes("SessionLocked") &&
+					retries < SESSION_LOCKED_MAX_RETRIES
+				) {
+					console.log(
+						`[bot] Session locked, retrying in ${SESSION_LOCKED_RETRY_DELAY_MS}ms (attempt ${retries + 1})`,
+					);
+					await new Promise((r) =>
+						setTimeout(r, SESSION_LOCKED_RETRY_DELAY_MS),
+					);
+					return prompt(retries + 1);
+				}
+
+				console.error("[bot] prompt error:", error);
+				stopTyping();
+				clearBusyTimeout();
+				bot.api.sendMessage(ctx.chat.id, `Error: ${errMsg}`).catch(() => {});
+				state.setBusy(false);
+			}
+		};
+
+		prompt().catch((err) => {
+			console.error("[bot] prompt error:", err);
+			stopTyping();
+			clearBusyTimeout();
+			bot.api.sendMessage(ctx.chat.id, "Error sending prompt.").catch(() => {});
+			state.setBusy(false);
+		});
 	});
 
 	// Error handler
@@ -129,6 +209,7 @@ async function main() {
 	const shutdown = () => {
 		console.log("[bot] Shutting down...");
 		stopTyping();
+		clearBusyTimeout();
 		stopEventListening();
 		server.close();
 		bot.stop();
