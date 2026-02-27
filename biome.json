@@ -1,0 +1,5 @@
+{
+	"files": {
+		"includes": ["**", "!**/.claude/settings.local.json", "!**/*.tsbuildinfo"]
+	}
+}

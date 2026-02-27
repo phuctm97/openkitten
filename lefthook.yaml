@@ -1,0 +1,5 @@
+pre-commit:
+  commands:
+    format:
+      run: bun --bun biome check --write --no-errors-on-unmatched {staged_files} && git add {staged_files}
+      stage_fixed: true

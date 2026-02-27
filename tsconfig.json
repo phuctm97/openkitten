@@ -1,0 +1,11 @@
+{
+	"references": [],
+	"extends": "@tsconfig/bun/tsconfig.json",
+	"compilerOptions": {
+		"composite": true,
+		"emitDeclarationOnly": true,
+		"noEmit": false,
+		"allowImportingTsExtensions": false
+	},
+	"include": []
+}
