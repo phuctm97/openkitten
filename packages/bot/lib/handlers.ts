@@ -1,6 +1,7 @@
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { showQuestion } from "~/lib/events";
+import { escapeMarkdown } from "~/lib/markdown";
 import { getClient, getDirectory } from "~/lib/opencode";
 import type { QuestionState } from "~/lib/state";
 import * as state from "~/lib/state";
@@ -11,12 +12,26 @@ function formatAnsweredQuestion(
 	answer: string,
 ): string {
 	const question = qs.questions[qIdx];
-	if (!question) return `\u2713 ${answer}`;
+	if (!question) return `\u2713 ${escapeMarkdown(answer)}`;
 
 	const total = qs.questions.length;
 	const progress = total > 1 ? `${qIdx + 1}/${total} ` : "";
-	const header = question.header ? `*${progress}${question.header}*\n\n` : "";
-	return `${header}${question.question}\n\n\u2713 ${answer}`;
+	const header = question.header
+		? `*${progress}${escapeMarkdown(question.header)}*\n\n`
+		: "";
+	return `${header}${escapeMarkdown(question.question)}\n\n\u2713 ${escapeMarkdown(answer)}`;
+}
+
+function formatCancelledQuestion(qs: QuestionState, qIdx: number): string {
+	const question = qs.questions[qIdx];
+	if (!question) return "\u2717 Cancelled";
+
+	const total = qs.questions.length;
+	const progress = total > 1 ? `${qIdx + 1}/${total} ` : "";
+	const header = question.header
+		? `*${progress}${escapeMarkdown(question.header)}*\n\n`
+		: "";
+	return `${header}${escapeMarkdown(question.question)}\n\n\u2717 Cancelled`;
 }
 
 export async function handleCallbackQuery(ctx: Context): Promise<void> {
@@ -167,7 +182,10 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 			break;
 		}
 		case "cancel": {
-			await ctx.editMessageText("Question cancelled.").catch(() => {});
+			const formatted = formatCancelledQuestion(qs, qIdx);
+			await ctx
+				.editMessageText(formatted, { parse_mode: "Markdown" })
+				.catch(() => {});
 			await ctx.answerCallbackQuery();
 
 			// Send empty answers so OpenCode doesn't hang waiting
@@ -256,9 +274,6 @@ function submitAllAnswers(ctx: Context, chatId: number): void {
 			directory: getDirectory(),
 			answers: qs.answers,
 		})
-		.then(() => {
-			ctx.api.sendMessage(chatId, "Answers submitted.").catch(console.error);
-		})
 		.catch((err: unknown) => {
 			console.error("[handlers] question.reply error:", err);
 			ctx.api
@@ -278,9 +293,11 @@ async function updateQuestionMessage(
 	const idx = qs.currentIndex;
 	const total = qs.questions.length;
 	const progress = total > 1 ? `${idx + 1}/${total} ` : "";
-	const header = question.header ? `*${progress}${question.header}*\n\n` : "";
+	const header = question.header
+		? `*${progress}${escapeMarkdown(question.header)}*\n\n`
+		: "";
 	const multi = question.multiple ? "\n_(Select multiple)_" : "";
-	const text = `${header}${question.question}${multi}\n\n_Or just type your answer._`;
+	const text = `${header}${escapeMarkdown(question.question)}${multi}\n\n_Or just type your answer._`;
 
 	const keyboard = new InlineKeyboard();
 	const selected = qs.selectedOptions.get(idx) ?? new Set<number>();

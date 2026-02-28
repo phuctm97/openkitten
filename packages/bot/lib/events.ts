@@ -1,6 +1,7 @@
 import type { Event } from "@opencode-ai/sdk/v2";
 import type { Api, Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
+import { escapeMarkdown } from "~/lib/markdown";
 import type { QuestionState } from "~/lib/state";
 import * as state from "~/lib/state";
 
@@ -40,9 +41,11 @@ export function showQuestion(
 	const idx = qs.currentIndex;
 	const total = qs.questions.length;
 	const progress = total > 1 ? `${idx + 1}/${total} ` : "";
-	const header = question.header ? `*${progress}${question.header}*\n\n` : "";
+	const header = question.header
+		? `*${progress}${escapeMarkdown(question.header)}*\n\n`
+		: "";
 	const multi = question.multiple ? "\n_(Select multiple)_" : "";
-	const text = `${header}${question.question}${multi}\n\n_Or just type your answer._`;
+	const text = `${header}${escapeMarkdown(question.question)}${multi}\n\n_Or just type your answer._`;
 
 	const keyboard = new InlineKeyboard();
 	const selected = qs.selectedOptions.get(idx) ?? new Set<number>();
