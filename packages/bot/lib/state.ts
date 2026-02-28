@@ -23,7 +23,6 @@ export interface QuestionState {
 	selectedOptions: Map<number, Set<number>>;
 	customAnswers: Map<number, string>;
 	waitingForCustomInput: number | null;
-	messageIds: number[];
 	activeMessageId: number | null;
 }
 
@@ -59,6 +58,9 @@ export function addPendingPermission(
 export function removePendingPermission(messageId: number): void {
 	pendingPermissions.delete(messageId);
 }
+export function clearPendingPermissions(): void {
+	pendingPermissions.clear();
+}
 export function getPermissionByMessageId(
 	messageId: number,
 ): PendingPermission | undefined {
@@ -73,13 +75,5 @@ export function setQuestionState(qs: QuestionState): void {
 	questionState = qs;
 }
 export function clearQuestionState(): void {
-	questionState = null;
-}
-
-// Clear all
-export function clearAll(): void {
-	activeSessionID = null;
-	accumulatedText.clear();
-	pendingPermissions.clear();
 	questionState = null;
 }

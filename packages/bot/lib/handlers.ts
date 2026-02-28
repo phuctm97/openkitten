@@ -49,12 +49,15 @@ async function handlePermission(ctx: Context, data: string): Promise<void> {
 	});
 	await ctx.deleteMessage().catch(() => {});
 
-	// Fire-and-forget
 	getClient()
 		.permission.reply({ requestID: pending.requestID, directory, reply })
-		.catch((err: unknown) =>
-			console.error("[handlers] permission.reply error:", err),
-		);
+		.catch((err: unknown) => {
+			console.error("[handlers] permission.reply error:", err);
+			if (ctx.chat?.id)
+				ctx.api
+					.sendMessage(ctx.chat.id, "Failed to send permission reply.")
+					.catch(console.error);
+		});
 
 	state.removePendingPermission(messageId);
 }
@@ -161,9 +164,13 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 					directory: getDirectory(),
 					answers: emptyAnswers,
 				})
-				.catch((err: unknown) =>
-					console.error("[handlers] question.reply (cancel) error:", err),
-				);
+				.catch((err: unknown) => {
+					console.error("[handlers] question.reply (cancel) error:", err);
+					if (chatId)
+						ctx.api
+							.sendMessage(chatId, "Failed to cancel question.")
+							.catch(console.error);
+				});
 
 			state.clearQuestionState();
 			break;
@@ -229,18 +236,21 @@ function submitAllAnswers(ctx: Context, chatId: number): void {
 		}
 	}
 
-	// Fire-and-forget
 	getClient()
 		.question.reply({
 			requestID: qs.requestID,
 			directory: getDirectory(),
 			answers: qs.answers,
 		})
-		.catch((err: unknown) =>
-			console.error("[handlers] question.reply error:", err),
-		);
-
-	ctx.api.sendMessage(chatId, "Answers submitted.").catch(() => {});
+		.then(() => {
+			ctx.api.sendMessage(chatId, "Answers submitted.").catch(console.error);
+		})
+		.catch((err: unknown) => {
+			console.error("[handlers] question.reply error:", err);
+			ctx.api
+				.sendMessage(chatId, "Failed to submit answers.")
+				.catch(console.error);
+		});
 	state.clearQuestionState();
 }
 

@@ -65,7 +65,6 @@ export function showQuestion(
 			parse_mode: "Markdown",
 		})
 		.then((msg) => {
-			qs.messageIds.push(msg.message_id);
 			qs.activeMessageId = msg.message_id;
 		})
 		.catch(console.error);
@@ -196,7 +195,6 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				selectedOptions: new Map(),
 				customAnswers: new Map(),
 				waitingForCustomInput: null,
-				messageIds: [],
 				activeMessageId: null,
 			};
 			state.setQuestionState(qs);

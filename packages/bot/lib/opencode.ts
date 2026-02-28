@@ -118,7 +118,13 @@ export async function subscribeToEvents(
 
 					if (eventCallback) {
 						const cb = eventCallback;
-						setImmediate(() => cb(event));
+						setImmediate(() => {
+							try {
+								cb(event);
+							} catch (err) {
+								console.error("[opencode] Event processing error:", err);
+							}
+						});
 					}
 				}
 

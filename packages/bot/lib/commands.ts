@@ -32,6 +32,7 @@ export function registerCommands(
 		state.setSessionID(session.id);
 		state.clearAccumulatedText();
 		state.clearQuestionState();
+		state.clearPendingPermissions();
 
 		await ctx.reply(`Session started: ${session.title}`);
 	});
@@ -45,10 +46,11 @@ export function registerCommands(
 
 		const directory = getDirectory();
 		const client = getClient();
-		await client.session.abort({ sessionID, directory }).catch(() => {});
+		await client.session.abort({ sessionID, directory }).catch(console.error);
 		stopTyping();
 		state.clearAccumulatedText();
 		state.clearQuestionState();
+		state.clearPendingPermissions();
 
 		await ctx.reply("Stopped.");
 	});
