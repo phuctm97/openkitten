@@ -50,7 +50,6 @@ bun run start
 |---------|-------------|
 | `/start` | Connect to a project |
 | `/new` | Create a new session |
-| `/sessions` | List and switch sessions |
 | `/stop` | Abort the current request |
 | `/help` | Show help message |
 
@@ -91,7 +90,7 @@ openkitten/
     bot/
       lib/
         index.ts        Entry point
-        commands.ts     Bot commands (/start, /new, /stop, /sessions, /help)
+        commands.ts     Bot commands (/start, /new, /stop, /help)
         handlers.ts     Callback query handlers (permissions, questions)
         events.ts       SSE event processing
         opencode.ts     OpenCode SDK client wrapper

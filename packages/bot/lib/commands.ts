@@ -1,6 +1,5 @@
 import type { BotCommand } from "@grammyjs/types";
 import type { Bot } from "grammy";
-import { InlineKeyboard } from "grammy";
 import { stopTyping } from "~/lib/events";
 import { getClient } from "~/lib/opencode";
 import * as state from "~/lib/state";
@@ -8,7 +7,6 @@ import * as state from "~/lib/state";
 export const BOT_COMMANDS: BotCommand[] = [
 	{ command: "start", description: "Connect to a project" },
 	{ command: "new", description: "Create a new session" },
-	{ command: "sessions", description: "List and switch sessions" },
 	{ command: "stop", description: "Abort the current request" },
 	{ command: "help", description: "Show help message" },
 ];
@@ -84,32 +82,6 @@ export function registerCommands(
 		await ctx.reply("Stopped.");
 	});
 
-	bot.command("sessions", async (ctx) => {
-		const directory = state.getDirectory();
-		if (!directory) {
-			await ctx.reply("No project selected. Use /start first.");
-			return;
-		}
-
-		const client = getClient();
-		const { data: sessions, error } = await client.session.list({
-			directory,
-		});
-
-		if (error || !sessions || sessions.length === 0) {
-			await ctx.reply("No sessions found.");
-			return;
-		}
-
-		const keyboard = new InlineKeyboard();
-		for (const s of sessions) {
-			const label = s.title || s.id.slice(0, 8);
-			keyboard.text(label, `sess:${s.id}`).row();
-		}
-
-		await ctx.reply("Sessions:", { reply_markup: keyboard });
-	});
-
 	bot.command("help", async (ctx) => {
 		await ctx.reply(
 			[
@@ -121,7 +93,6 @@ export function registerCommands(
 				"Commands:",
 				"/start - Connect to a project",
 				"/new - Create a new session",
-				"/sessions - List and switch sessions",
 				"/stop - Abort the current request",
 				"/help - Show this message",
 			].join("\n"),

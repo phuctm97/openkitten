@@ -1,6 +1,6 @@
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { showQuestion, stopTyping } from "~/lib/events";
+import { showQuestion } from "~/lib/events";
 import { getClient } from "~/lib/opencode";
 import type { QuestionState } from "~/lib/state";
 import * as state from "~/lib/state";
@@ -13,15 +13,17 @@ export async function handleCallbackQuery(ctx: Context): Promise<void> {
 		await handlePermission(ctx, data);
 	} else if (data.startsWith("question:")) {
 		await handleQuestion(ctx, data);
-	} else if (data.startsWith("sess:")) {
-		await handleSessionSwitch(ctx, data);
 	} else {
 		await ctx.answerCallbackQuery();
 	}
 }
 
 async function handlePermission(ctx: Context, data: string): Promise<void> {
-	const reply = data.split(":")[1] as "once" | "always" | "reject";
+	const reply = data.split(":")[1];
+	if (reply !== "once" && reply !== "always" && reply !== "reject") {
+		await ctx.answerCallbackQuery();
+		return;
+	}
 	const messageId = ctx.callbackQuery?.message?.message_id;
 	if (!messageId) {
 		await ctx.answerCallbackQuery();
@@ -314,39 +316,4 @@ export async function handleCustomTextInput(ctx: Context): Promise<boolean> {
 
 	advanceQuestion(qs, qIdx, ctx, chatId);
 	return true;
-}
-
-async function handleSessionSwitch(ctx: Context, data: string): Promise<void> {
-	const sessionId = data.slice(5);
-	const directory = state.getDirectory();
-
-	if (!directory) {
-		await ctx.answerCallbackQuery({
-			text: "No project selected",
-			show_alert: true,
-		});
-		return;
-	}
-
-	const client = getClient();
-	const { data: sessions } = await client.session.list({ directory });
-	const found = sessions?.find((s) => s.id === sessionId);
-
-	if (!found) {
-		await ctx.answerCallbackQuery({
-			text: "Session not found",
-			show_alert: true,
-		});
-		return;
-	}
-
-	stopTyping();
-	state.clearAccumulatedText();
-	state.setBusy(false);
-	state.clearQuestionState();
-	state.setSession({ id: found.id, title: found.title, directory });
-
-	await ctx.answerCallbackQuery({
-		text: `Switched to: ${found.title || found.id.slice(0, 8)}`,
-	});
 }

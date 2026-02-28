@@ -49,9 +49,6 @@ export function getSession(): SessionInfo | null {
 export function setSession(session: SessionInfo): void {
 	activeSession = session;
 }
-export function clearSession(): void {
-	activeSession = null;
-}
 
 // Directory
 export function getDirectory(): string | null {

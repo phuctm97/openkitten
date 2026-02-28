@@ -106,9 +106,12 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			const text = acc.get(messageID) ?? "";
 
 			if (text.length > 0) {
-				for (const chunk of chunkMessage(text)) {
-					bot.api.sendMessage(chatId, chunk).catch(console.error);
+				const chunks = chunkMessage(text);
+				let chain: Promise<unknown> = Promise.resolve();
+				for (const chunk of chunks) {
+					chain = chain.then(() => bot.api.sendMessage(chatId, chunk));
 				}
+				chain.catch(console.error);
 			}
 
 			acc.delete(messageID);

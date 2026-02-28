@@ -22,7 +22,7 @@ Users message an AI agent on Telegram. The agent can browse the web, read/write 
 | US-2 | **Chat**: Send a text message. Bot shows typing indicator, accumulates the response, sends the final result (auto-chunked if >4096 chars). |
 | US-3 | **Tool permissions**: When the AI wants to run a shell command or edit a file, bot shows inline buttons: "Allow Once / Always Allow / Deny". |
 | US-4 | **Interactive questions**: When the AI needs input (e.g., which approach to take), bot presents inline keyboard with options + custom text input. |
-| US-5 | **Sessions**: `/new` creates a fresh session. `/sessions` lists and switches between them. `/stop` aborts a running prompt. |
+| US-5 | **Sessions**: `/new` creates a fresh session. `/stop` aborts a running prompt. |
 | US-6 | **Single-user auth**: Only the configured Telegram user ID can interact with the bot. |
 
 ### MVP vs Future
@@ -95,8 +95,8 @@ openkitten/
     bot/                          @openkitten/bot (MVP - only package needed)
       lib/
         index.ts                  Entry point: server startup, bot setup, message handling
-        commands.ts               /start, /new, /stop, /sessions, /help
-        handlers.ts               Callback query handlers (permissions, questions, sessions)
+        commands.ts               /start, /new, /stop, /help
+        handlers.ts               Callback query handlers (permissions, questions)
         events.ts                 SSE event processing, typing indicators, chunking
         opencode.ts               OpenCode SDK client wrapper, SSE with reconnect
         state.ts                  In-memory application state
@@ -153,7 +153,7 @@ Text message received
 
 | Event | Behavior |
 |-------|----------|
-| `message.part.updated` | Accumulates text fragments, deduplicates via hash. Handles "pending" parts that arrive before message role is known. |
+| `message.part.updated` | Stores the full current text per message (each event overwrites the previous). |
 | `message.updated` | Detects completion (via `time.completed`), sends accumulated text to Telegram (chunked if >4096), clears state. |
 | `session.error` | Sends error message to user, clears busy state. |
 | `session.idle` | Clears busy state and accumulated text. |
@@ -161,10 +161,8 @@ Text message received
 | `question.asked` | Initiates multi-step question flow with inline keyboard. |
 
 **Text accumulation pattern:**
-- `message.part.updated` events arrive with text fragments
-- Parts are deduplicated using a djb2 hash (prevents duplicate SSE events on reconnect)
-- Parts that arrive before their message's role is established are stored with `pending:${messageID}` key
-- When `message.updated` fires with `time.completed`, all accumulated parts are joined and sent
+- `message.part.updated` events contain the full current text (not deltas) — each event overwrites the previous
+- When `message.updated` fires with `time.completed`, the accumulated text is sent
 - Long messages are split at 4096-char boundaries via `chunkMessage()`
 
 **Typing indicator:** `sendChatAction("typing")` every 4 seconds while processing.
@@ -176,16 +174,14 @@ Text message received
 | `/start` | Lists projects from `client.project.list()`, selects first one, sets working directory, starts SSE subscription |
 | `/new` | Creates fresh OpenCode session, clears accumulated state, resets busy flag |
 | `/stop` | Calls `client.session.abort()`, clears all state |
-| `/sessions` | Lists sessions as inline keyboard buttons for switching |
 | `/help` | Shows available commands and bot description |
 
 ### 3.5 Callback Handlers (`lib/handlers.ts`)
 
-**Three callback categories:**
+**Two callback categories:**
 
 1. **`permission:*`** - Permission approval/denial
 2. **`question:*`** - Interactive multi-step questions (single/multi-select + custom text)
-3. **`sess:*`** - Session switching
 
 ### 3.6 State Management (`lib/state.ts`)
 
@@ -195,8 +191,7 @@ Text message received
 |-------|------|---------|
 | `activeSession` | `SessionInfo \| null` | Current OpenCode session (id, title, directory) |
 | `activeDirectory` | `string \| null` | Working directory |
-| `accumulatedText` | `Map<string, string[]>` | Text parts being collected per message |
-| `partHashes` | `Map<string, Set<string>>` | Deduplication hashes for SSE events |
+| `accumulatedText` | `Map<string, string>` | Current text per message (overwritten on each update) |
 | `messageRoles` | `Map<string, {role}>` | Message role tracking (assistant vs user) |
 | `pendingPermissions` | `Map<number, PendingPermission>` | Telegram msg ID → permission request |
 | `questionState` | `QuestionState \| null` | Current interactive question flow |
@@ -251,7 +246,6 @@ Text message received
 | Persistence (MVP) | In-memory | Single user, OpenCode stores session history itself |
 | Long polling vs webhooks (MVP) | Long polling | Simpler for self-hosted, no public endpoint needed |
 | Fire-and-forget prompts | Yes | Prevents starving grammY's polling loop |
-| SSE event deduplication | djb2 hash | Prevents duplicate delivery on reconnect |
 
 ---
 
@@ -282,7 +276,7 @@ OpenCode's own `opencode.json` in the project directory handles model selection,
 - `@grammyjs/auto-retry` for Telegram flood wait handling
 - `/help` command and `setMyCommands()` for command menu
 - SessionLockedError retry logic
-- Busy timeout safety valve (5 min auto-reset)
+- Busy timeout safety valve (10 min auto-reset)
 - Dockerfile and docker-compose.yml
 
 ### Phase 2: Container Isolation + Persistence
