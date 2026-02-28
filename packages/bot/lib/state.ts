@@ -22,7 +22,6 @@ export interface QuestionState {
 	answers: string[][];
 	selectedOptions: Map<number, Set<number>>;
 	customAnswers: Map<number, string>;
-	waitingForCustomInput: number | null;
 	activeMessageId: number | null;
 }
 

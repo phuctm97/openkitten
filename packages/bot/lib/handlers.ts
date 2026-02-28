@@ -104,10 +104,6 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 				break;
 			}
 
-			if (qs.waitingForCustomInput === qIdx) {
-				qs.waitingForCustomInput = null;
-			}
-
 			let selected = qs.selectedOptions.get(qIdx);
 			if (!selected) {
 				selected = new Set();
@@ -129,8 +125,6 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 			break;
 		}
 		case "submit": {
-			if (qs.waitingForCustomInput === qIdx) qs.waitingForCustomInput = null;
-
 			const selected = qs.selectedOptions.get(qIdx);
 			if (!selected || selected.size === 0) {
 				await ctx.answerCallbackQuery({
@@ -142,14 +136,6 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 			await ctx.answerCallbackQuery();
 			await ctx.deleteMessage().catch(() => {});
 			advanceQuestion(qs, qIdx, ctx, chatId);
-			break;
-		}
-		case "custom": {
-			qs.waitingForCustomInput = qIdx;
-			await ctx.answerCallbackQuery({
-				text: "Type your answer...",
-				show_alert: true,
-			});
 			break;
 		}
 		case "cancel": {
@@ -266,7 +252,7 @@ async function updateQuestionMessage(
 	const progress = total > 1 ? `${idx + 1}/${total} ` : "";
 	const header = question.header ? `*${progress}${question.header}*\n\n` : "";
 	const multi = question.multiple ? "\n_(Select multiple)_" : "";
-	const text = `${header}${question.question}${multi}`;
+	const text = `${header}${question.question}${multi}\n\n_Or just type your answer._`;
 
 	const keyboard = new InlineKeyboard();
 	const selected = qs.selectedOptions.get(idx) ?? new Set<number>();
@@ -281,7 +267,6 @@ async function updateQuestionMessage(
 	if (question.multiple) {
 		keyboard.text("Submit", `question:submit:${idx}`).row();
 	}
-	keyboard.text("Custom answer...", `question:custom:${idx}`).row();
 	keyboard.text("Cancel", `question:cancel:${idx}`);
 
 	await ctx
@@ -294,15 +279,14 @@ async function updateQuestionMessage(
 
 export async function handleCustomTextInput(ctx: Context): Promise<boolean> {
 	const qs = state.getQuestionState();
-	if (!qs || qs.waitingForCustomInput === null) return false;
+	if (!qs) return false;
 
 	const text = ctx.message?.text;
 	const chatId = ctx.chat?.id;
 	if (!text || !chatId) return false;
 
-	const qIdx = qs.waitingForCustomInput;
+	const qIdx = qs.currentIndex;
 	qs.customAnswers.set(qIdx, text);
-	qs.waitingForCustomInput = null;
 
 	if (qs.activeMessageId) {
 		await ctx.api.deleteMessage(chatId, qs.activeMessageId).catch(() => {});

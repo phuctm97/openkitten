@@ -42,7 +42,7 @@ export function showQuestion(
 	const progress = total > 1 ? `${idx + 1}/${total} ` : "";
 	const header = question.header ? `*${progress}${question.header}*\n\n` : "";
 	const multi = question.multiple ? "\n_(Select multiple)_" : "";
-	const text = `${header}${question.question}${multi}`;
+	const text = `${header}${question.question}${multi}\n\n_Or just type your answer._`;
 
 	const keyboard = new InlineKeyboard();
 	const selected = qs.selectedOptions.get(idx) ?? new Set<number>();
@@ -56,7 +56,6 @@ export function showQuestion(
 	if (question.multiple) {
 		keyboard.text("Submit", `question:submit:${idx}`).row();
 	}
-	keyboard.text("Custom answer...", `question:custom:${idx}`).row();
 	keyboard.text("Cancel", `question:cancel:${idx}`);
 
 	api
@@ -194,7 +193,6 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				answers: [],
 				selectedOptions: new Map(),
 				customAnswers: new Map(),
-				waitingForCustomInput: null,
 				activeMessageId: null,
 			};
 			state.setQuestionState(qs);
