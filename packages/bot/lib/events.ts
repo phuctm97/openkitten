@@ -29,15 +29,6 @@ export function chunkMessage(text: string, maxLength = 4096): string[] {
 	return chunks;
 }
 
-function hashString(str: string): string {
-	let hash = 0;
-	for (let i = 0; i < str.length; i++) {
-		hash = (hash << 5) - hash + str.charCodeAt(i);
-		hash = hash & hash;
-	}
-	return hash.toString(36);
-}
-
 export function showQuestion(
 	api: Api,
 	chatId: number,
@@ -90,37 +81,10 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			if (part.sessionID !== session.id) return;
 			if (part.type !== "text" || !("text" in part) || !part.text) return;
 
-			const messageID = part.messageID;
-			const hashes = state.getPartHashes();
-			let hashSet = hashes.get(messageID);
-			if (!hashSet) {
-				hashSet = new Set();
-				hashes.set(messageID, hashSet);
-			}
-			const h = hashString(part.text);
-			if (hashSet.has(h)) return;
-			hashSet.add(h);
-
-			const msgs = state.getMessages();
+			// Each event contains the full current text — overwrite, don't append
 			const acc = state.getAccumulatedText();
-
-			if (msgs.has(messageID) && msgs.get(messageID)?.role === "assistant") {
-				let parts = acc.get(messageID);
-				if (!parts) {
-					parts = [];
-					acc.set(messageID, parts);
-					startTyping(bot, chatId);
-				}
-				parts.push(part.text);
-			} else {
-				const key = `pending:${messageID}`;
-				let pending = acc.get(key);
-				if (!pending) {
-					pending = [];
-					acc.set(key, pending);
-				}
-				pending.push(part.text);
-			}
+			acc.set(part.messageID, part.text);
+			startTyping(bot, chatId);
 			break;
 		}
 
@@ -132,42 +96,26 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			const msgs = state.getMessages();
 			msgs.set(messageID, { role: info.role });
 
-			if (info.role === "assistant") {
-				const acc = state.getAccumulatedText();
-				let msgParts = acc.get(messageID);
-				if (!msgParts) {
-					msgParts = [];
-					acc.set(messageID, msgParts);
-					startTyping(bot, chatId);
-				}
+			if (info.role !== "assistant") break;
 
-				// Merge pending parts
-				const pendingKey = `pending:${messageID}`;
-				const pending = acc.get(pendingKey);
-				if (pending) {
-					msgParts.push(...pending);
-					acc.delete(pendingKey);
-				}
+			const time =
+				"time" in info ? (info.time as { completed?: number }) : null;
+			if (!time?.completed) break;
 
-				const time = (info as { time?: { completed?: number } }).time;
-				if (time?.completed) {
-					const parts = acc.get(messageID) ?? [];
-					const lastPart = parts[parts.length - 1] ?? "";
+			const acc = state.getAccumulatedText();
+			const text = acc.get(messageID) ?? "";
 
-					if (lastPart.length > 0) {
-						for (const chunk of chunkMessage(lastPart)) {
-							bot.api.sendMessage(chatId, chunk).catch(console.error);
-						}
-					}
-
-					acc.delete(messageID);
-					msgs.delete(messageID);
-					state.getPartHashes().delete(messageID);
-
-					if (acc.size === 0) stopTyping();
-					state.setBusy(false);
+			if (text.length > 0) {
+				for (const chunk of chunkMessage(text)) {
+					bot.api.sendMessage(chatId, chunk).catch(console.error);
 				}
 			}
+
+			acc.delete(messageID);
+			msgs.delete(messageID);
+
+			if (acc.size === 0) stopTyping();
+			state.setBusy(false);
 			break;
 		}
 
@@ -209,7 +157,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			};
 			if (request.sessionID !== session.id) return;
 
-			stopTyping();
+			// Don't stop typing — AI continues after permission is granted
 
 			const keyboard = new InlineKeyboard()
 				.text("Allow Once", "permission:once")
@@ -218,12 +166,10 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				.row()
 				.text("Deny", "permission:reject");
 
-			let text = `Permission: ${request.permission}\n`;
-			if (request.patterns?.length) {
-				for (const p of request.patterns) {
-					text += `${p}\n`;
-				}
-			}
+			const patterns = request.patterns?.length
+				? request.patterns.map((p) => `\`${p}\``).join("\n")
+				: "";
+			const text = `Permission: ${request.permission}\n${patterns}`;
 
 			bot.api
 				.sendMessage(chatId, text, { reply_markup: keyboard })

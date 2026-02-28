@@ -13,7 +13,6 @@ import {
 } from "~/lib/opencode";
 import * as state from "~/lib/state";
 
-const BUSY_TIMEOUT_MS = 5 * 60 * 1000;
 const SESSION_LOCKED_RETRY_DELAY_MS = 1000;
 const SESSION_LOCKED_MAX_RETRIES = 3;
 
@@ -88,34 +87,6 @@ async function main() {
 	// Callback queries
 	bot.on("callback_query:data", handleCallbackQuery);
 
-	// Busy timeout safety valve
-	let busyTimer: ReturnType<typeof setTimeout> | null = null;
-
-	function startBusyTimeout(chatId: number) {
-		clearBusyTimeout();
-		busyTimer = setTimeout(() => {
-			if (state.isBusy()) {
-				console.warn("[bot] Busy timeout reached, resetting state");
-				stopTyping();
-				state.clearAccumulatedText();
-				state.setBusy(false);
-				bot.api
-					.sendMessage(
-						chatId,
-						"Request timed out after 5 minutes. You can send a new message.",
-					)
-					.catch(() => {});
-			}
-		}, BUSY_TIMEOUT_MS);
-	}
-
-	function clearBusyTimeout() {
-		if (busyTimer) {
-			clearTimeout(busyTimer);
-			busyTimer = null;
-		}
-	}
-
 	// Text messages
 	bot.on("message:text", async (ctx) => {
 		// Check if waiting for custom question input
@@ -156,7 +127,16 @@ async function main() {
 		}
 
 		state.setBusy(true);
-		startBusyTimeout(ctx.chat.id);
+		state.startBusyTimeout(() => {
+			stopTyping();
+			state.clearAccumulatedText();
+			bot.api
+				.sendMessage(
+					ctx.chat.id,
+					"Request timed out after 10 minutes. You can send a new message.",
+				)
+				.catch(() => {});
+		});
 
 		// Fire-and-forget with SessionLockedError retry
 		const prompt = async (retries = 0): Promise<void> => {
@@ -187,7 +167,6 @@ async function main() {
 
 				console.error("[bot] prompt error:", error);
 				stopTyping();
-				clearBusyTimeout();
 				bot.api.sendMessage(ctx.chat.id, `Error: ${errMsg}`).catch(() => {});
 				state.setBusy(false);
 			}
@@ -196,7 +175,6 @@ async function main() {
 		prompt().catch((err) => {
 			console.error("[bot] prompt error:", err);
 			stopTyping();
-			clearBusyTimeout();
 			bot.api.sendMessage(ctx.chat.id, "Error sending prompt.").catch(() => {});
 			state.setBusy(false);
 		});
@@ -209,7 +187,7 @@ async function main() {
 	const shutdown = () => {
 		console.log("[bot] Shutting down...");
 		stopTyping();
-		clearBusyTimeout();
+		state.clearBusyTimeout();
 		stopEventListening();
 		server.close();
 		bot.stop();

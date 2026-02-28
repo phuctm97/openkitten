@@ -51,7 +51,6 @@ async function handlePermission(ctx: Context, data: string): Promise<void> {
 			] ?? reply,
 	});
 	await ctx.deleteMessage().catch(() => {});
-	stopTyping();
 
 	// Fire-and-forget
 	getClient()

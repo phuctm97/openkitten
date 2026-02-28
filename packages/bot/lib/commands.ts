@@ -33,8 +33,9 @@ export function registerCommands(
 		state.setDirectory(project.worktree);
 		ensureSubscription(project.worktree, ctx.chat.id);
 
+		const name = project.worktree.split("/").pop() ?? project.worktree;
 		await ctx.reply(
-			`Project: ${project.worktree}\nSend a message to start chatting, or /new to create a session.`,
+			`Project: ${name}\nSend a message to start chatting, or /new to create a session.`,
 		);
 	});
 
