@@ -1,5 +1,5 @@
-import type { BotCommand } from "@grammyjs/types";
 import type { Bot } from "grammy";
+import type { BotCommand } from "grammy/types";
 import { stopTyping } from "~/lib/events";
 import { getClient, getDirectory } from "~/lib/opencode";
 import * as state from "~/lib/state";

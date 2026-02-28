@@ -5,6 +5,20 @@ import { getClient, getDirectory } from "~/lib/opencode";
 import type { QuestionState } from "~/lib/state";
 import * as state from "~/lib/state";
 
+function formatAnsweredQuestion(
+	qs: QuestionState,
+	qIdx: number,
+	answer: string,
+): string {
+	const question = qs.questions[qIdx];
+	if (!question) return `\u2713 ${answer}`;
+
+	const total = qs.questions.length;
+	const progress = total > 1 ? `${qIdx + 1}/${total} ` : "";
+	const header = question.header ? `*${progress}${question.header}*\n\n` : "";
+	return `${header}${question.question}\n\n\u2713 ${answer}`;
+}
+
 export async function handleCallbackQuery(ctx: Context): Promise<void> {
 	const data = ctx.callbackQuery?.data;
 	if (!data) return;
@@ -119,7 +133,11 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 				selected.clear();
 				selected.add(optIdx);
 				await ctx.answerCallbackQuery();
-				await ctx.deleteMessage().catch(() => {});
+				const answer = question.options[optIdx]?.label ?? "";
+				const formatted = formatAnsweredQuestion(qs, qIdx, answer);
+				await ctx
+					.editMessageText(formatted, { parse_mode: "Markdown" })
+					.catch(() => {});
 				advanceQuestion(qs, qIdx, ctx, chatId);
 			}
 			break;
@@ -134,7 +152,17 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 				return;
 			}
 			await ctx.answerCallbackQuery();
-			await ctx.deleteMessage().catch(() => {});
+			const question = qs.questions[qIdx];
+			const labels = question
+				? Array.from(selected)
+						.map((i) => question.options[i]?.label ?? "")
+						.filter(Boolean)
+						.join(", ")
+				: "";
+			const formatted = formatAnsweredQuestion(qs, qIdx, labels);
+			await ctx
+				.editMessageText(formatted, { parse_mode: "Markdown" })
+				.catch(() => {});
 			advanceQuestion(qs, qIdx, ctx, chatId);
 			break;
 		}
@@ -289,7 +317,12 @@ export async function handleCustomTextInput(ctx: Context): Promise<boolean> {
 	qs.customAnswers.set(qIdx, text);
 
 	if (qs.activeMessageId) {
-		await ctx.api.deleteMessage(chatId, qs.activeMessageId).catch(() => {});
+		const formatted = formatAnsweredQuestion(qs, qIdx, text);
+		await ctx.api
+			.editMessageText(chatId, qs.activeMessageId, formatted, {
+				parse_mode: "Markdown",
+			})
+			.catch(() => {});
 	}
 
 	advanceQuestion(qs, qIdx, ctx, chatId);
