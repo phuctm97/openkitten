@@ -1,7 +1,7 @@
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { showQuestion } from "~/lib/events";
-import { getClient } from "~/lib/opencode";
+import { getClient, getDirectory } from "~/lib/opencode";
 import type { QuestionState } from "~/lib/state";
 import * as state from "~/lib/state";
 
@@ -39,12 +39,7 @@ async function handlePermission(ctx: Context, data: string): Promise<void> {
 		return;
 	}
 
-	const session = state.getSession();
-	const directory = session?.directory ?? state.getDirectory();
-	if (!directory) {
-		await ctx.answerCallbackQuery();
-		return;
-	}
+	const directory = getDirectory();
 
 	await ctx.answerCallbackQuery({
 		text:
@@ -159,20 +154,16 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 			await ctx.answerCallbackQuery();
 
 			// Send empty answers so OpenCode doesn't hang waiting
-			const session = state.getSession();
-			const directory = session?.directory ?? state.getDirectory();
-			if (directory) {
-				const emptyAnswers = qs.questions.map(() => [] as string[]);
-				getClient()
-					.question.reply({
-						requestID: qs.requestID,
-						directory,
-						answers: emptyAnswers,
-					})
-					.catch((err: unknown) =>
-						console.error("[handlers] question.reply (cancel) error:", err),
-					);
-			}
+			const emptyAnswers = qs.questions.map(() => [] as string[]);
+			getClient()
+				.question.reply({
+					requestID: qs.requestID,
+					directory: getDirectory(),
+					answers: emptyAnswers,
+				})
+				.catch((err: unknown) =>
+					console.error("[handlers] question.reply (cancel) error:", err),
+				);
 
 			state.clearQuestionState();
 			break;
@@ -238,18 +229,11 @@ function submitAllAnswers(ctx: Context, chatId: number): void {
 		}
 	}
 
-	const session = state.getSession();
-	const directory = session?.directory ?? state.getDirectory();
-	if (!directory) {
-		state.clearQuestionState();
-		return;
-	}
-
 	// Fire-and-forget
 	getClient()
 		.question.reply({
 			requestID: qs.requestID,
-			directory,
+			directory: getDirectory(),
 			answers: qs.answers,
 		})
 		.catch((err: unknown) =>

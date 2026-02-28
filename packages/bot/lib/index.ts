@@ -7,7 +7,9 @@ import { processEvent, stopTyping } from "~/lib/events";
 import { handleCallbackQuery, handleCustomTextInput } from "~/lib/handlers";
 import {
 	getClient,
+	getDirectory,
 	initClient,
+	initDirectory,
 	stopEventListening,
 	subscribeToEvents,
 } from "~/lib/opencode";
@@ -52,6 +54,7 @@ async function main() {
 	console.log(`[bot] OpenCode server running at ${server.url}`);
 
 	initClient(server.url);
+	await initDirectory();
 
 	const bot = new Bot(token);
 
@@ -92,15 +95,12 @@ async function main() {
 		// Check if waiting for custom question input
 		if (await handleCustomTextInput(ctx)) return;
 
-		const directory = state.getDirectory();
-		if (!directory) {
-			await ctx.reply("No project selected. Use /start first.");
-			return;
-		}
+		const directory = getDirectory();
+		ensureSubscription(directory, ctx.chat.id);
 
 		// Auto-create session if none exists
-		let session = state.getSession();
-		if (!session) {
+		let sessionID = state.getSessionID();
+		if (!sessionID) {
 			const client = getClient();
 			const { data: newSession, error } = await client.session.create({
 				directory,
@@ -109,30 +109,15 @@ async function main() {
 				await ctx.reply("Failed to create session.");
 				return;
 			}
-			session = {
-				id: newSession.id,
-				title: newSession.title,
-				directory,
-			};
-			state.setSession(session);
+			sessionID = newSession.id;
+			state.setSessionID(sessionID);
 		}
-
-		ensureSubscription(directory, ctx.chat.id);
-
-		if (state.isBusy()) {
-			await ctx.reply(
-				"Still processing the previous message. Use /stop to abort.",
-			);
-			return;
-		}
-
-		state.setBusy(true);
 
 		// Fire-and-forget with SessionLockedError retry
 		const prompt = async (retries = 0): Promise<void> => {
 			const { error } = await getClient().session.prompt({
-				sessionID: session.id,
-				directory: session.directory,
+				sessionID,
+				directory,
 				parts: [{ type: "text", text: ctx.message.text }],
 			});
 
@@ -142,23 +127,28 @@ async function main() {
 						? (error as { message: string }).message
 						: String(error);
 
-				if (
-					errMsg.includes("SessionLocked") &&
-					retries < SESSION_LOCKED_MAX_RETRIES
-				) {
-					console.log(
-						`[bot] Session locked, retrying in ${SESSION_LOCKED_RETRY_DELAY_MS}ms (attempt ${retries + 1})`,
-					);
-					await new Promise((r) =>
-						setTimeout(r, SESSION_LOCKED_RETRY_DELAY_MS),
-					);
-					return prompt(retries + 1);
+				if (errMsg.includes("SessionLocked")) {
+					if (retries < SESSION_LOCKED_MAX_RETRIES) {
+						console.log(
+							`[bot] Session locked, retrying in ${SESSION_LOCKED_RETRY_DELAY_MS}ms (attempt ${retries + 1})`,
+						);
+						await new Promise((r) =>
+							setTimeout(r, SESSION_LOCKED_RETRY_DELAY_MS),
+						);
+						return prompt(retries + 1);
+					}
+					bot.api
+						.sendMessage(
+							ctx.chat.id,
+							"Still processing the previous message. Use /stop to abort.",
+						)
+						.catch(() => {});
+					return;
 				}
 
 				console.error("[bot] prompt error:", error);
 				stopTyping();
 				bot.api.sendMessage(ctx.chat.id, `Error: ${errMsg}`).catch(() => {});
-				state.setBusy(false);
 			}
 		};
 
@@ -166,7 +156,6 @@ async function main() {
 			console.error("[bot] prompt error:", err);
 			stopTyping();
 			bot.api.sendMessage(ctx.chat.id, "Error sending prompt.").catch(() => {});
-			state.setBusy(false);
 		});
 	});
 

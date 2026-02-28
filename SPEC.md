@@ -22,7 +22,7 @@ Users message an AI agent on Telegram. The agent can browse the web, read/write 
 | US-2 | **Chat**: Send a text message. Bot shows typing indicator, accumulates the response, sends the final result (auto-chunked if >4096 chars). |
 | US-3 | **Tool permissions**: When the AI wants to run a shell command or edit a file, bot shows inline buttons: "Allow Once / Always Allow / Deny". |
 | US-4 | **Interactive questions**: When the AI needs input (e.g., which approach to take), bot presents inline keyboard with options + custom text input. |
-| US-5 | **Sessions**: `/new` creates a fresh session. `/stop` aborts a running prompt. |
+| US-5 | **Sessions**: `/start` creates a fresh session. `/stop` aborts a running prompt. |
 | US-6 | **Single-user auth**: Only the configured Telegram user ID can interact with the bot. |
 
 ### MVP vs Future
@@ -95,7 +95,7 @@ openkitten/
     bot/                          @openkitten/bot (MVP - only package needed)
       lib/
         index.ts                  Entry point: server startup, bot setup, message handling
-        commands.ts               /start, /new, /stop, /help
+        commands.ts               /start, /stop, /help
         handlers.ts               Callback query handlers (permissions, questions)
         events.ts                 SSE event processing, typing indicators, chunking
         opencode.ts               OpenCode SDK client wrapper, SSE with reconnect
@@ -127,12 +127,10 @@ Single package for MVP. Future splits when complexity warrants it:
 ```
 Text message received
   → Check if waiting for custom question input → delegate to handlers
-  → Check directory is set (else prompt /start)
   → Auto-create session if none exists
   → Ensure SSE subscription is active
-  → Check busy flag (reject if busy, suggest /stop)
-  → Set busy = true
   → Fire-and-forget client.session.prompt() (non-blocking so grammY keeps polling)
+  → OpenCode rejects with SessionLockedError if session is busy (bot retries)
   → SSE events drive response delivery
 ```
 
@@ -155,8 +153,8 @@ Text message received
 |-------|----------|
 | `message.part.updated` | Stores the full current text per message (each event overwrites the previous). |
 | `message.updated` | Detects completion (via `time.completed`), sends accumulated text to Telegram (chunked if >4096), clears state. |
-| `session.error` | Sends error message to user, clears busy state. |
-| `session.idle` | Clears busy state and accumulated text. |
+| `session.error` | Sends error message to user, clears accumulated text. |
+| `session.idle` | Clears accumulated text. |
 | `permission.asked` | Shows inline keyboard (Allow Once / Always Allow / Deny). |
 | `question.asked` | Initiates multi-step question flow with inline keyboard. |
 
@@ -171,9 +169,8 @@ Text message received
 
 | Command | Behavior |
 |---------|----------|
-| `/start` | Lists projects from `client.project.list()`, selects first one, sets working directory, starts SSE subscription |
-| `/new` | Creates fresh OpenCode session, clears accumulated state, resets busy flag |
-| `/stop` | Calls `client.session.abort()`, clears all state |
+| `/start` | Creates fresh OpenCode session, ensures SSE subscription, clears accumulated state |
+| `/stop` | Calls `client.session.abort()`, clears accumulated state and questions |
 | `/help` | Shows available commands and bot description |
 
 ### 3.5 Callback Handlers (`lib/handlers.ts`)
@@ -189,13 +186,10 @@ Text message received
 
 | State | Type | Purpose |
 |-------|------|---------|
-| `activeSession` | `SessionInfo \| null` | Current OpenCode session (id, title, directory) |
-| `activeDirectory` | `string \| null` | Working directory |
+| `activeSessionID` | `string \| null` | Current OpenCode session ID |
 | `accumulatedText` | `Map<string, string>` | Current text per message (overwritten on each update) |
-| `messageRoles` | `Map<string, {role}>` | Message role tracking (assistant vs user) |
 | `pendingPermissions` | `Map<number, PendingPermission>` | Telegram msg ID → permission request |
 | `questionState` | `QuestionState \| null` | Current interactive question flow |
-| `busy` | `boolean` | Whether a prompt is in-flight |
 
 ---
 
@@ -207,20 +201,19 @@ Text message received
 1. Telegram delivers message via long polling
 2. grammY middleware checks ctx.from.id === TELEGRAM_USER_ID ✓
 3. bot.on("message:text") handler fires
-4. Check: not waiting for custom input, directory is set, session exists
+4. Check: not waiting for custom input, session exists (auto-created if needed)
 5. ensureSubscription() ensures SSE stream is active
-6. state.setBusy(true)
-7. client.session.prompt({ sessionID, parts: [{ type: "text", text }] })
+6. client.session.prompt({ sessionID, parts: [{ type: "text", text }] })
    → Fire-and-forget (not awaited)
-8. OpenCode server receives prompt via REST API
-9. OpenCode sends prompt to AI provider (e.g., Claude)
-10. AI responds with tool calls (e.g., read the README file)
+   → OpenCode rejects with SessionLockedError if busy (bot retries)
+7. OpenCode server receives prompt via REST API
+8. OpenCode sends prompt to AI provider (e.g., Claude)
+9. AI responds with tool calls (e.g., read the README file)
     → OpenCode executes tools and continues the conversation loop
-11. SSE events stream back:
+10. SSE events stream back:
     a. message.part.updated (text fragments) → accumulated in state
     b. message.updated (with time.completed) → triggers send
-12. Bot sends accumulated text to Telegram (chunked if needed)
-13. state.setBusy(false)
+11. Bot sends accumulated text to Telegram (chunked if needed)
 ```
 
 ### AI wants to run `cat README.md`

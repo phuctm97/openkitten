@@ -1,12 +1,11 @@
 import type { BotCommand } from "@grammyjs/types";
 import type { Bot } from "grammy";
 import { stopTyping } from "~/lib/events";
-import { getClient } from "~/lib/opencode";
+import { getClient, getDirectory } from "~/lib/opencode";
 import * as state from "~/lib/state";
 
 export const BOT_COMMANDS: BotCommand[] = [
-	{ command: "start", description: "Connect to a project" },
-	{ command: "new", description: "Create a new session" },
+	{ command: "start", description: "Start a new session" },
 	{ command: "stop", description: "Abort the current request" },
 	{ command: "help", description: "Show help message" },
 ];
@@ -16,33 +15,8 @@ export function registerCommands(
 	ensureSubscription: (directory: string, chatId: number) => void,
 ): void {
 	bot.command("start", async (ctx) => {
-		const client = getClient();
-		const { data: projects, error } = await client.project.list();
-
-		if (error || !projects || projects.length === 0) {
-			await ctx.reply(
-				"No projects detected. Make sure OpenCode is configured.",
-			);
-			return;
-		}
-
-		const project = projects[0];
-		if (!project) return;
-		state.setDirectory(project.worktree);
-		ensureSubscription(project.worktree, ctx.chat.id);
-
-		const name = project.worktree.split("/").pop() ?? project.worktree;
-		await ctx.reply(
-			`Project: ${name}\nSend a message to start chatting, or /new to create a session.`,
-		);
-	});
-
-	bot.command("new", async (ctx) => {
-		const directory = state.getDirectory();
-		if (!directory) {
-			await ctx.reply("No project selected. Use /start first.");
-			return;
-		}
+		const directory = getDirectory();
+		ensureSubscription(directory, ctx.chat.id);
 
 		const client = getClient();
 		const { data: session, error } = await client.session.create({
@@ -55,27 +29,24 @@ export function registerCommands(
 		}
 
 		stopTyping();
-		state.setBusy(false);
-		state.setSession({ id: session.id, title: session.title, directory });
+		state.setSessionID(session.id);
 		state.clearAccumulatedText();
+		state.clearQuestionState();
 
 		await ctx.reply(`New session: ${session.title}`);
 	});
 
 	bot.command("stop", async (ctx) => {
-		const session = state.getSession();
-		const directory = session?.directory ?? state.getDirectory();
-		if (!session || !directory) {
+		const sessionID = state.getSessionID();
+		if (!sessionID) {
 			await ctx.reply("No active session.");
 			return;
 		}
 
+		const directory = getDirectory();
 		const client = getClient();
-		await client.session
-			.abort({ sessionID: session.id, directory })
-			.catch(() => {});
+		await client.session.abort({ sessionID, directory }).catch(() => {});
 		stopTyping();
-		state.setBusy(false);
 		state.clearAccumulatedText();
 		state.clearQuestionState();
 
@@ -91,8 +62,7 @@ export function registerCommands(
 				"The AI can browse the web, read/write files, and run commands.",
 				"",
 				"Commands:",
-				"/start - Connect to a project",
-				"/new - Create a new session",
+				"/start - Start a new session",
 				"/stop - Abort the current request",
 				"/help - Show this message",
 			].join("\n"),

@@ -7,6 +7,7 @@ const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
 
 let client: ReturnType<typeof createOpencodeClient>;
+let cachedDirectory: string | null = null;
 let isListening = false;
 let activeDirectory: string | null = null;
 let streamAbortController: AbortController | null = null;
@@ -22,6 +23,19 @@ export function getClient(): ReturnType<typeof createOpencodeClient> {
 			"OpenCode client not initialized — call initClient() first",
 		);
 	return client;
+}
+
+export async function initDirectory(): Promise<string> {
+	const { data: project, error } = await getClient().project.current();
+	if (error || !project) throw new Error("Failed to get current project");
+	cachedDirectory = project.worktree;
+	return cachedDirectory;
+}
+
+export function getDirectory(): string {
+	if (!cachedDirectory)
+		throw new Error("Directory not initialized — call initDirectory() first");
+	return cachedDirectory;
 }
 
 function getReconnectDelay(attempt: number): number {

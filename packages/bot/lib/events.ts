@@ -72,13 +72,13 @@ export function showQuestion(
 }
 
 export function processEvent(event: Event, bot: Bot, chatId: number): void {
-	const session = state.getSession();
-	if (!session) return;
+	const sessionID = state.getSessionID();
+	if (!sessionID) return;
 
 	switch (event.type) {
 		case "message.part.updated": {
 			const { part } = event.properties;
-			if (part.sessionID !== session.id) return;
+			if (part.sessionID !== sessionID) return;
 			if (part.type !== "text" || !("text" in part) || !part.text) return;
 
 			// Each event contains the full current text — overwrite, don't append
@@ -90,18 +90,14 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 
 		case "message.updated": {
 			const { info } = event.properties;
-			if (info.sessionID !== session.id) return;
-
-			const messageID = info.id;
-			const msgs = state.getMessages();
-			msgs.set(messageID, { role: info.role });
-
+			if (info.sessionID !== sessionID) return;
 			if (info.role !== "assistant") break;
 
 			const time =
 				"time" in info ? (info.time as { completed?: number }) : null;
 			if (!time?.completed) break;
 
+			const messageID = info.id;
 			const acc = state.getAccumulatedText();
 			const text = acc.get(messageID) ?? "";
 
@@ -115,10 +111,8 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			}
 
 			acc.delete(messageID);
-			msgs.delete(messageID);
 
 			if (acc.size === 0) stopTyping();
-			state.setBusy(false);
 			break;
 		}
 
@@ -131,23 +125,21 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 					name?: string;
 				};
 			};
-			if (props.sessionID !== session.id) return;
+			if (props.sessionID !== sessionID) return;
 
 			const msg =
 				props.error?.data?.message ?? props.error?.message ?? "Unknown error";
 			stopTyping();
 			state.clearAccumulatedText();
-			state.setBusy(false);
 			bot.api.sendMessage(chatId, `Error: ${msg}`).catch(console.error);
 			break;
 		}
 
 		case "session.idle": {
 			const props = event.properties as { sessionID: string };
-			if (props.sessionID !== session.id) return;
+			if (props.sessionID !== sessionID) return;
 			stopTyping();
 			state.clearAccumulatedText();
-			state.setBusy(false);
 			break;
 		}
 
@@ -158,7 +150,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				permission: string;
 				patterns: string[];
 			};
-			if (request.sessionID !== session.id) return;
+			if (request.sessionID !== sessionID) return;
 
 			// Don't stop typing — AI continues after permission is granted
 
@@ -192,7 +184,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				sessionID: string;
 				questions: state.QuestionItem[];
 			};
-			if (props.sessionID !== session.id) return;
+			if (props.sessionID !== sessionID) return;
 
 			stopTyping();
 
