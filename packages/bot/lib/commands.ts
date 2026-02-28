@@ -33,7 +33,7 @@ export function registerCommands(
 		state.clearAccumulatedText();
 		state.clearQuestionState();
 
-		await ctx.reply(`New session: ${session.title}`);
+		await ctx.reply(`Session started: ${session.title}`);
 	});
 
 	bot.command("stop", async (ctx) => {
