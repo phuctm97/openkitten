@@ -97,37 +97,12 @@ export function clearQuestionState(): void {
 	questionState = null;
 }
 
-// Busy flag with timeout safety valve
-const BUSY_TIMEOUT_MS = 10 * 60 * 1000;
-let busyTimer: ReturnType<typeof setTimeout> | null = null;
-let busyTimeoutCallback: (() => void) | null = null;
-
+// Busy flag
 export function isBusy(): boolean {
 	return busy;
 }
 export function setBusy(value: boolean): void {
 	busy = value;
-	if (!value) clearBusyTimeout();
-}
-export function startBusyTimeout(onTimeout: () => void): void {
-	clearBusyTimeout();
-	busyTimeoutCallback = onTimeout;
-	busyTimer = setTimeout(() => {
-		if (busy) {
-			console.warn("[state] Busy timeout reached, resetting state");
-			busy = false;
-			busyTimeoutCallback?.();
-		}
-		busyTimer = null;
-		busyTimeoutCallback = null;
-	}, BUSY_TIMEOUT_MS);
-}
-export function clearBusyTimeout(): void {
-	if (busyTimer) {
-		clearTimeout(busyTimer);
-		busyTimer = null;
-	}
-	busyTimeoutCallback = null;
 }
 
 // Clear all
@@ -139,5 +114,4 @@ export function clearAll(): void {
 	pendingPermissions.clear();
 	questionState = null;
 	busy = false;
-	clearBusyTimeout();
 }

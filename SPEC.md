@@ -276,7 +276,6 @@ OpenCode's own `opencode.json` in the project directory handles model selection,
 - `@grammyjs/auto-retry` for Telegram flood wait handling
 - `/help` command and `setMyCommands()` for command menu
 - SessionLockedError retry logic
-- Busy timeout safety valve (10 min auto-reset)
 - Dockerfile and docker-compose.yml
 
 ### Phase 2: Container Isolation + Persistence

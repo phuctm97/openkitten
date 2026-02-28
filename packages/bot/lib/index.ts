@@ -127,16 +127,6 @@ async function main() {
 		}
 
 		state.setBusy(true);
-		state.startBusyTimeout(() => {
-			stopTyping();
-			state.clearAccumulatedText();
-			bot.api
-				.sendMessage(
-					ctx.chat.id,
-					"Request timed out after 10 minutes. You can send a new message.",
-				)
-				.catch(() => {});
-		});
 
 		// Fire-and-forget with SessionLockedError retry
 		const prompt = async (retries = 0): Promise<void> => {
@@ -187,7 +177,6 @@ async function main() {
 	const shutdown = () => {
 		console.log("[bot] Shutting down...");
 		stopTyping();
-		state.clearBusyTimeout();
 		stopEventListening();
 		server.close();
 		bot.stop();

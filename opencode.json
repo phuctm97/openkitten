@@ -1,7 +1,4 @@
 {
 	"$schema": "https://opencode.ai/config.json",
-	"model": "openrouter/google/gemini-3.1-pro-preview",
-	"permission": {
-		"*": "ask"
-	}
+	"model": "openrouter/google/gemini-3.1-pro-preview"
 }
