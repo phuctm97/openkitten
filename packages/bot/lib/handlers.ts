@@ -70,13 +70,17 @@ async function handlePermission(ctx: Context, data: string): Promise<void> {
 
 	const directory = getDirectory();
 
-	await ctx.answerCallbackQuery({
-		text:
-			{ once: "Allowed once", always: "Always allowed", reject: "Denied" }[
-				reply
-			] ?? reply,
-	});
-	await ctx.deleteMessage().catch(() => {});
+	await ctx
+		.answerCallbackQuery({
+			text:
+				{ once: "Allowed once", always: "Always allowed", reject: "Denied" }[
+					reply
+				] ?? reply,
+		})
+		.catch(() => {});
+	await ctx
+		.deleteMessage()
+		.catch((err) => console.error("[handlers] deleteMessage error:", err));
 
 	getClient()
 		.permission.reply({ requestID: pending.requestID, directory, reply })
@@ -142,17 +146,22 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 			if (question.multiple) {
 				if (selected.has(optIdx)) selected.delete(optIdx);
 				else selected.add(optIdx);
-				await ctx.answerCallbackQuery();
+				await ctx.answerCallbackQuery().catch(() => {});
 				await updateQuestionMessage(ctx, qs);
 			} else {
 				selected.clear();
 				selected.add(optIdx);
-				await ctx.answerCallbackQuery();
+				await ctx.answerCallbackQuery().catch(() => {});
 				const answer = question.options[optIdx]?.label ?? "";
 				const formatted = formatAnsweredQuestion(qs, qIdx, answer);
 				await ctx
 					.editMessageText(formatted, { parse_mode: "Markdown" })
-					.catch(() => {});
+					.catch((err) =>
+						console.error(
+							"[handlers] editMessageText error (single-select):",
+							err,
+						),
+					);
 				advanceQuestion(qs, qIdx, ctx, chatId);
 			}
 			break;
@@ -166,7 +175,7 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 				});
 				return;
 			}
-			await ctx.answerCallbackQuery();
+			await ctx.answerCallbackQuery().catch(() => {});
 			const question = qs.questions[qIdx];
 			const labels = question
 				? Array.from(selected)
@@ -177,7 +186,12 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 			const formatted = formatAnsweredQuestion(qs, qIdx, labels);
 			await ctx
 				.editMessageText(formatted, { parse_mode: "Markdown" })
-				.catch(() => {});
+				.catch((err) =>
+					console.error(
+						"[handlers] editMessageText error (multi-select submit):",
+						err,
+					),
+				);
 			advanceQuestion(qs, qIdx, ctx, chatId);
 			break;
 		}
@@ -185,8 +199,10 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 			const formatted = formatCancelledQuestion(qs, qIdx);
 			await ctx
 				.editMessageText(formatted, { parse_mode: "Markdown" })
-				.catch(() => {});
-			await ctx.answerCallbackQuery();
+				.catch((err) =>
+					console.error("[handlers] editMessageText error (cancel):", err),
+				);
+			await ctx.answerCallbackQuery().catch(() => {});
 
 			// Send empty answers so OpenCode doesn't hang waiting
 			const emptyAnswers = qs.questions.map(() => [] as string[]);
@@ -323,7 +339,9 @@ async function updateQuestionMessage(
 			reply_markup: keyboard,
 			parse_mode: "Markdown",
 		})
-		.catch(() => {});
+		.catch((err) =>
+			console.error("[handlers] editMessageText error (toggle):", err),
+		);
 }
 
 export async function handleCustomTextInput(ctx: Context): Promise<boolean> {
@@ -343,7 +361,9 @@ export async function handleCustomTextInput(ctx: Context): Promise<boolean> {
 			.editMessageText(chatId, qs.activeMessageId, formatted, {
 				parse_mode: "Markdown",
 			})
-			.catch(() => {});
+			.catch((err) =>
+				console.error("[handlers] editMessageText error (custom text):", err),
+			);
 	}
 
 	advanceQuestion(qs, qIdx, ctx, chatId);

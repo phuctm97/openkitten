@@ -9,7 +9,10 @@ let typingTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startTyping(api: Api, chatId: number): void {
 	if (typingTimer) return;
-	const send = () => api.sendChatAction(chatId, "typing").catch(() => {});
+	const send = () =>
+		api
+			.sendChatAction(chatId, "typing")
+			.catch((err) => console.error("[events] sendChatAction error:", err));
 	send();
 	typingTimer = setInterval(send, 4000);
 }

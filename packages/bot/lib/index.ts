@@ -142,20 +142,30 @@ async function main() {
 							ctx.chat.id,
 							"Still processing the previous message. Use /stop to abort.",
 						)
-						.catch(() => {});
+						.catch((err) =>
+							console.error("[bot] sendMessage error (session locked):", err),
+						);
 					return;
 				}
 
 				console.error("[bot] prompt error:", error);
 				stopTyping();
-				bot.api.sendMessage(ctx.chat.id, `Error: ${errMsg}`).catch(() => {});
+				bot.api
+					.sendMessage(ctx.chat.id, `Error: ${errMsg}`)
+					.catch((err) =>
+						console.error("[bot] sendMessage error (error notification):", err),
+					);
 			}
 		};
 
 		prompt().catch((err) => {
 			console.error("[bot] prompt error:", err);
 			stopTyping();
-			bot.api.sendMessage(ctx.chat.id, "Error sending prompt.").catch(() => {});
+			bot.api
+				.sendMessage(ctx.chat.id, "Error sending prompt.")
+				.catch((sendErr) =>
+					console.error("[bot] sendMessage error (prompt failure):", sendErr),
+				);
 		});
 	});
 
