@@ -1,6 +1,5 @@
 import { autoRetry } from "@grammyjs/auto-retry";
 import type { Event } from "@opencode-ai/sdk/v2";
-import { createOpencodeServer } from "@opencode-ai/sdk/v2/server";
 import { Bot } from "grammy";
 import { BOT_COMMANDS, registerCommands } from "~/lib/commands";
 import { processEvent, stopTyping } from "~/lib/events";
@@ -13,6 +12,7 @@ import {
 	stopEventListening,
 	subscribeToEvents,
 } from "~/lib/opencode";
+import { createSandboxedServer } from "~/lib/sandbox";
 import * as state from "~/lib/state";
 
 const SESSION_LOCKED_RETRY_DELAY_MS = 1000;
@@ -50,7 +50,7 @@ async function main() {
 	const { token, userId } = validateEnv();
 
 	console.log("[bot] Starting OpenCode server...");
-	const server = await createOpencodeServer({ port: 4096 });
+	const server = await createSandboxedServer({ port: 4096 });
 	console.log(`[bot] OpenCode server running at ${server.url}`);
 
 	initClient(server.url);
