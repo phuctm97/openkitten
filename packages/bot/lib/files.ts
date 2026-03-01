@@ -1,10 +1,11 @@
-import fs from "fs";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+
 import type { Api } from "grammy";
 import { InputFile } from "grammy";
 import mime from "mime";
 import { nanoid } from "nanoid";
-import os from "os";
-import path from "path";
 
 export const TELEGRAM_MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB Bot API limit
 const TELEGRAM_DOWNLOAD_TIMEOUT_MS = 60_000;

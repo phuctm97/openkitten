@@ -184,7 +184,8 @@ async function main() {
 
 	// Photo messages
 	bot.on("message:photo", async (ctx) => {
-		const photo = ctx.message.photo.at(-1)!;
+		const photo = ctx.message.photo.at(-1);
+		if (!photo) return;
 		if (photo.file_size && photo.file_size > TELEGRAM_MAX_FILE_SIZE) {
 			await ctx.reply("File too large (max 20MB).");
 			return;
