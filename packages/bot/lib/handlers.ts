@@ -1,6 +1,6 @@
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { showQuestion } from "~/lib/events";
+import { showQuestion, startTyping } from "~/lib/events";
 import { escapeMarkdown } from "~/lib/markdown";
 import { getClient, getDirectory } from "~/lib/opencode";
 import type { QuestionState } from "~/lib/state";
@@ -205,6 +205,8 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 				});
 
 			state.clearQuestionState();
+			// Resume typing — AI continues after question is resolved
+			startTyping(ctx.api, chatId);
 			break;
 		}
 		default: {
@@ -281,6 +283,8 @@ function submitAllAnswers(ctx: Context, chatId: number): void {
 				.catch(console.error);
 		});
 	state.clearQuestionState();
+	// Resume typing — AI continues after question is resolved
+	startTyping(ctx.api, chatId);
 }
 
 async function updateQuestionMessage(

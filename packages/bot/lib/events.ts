@@ -7,9 +7,9 @@ import * as state from "~/lib/state";
 
 let typingTimer: ReturnType<typeof setInterval> | null = null;
 
-function startTyping(bot: Bot, chatId: number): void {
+export function startTyping(api: Api, chatId: number): void {
 	if (typingTimer) return;
-	const send = () => bot.api.sendChatAction(chatId, "typing").catch(() => {});
+	const send = () => api.sendChatAction(chatId, "typing").catch(() => {});
 	send();
 	typingTimer = setInterval(send, 4000);
 }
@@ -85,7 +85,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			// Each event contains the full current text — overwrite, don't append
 			const acc = state.getAccumulatedText();
 			acc.set(part.messageID, part.text);
-			startTyping(bot, chatId);
+			startTyping(bot.api, chatId);
 			break;
 		}
 
