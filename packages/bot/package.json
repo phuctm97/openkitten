@@ -10,6 +10,7 @@
 		"@anthropic-ai/sandbox-runtime": "^0.0.39",
 		"@grammyjs/auto-retry": "^2.0.2",
 		"@opencode-ai/sdk": "^1.1.21",
-		"grammy": "^1.39.2"
+		"grammy": "^1.39.2",
+		"telegram-markdown-v2": "^0.0.4"
 	}
 }

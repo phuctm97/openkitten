@@ -1,7 +1,7 @@
 import type { Event } from "@opencode-ai/sdk/v2";
 import type { Api, Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
-import { escapeMarkdown } from "~/lib/markdown";
+import { convertWithFallback, sendFormattedMessage } from "~/lib/markdown";
 import type { QuestionState } from "~/lib/state";
 import * as state from "~/lib/state";
 
@@ -24,15 +24,6 @@ export function stopTyping(): void {
 	}
 }
 
-export function chunkMessage(text: string, maxLength = 4096): string[] {
-	if (text.length <= maxLength) return [text];
-	const chunks: string[] = [];
-	for (let i = 0; i < text.length; i += maxLength) {
-		chunks.push(text.slice(i, i + maxLength));
-	}
-	return chunks;
-}
-
 export function showQuestion(
 	api: Api,
 	chatId: number,
@@ -44,11 +35,9 @@ export function showQuestion(
 	const idx = qs.currentIndex;
 	const total = qs.questions.length;
 	const progress = total > 1 ? `${idx + 1}/${total} ` : "";
-	const header = question.header
-		? `*${progress}${escapeMarkdown(question.header)}*\n\n`
-		: "";
-	const multi = question.multiple ? "\n_(Select multiple)_" : "";
-	const text = `${header}${escapeMarkdown(question.question)}${multi}\n\n_Or just type your answer._`;
+	const header = question.header ? `**${progress}${question.header}**\n\n` : "";
+	const multi = question.multiple ? "\n_Select multiple_" : "";
+	const markdown = `${header}${question.question}${multi}\n\n_Or just type your answer._`;
 
 	const keyboard = new InlineKeyboard();
 	const selected = qs.selectedOptions.get(idx) ?? new Set<number>();
@@ -64,10 +53,11 @@ export function showQuestion(
 	}
 	keyboard.text("Cancel", `question:cancel:${idx}`);
 
+	const converted = convertWithFallback(markdown);
 	api
-		.sendMessage(chatId, text, {
+		.sendMessage(chatId, converted.text, {
 			reply_markup: keyboard,
-			parse_mode: "Markdown",
+			...(converted.parseMode && { parse_mode: converted.parseMode }),
 		})
 		.then((msg) => {
 			qs.activeMessageId = msg.message_id;
@@ -106,12 +96,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			const text = acc.get(messageID) ?? "";
 
 			if (text.length > 0) {
-				const chunks = chunkMessage(text);
-				let chain: Promise<unknown> = Promise.resolve();
-				for (const chunk of chunks) {
-					chain = chain.then(() => bot.api.sendMessage(chatId, chunk));
-				}
-				chain.catch(console.error);
+				sendFormattedMessage(bot.api, chatId, text).catch(console.error);
 			}
 
 			acc.delete(messageID);
@@ -168,10 +153,14 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			const patterns = request.patterns?.length
 				? request.patterns.map((p) => `\`${p}\``).join("\n")
 				: "";
-			const text = `Permission: ${request.permission}\n${patterns}`;
+			const markdown = `**Permission:** ${request.permission}\n${patterns}`;
 
+			const converted = convertWithFallback(markdown);
 			bot.api
-				.sendMessage(chatId, text, { reply_markup: keyboard })
+				.sendMessage(chatId, converted.text, {
+					reply_markup: keyboard,
+					...(converted.parseMode && { parse_mode: converted.parseMode }),
+				})
 				.then((msg) => {
 					state.addPendingPermission(msg.message_id, {
 						requestID: request.id,
