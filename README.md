@@ -1,16 +1,20 @@
 # OpenKitten
 
-Opinionated, batteries-included AI agent on Telegram.
+Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in capabilities people actually need.
 
-Most AI agent projects give you a framework and leave you to wire everything up. OpenKitten ships the features most people actually need — built-in integrations, sensible defaults, and a single `bun run start` to get going. It supports 75+ AI providers through [OpenCode](https://github.com/nicholasoxford/opencode), runs inside an OS-native sandbox, and handles text, photos, videos, documents, voice messages, and more — in both directions.
+## Motivation
 
-## Why OpenKitten?
+**OpenClaw** is the dominant open-source AI agent, but it has become buggy and almost unusable. With ~500k lines of code, it's overwhelming — hard to tell what's causing issues, what might break next, and what security risks are lurking underneath.
 
-**OpenClaw** is the dominant open-source AI agent, but it has become buggy and almost unusable. With ~400k+ lines of code, it's overwhelming — hard to tell what's causing issues, what might break next, and what security risks are lurking underneath.
+**NanoClaw** took the right approach by going minimal at ~500 lines of code, but it's Claude-only and more of a starting point than a product. You'll need to add a lot yourself before it becomes actually useful.
 
-**NanoClaw** took the right approach by going minimal (~3,900 lines, Claude-only), but it's a starting point, not a product. You'll need to add a lot yourself before it becomes actually useful.
+**How is OpenKitten different?**
 
-**OpenKitten** is different. It's Telegram-first — we're building the best chatbot experience on the best messaging platform. Powered by Bun and OS-native sandbox for fast and safe usage by default. Multiple models, multiple providers out of the box through OpenCode, with a plugin and skill ecosystem to customize for any use case. And it ships the integrations people actually need — Gmail, calendar, email — so you don't have to build them yourself.
+- **Telegram-first** — the best chatbot experience on the best messaging platform
+- **Fast and safe by default** — powered by Bun and OS-level sandbox runtime
+- **75+ AI providers** — multiple models, multiple providers out of the box through OpenCode
+- **Batteries included** — Gmail, calendar, and more — ready to work for you from day one
+- **Highly extensible** — rich plugin and skill ecosystem to customize for any use case
 
 ## Setup
 
@@ -42,7 +46,7 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 # or any of 75+ providers supported by OpenCode
 
 # Optional:
-# export DANGEROUSLY_DISABLE_SANDBOX=1  # Bypass OS-native sandbox
+# export DANGEROUSLY_DISABLE_SANDBOX=1  # Bypass OS-level sandbox
 ```
 
 ## Usage
@@ -71,7 +75,7 @@ Telegram <--> grammY Bot <--> Sandbox <--> OpenCode Server <--> AI Provider APIs
 
 ### Sandbox
 
-The OpenCode server runs inside an OS-native sandbox (via `@anthropic-ai/sandbox-runtime`) that restricts filesystem and network access:
+The OpenCode server runs inside an OS-level sandbox (via `@anthropic-ai/sandbox-runtime`) that restricts filesystem and network access:
 
 - **Read-blocked:** `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gcloud`
 - **Write-protected:** `.env`, `.env.local`, `.env.production`
@@ -90,7 +94,7 @@ Set `DANGEROUSLY_DISABLE_SANDBOX=1` to bypass.
 | `packages/bot/lib/files.ts` | File download/upload, MIME routing, filename sanitization |
 | `packages/bot/lib/markdown.ts` | MarkdownV2 conversion with content-aware message splitting |
 | `packages/bot/lib/opencode.ts` | OpenCode SDK client wrapper with SSE reconnection |
-| `packages/bot/lib/sandbox.ts` | OS-native sandbox for the OpenCode server |
+| `packages/bot/lib/sandbox.ts` | OS-level sandbox for the OpenCode server |
 | `packages/bot/lib/state.ts` | In-memory state (sessions, accumulated text/files, permissions, questions) |
 
 ## Roadmap
