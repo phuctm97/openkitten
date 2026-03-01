@@ -1,6 +1,7 @@
 import type { Event } from "@opencode-ai/sdk/v2";
 import type { Api, Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
+import { sendTelegramFile } from "~/lib/files";
 import { convertWithFallback, sendFormattedMessage } from "~/lib/markdown";
 import type { QuestionState } from "~/lib/state";
 import * as state from "~/lib/state";
@@ -73,12 +74,30 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 		case "message.part.updated": {
 			const { part } = event.properties;
 			if (part.sessionID !== sessionID) return;
-			if (part.type !== "text" || !("text" in part) || !part.text) return;
 
-			// Each event contains the full current text — overwrite, don't append
-			const acc = state.getAccumulatedText();
-			acc.set(part.messageID, part.text);
-			startTyping(bot.api, chatId);
+			if (part.type === "text" && "text" in part && part.text) {
+				// Each event contains the full current text — overwrite, don't append
+				const acc = state.getAccumulatedText();
+				acc.set(part.messageID, part.text);
+				startTyping(bot.api, chatId);
+			} else if (part.type === "file") {
+				const files = state.getAccumulatedFiles();
+				const list = files.get(part.messageID) ?? [];
+				const existing = list.findIndex((f) => f.partID === part.id);
+				const entry = {
+					partID: part.id,
+					url: part.url,
+					mime: part.mime,
+					filename: part.filename,
+				};
+				if (existing >= 0) {
+					list[existing] = entry;
+				} else {
+					list.push(entry);
+				}
+				files.set(part.messageID, list);
+				startTyping(bot.api, chatId);
+			}
 			break;
 		}
 
@@ -94,12 +113,34 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			const messageID = info.id;
 			const acc = state.getAccumulatedText();
 			const text = acc.get(messageID) ?? "";
+			const files = state.getAccumulatedFiles().get(messageID) ?? [];
 
-			if (text.length > 0) {
-				sendFormattedMessage(bot.api, chatId, text).catch(console.error);
+			// Send text first, then files — chain to preserve ordering
+			const textDone =
+				text.length > 0
+					? sendFormattedMessage(bot.api, chatId, text)
+					: Promise.resolve();
+
+			if (files.length > 0) {
+				textDone
+					.then(async () => {
+						for (const file of files) {
+							await sendTelegramFile(
+								bot.api,
+								chatId,
+								file.url,
+								file.mime,
+								file.filename,
+							);
+						}
+					})
+					.catch(console.error);
+			} else {
+				textDone.catch(console.error);
 			}
 
 			acc.delete(messageID);
+			state.getAccumulatedFiles().delete(messageID);
 
 			if (acc.size === 0) stopTyping();
 			break;
@@ -120,6 +161,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				props.error?.data?.message ?? props.error?.message ?? "Unknown error";
 			stopTyping();
 			state.clearAccumulatedText();
+			state.clearAccumulatedFiles();
 			bot.api.sendMessage(chatId, `Error: ${msg}`).catch(console.error);
 			break;
 		}
@@ -129,6 +171,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			if (props.sessionID !== sessionID) return;
 			stopTyping();
 			state.clearAccumulatedText();
+			state.clearAccumulatedFiles();
 			break;
 		}
 

@@ -25,9 +25,17 @@ export interface QuestionState {
 	activeMessageId: number | null;
 }
 
+export interface AccumulatedFile {
+	partID: string;
+	url: string;
+	mime: string;
+	filename?: string;
+}
+
 // Module-level mutable state
 let activeSessionID: string | null = null;
 const accumulatedText = new Map<string, string>();
+const accumulatedFiles = new Map<string, AccumulatedFile[]>();
 const pendingPermissions = new Map<number, PendingPermission>();
 let questionState: QuestionState | null = null;
 
@@ -45,6 +53,14 @@ export function getAccumulatedText(): Map<string, string> {
 }
 export function clearAccumulatedText(): void {
 	accumulatedText.clear();
+}
+
+// Accumulated files
+export function getAccumulatedFiles(): Map<string, AccumulatedFile[]> {
+	return accumulatedFiles;
+}
+export function clearAccumulatedFiles(): void {
+	accumulatedFiles.clear();
 }
 
 // Pending permissions

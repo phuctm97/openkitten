@@ -1,8 +1,14 @@
 import { autoRetry } from "@grammyjs/auto-retry";
-import type { Event } from "@opencode-ai/sdk/v2";
-import { Bot } from "grammy";
+import type { Event, FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
+import { Bot, type Context } from "grammy";
 import { BOT_COMMANDS, registerCommands } from "~/lib/commands";
 import { processEvent, stopTyping } from "~/lib/events";
+import {
+	downloadTelegramFile,
+	resolveFilename,
+	saveTempFile,
+	TELEGRAM_MAX_FILE_SIZE,
+} from "~/lib/files";
 import { handleCallbackQuery, handleCustomTextInput } from "~/lib/handlers";
 import {
 	getClient,
@@ -90,11 +96,11 @@ async function main() {
 	// Callback queries
 	bot.on("callback_query:data", handleCallbackQuery);
 
-	// Text messages
-	bot.on("message:text", async (ctx) => {
-		// Check if waiting for custom question input
-		if (await handleCustomTextInput(ctx)) return;
-
+	// Shared prompt helper: session creation + retry logic
+	async function promptOpenCode(
+		ctx: Context,
+		parts: Array<TextPartInput | FilePartInput>,
+	): Promise<void> {
 		const directory = getDirectory();
 		ensureSubscription(directory, ctx.chat.id);
 
@@ -118,7 +124,7 @@ async function main() {
 			const { error } = await getClient().session.prompt({
 				sessionID,
 				directory,
-				parts: [{ type: "text", text: ctx.message.text }],
+				parts,
 			});
 
 			if (error) {
@@ -167,6 +173,180 @@ async function main() {
 					console.error("[bot] sendMessage error (prompt failure):", sendErr),
 				);
 		});
+	}
+
+	// Text messages
+	bot.on("message:text", async (ctx) => {
+		// Check if waiting for custom question input
+		if (await handleCustomTextInput(ctx)) return;
+		await promptOpenCode(ctx, [{ type: "text", text: ctx.message.text }]);
+	});
+
+	// Photo messages
+	bot.on("message:photo", async (ctx) => {
+		const photo = ctx.message.photo.at(-1)!;
+		if (photo.file_size && photo.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			await ctx.reply("File too large (max 20MB).");
+			return;
+		}
+		const buffer = await downloadTelegramFile(token, photo.file_id, bot.api);
+		if (!buffer) {
+			await ctx.reply("Failed to download photo.");
+			return;
+		}
+		const filename = resolveFilename("image/jpeg");
+		const filePath = saveTempFile(buffer, filename);
+		const parts: Array<TextPartInput | FilePartInput> = [
+			{ type: "file", mime: "image/jpeg", filename, url: `file://${filePath}` },
+		];
+		if (ctx.message.caption) {
+			parts.push({ type: "text", text: ctx.message.caption });
+		}
+		await promptOpenCode(ctx, parts);
+	});
+
+	// Video messages
+	bot.on("message:video", async (ctx) => {
+		const video = ctx.message.video;
+		if (video.file_size && video.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			await ctx.reply("File too large (max 20MB).");
+			return;
+		}
+		const buffer = await downloadTelegramFile(token, video.file_id, bot.api);
+		if (!buffer) {
+			await ctx.reply("Failed to download video.");
+			return;
+		}
+		const mimeType = video.mime_type ?? "video/mp4";
+		const filename = resolveFilename(mimeType);
+		const filePath = saveTempFile(buffer, filename);
+		const parts: Array<TextPartInput | FilePartInput> = [
+			{ type: "file", mime: mimeType, filename, url: `file://${filePath}` },
+		];
+		if (ctx.message.caption) {
+			parts.push({ type: "text", text: ctx.message.caption });
+		}
+		await promptOpenCode(ctx, parts);
+	});
+
+	// Voice messages
+	bot.on("message:voice", async (ctx) => {
+		const voice = ctx.message.voice;
+		if (voice.file_size && voice.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			await ctx.reply("File too large (max 20MB).");
+			return;
+		}
+		const buffer = await downloadTelegramFile(token, voice.file_id, bot.api);
+		if (!buffer) {
+			await ctx.reply("Failed to download voice message.");
+			return;
+		}
+		const filename = resolveFilename("audio/ogg");
+		const filePath = saveTempFile(buffer, filename);
+		const parts: Array<TextPartInput | FilePartInput> = [
+			{ type: "file", mime: "audio/ogg", filename, url: `file://${filePath}` },
+		];
+		if (ctx.message.caption) {
+			parts.push({ type: "text", text: ctx.message.caption });
+		}
+		await promptOpenCode(ctx, parts);
+	});
+
+	// Audio messages
+	bot.on("message:audio", async (ctx) => {
+		const audio = ctx.message.audio;
+		if (audio.file_size && audio.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			await ctx.reply("File too large (max 20MB).");
+			return;
+		}
+		const buffer = await downloadTelegramFile(token, audio.file_id, bot.api);
+		if (!buffer) {
+			await ctx.reply("Failed to download audio.");
+			return;
+		}
+		const mimeType = audio.mime_type ?? "audio/mpeg";
+		const filename = resolveFilename(mimeType, audio.file_name);
+		const filePath = saveTempFile(buffer, filename);
+		const parts: Array<TextPartInput | FilePartInput> = [
+			{ type: "file", mime: mimeType, filename, url: `file://${filePath}` },
+		];
+		if (ctx.message.caption) {
+			parts.push({ type: "text", text: ctx.message.caption });
+		}
+		await promptOpenCode(ctx, parts);
+	});
+
+	// Video note messages (round videos)
+	bot.on("message:video_note", async (ctx) => {
+		const videoNote = ctx.message.video_note;
+		if (videoNote.file_size && videoNote.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			await ctx.reply("File too large (max 20MB).");
+			return;
+		}
+		const buffer = await downloadTelegramFile(
+			token,
+			videoNote.file_id,
+			bot.api,
+		);
+		if (!buffer) {
+			await ctx.reply("Failed to download video note.");
+			return;
+		}
+		const filename = resolveFilename("video/mp4");
+		const filePath = saveTempFile(buffer, filename);
+		const parts: Array<TextPartInput | FilePartInput> = [
+			{ type: "file", mime: "video/mp4", filename, url: `file://${filePath}` },
+		];
+		await promptOpenCode(ctx, parts);
+	});
+
+	// Sticker messages
+	bot.on("message:sticker", async (ctx) => {
+		const sticker = ctx.message.sticker;
+		if (sticker.file_size && sticker.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			await ctx.reply("File too large (max 20MB).");
+			return;
+		}
+		const buffer = await downloadTelegramFile(token, sticker.file_id, bot.api);
+		if (!buffer) {
+			await ctx.reply("Failed to download sticker.");
+			return;
+		}
+		const mimeType = sticker.is_video
+			? "video/webm"
+			: sticker.is_animated
+				? "application/x-tgsticker"
+				: "image/webp";
+		const filename = resolveFilename(mimeType);
+		const filePath = saveTempFile(buffer, filename);
+		const parts: Array<TextPartInput | FilePartInput> = [
+			{ type: "file", mime: mimeType, filename, url: `file://${filePath}` },
+		];
+		await promptOpenCode(ctx, parts);
+	});
+
+	// Document messages
+	bot.on("message:document", async (ctx) => {
+		const doc = ctx.message.document;
+		if (doc.file_size && doc.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			await ctx.reply("File too large (max 20MB).");
+			return;
+		}
+		const buffer = await downloadTelegramFile(token, doc.file_id, bot.api);
+		if (!buffer) {
+			await ctx.reply("Failed to download document.");
+			return;
+		}
+		const mimeType = doc.mime_type ?? "application/octet-stream";
+		const filename = resolveFilename(mimeType, doc.file_name);
+		const filePath = saveTempFile(buffer, filename);
+		const parts: Array<TextPartInput | FilePartInput> = [
+			{ type: "file", mime: mimeType, filename, url: `file://${filePath}` },
+		];
+		if (ctx.message.caption) {
+			parts.push({ type: "text", text: ctx.message.caption });
+		}
+		await promptOpenCode(ctx, parts);
 	});
 
 	// Error handler

@@ -11,6 +11,8 @@
 		"@grammyjs/auto-retry": "^2.0.2",
 		"@opencode-ai/sdk": "^1.1.21",
 		"grammy": "^1.39.2",
+		"mime": "^4.1.0",
+		"nanoid": "^5.1.6",
 		"telegram-markdown-v2": "^0.0.4"
 	}
 }
