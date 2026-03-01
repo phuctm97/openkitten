@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import type { FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
 import type { Api } from "grammy";
 import { InputFile } from "grammy";
 import mime from "mime";
@@ -63,12 +64,32 @@ export function resolveFilename(mimeType: string, filename?: string): string {
 	return name;
 }
 
+export function buildFileParts(
+	filePath: string,
+	mimeType: string,
+	filename: string,
+): Array<TextPartInput | FilePartInput> {
+	const baseMime = mimeType.split(";")[0].trim();
+	if (baseMime.startsWith("image/")) {
+		return [
+			{ type: "file", mime: baseMime, filename, url: `file://${filePath}` },
+		];
+	}
+	return [
+		{
+			type: "text",
+			text: `[File received: ${filename} (${baseMime}) saved at ${filePath} — use your tools to read or process this file]`,
+		},
+	];
+}
+
 export async function sendTelegramFile(
 	api: Api,
 	chatId: number,
 	url: string,
 	mimeType: string,
 	filename?: string,
+	caption?: string,
 ): Promise<void> {
 	try {
 		let buffer: Buffer;
@@ -94,18 +115,20 @@ export async function sendTelegramFile(
 		const baseMime = mimeType.split(";")[0].trim();
 		const [type] = baseMime.split("/");
 
+		const opts = caption ? { caption } : {};
+
 		if (baseMime === "image/gif") {
-			await api.sendAnimation(chatId, inputFile);
+			await api.sendAnimation(chatId, inputFile, opts);
 		} else if (baseMime === "audio/ogg") {
-			await api.sendVoice(chatId, inputFile);
+			await api.sendVoice(chatId, inputFile, opts);
 		} else if (type === "image") {
-			await api.sendPhoto(chatId, inputFile);
+			await api.sendPhoto(chatId, inputFile, opts);
 		} else if (type === "video") {
-			await api.sendVideo(chatId, inputFile);
+			await api.sendVideo(chatId, inputFile, opts);
 		} else if (type === "audio") {
-			await api.sendAudio(chatId, inputFile);
+			await api.sendAudio(chatId, inputFile, opts);
 		} else {
-			await api.sendDocument(chatId, inputFile);
+			await api.sendDocument(chatId, inputFile, opts);
 		}
 	} catch (err) {
 		console.error("[files] sendTelegramFile error:", err);

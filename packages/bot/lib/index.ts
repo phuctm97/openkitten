@@ -4,6 +4,7 @@ import { Bot, type Context } from "grammy";
 import { BOT_COMMANDS, registerCommands } from "~/lib/commands";
 import { processEvent, stopTyping } from "~/lib/events";
 import {
+	buildFileParts,
 	downloadTelegramFile,
 	resolveFilename,
 	saveTempFile,
@@ -197,9 +198,11 @@ async function main() {
 		}
 		const filename = resolveFilename("image/jpeg");
 		const filePath = saveTempFile(buffer, filename);
-		const parts: Array<TextPartInput | FilePartInput> = [
-			{ type: "file", mime: "image/jpeg", filename, url: `file://${filePath}` },
-		];
+		const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			filePath,
+			"image/jpeg",
+			filename,
+		);
 		if (ctx.message.caption) {
 			parts.push({ type: "text", text: ctx.message.caption });
 		}
@@ -221,9 +224,11 @@ async function main() {
 		const mimeType = video.mime_type ?? "video/mp4";
 		const filename = resolveFilename(mimeType);
 		const filePath = saveTempFile(buffer, filename);
-		const parts: Array<TextPartInput | FilePartInput> = [
-			{ type: "file", mime: mimeType, filename, url: `file://${filePath}` },
-		];
+		const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			filePath,
+			mimeType,
+			filename,
+		);
 		if (ctx.message.caption) {
 			parts.push({ type: "text", text: ctx.message.caption });
 		}
@@ -244,9 +249,11 @@ async function main() {
 		}
 		const filename = resolveFilename("audio/ogg");
 		const filePath = saveTempFile(buffer, filename);
-		const parts: Array<TextPartInput | FilePartInput> = [
-			{ type: "file", mime: "audio/ogg", filename, url: `file://${filePath}` },
-		];
+		const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			filePath,
+			"audio/ogg",
+			filename,
+		);
 		if (ctx.message.caption) {
 			parts.push({ type: "text", text: ctx.message.caption });
 		}
@@ -268,9 +275,11 @@ async function main() {
 		const mimeType = audio.mime_type ?? "audio/mpeg";
 		const filename = resolveFilename(mimeType, audio.file_name);
 		const filePath = saveTempFile(buffer, filename);
-		const parts: Array<TextPartInput | FilePartInput> = [
-			{ type: "file", mime: mimeType, filename, url: `file://${filePath}` },
-		];
+		const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			filePath,
+			mimeType,
+			filename,
+		);
 		if (ctx.message.caption) {
 			parts.push({ type: "text", text: ctx.message.caption });
 		}
@@ -295,9 +304,11 @@ async function main() {
 		}
 		const filename = resolveFilename("video/mp4");
 		const filePath = saveTempFile(buffer, filename);
-		const parts: Array<TextPartInput | FilePartInput> = [
-			{ type: "file", mime: "video/mp4", filename, url: `file://${filePath}` },
-		];
+		const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			filePath,
+			"video/mp4",
+			filename,
+		);
 		await promptOpenCode(ctx, parts);
 	});
 
@@ -320,9 +331,11 @@ async function main() {
 				: "image/webp";
 		const filename = resolveFilename(mimeType);
 		const filePath = saveTempFile(buffer, filename);
-		const parts: Array<TextPartInput | FilePartInput> = [
-			{ type: "file", mime: mimeType, filename, url: `file://${filePath}` },
-		];
+		const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			filePath,
+			mimeType,
+			filename,
+		);
 		await promptOpenCode(ctx, parts);
 	});
 
@@ -341,9 +354,11 @@ async function main() {
 		const mimeType = doc.mime_type ?? "application/octet-stream";
 		const filename = resolveFilename(mimeType, doc.file_name);
 		const filePath = saveTempFile(buffer, filename);
-		const parts: Array<TextPartInput | FilePartInput> = [
-			{ type: "file", mime: mimeType, filename, url: `file://${filePath}` },
-		];
+		const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			filePath,
+			mimeType,
+			filename,
+		);
 		if (ctx.message.caption) {
 			parts.push({ type: "text", text: ctx.message.caption });
 		}

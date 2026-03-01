@@ -31,8 +31,10 @@ export function registerCommands(
 		stopTyping();
 		state.setSessionID(session.id);
 		state.clearAccumulatedText();
+		state.clearAccumulatedFiles();
 		state.clearQuestionState();
 		state.clearPendingPermissions();
+		state.clearProcessedToolCalls();
 
 		await ctx.reply(`Session started: ${session.title}`);
 	});
@@ -49,8 +51,10 @@ export function registerCommands(
 		await client.session.abort({ sessionID, directory }).catch(console.error);
 		stopTyping();
 		state.clearAccumulatedText();
+		state.clearAccumulatedFiles();
 		state.clearQuestionState();
 		state.clearPendingPermissions();
+		state.clearProcessedToolCalls();
 
 		await ctx.reply("Stopped.");
 	});

@@ -9,11 +9,12 @@
 		"typecheck": "bun --bun tsc --build"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "^2.4.4",
+		"@opencode-ai/plugin": "^1.2.15",
 		"@tsconfig/bun": "^1.0.10",
 		"@types/node": "^25.3.0",
-		"type-fest": "^5.4.4",
-		"@biomejs/biome": "^2.4.4",
 		"lefthook": "^2.1.1",
+		"type-fest": "^5.4.4",
 		"typescript": "^5.9.3"
 	}
 }

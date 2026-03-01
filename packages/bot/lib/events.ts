@@ -1,6 +1,8 @@
+import node_path from "node:path";
 import type { Event } from "@opencode-ai/sdk/v2";
 import type { Api, Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
+import mime from "mime";
 import { sendTelegramFile } from "~/lib/files";
 import { convertWithFallback, sendFormattedMessage } from "~/lib/markdown";
 import type { QuestionState } from "~/lib/state";
@@ -66,6 +68,37 @@ export function showQuestion(
 		.catch(console.error);
 }
 
+function handleAttachFileTool(part: {
+	callID: string;
+	messageID: string;
+	tool: string;
+	state: { status: string; input: Record<string, unknown> };
+}): void {
+	if (part.tool !== "attach_file") return;
+	if (part.state.status !== "completed") return;
+	if (state.hasProcessedToolCall(part.callID)) return;
+	state.markToolCallProcessed(part.callID);
+
+	const rawPath = part.state.input.path as string | undefined;
+	if (!rawPath) return;
+
+	const filePath = node_path.resolve(rawPath);
+	const caption = part.state.input.caption as string | undefined;
+	const detectedMime = mime.getType(filePath) ?? "application/octet-stream";
+	const filename = node_path.basename(filePath);
+
+	const files = state.getAccumulatedFiles();
+	const list = files.get(part.messageID) ?? [];
+	list.push({
+		partID: part.callID,
+		url: filePath,
+		mime: detectedMime,
+		filename,
+		caption,
+	});
+	files.set(part.messageID, list);
+}
+
 export function processEvent(event: Event, bot: Bot, chatId: number): void {
 	const sessionID = state.getSessionID();
 	if (!sessionID) return;
@@ -84,7 +117,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				const files = state.getAccumulatedFiles();
 				const list = files.get(part.messageID) ?? [];
 				const existing = list.findIndex((f) => f.partID === part.id);
-				const entry = {
+				const entry: state.AccumulatedFile = {
 					partID: part.id,
 					url: part.url,
 					mime: part.mime,
@@ -97,6 +130,8 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				}
 				files.set(part.messageID, list);
 				startTyping(bot.api, chatId);
+			} else if (part.type === "tool") {
+				handleAttachFileTool(part);
 			}
 			break;
 		}
@@ -131,6 +166,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 								file.url,
 								file.mime,
 								file.filename,
+								file.caption,
 							);
 						}
 					})
@@ -162,6 +198,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			stopTyping();
 			state.clearAccumulatedText();
 			state.clearAccumulatedFiles();
+			state.clearProcessedToolCalls();
 			bot.api.sendMessage(chatId, `Error: ${msg}`).catch(console.error);
 			break;
 		}
@@ -172,6 +209,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			stopTyping();
 			state.clearAccumulatedText();
 			state.clearAccumulatedFiles();
+			state.clearProcessedToolCalls();
 			break;
 		}
 
