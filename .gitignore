@@ -5,3 +5,6 @@ node_modules
 dist
 .env.local
 .env.*.local
+*.db
+*.db-wal
+*.db-shm

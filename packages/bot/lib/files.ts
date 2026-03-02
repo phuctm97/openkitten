@@ -47,7 +47,7 @@ export function saveTempFile(buffer: Buffer, filename: string): string {
 }
 
 export function resolveFilename(mimeType: string, filename?: string): string {
-	const baseMime = mimeType.split(";")[0].trim();
+	const baseMime = (mimeType.split(";")[0] ?? mimeType).trim();
 	const ext = mime.getExtension(baseMime) ?? "bin";
 	if (!filename) return `file.${ext}`;
 
@@ -69,7 +69,7 @@ export function buildFileParts(
 	mimeType: string,
 	filename: string,
 ): Array<TextPartInput | FilePartInput> {
-	const baseMime = mimeType.split(";")[0].trim();
+	const baseMime = (mimeType.split(";")[0] ?? mimeType).trim();
 	if (baseMime.startsWith("image/")) {
 		return [
 			{ type: "file", mime: baseMime, filename, url: `file://${filePath}` },
@@ -112,8 +112,8 @@ export async function sendTelegramFile(
 
 		const name = resolveFilename(mimeType, filename);
 		const inputFile = new InputFile(buffer, name);
-		const baseMime = mimeType.split(";")[0].trim();
-		const [type] = baseMime.split("/");
+		const baseMime = (mimeType.split(";")[0] ?? mimeType).trim();
+		const type = baseMime.split("/")[0];
 
 		const opts = caption ? { caption } : {};
 

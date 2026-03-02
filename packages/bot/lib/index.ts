@@ -102,8 +102,10 @@ async function main() {
 		ctx: Context,
 		parts: Array<TextPartInput | FilePartInput>,
 	): Promise<void> {
+		if (!ctx.chat) return;
+		const chatId = ctx.chat.id;
 		const directory = getDirectory();
-		ensureSubscription(directory, ctx.chat.id);
+		ensureSubscription(directory, chatId);
 
 		// Auto-create session if none exists
 		let sessionID = state.getSessionID();
@@ -146,7 +148,7 @@ async function main() {
 					}
 					bot.api
 						.sendMessage(
-							ctx.chat.id,
+							chatId,
 							"Still processing the previous message. Use /stop to abort.",
 						)
 						.catch((err) =>
@@ -158,7 +160,7 @@ async function main() {
 				console.error("[bot] prompt error:", error);
 				stopTyping();
 				bot.api
-					.sendMessage(ctx.chat.id, `Error: ${errMsg}`)
+					.sendMessage(chatId, `Error: ${errMsg}`)
 					.catch((err) =>
 						console.error("[bot] sendMessage error (error notification):", err),
 					);
@@ -169,7 +171,7 @@ async function main() {
 			console.error("[bot] prompt error:", err);
 			stopTyping();
 			bot.api
-				.sendMessage(ctx.chat.id, "Error sending prompt.")
+				.sendMessage(chatId, "Error sending prompt.")
 				.catch((sendErr) =>
 					console.error("[bot] sendMessage error (prompt failure):", sendErr),
 				);

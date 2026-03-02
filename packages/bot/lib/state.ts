@@ -1,3 +1,7 @@
+import { eq } from "drizzle-orm";
+import { database } from "./database";
+import { profile } from "./schema";
+
 export interface PendingPermission {
 	requestID: string;
 	messageId: number;
@@ -34,19 +38,36 @@ export interface AccumulatedFile {
 }
 
 // Module-level mutable state
-let activeSessionID: string | null = null;
 const accumulatedText = new Map<string, string>();
 const accumulatedFiles = new Map<string, AccumulatedFile[]>();
 const pendingPermissions = new Map<number, PendingPermission>();
 const processedToolCalls = new Set<string>();
 let questionState: QuestionState | null = null;
 
-// Session ID
+// Session ID (database-backed with in-memory cache)
+let cachedSessionID: string | null | undefined; // undefined = not loaded yet
+
 export function getSessionID(): string | null {
-	return activeSessionID;
+	if (cachedSessionID === undefined) {
+		const row = database
+			.select({ activeSessionId: profile.activeSessionId })
+			.from(profile)
+			.where(eq(profile.id, 1))
+			.get();
+		cachedSessionID = row?.activeSessionId ?? null;
+	}
+	return cachedSessionID;
 }
 export function setSessionID(id: string): void {
-	activeSessionID = id;
+	database
+		.insert(profile)
+		.values({ id: 1, activeSessionId: id })
+		.onConflictDoUpdate({
+			target: profile.id,
+			set: { activeSessionId: id, updatedAt: Math.floor(Date.now() / 1000) },
+		})
+		.run();
+	cachedSessionID = id;
 }
 
 // Accumulated text
