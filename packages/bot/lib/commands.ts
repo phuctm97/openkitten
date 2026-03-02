@@ -38,7 +38,7 @@ export function registerCommands(
 		state.clearProcessedToolCalls();
 
 		sendNotice(ctx.api, ctx.chat.id, "started", "New session created.", {
-			language: "Session ID",
+			language: "ID",
 			content: session.id,
 		});
 	});

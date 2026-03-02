@@ -4,7 +4,8 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"start": "bun run lib/index.ts",
+		"start": "bun lib/index.ts",
+		"dev": "bun --hot lib/index.ts",
 		"drizzle-generate": "bun --bun drizzle-kit generate",
 		"drizzle-migrate": "bun --bun drizzle-kit migrate"
 	},
