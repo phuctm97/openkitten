@@ -11,6 +11,7 @@ import {
 	TELEGRAM_MAX_FILE_SIZE,
 } from "~/lib/files";
 import { handleCallbackQuery, handleCustomTextInput } from "~/lib/handlers";
+import { sendNotice } from "~/lib/notice";
 import {
 	getClient,
 	getDirectory,
@@ -115,7 +116,7 @@ async function main() {
 				directory,
 			});
 			if (error || !newSession) {
-				await ctx.reply("Failed to create session.");
+				sendNotice(ctx.api, chatId, "error", "Failed to create session.");
 				return;
 			}
 			sessionID = newSession.id;
@@ -146,35 +147,25 @@ async function main() {
 						);
 						return prompt(retries + 1);
 					}
-					bot.api
-						.sendMessage(
-							chatId,
-							"Still processing the previous message. Use /stop to abort.",
-						)
-						.catch((err) =>
-							console.error("[bot] sendMessage error (session locked):", err),
-						);
+					sendNotice(
+						bot.api,
+						chatId,
+						"busy",
+						"Still processing the previous message. Use /stop to abort.",
+					);
 					return;
 				}
 
 				console.error("[bot] prompt error:", error);
 				stopTyping();
-				bot.api
-					.sendMessage(chatId, `Error: ${errMsg}`)
-					.catch((err) =>
-						console.error("[bot] sendMessage error (error notification):", err),
-					);
+				sendNotice(bot.api, chatId, "error", errMsg);
 			}
 		};
 
 		prompt().catch((err) => {
 			console.error("[bot] prompt error:", err);
 			stopTyping();
-			bot.api
-				.sendMessage(chatId, "Error sending prompt.")
-				.catch((sendErr) =>
-					console.error("[bot] sendMessage error (prompt failure):", sendErr),
-				);
+			sendNotice(bot.api, chatId, "error", "Error sending prompt.");
 		});
 	}
 
@@ -190,12 +181,12 @@ async function main() {
 		const photo = ctx.message.photo.at(-1);
 		if (!photo) return;
 		if (photo.file_size && photo.file_size > TELEGRAM_MAX_FILE_SIZE) {
-			await ctx.reply("File too large (max 20MB).");
+			sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 			return;
 		}
 		const buffer = await downloadTelegramFile(token, photo.file_id, bot.api);
 		if (!buffer) {
-			await ctx.reply("Failed to download photo.");
+			sendNotice(ctx.api, ctx.chat.id, "error", "Failed to download photo.");
 			return;
 		}
 		const filename = resolveFilename("image/jpeg");
@@ -215,12 +206,12 @@ async function main() {
 	bot.on("message:video", async (ctx) => {
 		const video = ctx.message.video;
 		if (video.file_size && video.file_size > TELEGRAM_MAX_FILE_SIZE) {
-			await ctx.reply("File too large (max 20MB).");
+			sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 			return;
 		}
 		const buffer = await downloadTelegramFile(token, video.file_id, bot.api);
 		if (!buffer) {
-			await ctx.reply("Failed to download video.");
+			sendNotice(ctx.api, ctx.chat.id, "error", "Failed to download video.");
 			return;
 		}
 		const mimeType = video.mime_type ?? "video/mp4";
@@ -241,12 +232,17 @@ async function main() {
 	bot.on("message:voice", async (ctx) => {
 		const voice = ctx.message.voice;
 		if (voice.file_size && voice.file_size > TELEGRAM_MAX_FILE_SIZE) {
-			await ctx.reply("File too large (max 20MB).");
+			sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 			return;
 		}
 		const buffer = await downloadTelegramFile(token, voice.file_id, bot.api);
 		if (!buffer) {
-			await ctx.reply("Failed to download voice message.");
+			sendNotice(
+				ctx.api,
+				ctx.chat.id,
+				"error",
+				"Failed to download voice message.",
+			);
 			return;
 		}
 		const filename = resolveFilename("audio/ogg");
@@ -266,12 +262,12 @@ async function main() {
 	bot.on("message:audio", async (ctx) => {
 		const audio = ctx.message.audio;
 		if (audio.file_size && audio.file_size > TELEGRAM_MAX_FILE_SIZE) {
-			await ctx.reply("File too large (max 20MB).");
+			sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 			return;
 		}
 		const buffer = await downloadTelegramFile(token, audio.file_id, bot.api);
 		if (!buffer) {
-			await ctx.reply("Failed to download audio.");
+			sendNotice(ctx.api, ctx.chat.id, "error", "Failed to download audio.");
 			return;
 		}
 		const mimeType = audio.mime_type ?? "audio/mpeg";
@@ -292,7 +288,7 @@ async function main() {
 	bot.on("message:video_note", async (ctx) => {
 		const videoNote = ctx.message.video_note;
 		if (videoNote.file_size && videoNote.file_size > TELEGRAM_MAX_FILE_SIZE) {
-			await ctx.reply("File too large (max 20MB).");
+			sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 			return;
 		}
 		const buffer = await downloadTelegramFile(
@@ -301,7 +297,12 @@ async function main() {
 			bot.api,
 		);
 		if (!buffer) {
-			await ctx.reply("Failed to download video note.");
+			sendNotice(
+				ctx.api,
+				ctx.chat.id,
+				"error",
+				"Failed to download video note.",
+			);
 			return;
 		}
 		const filename = resolveFilename("video/mp4");
@@ -318,12 +319,12 @@ async function main() {
 	bot.on("message:sticker", async (ctx) => {
 		const sticker = ctx.message.sticker;
 		if (sticker.file_size && sticker.file_size > TELEGRAM_MAX_FILE_SIZE) {
-			await ctx.reply("File too large (max 20MB).");
+			sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 			return;
 		}
 		const buffer = await downloadTelegramFile(token, sticker.file_id, bot.api);
 		if (!buffer) {
-			await ctx.reply("Failed to download sticker.");
+			sendNotice(ctx.api, ctx.chat.id, "error", "Failed to download sticker.");
 			return;
 		}
 		const mimeType = sticker.is_video
@@ -345,12 +346,12 @@ async function main() {
 	bot.on("message:document", async (ctx) => {
 		const doc = ctx.message.document;
 		if (doc.file_size && doc.file_size > TELEGRAM_MAX_FILE_SIZE) {
-			await ctx.reply("File too large (max 20MB).");
+			sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 			return;
 		}
 		const buffer = await downloadTelegramFile(token, doc.file_id, bot.api);
 		if (!buffer) {
-			await ctx.reply("Failed to download document.");
+			sendNotice(ctx.api, ctx.chat.id, "error", "Failed to download document.");
 			return;
 		}
 		const mimeType = doc.mime_type ?? "application/octet-stream";

@@ -2,6 +2,7 @@ import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
 import { showQuestion, startTyping } from "~/lib/events";
 import { convertWithFallback } from "~/lib/markdown";
+import { sendNotice } from "~/lib/notice";
 import { getClient, getDirectory } from "~/lib/opencode";
 import type { QuestionState } from "~/lib/state";
 import * as state from "~/lib/state";
@@ -83,9 +84,12 @@ async function handlePermission(ctx: Context, data: string): Promise<void> {
 		.catch((err: unknown) => {
 			console.error("[handlers] permission.reply error:", err);
 			if (ctx.chat?.id)
-				ctx.api
-					.sendMessage(ctx.chat.id, "Failed to send permission reply.")
-					.catch(console.error);
+				sendNotice(
+					ctx.api,
+					ctx.chat.id,
+					"error",
+					"Failed to send permission reply.",
+				);
 		});
 
 	state.removePendingPermission(messageId);
@@ -222,9 +226,7 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 				.catch((err: unknown) => {
 					console.error("[handlers] question.reply (cancel) error:", err);
 					if (chatId)
-						ctx.api
-							.sendMessage(chatId, "Failed to cancel question.")
-							.catch(console.error);
+						sendNotice(ctx.api, chatId, "error", "Failed to cancel question.");
 				});
 
 			state.clearQuestionState();
@@ -301,9 +303,7 @@ function submitAllAnswers(ctx: Context, chatId: number): void {
 		})
 		.catch((err: unknown) => {
 			console.error("[handlers] question.reply error:", err);
-			ctx.api
-				.sendMessage(chatId, "Failed to submit answers.")
-				.catch(console.error);
+			sendNotice(ctx.api, chatId, "error", "Failed to submit answers.");
 		});
 	state.clearQuestionState();
 	// Resume typing — AI continues after question is resolved

@@ -5,6 +5,7 @@ import { InlineKeyboard } from "grammy";
 import mime from "mime";
 import { sendTelegramFile } from "~/lib/files";
 import { convertWithFallback, sendFormattedMessage } from "~/lib/markdown";
+import { sendNotice } from "~/lib/notice";
 import type { QuestionState } from "~/lib/state";
 import * as state from "~/lib/state";
 
@@ -199,7 +200,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			state.clearAccumulatedText();
 			state.clearAccumulatedFiles();
 			state.clearProcessedToolCalls();
-			bot.api.sendMessage(chatId, `Error: ${msg}`).catch(console.error);
+			sendNotice(bot.api, chatId, "error", msg);
 			break;
 		}
 

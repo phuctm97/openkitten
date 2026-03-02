@@ -1,6 +1,7 @@
 import type { Bot } from "grammy";
 import type { BotCommand } from "grammy/types";
 import { stopTyping } from "~/lib/events";
+import { sendNotice } from "~/lib/notice";
 import { getClient, getDirectory } from "~/lib/opencode";
 import * as state from "~/lib/state";
 
@@ -24,7 +25,7 @@ export function registerCommands(
 		});
 
 		if (error || !session) {
-			await ctx.reply("Failed to create session.");
+			sendNotice(ctx.api, ctx.chat.id, "error", "Failed to create session.");
 			return;
 		}
 
@@ -36,13 +37,16 @@ export function registerCommands(
 		state.clearPendingPermissions();
 		state.clearProcessedToolCalls();
 
-		await ctx.reply(`Session started: ${session.title}`);
+		sendNotice(ctx.api, ctx.chat.id, "started", "New session created.", {
+			language: "Session ID",
+			content: session.id,
+		});
 	});
 
 	bot.command("stop", async (ctx) => {
 		const sessionID = state.getSessionID();
 		if (!sessionID) {
-			await ctx.reply("No active session.");
+			sendNotice(ctx.api, ctx.chat.id, "error", "No active session.");
 			return;
 		}
 
@@ -56,21 +60,23 @@ export function registerCommands(
 		state.clearPendingPermissions();
 		state.clearProcessedToolCalls();
 
-		await ctx.reply("Stopped.");
+		sendNotice(ctx.api, ctx.chat.id, "stopped", "Current request aborted.");
 	});
 
-	bot.command("help", async (ctx) => {
-		await ctx.reply(
+	bot.command("help", (ctx) => {
+		sendNotice(
+			ctx.api,
+			ctx.chat.id,
+			"help",
 			[
-				"OpenKitten - AI agent on Telegram",
+				"OpenKitten \u2014 AI agent on Telegram",
 				"",
 				"Send any text message to chat with the AI.",
 				"The AI can browse the web, read/write files, and run commands.",
 				"",
-				"Commands:",
-				"/start - Start a new session",
-				"/stop - Abort the current request",
-				"/help - Show this message",
+				"/start \u2014 Start a new session",
+				"/stop \u2014 Abort the current request",
+				"/help \u2014 Show this message",
 			].join("\n"),
 		);
 	});
