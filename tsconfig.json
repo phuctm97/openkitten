@@ -1,11 +1,11 @@
 {
-	"references": [{ "path": "packages/bot/tsconfig.json" }],
 	"extends": "@tsconfig/bun/tsconfig.json",
 	"compilerOptions": {
-		"composite": true,
-		"emitDeclarationOnly": true,
-		"noEmit": false,
-		"allowImportingTsExtensions": false
+		"incremental": true,
+		"allowImportingTsExtensions": false,
+		"paths": {
+			"~/*": ["./*"]
+		}
 	},
-	"include": []
+	"include": ["lib", ".opencode/tools", ".opencode/plugins"]
 }

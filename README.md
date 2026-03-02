@@ -31,7 +31,7 @@ Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in ca
 git clone https://github.com/phuctm97/openkitten.git
 cd openkitten
 bun install
-bun run start --filter @openkitten/bot
+bun start
 ```
 
 ### Environment Variables
@@ -87,15 +87,15 @@ Set `DANGEROUSLY_DISABLE_SANDBOX=1` to bypass.
 
 | File | Role |
 |------|------|
-| `packages/bot/lib/index.ts` | Entry point: env validation, bot setup, media handlers, shutdown |
-| `packages/bot/lib/commands.ts` | `/start`, `/stop`, `/help` command handlers |
-| `packages/bot/lib/handlers.ts` | Callback query handlers for permissions and interactive questions |
-| `packages/bot/lib/events.ts` | SSE event processing: typing indicators, text/file accumulation, questions |
-| `packages/bot/lib/files.ts` | File download/upload, MIME routing, filename sanitization |
-| `packages/bot/lib/markdown.ts` | MarkdownV2 conversion with content-aware message splitting |
-| `packages/bot/lib/opencode.ts` | OpenCode SDK client wrapper with SSE reconnection |
-| `packages/bot/lib/sandbox.ts` | OS-level sandbox for the OpenCode server |
-| `packages/bot/lib/state.ts` | In-memory state (sessions, accumulated text/files, permissions, questions) |
+| `lib/index.ts` | Entry point: env validation, bot setup, media handlers, shutdown |
+| `lib/commands.ts` | `/start`, `/stop`, `/help` command handlers |
+| `lib/handlers.ts` | Callback query handlers for permissions and interactive questions |
+| `lib/events.ts` | SSE event processing: typing indicators, text/file accumulation, questions |
+| `lib/files.ts` | File download/upload, MIME routing, filename sanitization |
+| `lib/markdown.ts` | MarkdownV2 conversion with content-aware message splitting |
+| `lib/opencode.ts` | OpenCode SDK client wrapper with SSE reconnection |
+| `lib/sandbox.ts` | OS-level sandbox for the OpenCode server |
+| `lib/state.ts` | In-memory state (sessions, accumulated text/files, permissions, questions) |
 
 ## Roadmap
 
