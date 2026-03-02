@@ -70,7 +70,7 @@ File size limit: 20 MB (Telegram Bot API limit).
 ```
 Telegram <--> grammY Bot <--> Sandbox <--> OpenCode Server <--> AI Provider APIs
                   |                             |
-            In-memory State            Built-in Tools (bash, edit, read, webfetch, etc.)
+          SQLite + In-memory State      Built-in Tools (bash, edit, read, webfetch, etc.)
 ```
 
 ### Sandbox
@@ -89,13 +89,16 @@ Set `DANGEROUSLY_DISABLE_SANDBOX=1` to bypass.
 |------|------|
 | `lib/index.ts` | Entry point: env validation, bot setup, media handlers, shutdown |
 | `lib/commands.ts` | `/start`, `/stop`, `/help` command handlers |
-| `lib/handlers.ts` | Callback query handlers for permissions and interactive questions |
+| `lib/database.ts` | Drizzle ORM setup with Bun SQLite and auto-migration |
 | `lib/events.ts` | SSE event processing: typing indicators, text/file accumulation, questions |
 | `lib/files.ts` | File download/upload, MIME routing, filename sanitization |
+| `lib/handlers.ts` | Callback query handlers for permissions and interactive questions |
 | `lib/markdown.ts` | MarkdownV2 conversion with content-aware message splitting |
+| `lib/notice.ts` | System notification messages (errors, busy, info) |
 | `lib/opencode.ts` | OpenCode SDK client wrapper with SSE reconnection |
 | `lib/sandbox.ts` | OS-level sandbox for the OpenCode server |
-| `lib/state.ts` | In-memory state (sessions, accumulated text/files, permissions, questions) |
+| `lib/schema.ts` | Database schema definitions |
+| `lib/state.ts` | Session (persisted in SQLite) and in-memory state (accumulated text/files, permissions, questions) |
 
 ## Roadmap
 
