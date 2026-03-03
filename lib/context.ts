@@ -22,23 +22,23 @@ export class BotContext {
 	/** Typing indicator timer */
 	typingTimer: ReturnType<typeof setInterval> | null = null;
 
-	/** Clear transient state (keeps sessionID) */
+	/** Clear transient message state (keeps sessionID and eventChatId) */
 	resetTransient(): void {
 		this.accumulatedText.clear();
 		this.accumulatedFiles.clear();
 		this.pendingPermissions.clear();
 		this.processedToolCalls.clear();
 		this.questionState = null;
-		this.eventChatId = null;
 		if (this.typingTimer) {
 			clearInterval(this.typingTimer);
 			this.typingTimer = null;
 		}
 	}
 
-	/** Clear everything including sessionID */
+	/** Clear everything including sessionID and eventChatId */
 	resetAll(): void {
 		this.resetTransient();
 		this.sessionID = null;
+		this.eventChatId = null;
 	}
 }

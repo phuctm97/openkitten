@@ -53,8 +53,15 @@ describe("prompt constants", () => {
 
 describe("promptOpenCode", () => {
 	afterEach(() => {
-		mockSessionCreate.mockClear();
-		mockSessionPrompt.mockClear();
+		mockSessionCreate.mockReset();
+		mockSessionPrompt.mockReset();
+		// Restore default implementations after tests that override them
+		mockSessionCreate.mockImplementation(() =>
+			Promise.resolve({ data: { id: "new-session-123" }, error: null }),
+		);
+		mockSessionPrompt.mockImplementation(() =>
+			Promise.resolve({ error: null }),
+		);
 	});
 
 	test("auto-creates session when botCtx.sessionID is null", async () => {

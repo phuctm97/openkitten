@@ -382,6 +382,7 @@ describe("processEvent", () => {
 		botCtx.accumulatedFiles.set("m1", [
 			{ partID: "f1", url: "/tmp/f", mime: "text/plain" },
 		]);
+		botCtx.processedToolCalls.add("tc1");
 		const bot = mockBot();
 
 		const event: Event = {
@@ -392,6 +393,150 @@ describe("processEvent", () => {
 		processEvent(event, bot, 123, botCtx);
 		expect(botCtx.accumulatedText.size).toBe(0);
 		expect(botCtx.accumulatedFiles.size).toBe(0);
+		expect(botCtx.processedToolCalls.size).toBe(0);
+	});
+
+	test("message.updated cleans up state for completed assistant message", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		botCtx.accumulatedText.set("m1", "hello world");
+		const api = mockApi();
+		const bot = mockBot(api);
+		startTyping(botCtx, api, 123);
+
+		const event: Event = {
+			type: "message.updated",
+			properties: {
+				info: {
+					id: "m1",
+					sessionID: "s1",
+					role: "assistant",
+					time: { completed: Date.now() },
+				},
+			},
+		} as unknown as Event;
+
+		processEvent(event, bot, 123, botCtx);
+		expect(botCtx.accumulatedText.has("m1")).toBe(false);
+		expect(botCtx.typingTimer).toBeNull();
+	});
+
+	test("message.updated ignores non-assistant role", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		botCtx.accumulatedText.set("m1", "user message");
+		const bot = mockBot();
+
+		const event: Event = {
+			type: "message.updated",
+			properties: {
+				info: {
+					id: "m1",
+					sessionID: "s1",
+					role: "user",
+					time: { completed: Date.now() },
+				},
+			},
+		} as unknown as Event;
+
+		processEvent(event, bot, 123, botCtx);
+		expect(botCtx.accumulatedText.has("m1")).toBe(true);
+	});
+
+	test("message.updated ignores message without time.completed", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		botCtx.accumulatedText.set("m1", "partial");
+		const bot = mockBot();
+
+		const event: Event = {
+			type: "message.updated",
+			properties: {
+				info: {
+					id: "m1",
+					sessionID: "s1",
+					role: "assistant",
+					time: {},
+				},
+			},
+		} as unknown as Event;
+
+		processEvent(event, bot, 123, botCtx);
+		expect(botCtx.accumulatedText.has("m1")).toBe(true);
+	});
+
+	test("message.updated ignores wrong session", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		botCtx.accumulatedText.set("m1", "hello");
+		const bot = mockBot();
+
+		const event: Event = {
+			type: "message.updated",
+			properties: {
+				info: {
+					id: "m1",
+					sessionID: "wrong-session",
+					role: "assistant",
+					time: { completed: Date.now() },
+				},
+			},
+		} as unknown as Event;
+
+		processEvent(event, bot, 123, botCtx);
+		expect(botCtx.accumulatedText.has("m1")).toBe(true);
+	});
+
+	test("message.updated keeps typing when other messages remain", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		botCtx.accumulatedText.set("m1", "first message");
+		botCtx.accumulatedText.set("m2", "second message");
+		const api = mockApi();
+		const bot = mockBot(api);
+		startTyping(botCtx, api, 123);
+
+		const event: Event = {
+			type: "message.updated",
+			properties: {
+				info: {
+					id: "m1",
+					sessionID: "s1",
+					role: "assistant",
+					time: { completed: Date.now() },
+				},
+			},
+		} as unknown as Event;
+
+		processEvent(event, bot, 123, botCtx);
+		expect(botCtx.accumulatedText.has("m1")).toBe(false);
+		expect(botCtx.accumulatedText.has("m2")).toBe(true);
+		expect(botCtx.typingTimer).not.toBeNull();
+		stopTyping(botCtx);
+	});
+
+	test("message.updated cleans up accumulated files", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		botCtx.accumulatedFiles.set("m1", [
+			{ partID: "f1", url: "/tmp/file.png", mime: "image/png" },
+		]);
+		const bot = mockBot();
+
+		const event: Event = {
+			type: "message.updated",
+			properties: {
+				info: {
+					id: "m1",
+					sessionID: "s1",
+					role: "assistant",
+					time: { completed: Date.now() },
+				},
+			},
+		} as unknown as Event;
+
+		processEvent(event, bot, 123, botCtx);
+		expect(botCtx.accumulatedFiles.has("m1")).toBe(false);
 	});
 
 	test("renders permission keyboard on permission.asked", () => {

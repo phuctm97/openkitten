@@ -51,8 +51,7 @@ export function registerCommands(
 		await client.session
 			.abort({ sessionID: botCtx.sessionID, directory })
 			.catch(console.error);
-		botCtx.resetAll();
-		saveSessionID(null);
+		botCtx.resetTransient();
 
 		sendNotice(ctx.api, ctx.chat.id, "stopped", "Current request aborted.");
 	});

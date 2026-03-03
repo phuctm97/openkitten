@@ -55,12 +55,9 @@ describe("handleCallbackQuery", () => {
 		// Should not throw
 	});
 
-	test("routes permission callbacks", async () => {
+	test("responds with 'expired' for unknown permission", async () => {
 		const botCtx = new BotContext();
-		botCtx.pendingPermissions.set(42, {
-			requestID: "perm1",
-			messageId: 42,
-		});
+		// No pending permissions registered for messageId 42
 
 		const ctx = mockCtx({
 			callbackQuery: {
@@ -69,13 +66,39 @@ describe("handleCallbackQuery", () => {
 			},
 		});
 
-		// This will try to call getClient/getDirectory which will throw,
-		// but the permission lookup should work
-		try {
-			await handleCallbackQuery(ctx, botCtx);
-		} catch {
-			// Expected — getDirectory not initialized in test
-		}
+		await handleCallbackQuery(ctx, botCtx);
+		expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+			text: "Permission request expired",
+			show_alert: true,
+		});
+	});
+
+	test("answers callback for permission with missing messageId", async () => {
+		const botCtx = new BotContext();
+
+		const ctx = mockCtx({
+			callbackQuery: {
+				data: "permission:once",
+				message: undefined,
+			},
+		});
+
+		await handleCallbackQuery(ctx, botCtx);
+		expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+	});
+
+	test("answers callback for invalid permission action", async () => {
+		const botCtx = new BotContext();
+
+		const ctx = mockCtx({
+			callbackQuery: {
+				data: "permission:invalid",
+				message: { message_id: 42 },
+			},
+		});
+
+		await handleCallbackQuery(ctx, botCtx);
+		expect(ctx.answerCallbackQuery).toHaveBeenCalled();
 	});
 
 	test("answers with 'No active question' when no question state", async () => {

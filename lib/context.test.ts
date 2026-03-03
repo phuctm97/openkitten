@@ -14,7 +14,7 @@ describe("BotContext", () => {
 		expect(ctx.typingTimer).toBeNull();
 	});
 
-	test("resetTransient clears transient state but keeps sessionID", () => {
+	test("resetTransient clears transient state but keeps sessionID and eventChatId", () => {
 		const ctx = new BotContext();
 		ctx.sessionID = "test-session-123";
 		ctx.accumulatedText.set("msg1", "hello");
@@ -44,13 +44,13 @@ describe("BotContext", () => {
 		expect(ctx.pendingPermissions.size).toBe(0);
 		expect(ctx.processedToolCalls.size).toBe(0);
 		expect(ctx.questionState).toBeNull();
-		expect(ctx.eventChatId).toBeNull();
 		expect(ctx.typingTimer).toBeNull();
-		// sessionID preserved
+		// sessionID and eventChatId preserved — they're routing state, not message state
 		expect(ctx.sessionID).toBe("test-session-123");
+		expect(ctx.eventChatId).toBe(12345);
 	});
 
-	test("resetAll clears everything including sessionID", () => {
+	test("resetAll clears everything including sessionID and eventChatId", () => {
 		const ctx = new BotContext();
 		ctx.sessionID = "test-session-456";
 		ctx.accumulatedText.set("msg1", "hello");
