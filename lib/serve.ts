@@ -5,28 +5,18 @@ import { Bot, type Context } from "grammy";
 import { BOT_COMMANDS, registerCommands } from "~/lib/commands";
 import { BotContext } from "~/lib/context";
 import { processEvent, stopTyping } from "~/lib/events";
-import {
-	buildFileParts,
-	downloadTelegramFile,
-	resolveFilename,
-	saveTempFile,
-	TELEGRAM_MAX_FILE_SIZE,
-} from "~/lib/files";
 import { handleCallbackQuery, handleCustomTextInput } from "~/lib/handlers";
-import { sendNotice } from "~/lib/notice";
+import { registerMediaHandlers } from "~/lib/media";
 import {
-	getClient,
 	getDirectory,
 	initClient,
 	initDirectory,
 	stopEventListening,
 	subscribeToEvents,
 } from "~/lib/opencode";
+import { promptOpenCode } from "~/lib/prompt";
 import { createSandboxedServer } from "~/lib/sandbox";
-import { loadSessionID, saveSessionID } from "~/lib/session";
-
-const SESSION_LOCKED_RETRY_DELAY_MS = 1000;
-const SESSION_LOCKED_MAX_RETRIES = 3;
+import { loadSessionID } from "~/lib/session";
 
 function validateEnv(): { token: string; userId: number } {
 	const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -105,290 +95,20 @@ export default defineCommand({
 		// Callback queries
 		bot.on("callback_query:data", (ctx) => handleCallbackQuery(ctx, botCtx));
 
-		// Shared prompt helper: session creation + retry logic
-		async function promptOpenCode(
+		// Prompt helper bound to this bot's context
+		const prompt = (
 			ctx: Context,
 			parts: Array<TextPartInput | FilePartInput>,
-		): Promise<void> {
-			if (!ctx.chat) return;
-			const chatId = ctx.chat.id;
-			const directory = getDirectory();
-			ensureSubscription(directory, chatId);
-
-			// Auto-create session if none exists
-			let sessionID = botCtx.sessionID;
-			if (!sessionID) {
-				const client = getClient();
-				const { data: newSession, error } = await client.session.create({
-					directory,
-				});
-				if (error || !newSession) {
-					sendNotice(ctx.api, chatId, "error", "Failed to create session.");
-					return;
-				}
-				sessionID = newSession.id;
-				botCtx.sessionID = sessionID;
-				saveSessionID(sessionID);
-			}
-
-			// Fire-and-forget with SessionLockedError retry
-			const prompt = async (retries = 0): Promise<void> => {
-				const { error } = await getClient().session.prompt({
-					sessionID,
-					directory,
-					parts,
-				});
-
-				if (error) {
-					const errMsg =
-						typeof error === "object" && "message" in error
-							? (error as { message: string }).message
-							: String(error);
-
-					if (errMsg.includes("SessionLocked")) {
-						if (retries < SESSION_LOCKED_MAX_RETRIES) {
-							console.log(
-								`[bot] Session locked, retrying in ${SESSION_LOCKED_RETRY_DELAY_MS}ms (attempt ${retries + 1})`,
-							);
-							await new Promise((r) =>
-								setTimeout(r, SESSION_LOCKED_RETRY_DELAY_MS),
-							);
-							return prompt(retries + 1);
-						}
-						sendNotice(
-							bot.api,
-							chatId,
-							"busy",
-							"Still processing the previous message. Use /stop to abort.",
-						);
-						return;
-					}
-
-					console.error("[bot] prompt error:", error);
-					stopTyping(botCtx);
-					sendNotice(bot.api, chatId, "error", errMsg);
-				}
-			};
-
-			prompt().catch((err) => {
-				console.error("[bot] prompt error:", err);
-				stopTyping(botCtx);
-				sendNotice(bot.api, chatId, "error", "Error sending prompt.");
-			});
-		}
+		) => promptOpenCode(ctx, parts, botCtx, bot.api, ensureSubscription);
 
 		// Text messages
 		bot.on("message:text", async (ctx) => {
-			// Check if waiting for custom question input
 			if (await handleCustomTextInput(ctx, botCtx)) return;
-			await promptOpenCode(ctx, [{ type: "text", text: ctx.message.text }]);
+			await prompt(ctx, [{ type: "text", text: ctx.message.text }]);
 		});
 
-		// Photo messages
-		bot.on("message:photo", async (ctx) => {
-			const photo = ctx.message.photo.at(-1);
-			if (!photo) return;
-			if (photo.file_size && photo.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
-				return;
-			}
-			const buffer = await downloadTelegramFile(token, photo.file_id, bot.api);
-			if (!buffer) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "Failed to download photo.");
-				return;
-			}
-			const filename = resolveFilename("image/jpeg");
-			const filePath = saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				"image/jpeg",
-				filename,
-			);
-			if (ctx.message.caption) {
-				parts.push({ type: "text", text: ctx.message.caption });
-			}
-			await promptOpenCode(ctx, parts);
-		});
-
-		// Video messages
-		bot.on("message:video", async (ctx) => {
-			const video = ctx.message.video;
-			if (video.file_size && video.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
-				return;
-			}
-			const buffer = await downloadTelegramFile(token, video.file_id, bot.api);
-			if (!buffer) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "Failed to download video.");
-				return;
-			}
-			const mimeType = video.mime_type ?? "video/mp4";
-			const filename = resolveFilename(mimeType);
-			const filePath = saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				mimeType,
-				filename,
-			);
-			if (ctx.message.caption) {
-				parts.push({ type: "text", text: ctx.message.caption });
-			}
-			await promptOpenCode(ctx, parts);
-		});
-
-		// Voice messages
-		bot.on("message:voice", async (ctx) => {
-			const voice = ctx.message.voice;
-			if (voice.file_size && voice.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
-				return;
-			}
-			const buffer = await downloadTelegramFile(token, voice.file_id, bot.api);
-			if (!buffer) {
-				sendNotice(
-					ctx.api,
-					ctx.chat.id,
-					"error",
-					"Failed to download voice message.",
-				);
-				return;
-			}
-			const filename = resolveFilename("audio/ogg");
-			const filePath = saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				"audio/ogg",
-				filename,
-			);
-			if (ctx.message.caption) {
-				parts.push({ type: "text", text: ctx.message.caption });
-			}
-			await promptOpenCode(ctx, parts);
-		});
-
-		// Audio messages
-		bot.on("message:audio", async (ctx) => {
-			const audio = ctx.message.audio;
-			if (audio.file_size && audio.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
-				return;
-			}
-			const buffer = await downloadTelegramFile(token, audio.file_id, bot.api);
-			if (!buffer) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "Failed to download audio.");
-				return;
-			}
-			const mimeType = audio.mime_type ?? "audio/mpeg";
-			const filename = resolveFilename(mimeType, audio.file_name);
-			const filePath = saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				mimeType,
-				filename,
-			);
-			if (ctx.message.caption) {
-				parts.push({ type: "text", text: ctx.message.caption });
-			}
-			await promptOpenCode(ctx, parts);
-		});
-
-		// Video note messages (round videos)
-		bot.on("message:video_note", async (ctx) => {
-			const videoNote = ctx.message.video_note;
-			if (videoNote.file_size && videoNote.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
-				return;
-			}
-			const buffer = await downloadTelegramFile(
-				token,
-				videoNote.file_id,
-				bot.api,
-			);
-			if (!buffer) {
-				sendNotice(
-					ctx.api,
-					ctx.chat.id,
-					"error",
-					"Failed to download video note.",
-				);
-				return;
-			}
-			const filename = resolveFilename("video/mp4");
-			const filePath = saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				"video/mp4",
-				filename,
-			);
-			await promptOpenCode(ctx, parts);
-		});
-
-		// Sticker messages
-		bot.on("message:sticker", async (ctx) => {
-			const sticker = ctx.message.sticker;
-			if (sticker.file_size && sticker.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
-				return;
-			}
-			const buffer = await downloadTelegramFile(
-				token,
-				sticker.file_id,
-				bot.api,
-			);
-			if (!buffer) {
-				sendNotice(
-					ctx.api,
-					ctx.chat.id,
-					"error",
-					"Failed to download sticker.",
-				);
-				return;
-			}
-			const mimeType = sticker.is_video
-				? "video/webm"
-				: sticker.is_animated
-					? "application/x-tgsticker"
-					: "image/webp";
-			const filename = resolveFilename(mimeType);
-			const filePath = saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				mimeType,
-				filename,
-			);
-			await promptOpenCode(ctx, parts);
-		});
-
-		// Document messages
-		bot.on("message:document", async (ctx) => {
-			const doc = ctx.message.document;
-			if (doc.file_size && doc.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
-				return;
-			}
-			const buffer = await downloadTelegramFile(token, doc.file_id, bot.api);
-			if (!buffer) {
-				sendNotice(
-					ctx.api,
-					ctx.chat.id,
-					"error",
-					"Failed to download document.",
-				);
-				return;
-			}
-			const mimeType = doc.mime_type ?? "application/octet-stream";
-			const filename = resolveFilename(mimeType, doc.file_name);
-			const filePath = saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				mimeType,
-				filename,
-			);
-			if (ctx.message.caption) {
-				parts.push({ type: "text", text: ctx.message.caption });
-			}
-			await promptOpenCode(ctx, parts);
-		});
+		// Media handlers (photo, video, voice, audio, video_note, sticker, document)
+		registerMediaHandlers(bot, token, prompt);
 
 		// Error handler
 		bot.catch((err) => console.error("[bot] Error:", err));

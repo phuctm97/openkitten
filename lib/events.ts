@@ -7,6 +7,7 @@ import type { BotContext } from "~/lib/context";
 import { sendTelegramFile } from "~/lib/files";
 import { convertWithFallback, sendFormattedMessage } from "~/lib/markdown";
 import { sendNotice } from "~/lib/notice";
+import { buildQuestionMessage } from "~/lib/question-ui";
 import type { AccumulatedFile, QuestionItem, QuestionState } from "~/lib/types";
 
 export function startTyping(
@@ -35,38 +36,16 @@ export function showQuestion(
 	chatId: number,
 	qs: QuestionState,
 ): void {
-	const question = qs.questions[qs.currentIndex];
-	if (!question) return;
+	const msg = buildQuestionMessage(qs);
+	if (!msg) return;
 
-	const idx = qs.currentIndex;
-	const total = qs.questions.length;
-	const progress = total > 1 ? `${idx + 1}/${total} ` : "";
-	const header = question.header ? `**${progress}${question.header}**\n\n` : "";
-	const multi = question.multiple ? "\n_Select multiple_" : "";
-	const markdown = `${header}${question.question}${multi}\n\n_Or just type your answer._`;
-
-	const keyboard = new InlineKeyboard();
-	const selected = qs.selectedOptions.get(idx) ?? new Set<number>();
-
-	for (const [i, opt] of question.options.entries()) {
-		const icon = selected.has(i) ? "\u2705 " : "";
-		const label = `${icon}${opt.label}`.slice(0, 60);
-		keyboard.text(label, `question:select:${idx}:${i}`).row();
-	}
-
-	if (question.multiple) {
-		keyboard.text("Submit", `question:submit:${idx}`).row();
-	}
-	keyboard.text("Cancel", `question:cancel:${idx}`);
-
-	const converted = convertWithFallback(markdown);
 	api
-		.sendMessage(chatId, converted.text, {
-			reply_markup: keyboard,
-			...(converted.parseMode && { parse_mode: converted.parseMode }),
+		.sendMessage(chatId, msg.text, {
+			reply_markup: msg.keyboard,
+			...(msg.parseMode && { parse_mode: msg.parseMode }),
 		})
-		.then((msg) => {
-			qs.activeMessageId = msg.message_id;
+		.then((sent) => {
+			qs.activeMessageId = sent.message_id;
 		})
 		.catch(console.error);
 }

@@ -1,35 +1,14 @@
 import type { Context } from "grammy";
-import { InlineKeyboard } from "grammy";
 import type { BotContext } from "~/lib/context";
 import { showQuestion, startTyping } from "~/lib/events";
-import { convertWithFallback } from "~/lib/markdown";
 import { sendNotice } from "~/lib/notice";
 import { getClient, getDirectory } from "~/lib/opencode";
+import {
+	buildAnsweredMessage,
+	buildCancelledMessage,
+	buildQuestionMessage,
+} from "~/lib/question-ui";
 import type { QuestionState } from "~/lib/types";
-
-function formatAnsweredQuestion(
-	qs: QuestionState,
-	qIdx: number,
-	answer: string,
-): string {
-	const question = qs.questions[qIdx];
-	if (!question) return `\u2713 ${answer}`;
-
-	const total = qs.questions.length;
-	const progress = total > 1 ? `${qIdx + 1}/${total} ` : "";
-	const header = question.header ? `**${progress}${question.header}**\n\n` : "";
-	return `${header}${question.question}\n\n\u2713 ${answer}`;
-}
-
-function formatCancelledQuestion(qs: QuestionState, qIdx: number): string {
-	const question = qs.questions[qIdx];
-	if (!question) return "\u2717 Cancelled";
-
-	const total = qs.questions.length;
-	const progress = total > 1 ? `${qIdx + 1}/${total} ` : "";
-	const header = question.header ? `**${progress}${question.header}**\n\n` : "";
-	return `${header}${question.question}\n\n\u2717 Cancelled`;
-}
 
 export async function handleCallbackQuery(
 	ctx: Context,
@@ -164,11 +143,10 @@ async function handleQuestion(
 				selected.add(optIdx);
 				await ctx.answerCallbackQuery().catch(() => {});
 				const answer = question.options[optIdx]?.label ?? "";
-				const markdown = formatAnsweredQuestion(qs, qIdx, answer);
-				const converted = convertWithFallback(markdown);
+				const msg = buildAnsweredMessage(qs, qIdx, answer);
 				await ctx
-					.editMessageText(converted.text, {
-						...(converted.parseMode && { parse_mode: converted.parseMode }),
+					.editMessageText(msg.text, {
+						...(msg.parseMode && { parse_mode: msg.parseMode }),
 					})
 					.catch((err) =>
 						console.error(
@@ -197,11 +175,10 @@ async function handleQuestion(
 						.filter(Boolean)
 						.join(", ")
 				: "";
-			const markdown = formatAnsweredQuestion(qs, qIdx, labels);
-			const converted = convertWithFallback(markdown);
+			const msg = buildAnsweredMessage(qs, qIdx, labels);
 			await ctx
-				.editMessageText(converted.text, {
-					...(converted.parseMode && { parse_mode: converted.parseMode }),
+				.editMessageText(msg.text, {
+					...(msg.parseMode && { parse_mode: msg.parseMode }),
 				})
 				.catch((err) =>
 					console.error(
@@ -213,12 +190,11 @@ async function handleQuestion(
 			break;
 		}
 		case "cancel": {
-			const cancelMarkdown = formatCancelledQuestion(qs, qIdx);
-			const cancelConverted = convertWithFallback(cancelMarkdown);
+			const cancelMsg = buildCancelledMessage(qs, qIdx);
 			await ctx
-				.editMessageText(cancelConverted.text, {
-					...(cancelConverted.parseMode && {
-						parse_mode: cancelConverted.parseMode,
+				.editMessageText(cancelMsg.text, {
+					...(cancelMsg.parseMode && {
+						parse_mode: cancelMsg.parseMode,
 					}),
 				})
 				.catch((err) =>
@@ -330,36 +306,13 @@ async function updateQuestionMessage(
 	ctx: Context,
 	qs: QuestionState,
 ): Promise<void> {
-	const question = qs.questions[qs.currentIndex];
-	if (!question) return;
+	const msg = buildQuestionMessage(qs);
+	if (!msg) return;
 
-	const idx = qs.currentIndex;
-	const total = qs.questions.length;
-	const progress = total > 1 ? `${idx + 1}/${total} ` : "";
-	const header = question.header ? `**${progress}${question.header}**\n\n` : "";
-	const multi = question.multiple ? "\n_Select multiple_" : "";
-	const markdown = `${header}${question.question}${multi}\n\n_Or just type your answer._`;
-
-	const keyboard = new InlineKeyboard();
-	const selected = qs.selectedOptions.get(idx) ?? new Set<number>();
-
-	for (const [i, opt] of question.options.entries()) {
-		const icon = selected.has(i) ? "\u2705 " : "";
-		keyboard
-			.text(`${icon}${opt.label}`.slice(0, 60), `question:select:${idx}:${i}`)
-			.row();
-	}
-
-	if (question.multiple) {
-		keyboard.text("Submit", `question:submit:${idx}`).row();
-	}
-	keyboard.text("Cancel", `question:cancel:${idx}`);
-
-	const converted = convertWithFallback(markdown);
 	await ctx
-		.editMessageText(converted.text, {
-			reply_markup: keyboard,
-			...(converted.parseMode && { parse_mode: converted.parseMode }),
+		.editMessageText(msg.text, {
+			reply_markup: msg.keyboard,
+			...(msg.parseMode && { parse_mode: msg.parseMode }),
 		})
 		.catch((err) =>
 			console.error("[handlers] editMessageText error (toggle):", err),
@@ -381,11 +334,10 @@ export async function handleCustomTextInput(
 	qs.customAnswers.set(qIdx, text);
 
 	if (qs.activeMessageId) {
-		const markdown = formatAnsweredQuestion(qs, qIdx, text);
-		const converted = convertWithFallback(markdown);
+		const msg = buildAnsweredMessage(qs, qIdx, text);
 		await ctx.api
-			.editMessageText(chatId, qs.activeMessageId, converted.text, {
-				...(converted.parseMode && { parse_mode: converted.parseMode }),
+			.editMessageText(chatId, qs.activeMessageId, msg.text, {
+				...(msg.parseMode && { parse_mode: msg.parseMode }),
 			})
 			.catch((err) =>
 				console.error("[handlers] editMessageText error (custom text):", err),
