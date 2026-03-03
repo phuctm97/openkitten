@@ -24,6 +24,8 @@ Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in ca
 curl -fsSL https://raw.githubusercontent.com/phuctm97/openkitten/main/install.sh | bash
 ```
 
+Set `OPENKITTEN_DIR` to customize the install directory (defaults to `~/.openkitten`).
+
 ### Prerequisites
 
 - [Bun](https://bun.sh) v1.0+
@@ -60,11 +62,17 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 
 Send any message to chat with the AI — a session is created automatically on your first message. When the AI needs to run a command or edit a file, you'll see inline buttons to approve or deny. The AI can also ask interactive questions with option buttons or free-text input.
 
-### Commands
+### Chat Commands
 
 - `/start` — Start a new session
 - `/stop` — Abort the current request
 - `/help` — Show help
+
+### CLI Commands
+
+- `bun setup` — Check dependencies, environment, and install the system service
+- `bun start` — Start the bot
+- `bun self-update` — Update to the latest version (pulls changes, installs dependencies, restarts service)
 
 ### Supported Media
 
@@ -92,41 +100,11 @@ The sandbox runtime also automatically blocks writes to shell configs (`.bashrc`
 
 Set `DANGEROUSLY_DISABLE_SANDBOX=1` to bypass.
 
-### Source Files
+### System Service
 
-| File | Role |
-|------|------|
-| `lib/index.ts` | CLI entry point: command routing via citty |
-| `lib/setup.ts` | `setup` command: dependency and environment checks |
-| `lib/service.ts` | System service generation, installation, and status detection |
-| `lib/serve.ts` | `serve` command: env validation, bot setup, media handlers, shutdown |
-| `lib/commands.ts` | `/start`, `/stop`, `/help` command handlers |
-| `lib/database.ts` | Drizzle ORM setup with Bun SQLite and auto-migration |
-| `lib/events.ts` | SSE event processing: typing indicators, text/file accumulation, questions |
-| `lib/files.ts` | File download/upload, MIME routing, filename sanitization |
-| `lib/handlers.ts` | Callback query handlers for permissions and interactive questions |
-| `lib/markdown.ts` | MarkdownV2 conversion with content-aware message splitting |
-| `lib/notice.ts` | System notification messages (errors, busy, info) |
-| `lib/opencode.ts` | OpenCode SDK client wrapper with SSE reconnection |
-| `lib/sandbox.ts` | OS-level sandbox for the OpenCode server |
-| `lib/schema.ts` | Database schema definitions |
-| `lib/state.ts` | Session (persisted in SQLite) and in-memory state (accumulated text/files, permissions, questions) |
+`bun setup` automatically installs OpenKitten as a system service that starts on boot and auto-restarts on failure:
 
-## Roadmap
+- **macOS** — LaunchAgent (`~/Library/LaunchAgents/com.openkitten.bot.plist`)
+- **Linux** — systemd user unit (`~/.config/systemd/user/openkitten.service`)
 
-### Built-in Integrations
-
-- Gmail (read, send, search)
-- IMAP (generic email)
-- Calendar
-
-### Platform
-
-- Multi-user support with allowlist and per-user state isolation
-- Per-user sandboxed OpenCode server instances
-- `/model`, `/provider`, `/config` commands
-- Webhook mode for production
-
-## License
-
-MIT
+Logs are written to `~/.local/log/openkitten/`.
