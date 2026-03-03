@@ -10,7 +10,7 @@ const NOTICE_META: Record<NoticeKind, { emoji: string; title: string }> = {
 	help: { emoji: "📖", title: "Help" },
 };
 
-function escapeMarkdownV2(text: string): string {
+export function escapeMarkdownV2(text: string): string {
 	return text.replace(/([_*[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
 }
 

@@ -38,7 +38,7 @@ export function getDirectory(): string {
 	return cachedDirectory;
 }
 
-function getReconnectDelay(attempt: number): number {
+export function getReconnectDelay(attempt: number): number {
 	return Math.min(
 		RECONNECT_BASE_MS * 2 ** Math.max(0, attempt - 1),
 		RECONNECT_MAX_MS,
