@@ -62,7 +62,9 @@ export default defineCommand({
 
 		console.log("[bot] Starting OpenCode server...");
 		const server = await createSandboxedServer({ port: 4096 });
-		console.log(`[bot] OpenCode server running at ${server.url}`);
+		console.log(
+			`[bot] OpenCode server running at ${server.url} (sandbox: ${server.sandboxed ? "enabled" : "DISABLED"})`,
+		);
 
 		initClient(server.url);
 		await initDirectory();
