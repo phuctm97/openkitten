@@ -33,7 +33,7 @@ Set `OPENKITTEN_DIR` to customize the install directory (defaults to `~/.openkit
 - Your Telegram user ID (send `/start` to [@userinfobot](https://t.me/userinfobot))
 - At least one AI provider API key
 
-### Install & Run
+### Manual Install
 
 ```bash
 git clone https://github.com/phuctm97/openkitten.git
@@ -70,8 +70,8 @@ Send any message to chat with the AI — a session is created automatically on y
 
 ### CLI Commands
 
-- `bun setup` — Check dependencies, environment, and install the system service
 - `bun start` — Start the bot
+- `bun setup` — Check dependencies, configure environment variables, and install the system service
 - `bun self-update` — Update to the latest version (pulls changes, installs dependencies, restarts service)
 
 ### Supported Media
