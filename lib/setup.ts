@@ -3,6 +3,11 @@ import { join } from "node:path";
 import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
 import { defineCommand } from "citty";
 import pc from "picocolors";
+import {
+	getServiceStatus,
+	installService,
+	supportedPlatform,
+} from "~/lib/service";
 
 // Pad each tag to align text at a consistent column.
 // Longest non-transient tag is "[missing]" (9 chars), so pad to 10.
@@ -33,7 +38,10 @@ function printFooter(hasFailed: boolean) {
 			pc.red("Some required checks failed. Fix the issues above and re-run."),
 		);
 	} else {
-		console.log(pc.green("Ready!") + " Run `bun start` to launch the bot.");
+		console.log(
+			pc.green("Ready!") +
+				" The bot will start automatically, or run `bun start` to launch manually.",
+		);
 	}
 	console.log();
 }
@@ -217,6 +225,50 @@ function checkSandbox() {
 	}
 }
 
+async function checkService(): Promise<void> {
+	try {
+		const platform = supportedPlatform();
+		if (!platform) {
+			console.log(
+				`${WARN}System service — not supported on ${process.platform}`,
+			);
+			return;
+		}
+
+		const status = await getServiceStatus();
+
+		if (status.installed && status.running) {
+			console.log(`${OK}System service (${pc.dim(status.path)})`);
+			return;
+		}
+
+		if (status.installed && !status.running) {
+			const hint =
+				platform === "darwin"
+					? `launchctl load ${status.path}`
+					: "systemctl --user start openkitten.service";
+			console.log(`${WARN}System service — installed but not running`);
+			console.log(`          Run ${pc.dim(hint)} to start it.`);
+			return;
+		}
+
+		// Not installed — attempt install
+		console.log(`${INSTALLING}System service...`);
+		const result = await installService();
+
+		if (result.ok) {
+			console.log(`${OK}System service (${pc.dim(result.path)})`);
+		} else {
+			console.log(`${WARN}System service — install failed`);
+			console.log(`          ${pc.dim(result.reason)}`);
+		}
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		console.log(`${WARN}System service — check failed`);
+		console.log(`          ${pc.dim(msg)}`);
+	}
+}
+
 export default defineCommand({
 	meta: { description: "Check dependencies and environment setup" },
 	run: async () => {
@@ -247,6 +299,11 @@ export default defineCommand({
 
 		// 5. Sandbox (informational, never a blocker)
 		checkSandbox();
+
+		console.log();
+
+		// 6. System service (informational, never a blocker)
+		await checkService();
 
 		printFooter(hasFailed);
 
