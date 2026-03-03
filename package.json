@@ -5,7 +5,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"prepare": "lefthook install",
+		"prepare": "lefthook install --reset-hooks-path",
 		"setup": "bun lib/index.ts setup",
 		"start": "bun lib/index.ts serve",
 		"dev": "bun --hot lib/index.ts serve",

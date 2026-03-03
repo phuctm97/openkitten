@@ -78,9 +78,11 @@ Telegram <--> grammY Bot <--> Sandbox <--> OpenCode Server <--> AI Provider APIs
 
 The OpenCode server runs inside an OS-level sandbox (via `@anthropic-ai/sandbox-runtime`) that restricts filesystem and network access:
 
-- **Read-blocked:** `~/.ssh`, `~/.aws`, `~/.gnupg`, `~/.config/gcloud`
-- **Write-protected:** `.env`, `.env.local`, `.env.production`
-- **Network:** Limited to known AI provider domains
+- **Read-blocked:** Credential directories — `~/.ssh`, `~/.aws`, `~/.azure`, `~/.config/gcloud`, `~/.docker`, `~/.kube`, `~/.gnupg`, `~/.npmrc`, `~/.yarnrc`, `~/.netrc`, `~/.config/gh`, `~/.config/op`
+- **Write-protected:** `.env*` (all variants), `*.pem`, `*.key`
+- **Network:** Comprehensive allowlist covering 17+ AI providers, package registries, version control, container registries, cloud platforms, and dev tools. All other domains are blocked.
+
+The sandbox runtime also automatically blocks writes to shell configs (`.bashrc`, `.zshrc`, `.profile`), git config, and IDE directories.
 
 Set `DANGEROUSLY_DISABLE_SANDBOX=1` to bypass.
 
