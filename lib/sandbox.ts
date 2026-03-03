@@ -7,30 +7,291 @@ import {
 } from "@anthropic-ai/sandbox-runtime";
 import { createOpencodeServer } from "@opencode-ai/sdk/v2/server";
 
+const home = homedir();
+
+// ── Credential directories the AI agent has no reason to access ──────────────
+
+const DENY_READ: string[] = [
+	resolve(home, ".ssh"),
+	resolve(home, ".aws"),
+	resolve(home, ".azure"),
+	resolve(home, ".config/gcloud"),
+	resolve(home, ".docker"),
+	resolve(home, ".kube"),
+	resolve(home, ".gnupg"),
+	resolve(home, ".npmrc"),
+	resolve(home, ".yarnrc"),
+	resolve(home, ".netrc"),
+	resolve(home, ".config/gh"),
+	resolve(home, ".config/op"),
+];
+
+// ── Writable paths ──────────────────────────────────────────────────────────
+
+const ALLOW_WRITE: string[] = [
+	".",
+	"/tmp",
+	resolve(home, ".local/share/opencode"),
+];
+
+// ── Write-denied patterns (within allowWrite paths) ─────────────────────────
+
+const DENY_WRITE: string[] = [".env*", "*.pem", "*.key"];
+
+// ── Network allowlist ───────────────────────────────────────────────────────
+// AI requests always work, OpenCode always works, everything else is denied.
+//
+// Combines:
+//   1. AI provider domains (our addition — not in Claude Code's default list)
+//   2. Full Claude Code web remote default allowlist
+
+const ALLOWED_DOMAINS: string[] = [
+	// ── AI Providers ────────────────────────────────────────────────────────
+	// Anthropic
+	"anthropic.com",
+	"*.anthropic.com",
+	// OpenAI
+	"openai.com",
+	"*.openai.com",
+	// Google / Vertex AI
+	"googleapis.com",
+	"*.googleapis.com",
+	// Azure OpenAI
+	"*.openai.azure.com",
+	"*.cognitiveservices.azure.com",
+	// AWS Bedrock
+	"*.amazonaws.com",
+	// OpenRouter
+	"openrouter.ai",
+	"*.openrouter.ai",
+	// Mistral
+	"mistral.ai",
+	"*.mistral.ai",
+	// Groq
+	"groq.com",
+	"*.groq.com",
+	// Together AI
+	"together.ai",
+	"*.together.ai",
+	"together.xyz",
+	"*.together.xyz",
+	// Fireworks AI
+	"fireworks.ai",
+	"*.fireworks.ai",
+	// Perplexity
+	"perplexity.ai",
+	"*.perplexity.ai",
+	// Cohere
+	"cohere.com",
+	"*.cohere.com",
+	"cohere.ai",
+	"*.cohere.ai",
+	// DeepSeek
+	"deepseek.com",
+	"*.deepseek.com",
+	// xAI
+	"x.ai",
+	"*.x.ai",
+	// Cerebras
+	"cerebras.ai",
+	"*.cerebras.ai",
+	// SambaNova
+	"sambanova.ai",
+	"*.sambanova.ai",
+	// AI21
+	"ai21.com",
+	"*.ai21.com",
+
+	// ── Claude Code web remote defaults ─────────────────────────────────────
+
+	// Anthropic services (subdomains covered by *.anthropic.com above)
+	"sentry.io",
+	"*.sentry.io",
+
+	// Version control
+	"github.com",
+	"*.github.com",
+	"github.io",
+	"*.github.io",
+	"githubusercontent.com",
+	"*.githubusercontent.com",
+	"gitlab.com",
+	"*.gitlab.com",
+	"bitbucket.org",
+	"*.bitbucket.org",
+
+	// Container registries (mcr.microsoft.com covered by *.microsoft.com)
+	"docker.io",
+	"*.docker.io",
+	"docker.com",
+	"*.docker.com",
+	"gcr.io",
+	"*.gcr.io",
+	"ghcr.io",
+	"*.ghcr.io",
+	"*.mcr.microsoft.com",
+	"*.ecr.aws",
+
+	// Cloud platforms
+	"cloud.google.com",
+	"*.cloud.google.com",
+	"azure.com",
+	"*.azure.com",
+	"microsoft.com",
+	"*.microsoft.com",
+	"oracle.com",
+	"*.oracle.com",
+	"java.com",
+	"*.java.com",
+
+	// Package managers — JavaScript / Node
+	"registry.npmjs.org",
+	"npmjs.com",
+	"*.npmjs.com",
+	"yarnpkg.com",
+	"*.yarnpkg.com",
+	"unpkg.com",
+	"*.unpkg.com",
+	"jsdelivr.net",
+	"*.jsdelivr.net",
+	"esm.sh",
+	"*.esm.sh",
+
+	// Package managers — Python
+	"pypi.org",
+	"*.pypi.org",
+	"pythonhosted.org",
+	"*.pythonhosted.org",
+	"python.org",
+	"*.python.org",
+
+	// Package managers — Ruby
+	"rubygems.org",
+	"*.rubygems.org",
+
+	// Package managers — Rust
+	"crates.io",
+	"*.crates.io",
+	"rust-lang.org",
+	"*.rust-lang.org",
+
+	// Package managers — Go
+	"golang.org",
+	"*.golang.org",
+	"go.dev",
+	"*.go.dev",
+
+	// Package managers — JVM
+	"maven.org",
+	"*.maven.org",
+	"mvnrepository.com",
+	"*.mvnrepository.com",
+	"gradle.org",
+	"*.gradle.org",
+
+	// Package managers — PHP
+	"packagist.org",
+	"*.packagist.org",
+	"getcomposer.org",
+	"*.getcomposer.org",
+
+	// Package managers — .NET (dotnet.microsoft.com covered by *.microsoft.com)
+	"nuget.org",
+	"*.nuget.org",
+
+	// Package managers — Dart
+	"pub.dev",
+	"*.pub.dev",
+	"dart.dev",
+	"*.dart.dev",
+
+	// Package managers — Elixir
+	"hex.pm",
+	"*.hex.pm",
+
+	// Package managers — Perl
+	"cpan.org",
+	"*.cpan.org",
+	"metacpan.org",
+	"*.metacpan.org",
+
+	// Package managers — Cocoa
+	"cocoapods.org",
+	"*.cocoapods.org",
+
+	// Package managers — Haskell
+	"haskell.org",
+	"*.haskell.org",
+
+	// Package managers — Swift
+	"swiftpackageindex.com",
+	"*.swiftpackageindex.com",
+	"swift.org",
+	"*.swift.org",
+
+	// Linux distributions
+	"ubuntu.com",
+	"*.ubuntu.com",
+	"debian.org",
+	"*.debian.org",
+	"archlinux.org",
+	"*.archlinux.org",
+
+	// Dev tools
+	"kubernetes.io",
+	"*.kubernetes.io",
+	"hashicorp.com",
+	"*.hashicorp.com",
+	"anaconda.com",
+	"*.anaconda.com",
+	"anaconda.org",
+	"*.anaconda.org",
+	"apache.org",
+	"*.apache.org",
+	"eclipse.org",
+	"*.eclipse.org",
+	"nodejs.org",
+	"*.nodejs.org",
+	"bun.sh",
+	"*.bun.sh",
+	"deno.land",
+	"*.deno.land",
+
+	// Cloud services & monitoring
+	"statsig.com",
+	"*.statsig.com",
+	"datadoghq.com",
+	"*.datadoghq.com",
+
+	// CDN & mirrors
+	"sourceforge.net",
+	"*.sourceforge.net",
+	"packagecloud.io",
+	"*.packagecloud.io",
+	"cloudflare.com",
+	"*.cloudflare.com",
+
+	// Schema & config
+	"json-schema.org",
+	"*.json-schema.org",
+	"schemastore.org",
+	"*.schemastore.org",
+
+	// MCP
+	"modelcontextprotocol.io",
+	"*.modelcontextprotocol.io",
+];
+
+// ── Sandbox configuration ───────────────────────────────────────────────────
+
 const SANDBOX_CONFIG: SandboxRuntimeConfig = {
 	filesystem: {
-		denyRead: [
-			resolve(homedir(), ".ssh"),
-			resolve(homedir(), ".aws"),
-			resolve(homedir(), ".gnupg"),
-			resolve(homedir(), ".config/gcloud"),
-		],
-		allowWrite: [".", "/tmp", resolve(homedir(), ".local/share/opencode")],
-		denyWrite: [".env", ".env.local", ".env.production"],
+		denyRead: DENY_READ,
+		allowWrite: ALLOW_WRITE,
+		denyWrite: DENY_WRITE,
 	},
 	network: {
-		allowedDomains: [
-			"anthropic.com",
-			"*.anthropic.com",
-			"openai.com",
-			"*.openai.com",
-			"googleapis.com",
-			"*.googleapis.com",
-			"openrouter.ai",
-			"*.openrouter.ai",
-			"registry.npmjs.org",
-			"registry.yarnpkg.com",
-		],
+		allowedDomains: ALLOWED_DOMAINS,
 		deniedDomains: [],
 		allowLocalBinding: true,
 	},
@@ -39,27 +300,34 @@ const SANDBOX_CONFIG: SandboxRuntimeConfig = {
 export async function createSandboxedServer(options?: {
 	port?: number;
 	timeout?: number;
-}): Promise<{ url: string; close: () => void }> {
+}): Promise<{ url: string; close: () => void; sandboxed: boolean }> {
 	const port = options?.port ?? 4096;
 	const timeout = options?.timeout ?? 5000;
 
 	if (process.env.DANGEROUSLY_DISABLE_SANDBOX === "1") {
-		console.warn("[sandbox] Sandbox disabled via DANGEROUSLY_DISABLE_SANDBOX");
-		return createOpencodeServer({ port, timeout });
+		console.warn(
+			"*** SANDBOX DISABLED *** Sandbox bypassed via DANGEROUSLY_DISABLE_SANDBOX",
+		);
+		const server = await createOpencodeServer({ port, timeout });
+		return { ...server, sandboxed: false };
 	}
 
 	if (!SandboxManager.isSupportedPlatform()) {
-		console.warn("[sandbox] Platform not supported, running without sandbox");
-		return createOpencodeServer({ port, timeout });
+		console.warn(
+			"*** SANDBOX UNAVAILABLE *** Platform not supported, running without sandbox",
+		);
+		const server = await createOpencodeServer({ port, timeout });
+		return { ...server, sandboxed: false };
 	}
 
 	const deps = SandboxManager.checkDependencies();
 	if (deps.errors.length > 0) {
 		console.warn(
-			"[sandbox] Missing dependencies, running without sandbox:",
+			"*** SANDBOX UNAVAILABLE *** Missing dependencies, running without sandbox:",
 			deps.errors.join(", "),
 		);
-		return createOpencodeServer({ port, timeout });
+		const server = await createOpencodeServer({ port, timeout });
+		return { ...server, sandboxed: false };
 	}
 
 	await SandboxManager.initialize(SANDBOX_CONFIG);
@@ -142,5 +410,6 @@ export async function createSandboxedServer(options?: {
 				console.error("[sandbox] Cleanup error:", err),
 			);
 		},
+		sandboxed: true,
 	};
 }
