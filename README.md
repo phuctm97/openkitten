@@ -18,6 +18,12 @@ Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in ca
 
 ## Setup
 
+### Quick Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/phuctm97/openkitten/main/install.sh | bash
+```
+
 ### Prerequisites
 
 - [Bun](https://bun.sh) v1.0+
