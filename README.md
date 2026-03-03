@@ -31,6 +31,7 @@ Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in ca
 git clone https://github.com/phuctm97/openkitten.git
 cd openkitten
 bun install
+bun setup
 bun start
 ```
 
@@ -88,6 +89,7 @@ Set `DANGEROUSLY_DISABLE_SANDBOX=1` to bypass.
 | File | Role |
 |------|------|
 | `lib/index.ts` | CLI entry point: command routing via citty |
+| `lib/setup.ts` | `setup` command: dependency and environment checks |
 | `lib/serve.ts` | `serve` command: env validation, bot setup, media handlers, shutdown |
 | `lib/commands.ts` | `/start`, `/stop`, `/help` command handlers |
 | `lib/database.ts` | Drizzle ORM setup with Bun SQLite and auto-migration |

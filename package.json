@@ -6,6 +6,7 @@
 	"type": "module",
 	"scripts": {
 		"prepare": "lefthook install",
+		"setup": "bun lib/index.ts setup",
 		"start": "bun lib/index.ts serve",
 		"dev": "bun --hot lib/index.ts serve",
 		"typecheck": "bun --bun tsc --build",
@@ -22,6 +23,8 @@
 		"grammy": "^1.41.1",
 		"mime": "^4.1.0",
 		"nanoid": "^5.1.6",
+		"opencode-ai": "^1.2.15",
+		"picocolors": "^1.1.1",
 		"telegram-markdown-v2": "^0.0.4"
 	},
 	"devDependencies": {
