@@ -101,6 +101,198 @@ const ALLOWED_DOMAINS: string[] = [
 	// AI21
 	"ai21.com",
 	"*.ai21.com",
+	// MiniMax
+	"minimax.io",
+	"*.minimax.io",
+	"minimaxi.com",
+	"*.minimaxi.com",
+	// 302.ai
+	"302.ai",
+	"*.302.ai",
+	// Abacus AI
+	"abacus.ai",
+	"*.abacus.ai",
+	// AIHubMix
+	"aihubmix.com",
+	"*.aihubmix.com",
+	// Alibaba / Qwen (DashScope)
+	"aliyuncs.com",
+	"*.aliyuncs.com",
+	// Bailing (Ant Group)
+	"tbox.cn",
+	"*.tbox.cn",
+	// Baseten
+	"baseten.co",
+	"*.baseten.co",
+	// Berget
+	"berget.ai",
+	"*.berget.ai",
+	// Chutes
+	"chutes.ai",
+	"*.chutes.ai",
+	// Cloudferro Sherlock
+	"cloudferro.com",
+	"*.cloudferro.com",
+	// Cortecs
+	"cortecs.ai",
+	"*.cortecs.ai",
+	// DeepInfra
+	"deepinfra.com",
+	"*.deepinfra.com",
+	// Evroc
+	"evroc.com",
+	"*.evroc.com",
+	// FastRouter
+	"fastrouter.ai",
+	"*.fastrouter.ai",
+	// Firmware
+	"firmware.ai",
+	"*.firmware.ai",
+	// Friendli
+	"friendli.ai",
+	"*.friendli.ai",
+	// GitHub Models
+	"github.ai",
+	"*.github.ai",
+	// Helicone
+	"helicone.ai",
+	"*.helicone.ai",
+	// Hugging Face
+	"huggingface.co",
+	"*.huggingface.co",
+	// iFlow
+	"iflow.cn",
+	"*.iflow.cn",
+	// Inception
+	"inceptionlabs.ai",
+	"*.inceptionlabs.ai",
+	// Inference.net
+	"inference.net",
+	"*.inference.net",
+	// io.net
+	"io.solutions",
+	"*.io.solutions",
+	// Jiekou
+	"jiekou.ai",
+	"*.jiekou.ai",
+	// Kilo
+	"kilo.ai",
+	"*.kilo.ai",
+	// Kimi (Moonshot coding)
+	"kimi.com",
+	"*.kimi.com",
+	// Kuae Cloud
+	"kuaecloud.net",
+	"*.kuaecloud.net",
+	// Meta Llama
+	"llama.com",
+	"*.llama.com",
+	// LucidQuery
+	"lucidquery.com",
+	"*.lucidquery.com",
+	// Meganova
+	"meganova.ai",
+	"*.meganova.ai",
+	// Moark
+	"moark.com",
+	"*.moark.com",
+	// ModelScope (Alibaba)
+	"modelscope.cn",
+	"*.modelscope.cn",
+	// Moonshot AI
+	"moonshot.ai",
+	"*.moonshot.ai",
+	"moonshot.cn",
+	"*.moonshot.cn",
+	// Morph
+	"morphllm.com",
+	"*.morphllm.com",
+	// NanoGPT
+	"nano-gpt.com",
+	"*.nano-gpt.com",
+	// Nebius
+	"nebius.com",
+	"*.nebius.com",
+	// Amazon Nova
+	"nova.amazon.com",
+	"*.nova.amazon.com",
+	// Novita AI
+	"novita.ai",
+	"*.novita.ai",
+	// NVIDIA NIM
+	"nvidia.com",
+	"*.nvidia.com",
+	// Ollama Cloud
+	"ollama.com",
+	"*.ollama.com",
+	// OVHcloud
+	"ovh.net",
+	"*.ovh.net",
+	// Poe
+	"poe.com",
+	"*.poe.com",
+	// Qihang AI
+	"qhaigc.net",
+	"*.qhaigc.net",
+	// Qiniu AI
+	"qnaigc.com",
+	"*.qnaigc.com",
+	// Requesty
+	"requesty.ai",
+	"*.requesty.ai",
+	// SAP AI Core
+	"hana.ondemand.com",
+	"*.hana.ondemand.com",
+	// Scaleway
+	"scaleway.ai",
+	"*.scaleway.ai",
+	// SiliconFlow
+	"siliconflow.com",
+	"*.siliconflow.com",
+	"siliconflow.cn",
+	"*.siliconflow.cn",
+	// STACKIT
+	"onstackit.cloud",
+	"*.onstackit.cloud",
+	// StepFun
+	"stepfun.com",
+	"*.stepfun.com",
+	// Submodel
+	"submodel.ai",
+	"*.submodel.ai",
+	// Synthetic
+	"synthetic.new",
+	"*.synthetic.new",
+	// Upstage
+	"upstage.ai",
+	"*.upstage.ai",
+	// Vercel
+	"vercel.sh",
+	"*.vercel.sh",
+	// Venice
+	"venice.ai",
+	"*.venice.ai",
+	// VivGrid
+	"vivgrid.com",
+	"*.vivgrid.com",
+	// Vultr
+	"vultrinference.com",
+	"*.vultrinference.com",
+	// Weights & Biases
+	"wandb.ai",
+	"*.wandb.ai",
+	// Xiaomi
+	"xiaomimimo.com",
+	"*.xiaomimimo.com",
+	// Zhipu AI (international)
+	"z.ai",
+	"*.z.ai",
+	// Zhipu AI (China)
+	"bigmodel.cn",
+	"*.bigmodel.cn",
+	// ZenMux
+	"zenmux.ai",
+	"*.zenmux.ai",
 
 	// ── Claude Code web remote defaults ─────────────────────────────────────
 
