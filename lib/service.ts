@@ -45,6 +45,7 @@ function bunPath(): string {
 function generatePlist(bun: string): string {
 	const home = homedir();
 	const pathEntries = [
+		join(PROJECT_DIR, "node_modules", ".bin"),
 		"/opt/homebrew/bin",
 		join(home, ".bun", "bin"),
 		"/usr/local/bin",
@@ -94,6 +95,7 @@ function generatePlist(bun: string): string {
 function generateUnit(bun: string): string {
 	const home = homedir();
 	const pathEntries = [
+		join(PROJECT_DIR, "node_modules", ".bin"),
 		join(home, ".bun", "bin"),
 		"/usr/local/bin",
 		"/usr/bin",

@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import {
 	SandboxManager,
 	type SandboxRuntimeConfig,
@@ -282,6 +283,25 @@ const ALLOWED_DOMAINS: string[] = [
 	"*.modelcontextprotocol.io",
 ];
 
+// ── Resolve opencode binary ─────────────────────────────────────────────────
+
+function resolveOpencodeBin(): string {
+	const fromPath = Bun.which("opencode");
+	if (fromPath) return fromPath;
+
+	const local = join(
+		resolve(import.meta.dirname, ".."),
+		"node_modules",
+		".bin",
+		"opencode",
+	);
+	if (existsSync(local)) return local;
+
+	throw new Error(
+		"opencode executable not found. Ensure the opencode-ai package is installed.",
+	);
+}
+
 // ── Sandbox configuration ───────────────────────────────────────────────────
 
 const SANDBOX_CONFIG: SandboxRuntimeConfig = {
@@ -334,7 +354,16 @@ export async function createSandboxedServer(options?: {
 
 	const hostname = "127.0.0.1";
 	const url = `http://${hostname}:${port}`;
-	const command = `opencode serve --hostname ${hostname} --port ${port}`;
+
+	let opencodeBin: string;
+	try {
+		opencodeBin = resolveOpencodeBin();
+	} catch (error) {
+		await SandboxManager.reset();
+		throw error;
+	}
+
+	const command = `'${opencodeBin.replace(/'/g, "'\\''")}' serve --hostname ${hostname} --port ${port}`;
 
 	let wrappedCommand: string;
 	try {
