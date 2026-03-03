@@ -3,6 +3,7 @@ import type { Event, FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
 import { defineCommand } from "citty";
 import { Bot, type Context } from "grammy";
 import { BOT_COMMANDS, registerCommands } from "~/lib/commands";
+import { BotContext } from "~/lib/context";
 import { processEvent, stopTyping } from "~/lib/events";
 import {
 	buildFileParts,
@@ -22,7 +23,7 @@ import {
 	subscribeToEvents,
 } from "~/lib/opencode";
 import { createSandboxedServer } from "~/lib/sandbox";
-import * as state from "~/lib/state";
+import { loadSessionID, saveSessionID } from "~/lib/session";
 
 const SESSION_LOCKED_RETRY_DELAY_MS = 1000;
 const SESSION_LOCKED_MAX_RETRIES = 3;
@@ -68,6 +69,10 @@ export default defineCommand({
 		await initDirectory();
 
 		const bot = new Bot(token);
+		const botCtx = new BotContext();
+
+		// Load persisted session ID
+		botCtx.sessionID = loadSessionID();
 
 		// Auto-retry on Telegram 429 flood waits
 		bot.api.config.use(autoRetry());
@@ -76,14 +81,13 @@ export default defineCommand({
 		await bot.api.setMyCommands(BOT_COMMANDS);
 
 		// SSE event subscription management
-		let eventChatId: number | null = null;
-
 		function handleEvent(event: Event) {
-			if (eventChatId) processEvent(event, bot, eventChatId);
+			if (botCtx.eventChatId)
+				processEvent(event, bot, botCtx.eventChatId, botCtx);
 		}
 
 		function ensureSubscription(directory: string, chatId: number) {
-			eventChatId = chatId;
+			botCtx.eventChatId = chatId;
 			subscribeToEvents(directory, handleEvent).catch((err) =>
 				console.error("[bot] SSE subscription error:", err),
 			);
@@ -96,10 +100,10 @@ export default defineCommand({
 		});
 
 		// Register commands
-		registerCommands(bot, ensureSubscription);
+		registerCommands(bot, botCtx, ensureSubscription);
 
 		// Callback queries
-		bot.on("callback_query:data", handleCallbackQuery);
+		bot.on("callback_query:data", (ctx) => handleCallbackQuery(ctx, botCtx));
 
 		// Shared prompt helper: session creation + retry logic
 		async function promptOpenCode(
@@ -112,7 +116,7 @@ export default defineCommand({
 			ensureSubscription(directory, chatId);
 
 			// Auto-create session if none exists
-			let sessionID = state.getSessionID();
+			let sessionID = botCtx.sessionID;
 			if (!sessionID) {
 				const client = getClient();
 				const { data: newSession, error } = await client.session.create({
@@ -123,7 +127,8 @@ export default defineCommand({
 					return;
 				}
 				sessionID = newSession.id;
-				state.setSessionID(sessionID);
+				botCtx.sessionID = sessionID;
+				saveSessionID(sessionID);
 			}
 
 			// Fire-and-forget with SessionLockedError retry
@@ -160,14 +165,14 @@ export default defineCommand({
 					}
 
 					console.error("[bot] prompt error:", error);
-					stopTyping();
+					stopTyping(botCtx);
 					sendNotice(bot.api, chatId, "error", errMsg);
 				}
 			};
 
 			prompt().catch((err) => {
 				console.error("[bot] prompt error:", err);
-				stopTyping();
+				stopTyping(botCtx);
 				sendNotice(bot.api, chatId, "error", "Error sending prompt.");
 			});
 		}
@@ -175,7 +180,7 @@ export default defineCommand({
 		// Text messages
 		bot.on("message:text", async (ctx) => {
 			// Check if waiting for custom question input
-			if (await handleCustomTextInput(ctx)) return;
+			if (await handleCustomTextInput(ctx, botCtx)) return;
 			await promptOpenCode(ctx, [{ type: "text", text: ctx.message.text }]);
 		});
 
@@ -391,7 +396,7 @@ export default defineCommand({
 		// Graceful shutdown
 		const shutdown = () => {
 			console.log("[bot] Shutting down...");
-			stopTyping();
+			stopTyping(botCtx);
 			stopEventListening();
 			server.close();
 			bot.stop();

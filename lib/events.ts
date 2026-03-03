@@ -3,28 +3,30 @@ import type { Event } from "@opencode-ai/sdk/v2";
 import type { Api, Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
 import mime from "mime";
+import type { BotContext } from "~/lib/context";
 import { sendTelegramFile } from "~/lib/files";
 import { convertWithFallback, sendFormattedMessage } from "~/lib/markdown";
 import { sendNotice } from "~/lib/notice";
-import type { QuestionState } from "~/lib/state";
-import * as state from "~/lib/state";
+import type { AccumulatedFile, QuestionItem, QuestionState } from "~/lib/types";
 
-let typingTimer: ReturnType<typeof setInterval> | null = null;
-
-export function startTyping(api: Api, chatId: number): void {
-	if (typingTimer) return;
+export function startTyping(
+	botCtx: BotContext,
+	api: Api,
+	chatId: number,
+): void {
+	if (botCtx.typingTimer) return;
 	const send = () =>
 		api
 			.sendChatAction(chatId, "typing")
 			.catch((err) => console.error("[events] sendChatAction error:", err));
 	send();
-	typingTimer = setInterval(send, 4000);
+	botCtx.typingTimer = setInterval(send, 4000);
 }
 
-export function stopTyping(): void {
-	if (typingTimer) {
-		clearInterval(typingTimer);
-		typingTimer = null;
+export function stopTyping(botCtx: BotContext): void {
+	if (botCtx.typingTimer) {
+		clearInterval(botCtx.typingTimer);
+		botCtx.typingTimer = null;
 	}
 }
 
@@ -69,16 +71,19 @@ export function showQuestion(
 		.catch(console.error);
 }
 
-function handleAttachFileTool(part: {
-	callID: string;
-	messageID: string;
-	tool: string;
-	state: { status: string; input: Record<string, unknown> };
-}): void {
+function handleAttachFileTool(
+	botCtx: BotContext,
+	part: {
+		callID: string;
+		messageID: string;
+		tool: string;
+		state: { status: string; input: Record<string, unknown> };
+	},
+): void {
 	if (part.tool !== "attach_file") return;
 	if (part.state.status !== "completed") return;
-	if (state.hasProcessedToolCall(part.callID)) return;
-	state.markToolCallProcessed(part.callID);
+	if (botCtx.processedToolCalls.has(part.callID)) return;
+	botCtx.processedToolCalls.add(part.callID);
 
 	const rawPath = part.state.input.path as string | undefined;
 	if (!rawPath) return;
@@ -88,8 +93,7 @@ function handleAttachFileTool(part: {
 	const detectedMime = mime.getType(filePath) ?? "application/octet-stream";
 	const filename = node_path.basename(filePath);
 
-	const files = state.getAccumulatedFiles();
-	const list = files.get(part.messageID) ?? [];
+	const list = botCtx.accumulatedFiles.get(part.messageID) ?? [];
 	list.push({
 		partID: part.callID,
 		url: filePath,
@@ -97,11 +101,16 @@ function handleAttachFileTool(part: {
 		filename,
 		caption,
 	});
-	files.set(part.messageID, list);
+	botCtx.accumulatedFiles.set(part.messageID, list);
 }
 
-export function processEvent(event: Event, bot: Bot, chatId: number): void {
-	const sessionID = state.getSessionID();
+export function processEvent(
+	event: Event,
+	bot: Bot,
+	chatId: number,
+	botCtx: BotContext,
+): void {
+	const sessionID = botCtx.sessionID;
 	if (!sessionID) return;
 
 	switch (event.type) {
@@ -111,14 +120,12 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 
 			if (part.type === "text" && "text" in part && part.text) {
 				// Each event contains the full current text — overwrite, don't append
-				const acc = state.getAccumulatedText();
-				acc.set(part.messageID, part.text);
-				startTyping(bot.api, chatId);
+				botCtx.accumulatedText.set(part.messageID, part.text);
+				startTyping(botCtx, bot.api, chatId);
 			} else if (part.type === "file") {
-				const files = state.getAccumulatedFiles();
-				const list = files.get(part.messageID) ?? [];
+				const list = botCtx.accumulatedFiles.get(part.messageID) ?? [];
 				const existing = list.findIndex((f) => f.partID === part.id);
-				const entry: state.AccumulatedFile = {
+				const entry: AccumulatedFile = {
 					partID: part.id,
 					url: part.url,
 					mime: part.mime,
@@ -129,10 +136,10 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				} else {
 					list.push(entry);
 				}
-				files.set(part.messageID, list);
-				startTyping(bot.api, chatId);
+				botCtx.accumulatedFiles.set(part.messageID, list);
+				startTyping(botCtx, bot.api, chatId);
 			} else if (part.type === "tool") {
-				handleAttachFileTool(part);
+				handleAttachFileTool(botCtx, part);
 			}
 			break;
 		}
@@ -147,9 +154,8 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			if (!time?.completed) break;
 
 			const messageID = info.id;
-			const acc = state.getAccumulatedText();
-			const text = acc.get(messageID) ?? "";
-			const files = state.getAccumulatedFiles().get(messageID) ?? [];
+			const text = botCtx.accumulatedText.get(messageID) ?? "";
+			const files = botCtx.accumulatedFiles.get(messageID) ?? [];
 
 			// Send text first, then files — chain to preserve ordering
 			const textDone =
@@ -176,10 +182,10 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				textDone.catch(console.error);
 			}
 
-			acc.delete(messageID);
-			state.getAccumulatedFiles().delete(messageID);
+			botCtx.accumulatedText.delete(messageID);
+			botCtx.accumulatedFiles.delete(messageID);
 
-			if (acc.size === 0) stopTyping();
+			if (botCtx.accumulatedText.size === 0) stopTyping(botCtx);
 			break;
 		}
 
@@ -196,10 +202,10 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 
 			const msg =
 				props.error?.data?.message ?? props.error?.message ?? "Unknown error";
-			stopTyping();
-			state.clearAccumulatedText();
-			state.clearAccumulatedFiles();
-			state.clearProcessedToolCalls();
+			stopTyping(botCtx);
+			botCtx.accumulatedText.clear();
+			botCtx.accumulatedFiles.clear();
+			botCtx.processedToolCalls.clear();
 			sendNotice(bot.api, chatId, "error", msg);
 			break;
 		}
@@ -207,10 +213,10 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 		case "session.idle": {
 			const props = event.properties as { sessionID: string };
 			if (props.sessionID !== sessionID) return;
-			stopTyping();
-			state.clearAccumulatedText();
-			state.clearAccumulatedFiles();
-			state.clearProcessedToolCalls();
+			stopTyping(botCtx);
+			botCtx.accumulatedText.clear();
+			botCtx.accumulatedFiles.clear();
+			botCtx.processedToolCalls.clear();
 			break;
 		}
 
@@ -244,7 +250,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 					...(converted.parseMode && { parse_mode: converted.parseMode }),
 				})
 				.then((msg) => {
-					state.addPendingPermission(msg.message_id, {
+					botCtx.pendingPermissions.set(msg.message_id, {
 						requestID: request.id,
 						messageId: msg.message_id,
 					});
@@ -257,13 +263,13 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			const props = event.properties as {
 				id: string;
 				sessionID: string;
-				questions: state.QuestionItem[];
+				questions: QuestionItem[];
 			};
 			if (props.sessionID !== sessionID) return;
 
-			stopTyping();
+			stopTyping(botCtx);
 
-			const qs: state.QuestionState = {
+			const qs: QuestionState = {
 				requestID: props.id,
 				questions: props.questions,
 				currentIndex: 0,
@@ -272,7 +278,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				customAnswers: new Map(),
 				activeMessageId: null,
 			};
-			state.setQuestionState(qs);
+			botCtx.questionState = qs;
 			showQuestion(bot.api, chatId, qs);
 			break;
 		}

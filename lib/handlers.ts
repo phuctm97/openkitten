@@ -1,11 +1,11 @@
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
+import type { BotContext } from "~/lib/context";
 import { showQuestion, startTyping } from "~/lib/events";
 import { convertWithFallback } from "~/lib/markdown";
 import { sendNotice } from "~/lib/notice";
 import { getClient, getDirectory } from "~/lib/opencode";
-import type { QuestionState } from "~/lib/state";
-import * as state from "~/lib/state";
+import type { QuestionState } from "~/lib/types";
 
 function formatAnsweredQuestion(
 	qs: QuestionState,
@@ -31,20 +31,27 @@ function formatCancelledQuestion(qs: QuestionState, qIdx: number): string {
 	return `${header}${question.question}\n\n\u2717 Cancelled`;
 }
 
-export async function handleCallbackQuery(ctx: Context): Promise<void> {
+export async function handleCallbackQuery(
+	ctx: Context,
+	botCtx: BotContext,
+): Promise<void> {
 	const data = ctx.callbackQuery?.data;
 	if (!data) return;
 
 	if (data.startsWith("permission:")) {
-		await handlePermission(ctx, data);
+		await handlePermission(ctx, data, botCtx);
 	} else if (data.startsWith("question:")) {
-		await handleQuestion(ctx, data);
+		await handleQuestion(ctx, data, botCtx);
 	} else {
 		await ctx.answerCallbackQuery();
 	}
 }
 
-async function handlePermission(ctx: Context, data: string): Promise<void> {
+async function handlePermission(
+	ctx: Context,
+	data: string,
+	botCtx: BotContext,
+): Promise<void> {
 	const reply = data.split(":")[1];
 	if (reply !== "once" && reply !== "always" && reply !== "reject") {
 		await ctx.answerCallbackQuery();
@@ -56,7 +63,7 @@ async function handlePermission(ctx: Context, data: string): Promise<void> {
 		return;
 	}
 
-	const pending = state.getPermissionByMessageId(messageId);
+	const pending = botCtx.pendingPermissions.get(messageId);
 	if (!pending) {
 		await ctx.answerCallbackQuery({
 			text: "Permission request expired",
@@ -92,11 +99,15 @@ async function handlePermission(ctx: Context, data: string): Promise<void> {
 				);
 		});
 
-	state.removePendingPermission(messageId);
+	botCtx.pendingPermissions.delete(messageId);
 }
 
-async function handleQuestion(ctx: Context, data: string): Promise<void> {
-	const qs = state.getQuestionState();
+async function handleQuestion(
+	ctx: Context,
+	data: string,
+	botCtx: BotContext,
+): Promise<void> {
+	const qs = botCtx.questionState;
 	if (!qs) {
 		await ctx.answerCallbackQuery({
 			text: "No active question",
@@ -165,7 +176,7 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 							err,
 						),
 					);
-				advanceQuestion(qs, qIdx, ctx, chatId);
+				advanceQuestion(qs, qIdx, ctx, chatId, botCtx);
 			}
 			break;
 		}
@@ -198,7 +209,7 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 						err,
 					),
 				);
-			advanceQuestion(qs, qIdx, ctx, chatId);
+			advanceQuestion(qs, qIdx, ctx, chatId, botCtx);
 			break;
 		}
 		case "cancel": {
@@ -229,9 +240,9 @@ async function handleQuestion(ctx: Context, data: string): Promise<void> {
 						sendNotice(ctx.api, chatId, "error", "Failed to cancel question.");
 				});
 
-			state.clearQuestionState();
+			botCtx.questionState = null;
 			// Resume typing — AI continues after question is resolved
-			startTyping(ctx.api, chatId);
+			startTyping(botCtx, ctx.api, chatId);
 			break;
 		}
 		default: {
@@ -246,6 +257,7 @@ function advanceQuestion(
 	qIdx: number,
 	ctx: Context,
 	chatId: number,
+	botCtx: BotContext,
 ): void {
 	const customAnswer = qs.customAnswers.get(qIdx);
 	if (customAnswer) {
@@ -267,12 +279,16 @@ function advanceQuestion(
 	if (qs.currentIndex < qs.questions.length) {
 		showQuestion(ctx.api, chatId, qs);
 	} else {
-		submitAllAnswers(ctx, chatId);
+		submitAllAnswers(ctx, chatId, botCtx);
 	}
 }
 
-function submitAllAnswers(ctx: Context, chatId: number): void {
-	const qs = state.getQuestionState();
+function submitAllAnswers(
+	ctx: Context,
+	chatId: number,
+	botCtx: BotContext,
+): void {
+	const qs = botCtx.questionState;
 	if (!qs) return;
 
 	// Fill in any unanswered questions
@@ -305,9 +321,9 @@ function submitAllAnswers(ctx: Context, chatId: number): void {
 			console.error("[handlers] question.reply error:", err);
 			sendNotice(ctx.api, chatId, "error", "Failed to submit answers.");
 		});
-	state.clearQuestionState();
+	botCtx.questionState = null;
 	// Resume typing — AI continues after question is resolved
-	startTyping(ctx.api, chatId);
+	startTyping(botCtx, ctx.api, chatId);
 }
 
 async function updateQuestionMessage(
@@ -350,8 +366,11 @@ async function updateQuestionMessage(
 		);
 }
 
-export async function handleCustomTextInput(ctx: Context): Promise<boolean> {
-	const qs = state.getQuestionState();
+export async function handleCustomTextInput(
+	ctx: Context,
+	botCtx: BotContext,
+): Promise<boolean> {
+	const qs = botCtx.questionState;
 	if (!qs) return false;
 
 	const text = ctx.message?.text;
@@ -373,6 +392,6 @@ export async function handleCustomTextInput(ctx: Context): Promise<boolean> {
 			);
 	}
 
-	advanceQuestion(qs, qIdx, ctx, chatId);
+	advanceQuestion(qs, qIdx, ctx, chatId, botCtx);
 	return true;
 }
