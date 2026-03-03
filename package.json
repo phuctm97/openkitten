@@ -9,6 +9,7 @@
 		"setup": "bun lib/index.ts setup",
 		"start": "bun lib/index.ts serve",
 		"dev": "bun --hot lib/index.ts serve",
+		"self-update": "bun lib/index.ts self-update",
 		"typecheck": "bun --bun tsc --build",
 		"drizzle-generate": "bun --bun drizzle-kit generate",
 		"drizzle-migrate": "bun --bun drizzle-kit migrate"
