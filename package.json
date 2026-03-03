@@ -7,9 +7,9 @@
 	"scripts": {
 		"prepare": "lefthook install --reset-hooks-path",
 		"typecheck": "bun --bun tsc --build",
-		"setup": "bun lib/index.ts setup",
-		"start": "bun lib/index.ts serve",
 		"dev": "bun --hot lib/index.ts serve",
+		"start": "bun lib/index.ts serve",
+		"setup": "bun lib/index.ts setup",
 		"self-update": "bun lib/index.ts self-update",
 		"drizzle-generate": "bun --bun drizzle-kit generate",
 		"drizzle-migrate": "bun --bun drizzle-kit migrate"
