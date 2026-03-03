@@ -1,12 +1,13 @@
 {
 	"name": "openkitten",
 	"version": "0.0.1",
+	"description": "Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in capabilities people actually need",
 	"private": true,
 	"type": "module",
 	"scripts": {
 		"prepare": "lefthook install",
-		"start": "bun lib/index.ts",
-		"dev": "bun --hot lib/index.ts",
+		"start": "bun lib/index.ts serve",
+		"dev": "bun --hot lib/index.ts serve",
 		"typecheck": "bun --bun tsc --build",
 		"drizzle-generate": "bun --bun drizzle-kit generate",
 		"drizzle-migrate": "bun --bun drizzle-kit migrate"
@@ -16,6 +17,7 @@
 		"@grammyjs/auto-retry": "^2.0.2",
 		"@opencode-ai/plugin": "^1.2.15",
 		"@opencode-ai/sdk": "^1.2.15",
+		"citty": "^0.2.1",
 		"drizzle-orm": "^0.45.1",
 		"grammy": "^1.41.1",
 		"mime": "^4.1.0",

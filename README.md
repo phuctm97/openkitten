@@ -87,7 +87,8 @@ Set `DANGEROUSLY_DISABLE_SANDBOX=1` to bypass.
 
 | File | Role |
 |------|------|
-| `lib/index.ts` | Entry point: env validation, bot setup, media handlers, shutdown |
+| `lib/index.ts` | CLI entry point: command routing via citty |
+| `lib/serve.ts` | `serve` command: env validation, bot setup, media handlers, shutdown |
 | `lib/commands.ts` | `/start`, `/stop`, `/help` command handlers |
 | `lib/database.ts` | Drizzle ORM setup with Bun SQLite and auto-migration |
 | `lib/events.ts` | SSE event processing: typing indicators, text/file accumulation, questions |
