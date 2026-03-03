@@ -353,11 +353,21 @@ describe("processEvent", () => {
 		expect(botCtx.processedToolCalls.has("tc1")).toBe(false);
 	});
 
-	test("clears state on session.error", () => {
+	test("clears all transient state on session.error", () => {
 		const botCtx = new BotContext();
 		botCtx.sessionID = "s1";
 		botCtx.accumulatedText.set("m1", "hello");
 		botCtx.processedToolCalls.add("tc1");
+		botCtx.pendingPermissions.set(42, { requestID: "p1", messageId: 42 });
+		botCtx.questionState = {
+			requestID: "q1",
+			questions: [],
+			currentIndex: 0,
+			answers: [],
+			selectedOptions: new Map(),
+			customAnswers: new Map(),
+			activeMessageId: null,
+		};
 		const api = mockApi();
 		const bot = mockBot(api);
 
@@ -372,10 +382,57 @@ describe("processEvent", () => {
 		processEvent(event, bot, 123, botCtx);
 		expect(botCtx.accumulatedText.size).toBe(0);
 		expect(botCtx.processedToolCalls.size).toBe(0);
+		expect(botCtx.questionState).toBeNull();
+		expect(botCtx.pendingPermissions.size).toBe(0);
 		expect(api.sendMessage).toHaveBeenCalledTimes(1);
 	});
 
-	test("clears state on session.idle", () => {
+	test("session.error extracts nested data.message", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		const api = mockApi();
+		const bot = mockBot(api);
+
+		processEvent(
+			{
+				type: "session.error",
+				properties: {
+					sessionID: "s1",
+					error: { data: { message: "Nested error" } },
+				},
+			} as unknown as Event,
+			bot,
+			123,
+			botCtx,
+		);
+
+		const call = (api.sendMessage as ReturnType<typeof mock>).mock
+			.calls[0] as unknown[];
+		expect(call[1]).toContain("Nested error");
+	});
+
+	test("session.error falls back to 'Unknown error'", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		const api = mockApi();
+		const bot = mockBot(api);
+
+		processEvent(
+			{
+				type: "session.error",
+				properties: { sessionID: "s1", error: {} },
+			} as unknown as Event,
+			bot,
+			123,
+			botCtx,
+		);
+
+		const call = (api.sendMessage as ReturnType<typeof mock>).mock
+			.calls[0] as unknown[];
+		expect(call[1]).toContain("Unknown error");
+	});
+
+	test("clears all transient state on session.idle", () => {
 		const botCtx = new BotContext();
 		botCtx.sessionID = "s1";
 		botCtx.accumulatedText.set("m1", "hello");
@@ -383,6 +440,16 @@ describe("processEvent", () => {
 			{ partID: "f1", url: "/tmp/f", mime: "text/plain" },
 		]);
 		botCtx.processedToolCalls.add("tc1");
+		botCtx.pendingPermissions.set(42, { requestID: "p1", messageId: 42 });
+		botCtx.questionState = {
+			requestID: "q1",
+			questions: [],
+			currentIndex: 0,
+			answers: [],
+			selectedOptions: new Map(),
+			customAnswers: new Map(),
+			activeMessageId: null,
+		};
 		const bot = mockBot();
 
 		const event: Event = {
@@ -394,6 +461,8 @@ describe("processEvent", () => {
 		expect(botCtx.accumulatedText.size).toBe(0);
 		expect(botCtx.accumulatedFiles.size).toBe(0);
 		expect(botCtx.processedToolCalls.size).toBe(0);
+		expect(botCtx.questionState).toBeNull();
+		expect(botCtx.pendingPermissions.size).toBe(0);
 	});
 
 	test("message.updated cleans up state for completed assistant message", () => {
@@ -539,7 +608,7 @@ describe("processEvent", () => {
 		expect(botCtx.accumulatedFiles.has("m1")).toBe(false);
 	});
 
-	test("renders permission keyboard on permission.asked", () => {
+	test("renders permission keyboard on permission.asked", async () => {
 		const botCtx = new BotContext();
 		botCtx.sessionID = "s1";
 		const api = mockApi();
@@ -560,8 +629,11 @@ describe("processEvent", () => {
 		const calls = (api.sendMessage as ReturnType<typeof mock>).mock.calls;
 		const call = calls[0] as unknown[];
 		expect(call[0]).toBe(123); // chatId
-		// Message should contain "Permission"
 		expect(call[1]).toContain("Permission");
+
+		// Wait for sendMessage .then() to store the pending permission
+		await new Promise((r) => setTimeout(r, 0));
+		expect(botCtx.pendingPermissions.size).toBe(1);
 	});
 
 	test("initializes question state on question.asked", () => {

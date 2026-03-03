@@ -181,10 +181,7 @@ export function processEvent(
 
 			const msg =
 				props.error?.data?.message ?? props.error?.message ?? "Unknown error";
-			stopTyping(botCtx);
-			botCtx.accumulatedText.clear();
-			botCtx.accumulatedFiles.clear();
-			botCtx.processedToolCalls.clear();
+			botCtx.resetTransient();
 			sendNotice(bot.api, chatId, "error", msg);
 			break;
 		}
@@ -192,10 +189,7 @@ export function processEvent(
 		case "session.idle": {
 			const props = event.properties as { sessionID: string };
 			if (props.sessionID !== sessionID) return;
-			stopTyping(botCtx);
-			botCtx.accumulatedText.clear();
-			botCtx.accumulatedFiles.clear();
-			botCtx.processedToolCalls.clear();
+			botCtx.resetTransient();
 			break;
 		}
 
