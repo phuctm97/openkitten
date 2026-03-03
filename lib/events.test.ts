@@ -19,14 +19,14 @@ function mockBot(api?: Api): Bot {
 }
 
 describe("startTyping / stopTyping", () => {
+	let botCtx: BotContext;
+
 	afterEach(() => {
-		// Clean up any lingering timers
-		const ctx = new BotContext();
-		stopTyping(ctx);
+		stopTyping(botCtx);
 	});
 
 	test("startTyping sets timer on BotContext", () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		const api = mockApi();
 		startTyping(botCtx, api, 123);
 		expect(botCtx.typingTimer).not.toBeNull();
@@ -36,7 +36,7 @@ describe("startTyping / stopTyping", () => {
 	});
 
 	test("startTyping is idempotent when already typing", () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		const api = mockApi();
 		startTyping(botCtx, api, 123);
 		const timer1 = botCtx.typingTimer;
@@ -46,7 +46,7 @@ describe("startTyping / stopTyping", () => {
 	});
 
 	test("stopTyping clears timer", () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		const api = mockApi();
 		startTyping(botCtx, api, 123);
 		expect(botCtx.typingTimer).not.toBeNull();
@@ -55,7 +55,7 @@ describe("startTyping / stopTyping", () => {
 	});
 
 	test("stopTyping is safe when no timer", () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		expect(() => stopTyping(botCtx)).not.toThrow();
 	});
 });

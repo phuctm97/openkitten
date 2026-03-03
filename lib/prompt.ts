@@ -37,7 +37,9 @@ export async function promptOpenCode(
 		saveSessionID(sessionID);
 	}
 
-	// Fire-and-forget with SessionLockedError retry
+	// Fire-and-forget: prompt() is called without await below so that
+	// promptOpenCode resolves after session creation but before the actual
+	// prompt response arrives. This lets the caller proceed while the AI works.
 	const prompt = async (retries = 0): Promise<void> => {
 		const { error } = await getClient().session.prompt({
 			sessionID,

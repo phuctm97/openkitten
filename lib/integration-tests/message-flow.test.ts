@@ -21,13 +21,14 @@ function mockBot(api?: Api): Bot {
 const CHAT_ID = 42;
 
 describe("Message flow: text streaming → delivery", () => {
+	let botCtx: BotContext;
+
 	afterEach(() => {
-		const ctx = new BotContext();
-		stopTyping(ctx);
+		stopTyping(botCtx);
 	});
 
 	test("streaming text parts → message completed → formatted message sent", async () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		botCtx.sessionID = "session-1";
 		const api = mockApi();
 		const bot = mockBot(api);
@@ -95,7 +96,7 @@ describe("Message flow: text streaming → delivery", () => {
 	});
 
 	test("error mid-stream clears state and sends error notice", async () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		botCtx.sessionID = "session-1";
 		const api = mockApi();
 		const bot = mockBot(api);
@@ -149,7 +150,7 @@ describe("Message flow: text streaming → delivery", () => {
 	});
 
 	test("session.idle after response clears leftover state", () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		botCtx.sessionID = "session-1";
 		const bot = mockBot();
 
@@ -176,7 +177,7 @@ describe("Message flow: text streaming → delivery", () => {
 	});
 
 	test("multiple messages accumulate independently and deliver in order", async () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		botCtx.sessionID = "session-1";
 		const api = mockApi();
 		const bot = mockBot(api);
@@ -242,12 +243,10 @@ describe("Message flow: text streaming → delivery", () => {
 		expect(botCtx.accumulatedText.get("msg-2")).toBe("Second response");
 		// Typing timer should still be active (second message pending)
 		expect(botCtx.typingTimer).not.toBeNull();
-
-		stopTyping(botCtx);
 	});
 
 	test("events from wrong session are completely ignored", () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		botCtx.sessionID = "session-1";
 		const api = mockApi();
 		const bot = mockBot(api);
@@ -302,7 +301,7 @@ describe("Message flow: text streaming → delivery", () => {
 	});
 
 	test("incomplete message.updated (no completed time) is ignored", () => {
-		const botCtx = new BotContext();
+		botCtx = new BotContext();
 		botCtx.sessionID = "session-1";
 		const api = mockApi();
 		const bot = mockBot(api);
@@ -349,7 +348,5 @@ describe("Message flow: text streaming → delivery", () => {
 		const sendMsgCalls = (api.sendMessage as ReturnType<typeof mock>).mock
 			.calls;
 		expect(sendMsgCalls.length).toBe(0);
-
-		stopTyping(botCtx);
 	});
 });

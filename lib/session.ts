@@ -11,7 +11,7 @@ export function loadSessionID(): string | null {
 	return row?.activeSessionId ?? null;
 }
 
-export function saveSessionID(id: string): void {
+export function saveSessionID(id: string | null): void {
 	database
 		.insert(profile)
 		.values({ id: 1, activeSessionId: id })

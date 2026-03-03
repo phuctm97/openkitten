@@ -49,7 +49,6 @@ export function extractVoice(ctx: Context): MediaDescriptor | null {
 		fileId: voice.file_id,
 		fileSize: voice.file_size,
 		mimeType: "audio/ogg",
-		caption: ctx.message?.caption,
 		label: "voice message",
 	};
 }
@@ -111,7 +110,6 @@ export async function handleMedia(
 	ctx: Context,
 	media: MediaDescriptor,
 	token: string,
-	api: Bot["api"],
 	promptFn: (
 		ctx: Context,
 		parts: Array<TextPartInput | FilePartInput>,
@@ -125,7 +123,7 @@ export async function handleMedia(
 		return;
 	}
 
-	const buffer = await downloadTelegramFile(token, media.fileId, api);
+	const buffer = await downloadTelegramFile(token, media.fileId, ctx.api);
 	if (!buffer) {
 		sendNotice(ctx.api, chatId, "error", `Failed to download ${media.label}.`);
 		return;
@@ -154,36 +152,36 @@ export function registerMediaHandlers(
 ): void {
 	bot.on("message:photo", async (ctx) => {
 		const media = extractPhoto(ctx);
-		if (media) await handleMedia(ctx, media, token, bot.api, promptFn);
+		if (media) await handleMedia(ctx, media, token, promptFn);
 	});
 
 	bot.on("message:video", async (ctx) => {
 		const media = extractVideo(ctx);
-		if (media) await handleMedia(ctx, media, token, bot.api, promptFn);
+		if (media) await handleMedia(ctx, media, token, promptFn);
 	});
 
 	bot.on("message:voice", async (ctx) => {
 		const media = extractVoice(ctx);
-		if (media) await handleMedia(ctx, media, token, bot.api, promptFn);
+		if (media) await handleMedia(ctx, media, token, promptFn);
 	});
 
 	bot.on("message:audio", async (ctx) => {
 		const media = extractAudio(ctx);
-		if (media) await handleMedia(ctx, media, token, bot.api, promptFn);
+		if (media) await handleMedia(ctx, media, token, promptFn);
 	});
 
 	bot.on("message:video_note", async (ctx) => {
 		const media = extractVideoNote(ctx);
-		if (media) await handleMedia(ctx, media, token, bot.api, promptFn);
+		if (media) await handleMedia(ctx, media, token, promptFn);
 	});
 
 	bot.on("message:sticker", async (ctx) => {
 		const media = extractSticker(ctx);
-		if (media) await handleMedia(ctx, media, token, bot.api, promptFn);
+		if (media) await handleMedia(ctx, media, token, promptFn);
 	});
 
 	bot.on("message:document", async (ctx) => {
 		const media = extractDocument(ctx);
-		if (media) await handleMedia(ctx, media, token, bot.api, promptFn);
+		if (media) await handleMedia(ctx, media, token, promptFn);
 	});
 }

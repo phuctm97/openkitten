@@ -1,7 +1,6 @@
 import type { Bot } from "grammy";
 import type { BotCommand } from "grammy/types";
 import type { BotContext } from "~/lib/context";
-import { stopTyping } from "~/lib/events";
 import { sendNotice } from "~/lib/notice";
 import { getClient, getDirectory } from "~/lib/opencode";
 import { saveSessionID } from "~/lib/session";
@@ -31,14 +30,9 @@ export function registerCommands(
 			return;
 		}
 
-		stopTyping(botCtx);
+		botCtx.resetTransient();
 		botCtx.sessionID = session.id;
 		saveSessionID(session.id);
-		botCtx.accumulatedText.clear();
-		botCtx.accumulatedFiles.clear();
-		botCtx.questionState = null;
-		botCtx.pendingPermissions.clear();
-		botCtx.processedToolCalls.clear();
 
 		sendNotice(ctx.api, ctx.chat.id, "started", "New session created.", {
 			language: "ID",
@@ -57,12 +51,8 @@ export function registerCommands(
 		await client.session
 			.abort({ sessionID: botCtx.sessionID, directory })
 			.catch(console.error);
-		stopTyping(botCtx);
-		botCtx.accumulatedText.clear();
-		botCtx.accumulatedFiles.clear();
-		botCtx.questionState = null;
-		botCtx.pendingPermissions.clear();
-		botCtx.processedToolCalls.clear();
+		botCtx.resetTransient();
+		saveSessionID(null);
 
 		sendNotice(ctx.api, ctx.chat.id, "stopped", "Current request aborted.");
 	});
