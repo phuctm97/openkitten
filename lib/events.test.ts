@@ -175,6 +175,184 @@ describe("processEvent", () => {
 		stopTyping(botCtx);
 	});
 
+	test("updates existing file part with same partID", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		const bot = mockBot();
+
+		// First file part
+		processEvent(
+			{
+				type: "message.part.updated",
+				properties: {
+					part: {
+						sessionID: "s1",
+						messageID: "m1",
+						type: "file",
+						id: "f1",
+						url: "http://example.com/v1.png",
+						mime: "image/png",
+						filename: "v1.png",
+					},
+				},
+			} as unknown as Event,
+			bot,
+			123,
+			botCtx,
+		);
+
+		// Updated file part with same partID
+		processEvent(
+			{
+				type: "message.part.updated",
+				properties: {
+					part: {
+						sessionID: "s1",
+						messageID: "m1",
+						type: "file",
+						id: "f1",
+						url: "http://example.com/v2.png",
+						mime: "image/png",
+						filename: "v2.png",
+					},
+				},
+			} as unknown as Event,
+			bot,
+			123,
+			botCtx,
+		);
+
+		const files = botCtx.accumulatedFiles.get("m1");
+		expect(files).toHaveLength(1);
+		expect(files?.[0]?.url).toBe("http://example.com/v2.png");
+		stopTyping(botCtx);
+	});
+
+	test("handles attach_file tool call", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		const bot = mockBot();
+
+		processEvent(
+			{
+				type: "message.part.updated",
+				properties: {
+					part: {
+						sessionID: "s1",
+						messageID: "m1",
+						type: "tool",
+						callID: "tc1",
+						tool: "attach_file",
+						state: {
+							status: "completed",
+							input: { path: "/tmp/test.png", caption: "A file" },
+						},
+					},
+				},
+			} as unknown as Event,
+			bot,
+			123,
+			botCtx,
+		);
+
+		const files = botCtx.accumulatedFiles.get("m1");
+		expect(files).toHaveLength(1);
+		expect(files?.[0]?.partID).toBe("tc1");
+		expect(files?.[0]?.caption).toBe("A file");
+		// Tool call should be marked as processed
+		expect(botCtx.processedToolCalls.has("tc1")).toBe(true);
+	});
+
+	test("attach_file deduplicates by callID", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		const bot = mockBot();
+
+		const event = {
+			type: "message.part.updated",
+			properties: {
+				part: {
+					sessionID: "s1",
+					messageID: "m1",
+					type: "tool",
+					callID: "tc1",
+					tool: "attach_file",
+					state: {
+						status: "completed",
+						input: { path: "/tmp/test.png" },
+					},
+				},
+			},
+		} as unknown as Event;
+
+		processEvent(event, bot, 123, botCtx);
+		processEvent(event, bot, 123, botCtx);
+
+		const files = botCtx.accumulatedFiles.get("m1");
+		expect(files).toHaveLength(1);
+	});
+
+	test("ignores non-attach_file tool calls", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		const bot = mockBot();
+
+		processEvent(
+			{
+				type: "message.part.updated",
+				properties: {
+					part: {
+						sessionID: "s1",
+						messageID: "m1",
+						type: "tool",
+						callID: "tc1",
+						tool: "some_other_tool",
+						state: {
+							status: "completed",
+							input: { path: "/tmp/test.png" },
+						},
+					},
+				},
+			} as unknown as Event,
+			bot,
+			123,
+			botCtx,
+		);
+
+		expect(botCtx.accumulatedFiles.has("m1")).toBe(false);
+	});
+
+	test("ignores incomplete attach_file tool calls", () => {
+		const botCtx = new BotContext();
+		botCtx.sessionID = "s1";
+		const bot = mockBot();
+
+		processEvent(
+			{
+				type: "message.part.updated",
+				properties: {
+					part: {
+						sessionID: "s1",
+						messageID: "m1",
+						type: "tool",
+						callID: "tc1",
+						tool: "attach_file",
+						state: {
+							status: "running",
+							input: { path: "/tmp/test.png" },
+						},
+					},
+				},
+			} as unknown as Event,
+			bot,
+			123,
+			botCtx,
+		);
+
+		expect(botCtx.accumulatedFiles.has("m1")).toBe(false);
+		expect(botCtx.processedToolCalls.has("tc1")).toBe(false);
+	});
+
 	test("clears state on session.error", () => {
 		const botCtx = new BotContext();
 		botCtx.sessionID = "s1";

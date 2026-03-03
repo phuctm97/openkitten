@@ -104,7 +104,12 @@ Set `DANGEROUSLY_DISABLE_SANDBOX=1` to bypass.
 | `lib/opencode.ts` | OpenCode SDK client wrapper with SSE reconnection |
 | `lib/sandbox.ts` | OS-level sandbox for the OpenCode server |
 | `lib/schema.ts` | Database schema definitions |
-| `lib/state.ts` | Session (persisted in SQLite) and in-memory state (accumulated text/files, permissions, questions) |
+| `lib/context.ts` | Injectable `BotContext` class holding all in-memory state (accumulated text/files, permissions, questions) |
+| `lib/session.ts` | Session ID persistence (SQLite read/write helpers) |
+| `lib/types.ts` | Shared type definitions (`QuestionState`, `PendingPermission`, `AccumulatedFile`, etc.) |
+| `lib/media.ts` | Unified media extraction and download-save-build pipeline |
+| `lib/prompt.ts` | Session auto-creation and prompt delivery with retry logic |
+| `lib/question-ui.ts` | Pure question/answer message rendering functions |
 
 ## Roadmap
 
