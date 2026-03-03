@@ -129,7 +129,7 @@ fi
 success "Bun v$(bun --version) ready"
 
 # ---------------------------------------------------------------------------
-# Step 3 — Clone or update repo
+# Step 3 — Clone repo
 # ---------------------------------------------------------------------------
 
 step "Setting up OpenKitten"
@@ -141,14 +141,9 @@ if ! has_command git; then
 fi
 
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  info "Existing installation found — updating"
-  cd "$INSTALL_DIR"
-  if git pull --ff-only; then
-    success "Updated to latest version"
-  else
-    warn "Fast-forward update failed. You may have local changes."
-    warn "Continuing with existing version."
-  fi
+  info "Existing installation found at $INSTALL_DIR"
+  info "To update, run: cd $INSTALL_DIR && bun self-update"
+  exit 0
 elif [[ -d "$INSTALL_DIR" ]]; then
   warn "$INSTALL_DIR exists but is not a git repository"
   BACKUP="${INSTALL_DIR}.backup.$(date +%s)"
@@ -279,9 +274,5 @@ echo
 printf "  ${DIM}Install dir:${RESET}  %s\n" "$INSTALL_DIR"
 printf "  ${DIM}Config file:${RESET}  %s\n" "$ENV_FILE"
 echo
-printf "  ${BOLD}Useful commands:${RESET}\n"
-printf "    cd %s && bun start    ${DIM}# Start manually${RESET}\n" "$INSTALL_DIR"
-printf "    cd %s && bun setup    ${DIM}# Re-run setup checks${RESET}\n" "$INSTALL_DIR"
-echo
-printf "  To update later, simply re-run the installer.\n"
+printf "  To update later: cd %s && bun self-update\n" "$INSTALL_DIR"
 echo
