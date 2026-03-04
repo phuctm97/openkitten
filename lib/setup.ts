@@ -163,49 +163,6 @@ function ensureServerPassword(): void {
 	}
 }
 
-async function checkAIProviders(opencodeAvailable: boolean): Promise<boolean> {
-	if (!opencodeAvailable) {
-		console.log(`${WARN}AI providers — skipped (opencode CLI not available)`);
-		return false;
-	}
-
-	try {
-		const { createOpencode } = await import("@opencode-ai/sdk/v2");
-		const { client, server } = await createOpencode();
-
-		try {
-			const { data, error } = await client.provider.list();
-
-			if (error || !data) {
-				console.log(`${WARN}AI providers — could not query providers`);
-				return false;
-			}
-
-			const connected = data.connected;
-			if (connected.length > 0) {
-				console.log(`${OK}AI providers: ${connected.join(", ")}`);
-				return true;
-			}
-
-			console.log(`${MISSING}AI providers — no providers connected`);
-			console.log(
-				`          Set an API key for at least one provider (e.g. ANTHROPIC_API_KEY).`,
-			);
-			console.log(
-				`          See ${pc.dim("https://opencode.ai/docs/providers")} for full list.`,
-			);
-			return false;
-		} finally {
-			server.close();
-		}
-	} catch (err) {
-		const msg = err instanceof Error ? err.message : String(err);
-		console.log(`${WARN}AI providers — check failed`);
-		console.log(`          ${pc.dim(msg)}`);
-		return false;
-	}
-}
-
 function checkSandbox() {
 	try {
 		const supported = SandboxManager.isSupportedPlatform();
@@ -327,18 +284,12 @@ export default defineCommand({
 
 		console.log();
 
-		// 5. AI providers
-		const providersOk = await checkAIProviders(opencodeOk);
-		if (!providersOk && opencodeOk) hasFailed = true;
-
-		console.log();
-
-		// 6. Sandbox (informational, never a blocker)
+		// 5. Sandbox (informational, never a blocker)
 		checkSandbox();
 
 		console.log();
 
-		// 7. System service (informational, never a blocker)
+		// 6. System service (informational, never a blocker)
 		await checkService();
 
 		printFooter(hasFailed);
