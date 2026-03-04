@@ -38,7 +38,7 @@ Set `OPENKITTEN_DIR` to customize the install directory (defaults to `~/.openkit
 git clone https://github.com/phuctm97/openkitten.git
 cd openkitten
 bun install
-bun setup
+bun openkitten-up
 bun start
 ```
 
@@ -70,8 +70,7 @@ Send any message to chat with the AI — a session is created automatically on y
 ### CLI Commands
 
 - `bun start` — Start the bot
-- `bun setup` — Check dependencies, configure environment variables, and install the system service
-- `bun self-update` — Update to the latest version (pulls changes, installs dependencies, restarts service)
+- `bun openkitten-up` — Update to the latest version, check dependencies, configure environment, and install the system service
 
 ### Supported Media
 
@@ -101,7 +100,7 @@ Set `DANGEROUSLY_DISABLE_SANDBOX=1` to bypass.
 
 ### System Service
 
-`bun setup` automatically installs OpenKitten as a system service that starts on boot and auto-restarts on failure:
+`bun openkitten-up` automatically installs OpenKitten as a system service that starts on boot and auto-restarts on failure:
 
 - **macOS** — LaunchAgent (`~/Library/LaunchAgents/com.openkitten.bot.plist`)
 - **Linux** — systemd user unit (`~/.config/systemd/user/openkitten.service`)

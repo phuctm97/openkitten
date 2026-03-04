@@ -141,9 +141,15 @@ if ! has_command git; then
 fi
 
 if [[ -d "$INSTALL_DIR/.git" ]]; then
-  info "Existing installation found at $INSTALL_DIR"
-  info "To update, run: cd $INSTALL_DIR && bun self-update"
-  exit 0
+  info "Existing installation found at $INSTALL_DIR — running update"
+  cd "$INSTALL_DIR"
+  trap - EXIT  # Disable cleanup trap — openkitten-up has its own output
+  # Pull latest code first so the openkitten-up script exists
+  # (handles upgrades from older versions that used different script names)
+  git pull --ff-only 2>/dev/null || true
+  bun install 2>/dev/null || true
+  bun openkitten-up
+  exit $?
 elif [[ -d "$INSTALL_DIR" ]]; then
   warn "$INSTALL_DIR exists but is not a git repository"
   BACKUP="${INSTALL_DIR}.backup.$(date +%s)"
@@ -224,14 +230,14 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Step 6 — Run bun setup
+# Step 6 — Run bun openkitten-up
 # ---------------------------------------------------------------------------
 
 step "Running setup"
 
-# Don't let setup's exit code kill the installer — some checks are
+# Don't let openkitten-up's exit code kill the installer — some checks are
 # informational warnings, not hard failures.
-if bun setup; then
+if bun openkitten-up; then
   success "Setup complete"
 else
   warn "Setup reported warnings (this is usually fine)"
@@ -254,5 +260,5 @@ printf "  1. Add an AI provider key to %s\n" "$ENV_FILE"
 printf "     e.g. ANTHROPIC_API_KEY, OPENAI_API_KEY, or any of 75+ providers\n"
 printf "  2. Restart: cd %s && bun start\n" "$INSTALL_DIR"
 echo
-printf "  To update later: cd %s && bun self-update\n" "$INSTALL_DIR"
+printf "  To update later: cd %s && bun openkitten-up\n" "$INSTALL_DIR"
 echo

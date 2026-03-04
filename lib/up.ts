@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { appendFileSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
 import { defineCommand } from "citty";
 import pc from "picocolors";
@@ -9,6 +9,8 @@ import {
 	installService,
 	supportedPlatform,
 } from "~/lib/service";
+
+const PROJECT_DIR = resolve(import.meta.dirname, "..");
 
 // Pad each tag to align text at a consistent column.
 // Longest non-transient tag is "[missing]" (9 chars), so pad to 10.
@@ -23,29 +25,123 @@ const MISSING = tag(pc.red, "missing");
 const WARN = tag(pc.yellow, "warn");
 const INSTALLING = tag(pc.yellow, "installing");
 const ERROR = tag(pc.red, "error");
+const SKIP = tag(pc.cyan, "skip");
 
-function printHeader() {
-	console.log();
-	console.log(pc.bold("openkitten setup"));
-	console.log("==================");
-	console.log();
+async function run(
+	cmd: string[],
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+	const proc = Bun.spawn(cmd, {
+		cwd: PROJECT_DIR,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	const exitCode = await proc.exited;
+	const stdout = await new Response(proc.stdout).text();
+	const stderr = await new Response(proc.stderr).text();
+	return { exitCode, stdout: stdout.trim(), stderr: stderr.trim() };
 }
 
-function printFooter(hasFailed: boolean) {
+// ---------------------------------------------------------------------------
+// Phase 1 — Update (graceful, never fatal)
+// ---------------------------------------------------------------------------
+
+async function updatePhase(): Promise<boolean> {
+	console.log(pc.bold("Update"));
 	console.log();
-	console.log("------------------");
-	if (hasFailed) {
-		console.log(
-			pc.red("Some required checks failed. Fix the issues above and re-run."),
-		);
-	} else {
-		console.log(
-			pc.green("Ready!") +
-				" The bot will start automatically, or run `bun start` to launch manually.",
-		);
+
+	let stoppedService = false;
+
+	// 1. Check git status — if dirty, skip
+	const status = await run(["git", "status", "--porcelain"]);
+	if (status.exitCode !== 0 || status.stdout.length > 0) {
+		const reason =
+			status.exitCode !== 0
+				? "failed to check git status"
+				: "working tree has uncommitted changes";
+		console.log(`${SKIP}Git — ${reason}`);
+		console.log();
+		return stoppedService;
 	}
+
+	// 2. Check branch — if not main, skip
+	const branch = await run(["git", "rev-parse", "--abbrev-ref", "HEAD"]);
+	if (branch.exitCode !== 0 || branch.stdout !== "main") {
+		console.log(`${SKIP}Git — not on main branch (on "${branch.stdout}")`);
+		console.log();
+		return stoppedService;
+	}
+
+	// 3. Fetch origin main — if fails, warn and continue
+	const fetch = await run(["git", "fetch", "origin", "main"]);
+	if (fetch.exitCode !== 0) {
+		console.log(`${WARN}Failed to fetch from origin`);
+		console.log(`          ${pc.dim(fetch.stderr)}`);
+		console.log();
+		return stoppedService;
+	}
+
+	// 4. Compare HEAD vs origin/main
+	const head = await run(["git", "rev-parse", "HEAD"]);
+	const remote = await run(["git", "rev-parse", "origin/main"]);
+	if (head.exitCode !== 0 || remote.exitCode !== 0) {
+		console.log(`${WARN}Failed to resolve git revisions`);
+		console.log();
+		return stoppedService;
+	}
+	if (head.stdout === remote.stdout) {
+		console.log(`${OK}Already up to date`);
+		console.log();
+		return stoppedService;
+	}
+
+	// 5. Show incoming commits
+	const log = await run(["git", "log", "HEAD..origin/main", "--oneline"]);
+	if (log.stdout.length > 0) {
+		console.log(pc.bold("  Incoming changes:"));
+		for (const line of log.stdout.split("\n")) {
+			console.log(`  ${pc.dim(line)}`);
+		}
+		console.log();
+	}
+
+	// 6. Stop service if running
+	const serviceStatus = await getServiceStatus();
+	if (serviceStatus.installed && serviceStatus.running) {
+		const platform = supportedPlatform();
+		if (platform === "darwin") {
+			await run(["launchctl", "unload", serviceStatus.path]);
+		} else if (platform === "linux") {
+			await run(["systemctl", "--user", "stop", "openkitten.service"]);
+		}
+		console.log(`${OK}Stopped system service`);
+		stoppedService = true;
+	}
+
+	// 7. git pull --ff-only — if fails, warn and continue
+	const pull = await run(["git", "pull", "--ff-only", "origin", "main"]);
+	if (pull.exitCode !== 0) {
+		console.log(`${WARN}Failed to pull changes`);
+		console.log(`          ${pc.dim(pull.stderr)}`);
+	} else {
+		console.log(`${OK}Pulled latest changes`);
+	}
+
+	// 8. bun install — if fails, warn and continue
+	const install = await run(["bun", "install"]);
+	if (install.exitCode !== 0) {
+		console.log(`${WARN}Failed to install dependencies`);
+		console.log(`          ${pc.dim(install.stderr)}`);
+	} else {
+		console.log(`${OK}Dependencies installed`);
+	}
+
 	console.log();
+	return stoppedService;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Setup
+// ---------------------------------------------------------------------------
 
 function checkBun(): boolean {
 	console.log(`${OK}Bun v${Bun.version}`);
@@ -53,21 +149,18 @@ function checkBun(): boolean {
 }
 
 async function checkOpencode(): Promise<boolean> {
-	// Check if opencode is already available
 	const which = Bun.which("opencode");
 	if (which) {
 		console.log(`${OK}opencode CLI (${pc.dim(which)})`);
 		return true;
 	}
 
-	// Check node_modules/.bin directly
 	const localBin = join(process.cwd(), "node_modules", ".bin", "opencode");
 	if (existsSync(localBin)) {
 		console.log(`${OK}opencode CLI (${pc.dim(localBin)})`);
 		return true;
 	}
 
-	// Try to install opencode-ai as a project dependency
 	console.log(`${INSTALLING}opencode CLI — running \`bun add opencode-ai\`...`);
 	const proc = Bun.spawn(["bun", "add", "opencode-ai"], {
 		stdout: "ignore",
@@ -82,7 +175,6 @@ async function checkOpencode(): Promise<boolean> {
 		return false;
 	}
 
-	// Verify after install
 	const installedBin = join(process.cwd(), "node_modules", ".bin", "opencode");
 	if (existsSync(installedBin)) {
 		console.log(`${OK}opencode CLI (${pc.dim(installedBin)})`);
@@ -96,7 +188,6 @@ async function checkOpencode(): Promise<boolean> {
 function checkTelegramEnv(): boolean {
 	let ok = true;
 
-	// TELEGRAM_BOT_TOKEN
 	const token = process.env.TELEGRAM_BOT_TOKEN;
 	if (token) {
 		console.log(`${OK}TELEGRAM_BOT_TOKEN`);
@@ -111,7 +202,6 @@ function checkTelegramEnv(): boolean {
 		);
 	}
 
-	// TELEGRAM_USER_ID
 	const rawUserId = process.env.TELEGRAM_USER_ID;
 	if (rawUserId) {
 		const userId = Number(rawUserId);
@@ -205,7 +295,7 @@ function checkSandbox() {
 	}
 }
 
-async function checkService(): Promise<void> {
+async function checkService(forceRestart: boolean): Promise<void> {
 	try {
 		const platform = supportedPlatform();
 		if (!platform) {
@@ -231,12 +321,26 @@ async function checkService(): Promise<void> {
 		}
 
 		if (status.installed && !status.running) {
-			const hint =
-				platform === "darwin"
-					? `launchctl load ${status.path}`
-					: "systemctl --user start openkitten.service";
-			console.log(`${WARN}System service — installed but not running`);
-			console.log(`          Run ${pc.dim(hint)} to start it.`);
+			if (forceRestart) {
+				// Service was stopped by update phase — restart it
+				console.log(`${INSTALLING}System service — restarting...`);
+				const result = await installService();
+				if (result.ok) {
+					console.log(
+						`${OK}System service — restarted (${pc.dim(result.path)})`,
+					);
+				} else {
+					console.log(`${WARN}System service — restart failed`);
+					console.log(`          ${pc.dim(result.reason)}`);
+				}
+			} else {
+				const hint =
+					platform === "darwin"
+						? `launchctl load ${status.path}`
+						: "systemctl --user start openkitten.service";
+				console.log(`${WARN}System service — installed but not running`);
+				console.log(`          Run ${pc.dim(hint)} to start it.`);
+			}
 			return;
 		}
 
@@ -257,42 +361,71 @@ async function checkService(): Promise<void> {
 	}
 }
 
+async function setupPhase(stoppedService: boolean): Promise<boolean> {
+	console.log(pc.bold("Setup"));
+	console.log();
+
+	let hasFailed = false;
+
+	// 1. Bun runtime
+	checkBun();
+
+	// 2. opencode CLI
+	const opencodeOk = await checkOpencode();
+	if (!opencodeOk) hasFailed = true;
+
+	console.log();
+
+	// 3. Telegram env vars
+	const telegramOk = checkTelegramEnv();
+	if (!telegramOk) hasFailed = true;
+
+	console.log();
+
+	// 4. Server password (informational)
+	ensureServerPassword();
+
+	console.log();
+
+	// 5. Sandbox (informational)
+	checkSandbox();
+
+	console.log();
+
+	// 6. System service
+	await checkService(stoppedService);
+
+	return hasFailed;
+}
+
 export default defineCommand({
-	meta: { description: "Check dependencies and environment setup" },
+	meta: { description: "Update and set up openkitten" },
 	run: async () => {
-		printHeader();
-
-		let hasFailed = false;
-
-		// 1. Bun runtime
-		checkBun();
-
-		// 2. opencode CLI
-		const opencodeOk = await checkOpencode();
-		if (!opencodeOk) hasFailed = true;
-
+		console.log();
+		console.log(pc.bold("openkitten up"));
+		console.log("==================");
 		console.log();
 
-		// 3. Telegram env vars
-		const telegramOk = checkTelegramEnv();
-		if (!telegramOk) hasFailed = true;
+		// Phase 1 — Update
+		const stoppedService = await updatePhase();
 
+		// Phase 2 — Setup
+		const hasFailed = await setupPhase(stoppedService);
+
+		// Footer
 		console.log();
-
-		// 4. Server password (informational, never a blocker)
-		ensureServerPassword();
-
+		console.log("------------------");
+		if (hasFailed) {
+			console.log(
+				pc.red("Some required checks failed. Fix the issues above and re-run."),
+			);
+		} else {
+			console.log(
+				pc.green("Ready!") +
+					" The bot will start automatically, or run `bun start` to launch manually.",
+			);
+		}
 		console.log();
-
-		// 5. Sandbox (informational, never a blocker)
-		checkSandbox();
-
-		console.log();
-
-		// 6. System service (informational, never a blocker)
-		await checkService();
-
-		printFooter(hasFailed);
 
 		process.exit(hasFailed ? 1 : 0);
 	},

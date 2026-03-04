@@ -1,7 +1,6 @@
 import { defineCommand, runMain } from "citty";
-import selfUpdate from "~/lib/self-update";
 import serve from "~/lib/serve";
-import setup from "~/lib/setup";
+import up from "~/lib/up";
 import pkg from "~/package.json";
 
 const main = defineCommand({
@@ -11,9 +10,8 @@ const main = defineCommand({
 		description: pkg.description,
 	},
 	subCommands: {
-		setup,
+		up,
 		serve,
-		"self-update": selfUpdate,
 	},
 });
 
