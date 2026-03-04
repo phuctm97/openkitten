@@ -250,7 +250,7 @@ printf "  ${DIM}Install dir:${RESET}  %s\n" "$INSTALL_DIR"
 printf "  ${DIM}Config file:${RESET}  %s\n" "$ENV_FILE"
 echo
 printf "  ${BOLD}Next steps:${RESET}\n"
-printf "  1. Add an AI provider key to %s/.env.local\n" "$INSTALL_DIR"
+printf "  1. Add an AI provider key to %s\n" "$ENV_FILE"
 printf "     e.g. ANTHROPIC_API_KEY, OPENAI_API_KEY, or any of 75+ providers\n"
 printf "  2. Restart: cd %s && bun start\n" "$INSTALL_DIR"
 echo
