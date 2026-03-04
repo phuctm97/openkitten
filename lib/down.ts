@@ -1,4 +1,3 @@
-import { rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { defineCommand } from "citty";
@@ -48,7 +47,11 @@ export default defineCommand({
 
 		// 3. Remove log directory
 		try {
-			rmSync(LOG_DIR, { recursive: true, force: true });
+			const rm = Bun.spawn(["rm", "-rf", LOG_DIR], {
+				stdout: "ignore",
+				stderr: "ignore",
+			});
+			await rm.exited;
 			console.log(`${OK}Removed logs (${pc.dim(LOG_DIR)})`);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);

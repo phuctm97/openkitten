@@ -1,11 +1,10 @@
-import type { Api } from "grammy";
-import { convert } from "telegram-markdown-v2";
+/** Content-aware message splitting (NanoClaw algorithm). Pure, no IO. */
 
 export const TELEGRAM_MAX_LENGTH = 4096;
 /** 80% of max — headroom for MarkdownV2 escaping overhead */
 export const TELEGRAM_SPLIT_LENGTH = Math.floor(TELEGRAM_MAX_LENGTH * 0.8); // 3276
 
-// --- Content-aware message splitting (ported from NanoClaw) ---
+// ── Code block detection ────────────────────────────────────────────────────
 
 interface CodeBlockRange {
 	start: number;
@@ -13,7 +12,7 @@ interface CodeBlockRange {
 	lang: string;
 }
 
-function findCodeBlockRanges(text: string): CodeBlockRange[] {
+export function findCodeBlockRanges(text: string): CodeBlockRange[] {
 	const ranges: CodeBlockRange[] = [];
 	const regex = /^```(\w*)/gm;
 	let openStart: number | null = null;
@@ -42,7 +41,7 @@ function findCodeBlockRanges(text: string): CodeBlockRange[] {
 	return ranges;
 }
 
-function isInCodeBlock(
+export function isInCodeBlock(
 	pos: number,
 	ranges: CodeBlockRange[],
 ): CodeBlockRange | null {
@@ -52,7 +51,8 @@ function isInCodeBlock(
 	return null;
 }
 
-// Split priority: prefer breaking at higher-priority markdown boundaries.
+// ── Split priorities ────────────────────────────────────────────────────────
+
 const SPLIT_PRIORITIES: ReadonlyArray<{ pattern: RegExp; offset: number }> = [
 	// 1. Before markdown header or horizontal rule
 	{ pattern: /\n(?=#{1,6} |---|___|\*\*\*)/g, offset: 0 },
@@ -67,6 +67,8 @@ const SPLIT_PRIORITIES: ReadonlyArray<{ pattern: RegExp; offset: number }> = [
 	// 6. Word boundary (space)
 	{ pattern: / /g, offset: 0 },
 ];
+
+// ── Split algorithm ─────────────────────────────────────────────────────────
 
 export function splitMessage(text: string, maxLength: number): string[] {
 	if (text.length <= maxLength) return [text];
@@ -137,56 +139,11 @@ export function splitMessage(text: string, maxLength: number): string[] {
 	return chunks;
 }
 
-// --- MarkdownV2 conversion helpers ---
+// ── Horizontal rule pre-splitting ───────────────────────────────────────────
 
-/**
- * Try converting to MarkdownV2; fall back to plain text if conversion fails
- * or result exceeds Telegram's limit. For single messages (questions, permissions).
- */
-export function convertWithFallback(text: string): {
-	text: string;
-	parseMode?: "MarkdownV2";
-} {
-	try {
-		const formatted = convert(text);
-		if (formatted.length <= TELEGRAM_MAX_LENGTH) {
-			return { text: formatted, parseMode: "MarkdownV2" };
-		}
-	} catch {
-		// fall through to plain text
-	}
-	return { text };
-}
+const HR_PATTERN = /(?:^|\n)\s*(?:---+|___+|\*\*\*+)\s*(?:\n|$)/g;
 
-/**
- * Split text content-aware, convert each chunk to MarkdownV2, and send.
- * Falls back to plain text per-chunk if conversion fails or exceeds limit.
- */
-export async function sendFormattedMessage(
-	api: Api,
-	chatId: number,
-	text: string,
-): Promise<void> {
-	const chunks = splitMessage(text, TELEGRAM_SPLIT_LENGTH);
-
-	for (const chunk of chunks) {
-		try {
-			const formatted = convert(chunk);
-			if (formatted.length > TELEGRAM_MAX_LENGTH) {
-				await api.sendMessage(chatId, chunk, {
-					link_preview_options: { is_disabled: true },
-				});
-			} else {
-				await api.sendMessage(chatId, formatted, {
-					parse_mode: "MarkdownV2",
-					link_preview_options: { is_disabled: true },
-				});
-			}
-		} catch {
-			// Fallback to plain text if MarkdownV2 conversion/send fails
-			await api.sendMessage(chatId, chunk, {
-				link_preview_options: { is_disabled: true },
-			});
-		}
-	}
+export function splitOnHorizontalRules(text: string): string[] {
+	const sections = text.split(HR_PATTERN);
+	return sections.map((s) => s.trim()).filter((s) => s.length > 0);
 }

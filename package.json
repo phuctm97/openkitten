@@ -11,13 +11,14 @@
 		"start": "bun lib/index.ts serve",
 		"openkitten-up": "bun lib/index.ts up",
 		"openkitten-down": "bun lib/index.ts down",
+		"test": "bun test",
 		"drizzle-generate": "bun --bun drizzle-kit generate",
 		"drizzle-migrate": "bun --bun drizzle-kit migrate"
 	},
 	"dependencies": {
 		"@anthropic-ai/sandbox-runtime": "^0.0.39",
 		"@grammyjs/auto-retry": "^2.0.2",
-		"@opencode-ai/plugin": "^1.2.15",
+		"@modelcontextprotocol/sdk": "^1.27.1",
 		"@opencode-ai/sdk": "^1.2.15",
 		"citty": "^0.2.1",
 		"drizzle-orm": "^0.45.1",

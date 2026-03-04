@@ -7,5 +7,5 @@
 			"~/*": ["./*"]
 		}
 	},
-	"include": ["lib", ".opencode/tools", ".opencode/plugins"]
+	"include": ["lib", "test", ".opencode/plugins"]
 }
