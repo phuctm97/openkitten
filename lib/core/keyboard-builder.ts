@@ -61,8 +61,7 @@ export function formatQuestionMessage(qs: QuestionState): string {
 	const total = qs.questions.length;
 	const progress = total > 1 ? `${idx + 1}/${total} ` : "";
 	const header = question.header ? `**${progress}${question.header}**\n\n` : "";
-	const multi = question.multiple ? "\n_Select multiple_" : "";
-	return `${header}${question.question}${multi}\n\n_Or just type your answer._`;
+	return `${header}${question.question}\n\n_Or just type your answer._`;
 }
 
 export function formatAnsweredQuestion(
