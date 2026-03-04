@@ -224,6 +224,10 @@ configure_env() {
     fi
   done
 
+  # Generate a random server password for HTTP Basic Auth
+  local server_password
+  server_password="$(openssl rand -hex 32)"
+
   # Write .env.local (printf to avoid shell expansion corrupting keys)
   (
     umask 077
@@ -231,6 +235,7 @@ configure_env() {
       printf 'TELEGRAM_BOT_TOKEN="%s"\n' "$token"
       printf 'TELEGRAM_USER_ID="%s"\n' "$user_id"
       printf '%s="%s"\n' "$provider_var" "$provider_key"
+      printf 'OPENCODE_SERVER_PASSWORD="%s"\n' "$server_password"
     } > "$ENV_FILE"
   )
 

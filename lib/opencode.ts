@@ -14,7 +14,13 @@ let streamAbortController: AbortController | null = null;
 let eventCallback: EventCallback | null = null;
 
 export function initClient(baseUrl: string): void {
-	client = createOpencodeClient({ baseUrl });
+	const password = process.env.OPENCODE_SERVER_PASSWORD;
+	const headers: Record<string, string> = {};
+	if (password) {
+		const username = process.env.OPENCODE_SERVER_USERNAME ?? "opencode";
+		headers.Authorization = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
+	}
+	client = createOpencodeClient({ baseUrl, headers });
 }
 
 export function getClient(): ReturnType<typeof createOpencodeClient> {

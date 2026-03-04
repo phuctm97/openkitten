@@ -1,4 +1,5 @@
-import { existsSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { appendFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
 import { defineCommand } from "citty";
@@ -140,6 +141,28 @@ function checkTelegramEnv(): boolean {
 	return ok;
 }
 
+function ensureServerPassword(): void {
+	if (process.env.OPENCODE_SERVER_PASSWORD) {
+		console.log(`${OK}OPENCODE_SERVER_PASSWORD`);
+		return;
+	}
+
+	const password = randomBytes(32).toString("hex");
+	const envFile = join(process.cwd(), ".env.local");
+
+	try {
+		appendFileSync(envFile, `\nOPENCODE_SERVER_PASSWORD="${password}"\n`, {
+			mode: 0o600,
+		});
+		process.env.OPENCODE_SERVER_PASSWORD = password;
+		console.log(`${OK}OPENCODE_SERVER_PASSWORD (generated)`);
+	} catch (err) {
+		const msg = err instanceof Error ? err.message : String(err);
+		console.log(`${WARN}OPENCODE_SERVER_PASSWORD — failed to write .env.local`);
+		console.log(`          ${pc.dim(msg)}`);
+	}
+}
+
 async function checkAIProviders(opencodeAvailable: boolean): Promise<boolean> {
 	if (!opencodeAvailable) {
 		console.log(`${WARN}AI providers — skipped (opencode CLI not available)`);
@@ -238,7 +261,15 @@ async function checkService(): Promise<void> {
 		const status = await getServiceStatus();
 
 		if (status.installed && status.running) {
-			console.log(`${OK}System service (${pc.dim(status.path)})`);
+			// Always restart so the service picks up any env / code changes
+			console.log(`${INSTALLING}System service — restarting...`);
+			const result = await installService();
+			if (result.ok) {
+				console.log(`${OK}System service — restarted (${pc.dim(result.path)})`);
+			} else {
+				console.log(`${WARN}System service — restart failed`);
+				console.log(`          ${pc.dim(result.reason)}`);
+			}
 			return;
 		}
 
@@ -291,18 +322,23 @@ export default defineCommand({
 
 		console.log();
 
-		// 4. AI providers
+		// 4. Server password (informational, never a blocker)
+		ensureServerPassword();
+
+		console.log();
+
+		// 5. AI providers
 		const providersOk = await checkAIProviders(opencodeOk);
 		if (!providersOk && opencodeOk) hasFailed = true;
 
 		console.log();
 
-		// 5. Sandbox (informational, never a blocker)
+		// 6. Sandbox (informational, never a blocker)
 		checkSandbox();
 
 		console.log();
 
-		// 6. System service (informational, never a blocker)
+		// 7. System service (informational, never a blocker)
 		await checkService();
 
 		printFooter(hasFailed);
