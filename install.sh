@@ -195,12 +195,13 @@ configure_env() {
     fi
   done
 
-  # AI provider
+  # AI provider (optional — can be configured later)
   echo > /dev/tty
-  info "Select your AI provider:"
+  info "Select your AI provider (or skip to configure later):"
   printf "    1) Anthropic (Claude)\n" > /dev/tty
   printf "    2) OpenAI\n" > /dev/tty
   printf "    3) Other (enter variable name manually)\n" > /dev/tty
+  printf "    4) Skip (configure later)\n" > /dev/tty
   local choice=""
   prompt_tty "  Choice [1]: " choice
   choice="${choice:-1}"
@@ -208,6 +209,10 @@ configure_env() {
   case "$choice" in
     1) provider_var="ANTHROPIC_API_KEY" ;;
     2) provider_var="OPENAI_API_KEY" ;;
+    4)
+      provider_var=""
+      info "Skipping AI provider setup — you can add a key to .env.local later"
+      ;;
     *)
       prompt_tty "  Environment variable name (e.g. GOOGLE_API_KEY): " provider_var
       if [[ -z "$provider_var" ]]; then
@@ -217,12 +222,12 @@ configure_env() {
       ;;
   esac
 
-  while [[ -z "$provider_key" ]]; do
+  if [[ -n "$provider_var" ]]; then
     prompt_tty "  $provider_var: " provider_key
     if [[ -z "$provider_key" ]]; then
-      warn "API key is required."
+      warn "No API key entered — you can add it to .env.local later"
     fi
-  done
+  fi
 
   # Generate a random server password for HTTP Basic Auth
   local server_password
@@ -234,7 +239,9 @@ configure_env() {
     {
       printf 'TELEGRAM_BOT_TOKEN="%s"\n' "$token"
       printf 'TELEGRAM_USER_ID="%s"\n' "$user_id"
-      printf '%s="%s"\n' "$provider_var" "$provider_key"
+      if [[ -n "$provider_var" && -n "$provider_key" ]]; then
+        printf '%s="%s"\n' "$provider_var" "$provider_key"
+      fi
       printf 'OPENCODE_SERVER_PASSWORD="%s"\n' "$server_password"
     } > "$ENV_FILE"
   )

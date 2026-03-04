@@ -31,7 +31,6 @@ Set `OPENKITTEN_DIR` to customize the install directory (defaults to `~/.openkit
 - [Bun](https://bun.sh) v1.0+
 - A Telegram bot token from [@BotFather](https://t.me/BotFather)
 - Your Telegram user ID (send `/start` to [@userinfobot](https://t.me/userinfobot))
-- At least one AI provider API key
 
 ### Manual Install
 
