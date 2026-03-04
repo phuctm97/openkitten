@@ -3,12 +3,12 @@
  * Spawns OpenCode subprocess, creates adapters, wires grammY handlers to App.
  */
 
-import { resolve } from "node:path";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import type { BotCommand } from "grammy/types";
 import { BunFileSystemAdapter } from "~/lib/adapters/filesystem-bun";
+import { startMcpServer } from "~/lib/adapters/mcp-server";
 import { OpenCodeSdkAdapter } from "~/lib/adapters/opencode-sdk";
 import { SqliteStorageAdapter } from "~/lib/adapters/storage-sqlite";
 import { TelegramGrammyAdapter } from "~/lib/adapters/telegram-grammy";
@@ -89,22 +89,13 @@ export default defineCommand({
 		const project = await opencodeAdapter.getProjectInfo();
 		const directory = project.worktree;
 
-		// 4. Spawn MCP server subprocess and register with OpenCode
-		const mcpProc = Bun.spawn(
-			["bun", resolve(import.meta.dirname, "adapters/mcp-server.ts")],
-			{
-				stdio: ["pipe", "pipe", "pipe"],
-				env: {
-					...process.env,
-					TELEGRAM_BOT_TOKEN: token,
-					TELEGRAM_CHAT_ID: String(userId),
-				},
-			},
-		);
+		// 4. Start MCP server in-process (HTTP transport, dynamic port)
+		const mcpServer = await startMcpServer(token, userId);
+		console.log(`[bot] MCP server running at ${mcpServer.url}`);
 
-		// Register MCP server with OpenCode
+		// Register MCP server with OpenCode as remote
 		try {
-			await opencodeAdapter.registerMcpServer("openkitten", "stdio");
+			await opencodeAdapter.registerMcpServer("openkitten", mcpServer.url);
 			console.log("[bot] MCP server registered with OpenCode");
 		} catch (err) {
 			console.warn("[bot] Failed to register MCP server:", err);
@@ -200,7 +191,7 @@ export default defineCommand({
 		const shutdown = () => {
 			console.log("[bot] Shutting down...");
 			app.shutdown();
-			mcpProc.kill();
+			mcpServer.stop();
 			server.kill();
 			bot.stop();
 		};

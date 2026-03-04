@@ -16,6 +16,7 @@
         "opencode-ai": "^1.2.15",
         "picocolors": "^1.1.1",
         "telegram-markdown-v2": "^0.0.4",
+        "zod": "3.25.76",
       },
       "devDependencies": {
         "@biomejs/biome": "^2.4.5",
