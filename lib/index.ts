@@ -1,4 +1,5 @@
 import { defineCommand, runMain } from "citty";
+import down from "~/lib/down";
 import serve from "~/lib/serve";
 import up from "~/lib/up";
 import pkg from "~/package.json";
@@ -10,6 +11,7 @@ const main = defineCommand({
 		description: pkg.description,
 	},
 	subCommands: {
+		down,
 		up,
 		serve,
 	},
