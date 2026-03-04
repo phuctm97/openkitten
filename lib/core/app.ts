@@ -58,8 +58,8 @@ export class App {
 
 	// ── Initialization ────────────────────────────────────────────────────────
 
-	async initialize(): Promise<void> {
-		await this.opencode
+	initialize(): void {
+		this.opencode
 			.subscribeToEvents(this.directory, (event) => this.handleEvent(event))
 			.catch((err) => console.error("[app] SSE subscription error:", err));
 	}
@@ -269,8 +269,8 @@ export class App {
 	private async promptOpenCode(
 		parts: Array<TextPartInput | FilePartInput>,
 	): Promise<void> {
-		// Ensure event subscription is active
-		await this.opencode
+		// Ensure event subscription is active (fire-and-forget, never resolves)
+		this.opencode
 			.subscribeToEvents(this.directory, (event) => this.handleEvent(event))
 			.catch((err) => console.error("[app] SSE subscription error:", err));
 
