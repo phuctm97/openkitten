@@ -4,7 +4,12 @@ import {
 	executeEffects,
 } from "~/lib/core/effect-executor";
 import { createSessionState } from "~/lib/core/session-state";
-import type { Effect, SessionState } from "~/lib/core/types";
+import type {
+	CallbackEffect,
+	Effect,
+	QuestionState,
+	SessionState,
+} from "~/lib/core/types";
 import { createFileSystemStub } from "~/test/stubs/filesystem";
 import { createOpenCodeStub } from "~/test/stubs/opencode";
 import { createTelegramStub } from "~/test/stubs/telegram";
@@ -281,5 +286,295 @@ describe("executeCallbackEffects", () => {
 		);
 
 		expect(state.pendingPermissions.has(10)).toBe(false);
+	});
+
+	it("executes delete_message — deletes via telegram", async () => {
+		const { deps, telegram } = makeDeps();
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 42,
+		};
+
+		await executeCallbackEffects([{ type: "delete_message" }], cbDeps);
+
+		const call = telegram.calls.find((c) => c.method === "deleteMessage");
+		expect(call).toBeDefined();
+		expect(call?.args[0]).toBe(123); // chatId
+		expect(call?.args[1]).toBe(42); // callbackMessageId
+	});
+
+	it("executes reply_question — sends answers to opencode", async () => {
+		const { deps, opencode } = makeDeps();
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 10,
+		};
+
+		await executeCallbackEffects(
+			[
+				{
+					type: "reply_question",
+					requestID: "q1",
+					answers: [["option-a"], ["option-b"]],
+				},
+			],
+			cbDeps,
+		);
+
+		const call = opencode.calls.find((c) => c.method === "replyQuestion");
+		expect(call).toBeDefined();
+		expect(call?.args[0]).toBe("q1");
+		expect(call?.args[1]).toBe("/test");
+		expect(call?.args[2]).toEqual([["option-a"], ["option-b"]]);
+	});
+
+	it("executes start_typing in callback context", async () => {
+		const { deps, timer, state } = makeDeps();
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 10,
+		};
+
+		await executeCallbackEffects([{ type: "start_typing" }], cbDeps);
+
+		expect(state.typingHandle).not.toBeNull();
+		expect(timer.registrations.length).toBe(1);
+		expect(timer.registrations[0]?.ms).toBe(4000);
+	});
+
+	it("start_typing in callback context is no-op when already typing", async () => {
+		const { deps, timer, state } = makeDeps();
+		state.typingHandle = "existing";
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 10,
+		};
+
+		await executeCallbackEffects([{ type: "start_typing" }], cbDeps);
+
+		expect(timer.registrations.length).toBe(0);
+		expect(state.typingHandle).toBe("existing");
+	});
+
+	it("executes stop_typing in callback context", async () => {
+		const { deps, timer, state } = makeDeps();
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 10,
+		};
+
+		// Start first
+		await executeCallbackEffects([{ type: "start_typing" }], cbDeps);
+		expect(state.typingHandle).not.toBeNull();
+
+		// Stop
+		await executeCallbackEffects([{ type: "stop_typing" }], cbDeps);
+		expect(state.typingHandle).toBeNull();
+		expect(timer.registrations[0]?.cleared).toBe(true);
+	});
+
+	it("stop_typing in callback context is no-op when not typing", async () => {
+		const { deps, state } = makeDeps();
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 10,
+		};
+
+		await executeCallbackEffects([{ type: "stop_typing" }], cbDeps);
+		expect(state.typingHandle).toBeNull();
+	});
+
+	it("executes advance_question — delegates to computeAdvanceEffects", async () => {
+		const { deps } = makeDeps();
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 10,
+		};
+
+		const qs: QuestionState = {
+			requestID: "q1",
+			questions: [
+				{
+					header: "Q1",
+					question: "Pick one",
+					options: [
+						{ label: "A", description: "Option A" },
+						{ label: "B", description: "Option B" },
+					],
+				},
+				{
+					header: "Q2",
+					question: "Pick another",
+					options: [{ label: "C", description: "Option C" }],
+				},
+			],
+			currentIndex: 0,
+			answers: [],
+			selectedOptions: new Map([[0, new Set([0])]]),
+			customAnswers: new Map(),
+			activeMessageId: 10,
+		};
+
+		await executeCallbackEffects(
+			[{ type: "advance_question", questionState: qs, questionIndex: 0 }],
+			cbDeps,
+		);
+
+		// advance_question should produce sub-effects that get executed
+		// At minimum it records the answer for the current question
+		expect(qs.answers[0]).toBeDefined();
+	});
+
+	it("executes show_question — sends question message with keyboard", async () => {
+		const { deps, telegram } = makeDeps();
+		telegram.nextMessageId = 77;
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 10,
+		};
+
+		const qs: QuestionState = {
+			requestID: "q1",
+			questions: [
+				{
+					header: "Setup",
+					question: "Choose your option",
+					options: [
+						{ label: "Yes", description: "Confirm" },
+						{ label: "No", description: "Deny" },
+					],
+				},
+			],
+			currentIndex: 0,
+			answers: [],
+			selectedOptions: new Map(),
+			customAnswers: new Map(),
+			activeMessageId: null,
+		};
+
+		await executeCallbackEffects(
+			[{ type: "show_question", questionState: qs }],
+			cbDeps,
+		);
+
+		const sendCall = telegram.calls.find((c) => c.method === "sendMessage");
+		expect(sendCall).toBeDefined();
+		// Should include reply_markup (keyboard)
+		const opts = sendCall?.args[2] as { reply_markup?: unknown };
+		expect(opts.reply_markup).toBeDefined();
+		// activeMessageId should be set to the sent message id
+		expect(qs.activeMessageId).toBe(77);
+	});
+
+	it("show_question is no-op when currentIndex has no question", async () => {
+		const { deps, telegram } = makeDeps();
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 10,
+		};
+
+		const qs: QuestionState = {
+			requestID: "q1",
+			questions: [],
+			currentIndex: 0,
+			answers: [],
+			selectedOptions: new Map(),
+			customAnswers: new Map(),
+			activeMessageId: null,
+		};
+
+		await executeCallbackEffects(
+			[{ type: "show_question", questionState: qs }],
+			cbDeps,
+		);
+
+		// No message should be sent since there is no question at index 0
+		const sendCall = telegram.calls.find((c) => c.method === "sendMessage");
+		expect(sendCall).toBeUndefined();
+		expect(qs.activeMessageId).toBeNull();
+	});
+
+	it("continues after an error in one callback effect", async () => {
+		const { deps, telegram, state } = makeDeps();
+		telegram.failNextSend = true;
+		state.questionState = {
+			requestID: "q1",
+			questions: [
+				{
+					header: "Q",
+					question: "Pick",
+					options: [{ label: "A", description: "a" }],
+				},
+			],
+			currentIndex: 0,
+			answers: [],
+			selectedOptions: new Map(),
+			customAnswers: new Map(),
+			activeMessageId: null,
+		};
+		const cbDeps = {
+			...deps,
+			callbackQueryId: "cb1",
+			callbackMessageId: 10,
+		};
+
+		const effects: CallbackEffect[] = [
+			// show_question will call sendMessage which will fail
+			{ type: "show_question", questionState: state.questionState },
+			// clear_question_state should still execute
+			{ type: "clear_question_state" },
+		];
+
+		await executeCallbackEffects(effects, cbDeps);
+
+		// The second effect should have still been attempted despite the first failing
+		expect(state.questionState).toBeNull();
+	});
+});
+
+describe("executeEffects — additional coverage", () => {
+	it("executes send_notice with a codeBlock parameter", async () => {
+		const { deps, telegram } = makeDeps();
+
+		await executeEffects(
+			[
+				{
+					type: "send_notice",
+					kind: "error",
+					message: "Something went wrong",
+					codeBlock: { language: "json", content: '{"error": true}' },
+				},
+			],
+			deps,
+		);
+
+		const call = telegram.calls.find((c) => c.method === "sendMessage");
+		expect(call).toBeDefined();
+		// The message text should contain the code block content
+		const text = call?.args[1] as string;
+		expect(text).toContain("error");
+		// Should include disable_notification
+		const opts = call?.args[2] as { disable_notification?: boolean };
+		expect(opts.disable_notification).toBe(true);
+	});
+
+	it("executes delete_message effect", async () => {
+		const { deps, telegram } = makeDeps();
+
+		await executeEffects([{ type: "delete_message", messageId: 42 }], deps);
+
+		const call = telegram.calls.find((c) => c.method === "deleteMessage");
+		expect(call).toBeDefined();
+		expect(call?.args[0]).toBe(123); // chatId
+		expect(call?.args[1]).toBe(42); // messageId
 	});
 });
