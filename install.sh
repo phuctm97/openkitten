@@ -176,7 +176,7 @@ step "Configuring environment"
 ENV_FILE="$INSTALL_DIR/.env.local"
 
 configure_env() {
-  local token="" user_id="" provider_key="" provider_var=""
+  local token="" user_id=""
 
   # Telegram Bot Token
   while [[ -z "$token" ]]; do
@@ -195,40 +195,6 @@ configure_env() {
     fi
   done
 
-  # AI provider (optional — can be configured later)
-  echo > /dev/tty
-  info "Select your AI provider (or skip to configure later):"
-  printf "    1) Anthropic (Claude)\n" > /dev/tty
-  printf "    2) OpenAI\n" > /dev/tty
-  printf "    3) Other (enter variable name manually)\n" > /dev/tty
-  printf "    4) Skip (configure later)\n" > /dev/tty
-  local choice=""
-  prompt_tty "  Choice [1]: " choice
-  choice="${choice:-1}"
-
-  case "$choice" in
-    1) provider_var="ANTHROPIC_API_KEY" ;;
-    2) provider_var="OPENAI_API_KEY" ;;
-    4)
-      provider_var=""
-      info "Skipping AI provider setup — you can add a key to .env.local later"
-      ;;
-    *)
-      prompt_tty "  Environment variable name (e.g. GOOGLE_API_KEY): " provider_var
-      if [[ -z "$provider_var" ]]; then
-        provider_var="ANTHROPIC_API_KEY"
-        warn "Defaulting to ANTHROPIC_API_KEY"
-      fi
-      ;;
-  esac
-
-  if [[ -n "$provider_var" ]]; then
-    prompt_tty "  $provider_var: " provider_key
-    if [[ -z "$provider_key" ]]; then
-      warn "No API key entered — you can add it to .env.local later"
-    fi
-  fi
-
   # Generate a random server password for HTTP Basic Auth
   local server_password
   server_password="$(openssl rand -hex 32)"
@@ -239,9 +205,6 @@ configure_env() {
     {
       printf 'TELEGRAM_BOT_TOKEN="%s"\n' "$token"
       printf 'TELEGRAM_USER_ID="%s"\n' "$user_id"
-      if [[ -n "$provider_var" && -n "$provider_key" ]]; then
-        printf '%s="%s"\n' "$provider_var" "$provider_key"
-      fi
       printf 'OPENCODE_SERVER_PASSWORD="%s"\n' "$server_password"
     } > "$ENV_FILE"
   )
@@ -285,6 +248,11 @@ printf "${BOLD}========================================${RESET}\n"
 echo
 printf "  ${DIM}Install dir:${RESET}  %s\n" "$INSTALL_DIR"
 printf "  ${DIM}Config file:${RESET}  %s\n" "$ENV_FILE"
+echo
+printf "  ${BOLD}Next steps:${RESET}\n"
+printf "  1. Add an AI provider key to %s/.env.local\n" "$INSTALL_DIR"
+printf "     e.g. ANTHROPIC_API_KEY, OPENAI_API_KEY, or any of 75+ providers\n"
+printf "  2. Restart: cd %s && bun start\n" "$INSTALL_DIR"
 echo
 printf "  To update later: cd %s && bun self-update\n" "$INSTALL_DIR"
 echo
