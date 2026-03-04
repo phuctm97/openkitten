@@ -307,8 +307,6 @@ export default defineCommand({
 
 		printFooter(hasFailed);
 
-		if (hasFailed) {
-			process.exitCode = 1;
-		}
+		process.exit(hasFailed ? 1 : 0);
 	},
 });
