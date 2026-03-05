@@ -1,9 +1,6 @@
-import node_path from "node:path";
 import type { Event } from "@opencode-ai/sdk/v2";
 import type { Api, Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
-import mime from "mime";
-import { sendTelegramFile } from "~/lib/files";
 import { convertWithFallback, sendFormattedMessage } from "~/lib/markdown";
 import { sendNotice } from "~/lib/notice";
 import type { QuestionState } from "~/lib/state";
@@ -69,37 +66,6 @@ export function showQuestion(
 		.catch(console.error);
 }
 
-function handleAttachFileTool(part: {
-	callID: string;
-	messageID: string;
-	tool: string;
-	state: { status: string; input: Record<string, unknown> };
-}): void {
-	if (part.tool !== "attach_file") return;
-	if (part.state.status !== "completed") return;
-	if (state.hasProcessedToolCall(part.callID)) return;
-	state.markToolCallProcessed(part.callID);
-
-	const rawPath = part.state.input.path as string | undefined;
-	if (!rawPath) return;
-
-	const filePath = node_path.resolve(rawPath);
-	const caption = part.state.input.caption as string | undefined;
-	const detectedMime = mime.getType(filePath) ?? "application/octet-stream";
-	const filename = node_path.basename(filePath);
-
-	const files = state.getAccumulatedFiles();
-	const list = files.get(part.messageID) ?? [];
-	list.push({
-		partID: part.callID,
-		url: filePath,
-		mime: detectedMime,
-		filename,
-		caption,
-	});
-	files.set(part.messageID, list);
-}
-
 export function processEvent(event: Event, bot: Bot, chatId: number): void {
 	const sessionID = state.getSessionID();
 	if (!sessionID) return;
@@ -114,25 +80,6 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				const acc = state.getAccumulatedText();
 				acc.set(part.messageID, part.text);
 				startTyping(bot.api, chatId);
-			} else if (part.type === "file") {
-				const files = state.getAccumulatedFiles();
-				const list = files.get(part.messageID) ?? [];
-				const existing = list.findIndex((f) => f.partID === part.id);
-				const entry: state.AccumulatedFile = {
-					partID: part.id,
-					url: part.url,
-					mime: part.mime,
-					filename: part.filename,
-				};
-				if (existing >= 0) {
-					list[existing] = entry;
-				} else {
-					list.push(entry);
-				}
-				files.set(part.messageID, list);
-				startTyping(bot.api, chatId);
-			} else if (part.type === "tool") {
-				handleAttachFileTool(part);
 			}
 			break;
 		}
@@ -149,35 +96,12 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			const messageID = info.id;
 			const acc = state.getAccumulatedText();
 			const text = acc.get(messageID) ?? "";
-			const files = state.getAccumulatedFiles().get(messageID) ?? [];
 
-			// Send text first, then files — chain to preserve ordering
-			const textDone =
-				text.length > 0
-					? sendFormattedMessage(bot.api, chatId, text)
-					: Promise.resolve();
-
-			if (files.length > 0) {
-				textDone
-					.then(async () => {
-						for (const file of files) {
-							await sendTelegramFile(
-								bot.api,
-								chatId,
-								file.url,
-								file.mime,
-								file.filename,
-								file.caption,
-							);
-						}
-					})
-					.catch(console.error);
-			} else {
-				textDone.catch(console.error);
+			if (text.length > 0) {
+				sendFormattedMessage(bot.api, chatId, text).catch(console.error);
 			}
 
 			acc.delete(messageID);
-			state.getAccumulatedFiles().delete(messageID);
 
 			if (acc.size === 0) stopTyping();
 			break;
@@ -198,8 +122,6 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				props.error?.data?.message ?? props.error?.message ?? "Unknown error";
 			stopTyping();
 			state.clearAccumulatedText();
-			state.clearAccumulatedFiles();
-			state.clearProcessedToolCalls();
 			sendNotice(bot.api, chatId, "error", msg);
 			break;
 		}
@@ -209,8 +131,6 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			if (props.sessionID !== sessionID) return;
 			stopTyping();
 			state.clearAccumulatedText();
-			state.clearAccumulatedFiles();
-			state.clearProcessedToolCalls();
 			break;
 		}
 

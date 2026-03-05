@@ -94,46 +94,41 @@ export async function sendTelegramFile(
 	filename?: string,
 	caption?: string,
 ): Promise<void> {
-	try {
-		let buffer: Buffer;
+	let buffer: Buffer;
 
-		if (url.startsWith("file://")) {
-			buffer = Buffer.from(await Bun.file(url.slice(7)).arrayBuffer());
-		} else if (url.startsWith("http://") || url.startsWith("https://")) {
-			const res = await fetch(url, {
-				signal: AbortSignal.timeout(TELEGRAM_DOWNLOAD_TIMEOUT_MS),
-			});
-			if (!res.ok) {
-				console.error("[files] fetch outbound file failed:", res.status, url);
-				return;
-			}
-			buffer = Buffer.from(await res.arrayBuffer());
-		} else {
-			// Treat as absolute path
-			buffer = Buffer.from(await Bun.file(url).arrayBuffer());
+	if (url.startsWith("file://")) {
+		buffer = Buffer.from(await Bun.file(url.slice(7)).arrayBuffer());
+	} else if (url.startsWith("http://") || url.startsWith("https://")) {
+		const res = await fetch(url, {
+			signal: AbortSignal.timeout(TELEGRAM_DOWNLOAD_TIMEOUT_MS),
+		});
+		if (!res.ok) {
+			throw new Error(`Failed to fetch file: HTTP ${res.status} for ${url}`);
 		}
+		buffer = Buffer.from(await res.arrayBuffer());
+	} else {
+		// Treat as absolute path
+		buffer = Buffer.from(await Bun.file(url).arrayBuffer());
+	}
 
-		const name = resolveFilename(mimeType, filename);
-		const inputFile = new InputFile(buffer, name);
-		const baseMime = (mimeType.split(";")[0] ?? mimeType).trim();
-		const type = baseMime.split("/")[0];
+	const name = resolveFilename(mimeType, filename);
+	const inputFile = new InputFile(buffer, name);
+	const baseMime = (mimeType.split(";")[0] ?? mimeType).trim();
+	const type = baseMime.split("/")[0];
 
-		const opts = caption ? { caption } : {};
+	const opts = caption ? { caption } : {};
 
-		if (baseMime === "image/gif") {
-			await api.sendAnimation(chatId, inputFile, opts);
-		} else if (baseMime === "audio/ogg") {
-			await api.sendVoice(chatId, inputFile, opts);
-		} else if (type === "image") {
-			await api.sendPhoto(chatId, inputFile, opts);
-		} else if (type === "video") {
-			await api.sendVideo(chatId, inputFile, opts);
-		} else if (type === "audio") {
-			await api.sendAudio(chatId, inputFile, opts);
-		} else {
-			await api.sendDocument(chatId, inputFile, opts);
-		}
-	} catch (err) {
-		console.error("[files] sendTelegramFile error:", err);
+	if (baseMime === "image/gif") {
+		await api.sendAnimation(chatId, inputFile, opts);
+	} else if (baseMime === "audio/ogg") {
+		await api.sendVoice(chatId, inputFile, opts);
+	} else if (type === "image") {
+		await api.sendPhoto(chatId, inputFile, opts);
+	} else if (type === "video") {
+		await api.sendVideo(chatId, inputFile, opts);
+	} else if (type === "audio") {
+		await api.sendAudio(chatId, inputFile, opts);
+	} else {
+		await api.sendDocument(chatId, inputFile, opts);
 	}
 }

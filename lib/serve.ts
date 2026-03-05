@@ -12,6 +12,7 @@ import {
 	TELEGRAM_MAX_FILE_SIZE,
 } from "~/lib/files";
 import { handleCallbackQuery, handleCustomTextInput } from "~/lib/handlers";
+import { setTelegramContext, startMcpServer } from "~/lib/mcp";
 import { sendNotice } from "~/lib/notice";
 import {
 	getClient,
@@ -60,6 +61,10 @@ export default defineCommand({
 	run: async () => {
 		const { token, userId } = validateEnv();
 
+		console.log("[bot] Starting MCP server...");
+		const mcpServer = await startMcpServer(4097);
+		console.log(`[bot] MCP server running at ${mcpServer.url}`);
+
 		console.log("[bot] Starting OpenCode server...");
 		const server = await createSandboxedServer({ port: 4096 });
 		console.log(
@@ -68,6 +73,29 @@ export default defineCommand({
 
 		initClient(server.url);
 		await initDirectory();
+
+		const mcpName = "openkitten-telegram";
+		const client = getClient();
+		const { error: mcpAddError } = await client.mcp.add({
+			name: mcpName,
+			directory: getDirectory(),
+			config: {
+				type: "remote",
+				url: mcpServer.url,
+			},
+		});
+		if (mcpAddError) {
+			console.error("[bot] Failed to add MCP server:", mcpAddError);
+		}
+		const { error: mcpConnectError } = await client.mcp.connect({
+			name: mcpName,
+			directory: getDirectory(),
+		});
+		if (mcpConnectError) {
+			console.error("[bot] Failed to connect MCP server:", mcpConnectError);
+		} else {
+			console.log("[bot] MCP server registered and connected");
+		}
 
 		const bot = new Bot(token);
 
@@ -86,6 +114,7 @@ export default defineCommand({
 
 		function ensureSubscription(directory: string, chatId: number) {
 			eventChatId = chatId;
+			setTelegramContext(bot.api, chatId);
 			subscribeToEvents(directory, handleEvent).catch((err) =>
 				console.error("[bot] SSE subscription error:", err),
 			);
@@ -391,10 +420,14 @@ export default defineCommand({
 		bot.catch((err) => console.error("[bot] Error:", err));
 
 		// Graceful shutdown
-		const shutdown = () => {
+		const shutdown = async () => {
 			console.log("[bot] Shutting down...");
 			stopTyping();
 			stopEventListening();
+			await client.mcp
+				.disconnect({ name: mcpName, directory: getDirectory() })
+				.catch(() => {});
+			await mcpServer.close();
 			server.close();
 			bot.stop();
 		};

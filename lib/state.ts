@@ -29,19 +29,9 @@ export interface QuestionState {
 	activeMessageId: number | null;
 }
 
-export interface AccumulatedFile {
-	partID: string;
-	url: string;
-	mime: string;
-	filename?: string;
-	caption?: string;
-}
-
 // Module-level mutable state
 const accumulatedText = new Map<string, string>();
-const accumulatedFiles = new Map<string, AccumulatedFile[]>();
 const pendingPermissions = new Map<number, PendingPermission>();
-const processedToolCalls = new Set<string>();
 let questionState: QuestionState | null = null;
 
 // Session ID (database-backed with in-memory cache)
@@ -78,14 +68,6 @@ export function clearAccumulatedText(): void {
 	accumulatedText.clear();
 }
 
-// Accumulated files
-export function getAccumulatedFiles(): Map<string, AccumulatedFile[]> {
-	return accumulatedFiles;
-}
-export function clearAccumulatedFiles(): void {
-	accumulatedFiles.clear();
-}
-
 // Pending permissions
 export function addPendingPermission(
 	messageId: number,
@@ -103,17 +85,6 @@ export function getPermissionByMessageId(
 	messageId: number,
 ): PendingPermission | undefined {
 	return pendingPermissions.get(messageId);
-}
-
-// Processed tool calls (dedup — tool events fire for each status transition)
-export function hasProcessedToolCall(callID: string): boolean {
-	return processedToolCalls.has(callID);
-}
-export function markToolCallProcessed(callID: string): void {
-	processedToolCalls.add(callID);
-}
-export function clearProcessedToolCalls(): void {
-	processedToolCalls.clear();
 }
 
 // Question state
