@@ -8,8 +8,8 @@ import { InputFile } from "grammy";
 import mime from "mime";
 import { nanoid } from "nanoid";
 
-export const TELEGRAM_MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB Bot API limit
-const TELEGRAM_DOWNLOAD_TIMEOUT_MS = 60_000;
+import { TELEGRAM_DOWNLOAD_TIMEOUT_MS } from "./telegram-constants";
+
 const TEMP_DIR = path.join(tmpdir(), "openkitten-files");
 
 export async function downloadTelegramFile(

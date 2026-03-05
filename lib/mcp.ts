@@ -4,7 +4,8 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import type { Api } from "grammy";
 import mime from "mime";
 import { z } from "zod";
-import { sendTelegramFile, TELEGRAM_MAX_FILE_SIZE } from "~/lib/files";
+import { sendTelegramFile } from "~/lib/files";
+import { TELEGRAM_FILE_MAX_SIZE } from "~/lib/telegram-constants";
 
 let telegramApi: Api | null = null;
 let telegramChatId: number | null = null;
@@ -42,7 +43,7 @@ function createMcpServer(): McpServer {
 				};
 			}
 
-			if (file.size > TELEGRAM_MAX_FILE_SIZE) {
+			if (file.size > TELEGRAM_FILE_MAX_SIZE) {
 				return {
 					content: [
 						{

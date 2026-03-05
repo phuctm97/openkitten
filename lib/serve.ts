@@ -9,7 +9,6 @@ import {
 	downloadTelegramFile,
 	resolveFilename,
 	saveTempFile,
-	TELEGRAM_MAX_FILE_SIZE,
 } from "~/lib/files";
 import { handleCallbackQuery, handleCustomTextInput } from "~/lib/handlers";
 import { setTelegramContext, startMcpServer } from "~/lib/mcp";
@@ -24,6 +23,7 @@ import {
 } from "~/lib/opencode";
 import { createSandboxedServer } from "~/lib/sandbox";
 import * as state from "~/lib/state";
+import { TELEGRAM_FILE_MAX_SIZE } from "~/lib/telegram-constants";
 
 const SESSION_LOCKED_RETRY_DELAY_MS = 1000;
 const SESSION_LOCKED_MAX_RETRIES = 3;
@@ -214,7 +214,7 @@ export default defineCommand({
 		bot.on("message:photo", async (ctx) => {
 			const photo = ctx.message.photo.at(-1);
 			if (!photo) return;
-			if (photo.file_size && photo.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			if (photo.file_size && photo.file_size > TELEGRAM_FILE_MAX_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -239,7 +239,7 @@ export default defineCommand({
 		// Video messages
 		bot.on("message:video", async (ctx) => {
 			const video = ctx.message.video;
-			if (video.file_size && video.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			if (video.file_size && video.file_size > TELEGRAM_FILE_MAX_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -265,7 +265,7 @@ export default defineCommand({
 		// Voice messages
 		bot.on("message:voice", async (ctx) => {
 			const voice = ctx.message.voice;
-			if (voice.file_size && voice.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			if (voice.file_size && voice.file_size > TELEGRAM_FILE_MAX_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -295,7 +295,7 @@ export default defineCommand({
 		// Audio messages
 		bot.on("message:audio", async (ctx) => {
 			const audio = ctx.message.audio;
-			if (audio.file_size && audio.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			if (audio.file_size && audio.file_size > TELEGRAM_FILE_MAX_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -321,7 +321,7 @@ export default defineCommand({
 		// Video note messages (round videos)
 		bot.on("message:video_note", async (ctx) => {
 			const videoNote = ctx.message.video_note;
-			if (videoNote.file_size && videoNote.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			if (videoNote.file_size && videoNote.file_size > TELEGRAM_FILE_MAX_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -352,7 +352,7 @@ export default defineCommand({
 		// Sticker messages
 		bot.on("message:sticker", async (ctx) => {
 			const sticker = ctx.message.sticker;
-			if (sticker.file_size && sticker.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			if (sticker.file_size && sticker.file_size > TELEGRAM_FILE_MAX_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -388,7 +388,7 @@ export default defineCommand({
 		// Document messages
 		bot.on("message:document", async (ctx) => {
 			const doc = ctx.message.document;
-			if (doc.file_size && doc.file_size > TELEGRAM_MAX_FILE_SIZE) {
+			if (doc.file_size && doc.file_size > TELEGRAM_FILE_MAX_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}

@@ -1,9 +1,9 @@
 import type { Api } from "grammy";
 import { convert } from "telegram-markdown-v2";
-
-export const TELEGRAM_MAX_LENGTH = 4096;
-/** 80% of max — headroom for MarkdownV2 escaping overhead */
-export const TELEGRAM_SPLIT_LENGTH = Math.floor(TELEGRAM_MAX_LENGTH * 0.8); // 3276
+import {
+	TELEGRAM_MESSAGE_CHUNK_LENGTH,
+	TELEGRAM_MESSAGE_MAX_LENGTH,
+} from "./telegram-constants";
 
 // --- Content-aware message splitting (ported from NanoClaw) ---
 
@@ -149,7 +149,7 @@ export function convertWithFallback(text: string): {
 } {
 	try {
 		const formatted = convert(text);
-		if (formatted.length <= TELEGRAM_MAX_LENGTH) {
+		if (formatted.length <= TELEGRAM_MESSAGE_MAX_LENGTH) {
 			return { text: formatted, parseMode: "MarkdownV2" };
 		}
 	} catch {
@@ -177,16 +177,16 @@ export async function sendFormattedMessage(
 		const trimmed = section.trim();
 		if (!trimmed) continue;
 
-		const chunks = splitMessage(trimmed, TELEGRAM_SPLIT_LENGTH);
+		const chunks = splitMessage(trimmed, TELEGRAM_MESSAGE_CHUNK_LENGTH);
 
 		for (const chunk of chunks) {
 			let parts: string[];
 			try {
 				const formatted = convert(chunk);
-				if (formatted.length > TELEGRAM_MAX_LENGTH) {
+				if (formatted.length > TELEGRAM_MESSAGE_MAX_LENGTH) {
 					// Layer 2: MarkdownV2 escaping expanded beyond the limit —
 					// re-split proportionally to preserve formatting.
-					const ratio = TELEGRAM_MAX_LENGTH / formatted.length;
+					const ratio = TELEGRAM_MESSAGE_MAX_LENGTH / formatted.length;
 					const smallerLimit = Math.floor(chunk.length * ratio * 0.9);
 					parts = splitMessage(chunk, smallerLimit);
 				} else {
@@ -208,7 +208,7 @@ export async function sendFormattedMessage(
 			for (const sub of parts) {
 				try {
 					const subFormatted = convert(sub);
-					if (subFormatted.length <= TELEGRAM_MAX_LENGTH) {
+					if (subFormatted.length <= TELEGRAM_MESSAGE_MAX_LENGTH) {
 						await api.sendMessage(chatId, subFormatted, {
 							parse_mode: "MarkdownV2",
 							link_preview_options: { is_disabled: true },
