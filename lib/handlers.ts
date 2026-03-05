@@ -1,5 +1,6 @@
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
+import { BOT_CANCELED_ICON, BOT_SELECTED_ICON } from "~/lib/constants/bot";
 import { TELEGRAM_QUESTION_LABEL_MAX_LENGTH } from "~/lib/constants/telegram";
 import { showQuestion, startTyping } from "~/lib/events";
 import { convertWithFallback } from "~/lib/markdown";
@@ -24,12 +25,12 @@ function formatAnsweredQuestion(
 
 function formatCancelledQuestion(qs: QuestionState, qIdx: number): string {
 	const question = qs.questions[qIdx];
-	if (!question) return "\u2717 Cancelled";
+	if (!question) return `${BOT_CANCELED_ICON}Cancelled`;
 
 	const total = qs.questions.length;
 	const progress = total > 1 ? `${qIdx + 1}/${total} ` : "";
 	const header = question.header ? `**${progress}${question.header}**\n\n` : "";
-	return `${header}${question.question}\n\n\u2717 Cancelled`;
+	return `${header}${question.question}\n\n${BOT_CANCELED_ICON}Cancelled`;
 }
 
 export async function handleCallbackQuery(ctx: Context): Promise<void> {
@@ -329,7 +330,7 @@ async function updateQuestionMessage(
 	const selected = qs.selectedOptions.get(idx) ?? new Set<number>();
 
 	for (const [i, opt] of question.options.entries()) {
-		const icon = selected.has(i) ? "\u2705 " : "";
+		const icon = selected.has(i) ? BOT_SELECTED_ICON : "";
 		keyboard
 			.text(
 				`${icon}${opt.label}`.slice(0, TELEGRAM_QUESTION_LABEL_MAX_LENGTH),

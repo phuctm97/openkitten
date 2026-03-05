@@ -1,6 +1,7 @@
 import type { Event } from "@opencode-ai/sdk/v2";
 import type { Api, Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
+import { BOT_SELECTED_ICON } from "~/lib/constants/bot";
 import {
 	TELEGRAM_QUESTION_LABEL_MAX_LENGTH,
 	TELEGRAM_TYPING_INTERVAL_MS,
@@ -48,7 +49,7 @@ export function showQuestion(
 	const selected = qs.selectedOptions.get(idx) ?? new Set<number>();
 
 	for (const [i, opt] of question.options.entries()) {
-		const icon = selected.has(i) ? "\u2705 " : "";
+		const icon = selected.has(i) ? BOT_SELECTED_ICON : "";
 		const label = `${icon}${opt.label}`.slice(
 			0,
 			TELEGRAM_QUESTION_LABEL_MAX_LENGTH,

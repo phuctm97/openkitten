@@ -1,6 +1,10 @@
 import type { BotCommand } from "grammy/types";
 import type { NoticeType } from "~/lib/types";
 
+export const BOT_HOSTNAME = "127.0.0.1";
+export const BOT_SELECTED_ICON = "\u2705 ";
+export const BOT_CANCELED_ICON = "\u2717 ";
+
 export const BOT_COMMANDS: BotCommand[] = [
 	{ command: "start", description: "Start a new session" },
 	{ command: "stop", description: "Abort the current request" },

@@ -4,6 +4,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import type { Api } from "grammy";
 import mime from "mime";
 import { z } from "zod";
+import { BOT_HOSTNAME } from "~/lib/constants/bot";
 import {
 	MCP_SERVER_IDLE_TIMEOUT_SECONDS,
 	MCP_SERVER_NAME,
@@ -107,7 +108,7 @@ export async function startMcpServer(): Promise<{
 	close: () => Promise<void>;
 }> {
 	const httpServer = Bun.serve({
-		hostname: "127.0.0.1",
+		hostname: BOT_HOSTNAME,
 		port: 0,
 		idleTimeout: MCP_SERVER_IDLE_TIMEOUT_SECONDS,
 		async fetch(req) {
@@ -127,7 +128,7 @@ export async function startMcpServer(): Promise<{
 		},
 	});
 
-	const url = `http://127.0.0.1:${httpServer.port}${MCP_SERVER_PATH}`;
+	const url = `http://${BOT_HOSTNAME}:${httpServer.port}${MCP_SERVER_PATH}`;
 
 	return {
 		url,

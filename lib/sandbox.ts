@@ -1,5 +1,6 @@
 import { join, resolve } from "node:path";
 import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
+import { BOT_HOSTNAME } from "~/lib/constants/bot";
 import { OPENCODE_SERVER_READY_PATTERN } from "~/lib/constants/opencode";
 import {
 	SANDBOX_RUNTIME_CONFIG,
@@ -119,7 +120,7 @@ async function spawnOpencodeServer(options?: {
 	const timeout = options?.timeout ?? SANDBOX_STARTUP_TIMEOUT_MS;
 	const opencodeBin = await resolveOpencodeBin();
 
-	const proc = Bun.spawn([opencodeBin, "serve", "--hostname", "127.0.0.1"], {
+	const proc = Bun.spawn([opencodeBin, "serve", "--hostname", BOT_HOSTNAME], {
 		stdin: "ignore",
 		stdout: "pipe",
 		stderr: "pipe",
@@ -178,7 +179,7 @@ export async function createSandboxedServer(options?: {
 		throw error;
 	}
 
-	const command = `'${opencodeBin.replace(/'/g, "'\\''")}' serve --hostname 127.0.0.1`;
+	const command = `'${opencodeBin.replace(/'/g, "'\\''")}' serve --hostname ${BOT_HOSTNAME}`;
 
 	let wrappedCommand: string;
 	try {
