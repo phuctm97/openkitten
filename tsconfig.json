@@ -1,11 +1,10 @@
 {
 	"extends": "@tsconfig/bun/tsconfig.json",
 	"compilerOptions": {
+		"plugins": [{ "name": "@effect/language-service" }],
+		"paths": { "~/*": ["./*"] },
 		"incremental": true,
-		"allowImportingTsExtensions": false,
-		"paths": {
-			"~/*": ["./*"]
-		}
+		"allowImportingTsExtensions": false
 	},
-	"include": ["lib"]
+	"include": ["lib", "test", "drizzle.config.ts", "vitest.config.ts"]
 }

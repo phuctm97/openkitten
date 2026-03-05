@@ -18,3 +18,4 @@ jobs:
       - run: bun ci
       - run: bun --bun biome check
       - run: bun --bun tsc --build
+      - run: bun --bun vitest run

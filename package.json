@@ -5,7 +5,7 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"prepare": "lefthook install --reset-hooks-path",
+		"prepare": "lefthook install --reset-hooks-path && effect-language-service patch",
 		"typecheck": "bun --bun tsc --build",
 		"dev": "bun --hot lib/index.ts serve",
 		"start": "bun lib/index.ts serve",
@@ -24,6 +24,7 @@
 		"@types/node": "^25.3.3",
 		"citty": "^0.2.1",
 		"drizzle-orm": "^0.45.1",
+		"effect": "^3.19.19",
 		"grammy": "^1.41.1",
 		"mime": "^4.1.0",
 		"nanoid": "^5.1.6",
@@ -34,8 +35,12 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.4.5",
+		"@effect/language-service": "^0.77.0",
+		"@effect/vitest": "^0.27.0",
 		"drizzle-kit": "^0.31.9",
+		"lefthook": "^2.1.2",
 		"typescript": "^5.9.3",
-		"lefthook": "^2.1.2"
+		"vite-tsconfig-paths": "^6.1.1",
+		"vitest": "^4.0.18"
 	}
 }
