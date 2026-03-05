@@ -18,6 +18,11 @@ Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in ca
 
 ## Setup
 
+### Prerequisites
+
+- A Telegram bot token from [@BotFather](https://t.me/BotFather)
+- Your Telegram user ID (send `/start` to [@userinfobot](https://t.me/userinfobot))
+
 ### Quick Install
 
 ```bash
@@ -26,15 +31,10 @@ curl -fsSL https://raw.githubusercontent.com/phuctm97/openkitten/main/install.sh
 
 Set `OPENKITTEN_DIR` to customize the install directory (defaults to `~/.openkitten`).
 
-### Prerequisites
-
-- [Bun](https://bun.sh) v1.0+
-- A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- Your Telegram user ID (send `/start` to [@userinfobot](https://t.me/userinfobot))
-
 ### Manual Install
 
 ```bash
+curl -fsSL https://bun.sh/install | bash
 git clone https://github.com/phuctm97/openkitten.git
 cd openkitten
 bun install
@@ -60,18 +60,13 @@ export ANTHROPIC_API_KEY="sk-ant-..."
 
 Send any message to chat with the AI — a session is created automatically on your first message. When the AI needs to run a command or edit a file, you'll see inline buttons to approve or deny. The AI can also ask interactive questions with option buttons or free-text input.
 
-### Chat Commands
+### Bot Commands
 
 - `/start` — Start a new session
 - `/stop` — Abort the current request
 - `/help` — Show help
 
-### CLI Commands
-
-- `bun start` — Start the bot
-- `bun openkitten-up` — Update to the latest version, check dependencies, configure environment, and install the system service
-
-### Supported Media
+### Supported Files
 
 You can send and receive photos, videos, documents, voice messages, audio files, video notes, and stickers. Captions are forwarded alongside media. The AI can send back photos, videos, documents, audio, voice messages, and GIF animations.
 
