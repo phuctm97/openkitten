@@ -2,6 +2,7 @@ import type { Api } from "grammy";
 import { convert } from "telegram-markdown-v2";
 import {
 	TELEGRAM_MAX_MESSAGE_LENGTH,
+	TELEGRAM_RESPLIT_SAFETY_FACTOR,
 	TELEGRAM_SPLIT_MESSAGE_LENGTH,
 	TELEGRAM_SPLIT_MESSAGE_PRIORITIES,
 } from "~/lib/constants/telegram";
@@ -172,7 +173,9 @@ export async function sendFormattedMessage(
 					// Layer 2: MarkdownV2 escaping expanded beyond the limit —
 					// re-split proportionally to preserve formatting.
 					const ratio = TELEGRAM_MAX_MESSAGE_LENGTH / formatted.length;
-					const smallerLimit = Math.floor(chunk.length * ratio * 0.9);
+					const smallerLimit = Math.floor(
+						chunk.length * ratio * TELEGRAM_RESPLIT_SAFETY_FACTOR,
+					);
 					parts = splitMessage(chunk, smallerLimit);
 				} else {
 					await api.sendMessage(chatId, formatted, {

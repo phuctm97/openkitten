@@ -2,6 +2,8 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 
+export const SANDBOX_STARTUP_TIMEOUT_MS = 5000;
+
 const home = homedir();
 
 // Credential directories the AI agent has no reason to access

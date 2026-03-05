@@ -3,9 +3,10 @@ import { unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import {
-	SERVICE_LABEL,
+	SERVICE_LAUNCHCTL_NAME,
 	SERVICE_LOG_DIR,
 	SERVICE_PROJECT_DIR,
+	SERVICE_SYSTEMCTL_NAME,
 } from "~/lib/constants/service";
 
 // ---------------------------------------------------------------------------
@@ -23,11 +24,16 @@ export function supportedPlatform(): "darwin" | "linux" | null {
 // ---------------------------------------------------------------------------
 
 function plistPath(): string {
-	return join(homedir(), "Library", "LaunchAgents", `${SERVICE_LABEL}.plist`);
+	return join(
+		homedir(),
+		"Library",
+		"LaunchAgents",
+		`${SERVICE_LAUNCHCTL_NAME}.plist`,
+	);
 }
 
 function unitPath(): string {
-	return join(homedir(), ".config", "systemd", "user", "openkitten.service");
+	return join(homedir(), ".config", "systemd", "user", SERVICE_SYSTEMCTL_NAME);
 }
 
 function servicePath(): string {
@@ -60,7 +66,7 @@ function generatePlist(bun: string): string {
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>${SERVICE_LABEL}</string>
+	<string>${SERVICE_LAUNCHCTL_NAME}</string>
 
 	<key>ProgramArguments</key>
 	<array>
@@ -146,7 +152,7 @@ export async function getServiceStatus(): Promise<ServiceStatus> {
 async function isRunning(platform: "darwin" | "linux"): Promise<boolean> {
 	try {
 		if (platform === "darwin") {
-			const proc = Bun.spawn(["launchctl", "list", SERVICE_LABEL], {
+			const proc = Bun.spawn(["launchctl", "list", SERVICE_LAUNCHCTL_NAME], {
 				stdout: "ignore",
 				stderr: "ignore",
 			});
@@ -154,7 +160,7 @@ async function isRunning(platform: "darwin" | "linux"): Promise<boolean> {
 		}
 
 		const proc = Bun.spawn(
-			["systemctl", "--user", "is-active", "--quiet", "openkitten.service"],
+			["systemctl", "--user", "is-active", "--quiet", SERVICE_SYSTEMCTL_NAME],
 			{ stdout: "ignore", stderr: "ignore" },
 		);
 		return (await proc.exited) === 0;
@@ -219,7 +225,7 @@ async function stopExisting(platform: "darwin" | "linux"): Promise<void> {
 			}
 		} else {
 			const proc = Bun.spawn(
-				["systemctl", "--user", "stop", "openkitten.service"],
+				["systemctl", "--user", "stop", SERVICE_SYSTEMCTL_NAME],
 				{ stdout: "ignore", stderr: "ignore" },
 			);
 			await proc.exited;
@@ -257,7 +263,7 @@ async function loadService(
 	await reload.exited;
 
 	const proc = Bun.spawn(
-		["systemctl", "--user", "enable", "--now", "openkitten.service"],
+		["systemctl", "--user", "enable", "--now", SERVICE_SYSTEMCTL_NAME],
 		{ stdout: "ignore", stderr: "pipe" },
 	);
 	const code = await proc.exited;
@@ -289,7 +295,7 @@ export async function uninstallService(): Promise<{
 
 	if (platform === "linux") {
 		const disable = Bun.spawn(
-			["systemctl", "--user", "disable", "openkitten.service"],
+			["systemctl", "--user", "disable", SERVICE_SYSTEMCTL_NAME],
 			{ stdout: "ignore", stderr: "ignore" },
 		);
 		await disable.exited;

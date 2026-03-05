@@ -1,6 +1,10 @@
 import type { Event } from "@opencode-ai/sdk/v2";
 import type { Api, Bot } from "grammy";
 import { InlineKeyboard } from "grammy";
+import {
+	TELEGRAM_QUESTION_LABEL_MAX_LENGTH,
+	TELEGRAM_TYPING_INTERVAL_MS,
+} from "~/lib/constants/telegram";
 import { convertWithFallback, sendFormattedMessage } from "~/lib/markdown";
 import { sendNotice } from "~/lib/notice";
 import type { QuestionState } from "~/lib/state";
@@ -15,7 +19,7 @@ export function startTyping(api: Api, chatId: number): void {
 			.sendChatAction(chatId, "typing")
 			.catch((err) => console.error("[events] sendChatAction error:", err));
 	send();
-	typingTimer = setInterval(send, 4000);
+	typingTimer = setInterval(send, TELEGRAM_TYPING_INTERVAL_MS);
 }
 
 export function stopTyping(): void {
@@ -45,7 +49,10 @@ export function showQuestion(
 
 	for (const [i, opt] of question.options.entries()) {
 		const icon = selected.has(i) ? "\u2705 " : "";
-		const label = `${icon}${opt.label}`.slice(0, 60);
+		const label = `${icon}${opt.label}`.slice(
+			0,
+			TELEGRAM_QUESTION_LABEL_MAX_LENGTH,
+		);
 		keyboard.text(label, `question:select:${idx}:${i}`).row();
 	}
 

@@ -1,5 +1,6 @@
 import type { Context } from "grammy";
 import { InlineKeyboard } from "grammy";
+import { TELEGRAM_QUESTION_LABEL_MAX_LENGTH } from "~/lib/constants/telegram";
 import { showQuestion, startTyping } from "~/lib/events";
 import { convertWithFallback } from "~/lib/markdown";
 import { sendNotice } from "~/lib/notice";
@@ -330,7 +331,10 @@ async function updateQuestionMessage(
 	for (const [i, opt] of question.options.entries()) {
 		const icon = selected.has(i) ? "\u2705 " : "";
 		keyboard
-			.text(`${icon}${opt.label}`.slice(0, 60), `question:select:${idx}:${i}`)
+			.text(
+				`${icon}${opt.label}`.slice(0, TELEGRAM_QUESTION_LABEL_MAX_LENGTH),
+				`question:select:${idx}:${i}`,
+			)
 			.row();
 	}
 

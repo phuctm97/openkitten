@@ -1,3 +1,6 @@
+export const OPENCODE_SERVER_READY_PATTERN =
+	/opencode server listening on (https?:\/\/\S+)/;
+export const OPENCODE_SERVER_PASSWORD_LENGTH = 32;
 export const OPENCODE_RECONNECT_MIN_MS = 1000;
 export const OPENCODE_RECONNECT_MAX_MS = 15000;
 export const OPENCODE_SESSION_LOCKED_RETRY_DELAY_MS = 1000;

@@ -1,6 +1,10 @@
 import { join, resolve } from "node:path";
 import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
-import { SANDBOX_RUNTIME_CONFIG } from "~/lib/constants/sandbox";
+import { OPENCODE_SERVER_READY_PATTERN } from "~/lib/constants/opencode";
+import {
+	SANDBOX_RUNTIME_CONFIG,
+	SANDBOX_STARTUP_TIMEOUT_MS,
+} from "~/lib/constants/sandbox";
 
 // ── Resolve opencode binary ─────────────────────────────────────────────────
 
@@ -60,9 +64,7 @@ function waitForServerReady(
 					if (done) break;
 					if (settled) continue;
 					output += decoder.decode(value, { stream: true });
-					const match = output.match(
-						/opencode server listening on (https?:\/\/\S+)/,
-					);
+					const match = output.match(OPENCODE_SERVER_READY_PATTERN);
 					if (match?.[1]) {
 						settled = true;
 						clearTimeout(id);
@@ -112,7 +114,7 @@ function waitForServerReady(
 async function spawnOpencodeServer(options?: {
 	timeout?: number;
 }): Promise<{ url: string; close: () => void }> {
-	const timeout = options?.timeout ?? 5000;
+	const timeout = options?.timeout ?? SANDBOX_STARTUP_TIMEOUT_MS;
 	const opencodeBin = await resolveOpencodeBin();
 
 	const proc = Bun.spawn([opencodeBin, "serve", "--hostname", "127.0.0.1"], {
@@ -136,7 +138,7 @@ async function spawnOpencodeServer(options?: {
 export async function createSandboxedServer(options?: {
 	timeout?: number;
 }): Promise<{ url: string; close: () => void; sandboxed: boolean }> {
-	const timeout = options?.timeout ?? 5000;
+	const timeout = options?.timeout ?? SANDBOX_STARTUP_TIMEOUT_MS;
 
 	if (process.env.DANGEROUSLY_DISABLE_SANDBOX === "1") {
 		console.warn(

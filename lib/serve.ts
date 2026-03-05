@@ -3,11 +3,15 @@ import type { Event, FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
 import { defineCommand } from "citty";
 import { Bot, type Context } from "grammy";
 import { BOT_COMMANDS, registerCommands } from "~/lib/commands";
+import { MCP_SERVER_NAME } from "~/lib/constants/mcp";
 import {
 	OPENCODE_SESSION_LOCKED_MAX_RETRIES,
 	OPENCODE_SESSION_LOCKED_RETRY_DELAY_MS,
 } from "~/lib/constants/opencode";
-import { TELEGRAM_MAX_FILE_SIZE } from "~/lib/constants/telegram";
+import {
+	TELEGRAM_FILE_TOO_LARGE_MESSAGE,
+	TELEGRAM_MAX_FILE_SIZE,
+} from "~/lib/constants/telegram";
 import { processEvent, stopTyping } from "~/lib/events";
 import {
 	buildFileParts,
@@ -75,7 +79,7 @@ export default defineCommand({
 		initClient(server.url);
 		await initDirectory();
 
-		const mcpName = "openkitten-telegram";
+		const mcpName = MCP_SERVER_NAME;
 		const client = getClient();
 		const { error: mcpAddError } = await client.mcp.add({
 			name: mcpName,
@@ -216,7 +220,12 @@ export default defineCommand({
 			const photo = ctx.message.photo.at(-1);
 			if (!photo) return;
 			if (photo.file_size && photo.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
+				sendNotice(
+					ctx.api,
+					ctx.chat.id,
+					"error",
+					TELEGRAM_FILE_TOO_LARGE_MESSAGE,
+				);
 				return;
 			}
 			const buffer = await downloadTelegramFile(token, photo.file_id, bot.api);
@@ -241,7 +250,12 @@ export default defineCommand({
 		bot.on("message:video", async (ctx) => {
 			const video = ctx.message.video;
 			if (video.file_size && video.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
+				sendNotice(
+					ctx.api,
+					ctx.chat.id,
+					"error",
+					TELEGRAM_FILE_TOO_LARGE_MESSAGE,
+				);
 				return;
 			}
 			const buffer = await downloadTelegramFile(token, video.file_id, bot.api);
@@ -267,7 +281,12 @@ export default defineCommand({
 		bot.on("message:voice", async (ctx) => {
 			const voice = ctx.message.voice;
 			if (voice.file_size && voice.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
+				sendNotice(
+					ctx.api,
+					ctx.chat.id,
+					"error",
+					TELEGRAM_FILE_TOO_LARGE_MESSAGE,
+				);
 				return;
 			}
 			const buffer = await downloadTelegramFile(token, voice.file_id, bot.api);
@@ -297,7 +316,12 @@ export default defineCommand({
 		bot.on("message:audio", async (ctx) => {
 			const audio = ctx.message.audio;
 			if (audio.file_size && audio.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
+				sendNotice(
+					ctx.api,
+					ctx.chat.id,
+					"error",
+					TELEGRAM_FILE_TOO_LARGE_MESSAGE,
+				);
 				return;
 			}
 			const buffer = await downloadTelegramFile(token, audio.file_id, bot.api);
@@ -323,7 +347,12 @@ export default defineCommand({
 		bot.on("message:video_note", async (ctx) => {
 			const videoNote = ctx.message.video_note;
 			if (videoNote.file_size && videoNote.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
+				sendNotice(
+					ctx.api,
+					ctx.chat.id,
+					"error",
+					TELEGRAM_FILE_TOO_LARGE_MESSAGE,
+				);
 				return;
 			}
 			const buffer = await downloadTelegramFile(
@@ -354,7 +383,12 @@ export default defineCommand({
 		bot.on("message:sticker", async (ctx) => {
 			const sticker = ctx.message.sticker;
 			if (sticker.file_size && sticker.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
+				sendNotice(
+					ctx.api,
+					ctx.chat.id,
+					"error",
+					TELEGRAM_FILE_TOO_LARGE_MESSAGE,
+				);
 				return;
 			}
 			const buffer = await downloadTelegramFile(
@@ -390,7 +424,12 @@ export default defineCommand({
 		bot.on("message:document", async (ctx) => {
 			const doc = ctx.message.document;
 			if (doc.file_size && doc.file_size > TELEGRAM_MAX_FILE_SIZE) {
-				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
+				sendNotice(
+					ctx.api,
+					ctx.chat.id,
+					"error",
+					TELEGRAM_FILE_TOO_LARGE_MESSAGE,
+				);
 				return;
 			}
 			const buffer = await downloadTelegramFile(token, doc.file_id, bot.api);

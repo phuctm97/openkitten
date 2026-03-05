@@ -14,6 +14,18 @@ export const TELEGRAM_MAX_FILE_SIZE = 20 * 1024 * 1024;
 /** Timeout for downloading files from Telegram servers (ms) */
 export const TELEGRAM_DOWNLOAD_TIMEOUT_MS = 60_000;
 
+/** User-facing error when an upload exceeds the 20 MB Bot API limit */
+export const TELEGRAM_FILE_TOO_LARGE_MESSAGE = "File too large (max 20MB).";
+
+/** Interval between "typing…" indicator pings (ms) */
+export const TELEGRAM_TYPING_INTERVAL_MS = 4000;
+
+/** Max characters for inline-keyboard button labels */
+export const TELEGRAM_QUESTION_LABEL_MAX_LENGTH = 60;
+
+/** Safety factor when re-splitting after MarkdownV2 escaping blows up */
+export const TELEGRAM_RESPLIT_SAFETY_FACTOR = 0.9;
+
 /** Split priority: prefer breaking at higher-priority markdown boundaries. */
 export const TELEGRAM_SPLIT_MESSAGE_PRIORITIES: ReadonlyArray<{
 	pattern: RegExp;

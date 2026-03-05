@@ -4,6 +4,12 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import type { Api } from "grammy";
 import mime from "mime";
 import { z } from "zod";
+import {
+	MCP_SERVER_IDLE_TIMEOUT_SECONDS,
+	MCP_SERVER_NAME,
+	MCP_SERVER_PATH,
+	MCP_SERVER_VERSION,
+} from "~/lib/constants/mcp";
 import { TELEGRAM_MAX_FILE_SIZE } from "~/lib/constants/telegram";
 import { sendTelegramFile } from "~/lib/files";
 
@@ -17,8 +23,8 @@ export function setTelegramContext(api: Api, chatId: number): void {
 
 function createMcpServer(): McpServer {
 	const server = new McpServer({
-		name: "openkitten-telegram",
-		version: "1.0.0",
+		name: MCP_SERVER_NAME,
+		version: MCP_SERVER_VERSION,
 	});
 
 	// @ts-expect-error -- deep type instantiation in server.tool()
@@ -103,10 +109,10 @@ export async function startMcpServer(): Promise<{
 	const httpServer = Bun.serve({
 		hostname: "127.0.0.1",
 		port: 0,
-		idleTimeout: 255,
+		idleTimeout: MCP_SERVER_IDLE_TIMEOUT_SECONDS,
 		async fetch(req) {
 			const url = new URL(req.url);
-			if (url.pathname !== "/mcp") {
+			if (url.pathname !== MCP_SERVER_PATH) {
 				return new Response("Not Found", { status: 404 });
 			}
 
@@ -121,7 +127,7 @@ export async function startMcpServer(): Promise<{
 		},
 	});
 
-	const url = `http://127.0.0.1:${httpServer.port}/mcp`;
+	const url = `http://127.0.0.1:${httpServer.port}${MCP_SERVER_PATH}`;
 
 	return {
 		url,

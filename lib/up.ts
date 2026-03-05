@@ -10,7 +10,12 @@ import {
 	CLI_SKIP,
 	CLI_WARN,
 } from "~/lib/constants/cli";
-import { SERVICE_PROJECT_DIR } from "~/lib/constants/service";
+import { OPENCODE_SERVER_PASSWORD_LENGTH } from "~/lib/constants/opencode";
+import {
+	SERVICE_ENV_FILE_MODE,
+	SERVICE_PROJECT_DIR,
+	SERVICE_SYSTEMCTL_NAME,
+} from "~/lib/constants/service";
 import {
 	getServiceStatus,
 	installService,
@@ -101,7 +106,7 @@ async function updatePhase(): Promise<boolean> {
 		if (platform === "darwin") {
 			await run(["launchctl", "unload", serviceStatus.path]);
 		} else if (platform === "linux") {
-			await run(["systemctl", "--user", "stop", "openkitten.service"]);
+			await run(["systemctl", "--user", "stop", SERVICE_SYSTEMCTL_NAME]);
 		}
 		console.log(`${CLI_OK}Stopped system service`);
 		stoppedService = true;
@@ -229,7 +234,7 @@ async function ensureServerPassword(): Promise<void> {
 		return;
 	}
 
-	const bytes = new Uint8Array(32);
+	const bytes = new Uint8Array(OPENCODE_SERVER_PASSWORD_LENGTH);
 	crypto.getRandomValues(bytes);
 	const password = Buffer.from(bytes).toString("hex");
 	const envFile = join(process.cwd(), ".env.local");
@@ -242,7 +247,7 @@ async function ensureServerPassword(): Promise<void> {
 			envFile,
 			`${existing}\nOPENCODE_SERVER_PASSWORD="${password}"\n`,
 			{
-				mode: 0o600,
+				mode: SERVICE_ENV_FILE_MODE,
 			},
 		);
 		process.env.OPENCODE_SERVER_PASSWORD = password;
@@ -342,7 +347,7 @@ async function checkService(forceRestart: boolean): Promise<void> {
 				const hint =
 					platform === "darwin"
 						? `launchctl load ${status.path}`
-						: "systemctl --user start openkitten.service";
+						: `systemctl --user start ${SERVICE_SYSTEMCTL_NAME}`;
 				console.log(`${CLI_WARN}System service — installed but not running`);
 				console.log(`          Run ${pc.dim(hint)} to start it.`);
 			}
