@@ -1,7 +1,6 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 
-import type { FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
 import type { Api } from "grammy";
 import { InputFile } from "grammy";
 import mime from "mime";
@@ -9,6 +8,7 @@ import { nanoid } from "nanoid";
 
 import { FS_TEMP_DIR } from "~/lib/constants/fs";
 import { TELEGRAM_DOWNLOAD_TIMEOUT_MS } from "~/lib/constants/telegram";
+import type { PromptParts } from "~/lib/types";
 
 export async function downloadTelegramFile(
 	token: string,
@@ -69,7 +69,7 @@ export function buildFileParts(
 	filePath: string,
 	mimeType: string,
 	filename: string,
-): Array<TextPartInput | FilePartInput> {
+): PromptParts {
 	const baseMime = (mimeType.split(";")[0] ?? mimeType).trim();
 	if (baseMime.startsWith("image/")) {
 		return [

@@ -1,5 +1,5 @@
 import { autoRetry } from "@grammyjs/auto-retry";
-import type { Event, FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
+import type { Event } from "@opencode-ai/sdk/v2";
 import { defineCommand } from "citty";
 import { Bot, type Context } from "grammy";
 import { BOT_COMMANDS, registerCommands } from "~/lib/commands";
@@ -32,6 +32,7 @@ import {
 } from "~/lib/opencode";
 import { createSandboxedServer } from "~/lib/sandbox";
 import * as state from "~/lib/state";
+import type { PromptParts } from "~/lib/types";
 
 function validateEnv(): { token: string; userId: number } {
 	const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -140,7 +141,7 @@ export default defineCommand({
 		// Shared prompt helper: session creation + retry logic
 		async function promptOpenCode(
 			ctx: Context,
-			parts: Array<TextPartInput | FilePartInput>,
+			parts: PromptParts,
 		): Promise<void> {
 			if (!ctx.chat) return;
 			const chatId = ctx.chat.id;
@@ -235,7 +236,7 @@ export default defineCommand({
 			}
 			const filename = resolveFilename("image/jpeg");
 			const filePath = await saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			const parts: PromptParts = buildFileParts(
 				filePath,
 				"image/jpeg",
 				filename,
@@ -266,11 +267,7 @@ export default defineCommand({
 			const mimeType = video.mime_type ?? "video/mp4";
 			const filename = resolveFilename(mimeType);
 			const filePath = await saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				mimeType,
-				filename,
-			);
+			const parts: PromptParts = buildFileParts(filePath, mimeType, filename);
 			if (ctx.message.caption) {
 				parts.push({ type: "text", text: ctx.message.caption });
 			}
@@ -301,7 +298,7 @@ export default defineCommand({
 			}
 			const filename = resolveFilename("audio/ogg");
 			const filePath = await saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			const parts: PromptParts = buildFileParts(
 				filePath,
 				"audio/ogg",
 				filename,
@@ -332,11 +329,7 @@ export default defineCommand({
 			const mimeType = audio.mime_type ?? "audio/mpeg";
 			const filename = resolveFilename(mimeType, audio.file_name);
 			const filePath = await saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				mimeType,
-				filename,
-			);
+			const parts: PromptParts = buildFileParts(filePath, mimeType, filename);
 			if (ctx.message.caption) {
 				parts.push({ type: "text", text: ctx.message.caption });
 			}
@@ -371,7 +364,7 @@ export default defineCommand({
 			}
 			const filename = resolveFilename("video/mp4");
 			const filePath = await saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
+			const parts: PromptParts = buildFileParts(
 				filePath,
 				"video/mp4",
 				filename,
@@ -412,11 +405,7 @@ export default defineCommand({
 					: "image/webp";
 			const filename = resolveFilename(mimeType);
 			const filePath = await saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				mimeType,
-				filename,
-			);
+			const parts: PromptParts = buildFileParts(filePath, mimeType, filename);
 			await promptOpenCode(ctx, parts);
 		});
 
@@ -445,11 +434,7 @@ export default defineCommand({
 			const mimeType = doc.mime_type ?? "application/octet-stream";
 			const filename = resolveFilename(mimeType, doc.file_name);
 			const filePath = await saveTempFile(buffer, filename);
-			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
-				filePath,
-				mimeType,
-				filename,
-			);
+			const parts: PromptParts = buildFileParts(filePath, mimeType, filename);
 			if (ctx.message.caption) {
 				parts.push({ type: "text", text: ctx.message.caption });
 			}

@@ -6,6 +6,7 @@ import {
 	TELEGRAM_SPLIT_MESSAGE_LENGTH,
 	TELEGRAM_SPLIT_MESSAGE_PRIORITIES,
 } from "~/lib/constants/telegram";
+import type { FormattedMessage } from "~/lib/types";
 
 // --- Content-aware message splitting (ported from NanoClaw) ---
 
@@ -129,10 +130,7 @@ export function splitMessage(text: string, maxLength: number): string[] {
  * Try converting to MarkdownV2; fall back to plain text if conversion fails
  * or result exceeds Telegram's limit. For single messages (questions, permissions).
  */
-export function convertWithFallback(text: string): {
-	text: string;
-	parseMode?: "MarkdownV2";
-} {
+export function convertWithFallback(text: string): FormattedMessage {
 	try {
 		const formatted = convert(text);
 		if (formatted.length <= TELEGRAM_MAX_MESSAGE_LENGTH) {
