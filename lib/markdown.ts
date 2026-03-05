@@ -167,26 +167,63 @@ export async function sendFormattedMessage(
 	chatId: number,
 	text: string,
 ): Promise<void> {
-	const chunks = splitMessage(text, TELEGRAM_SPLIT_LENGTH);
+	// Layer 0: Pre-split on horizontal rules — Telegram has no HR support,
+	// so each section becomes a separate message for visual separation.
+	const sections = text.split(
+		/(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/,
+	);
 
-	for (const chunk of chunks) {
-		try {
-			const formatted = convert(chunk);
-			if (formatted.length > TELEGRAM_MAX_LENGTH) {
+	for (const section of sections) {
+		const trimmed = section.trim();
+		if (!trimmed) continue;
+
+		const chunks = splitMessage(trimmed, TELEGRAM_SPLIT_LENGTH);
+
+		for (const chunk of chunks) {
+			let parts: string[];
+			try {
+				const formatted = convert(chunk);
+				if (formatted.length > TELEGRAM_MAX_LENGTH) {
+					// Layer 2: MarkdownV2 escaping expanded beyond the limit —
+					// re-split proportionally to preserve formatting.
+					const ratio = TELEGRAM_MAX_LENGTH / formatted.length;
+					const smallerLimit = Math.floor(chunk.length * ratio * 0.9);
+					parts = splitMessage(chunk, smallerLimit);
+				} else {
+					await api.sendMessage(chatId, formatted, {
+						parse_mode: "MarkdownV2",
+						link_preview_options: { is_disabled: true },
+					});
+					continue;
+				}
+			} catch {
+				// Layer 3: convert() failed — send original chunk as plain text
 				await api.sendMessage(chatId, chunk, {
 					link_preview_options: { is_disabled: true },
 				});
-			} else {
-				await api.sendMessage(chatId, formatted, {
-					parse_mode: "MarkdownV2",
-					link_preview_options: { is_disabled: true },
-				});
+				continue;
 			}
-		} catch {
-			// Fallback to plain text if MarkdownV2 conversion/send fails
-			await api.sendMessage(chatId, chunk, {
-				link_preview_options: { is_disabled: true },
-			});
+
+			// Send each sub-chunk independently so a failure doesn't duplicate earlier ones
+			for (const sub of parts) {
+				try {
+					const subFormatted = convert(sub);
+					if (subFormatted.length <= TELEGRAM_MAX_LENGTH) {
+						await api.sendMessage(chatId, subFormatted, {
+							parse_mode: "MarkdownV2",
+							link_preview_options: { is_disabled: true },
+						});
+					} else {
+						await api.sendMessage(chatId, sub, {
+							link_preview_options: { is_disabled: true },
+						});
+					}
+				} catch {
+					await api.sendMessage(chatId, sub, {
+						link_preview_options: { is_disabled: true },
+					});
+				}
+			}
 		}
 	}
 }
