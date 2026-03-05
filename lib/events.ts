@@ -122,6 +122,8 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 				props.error?.data?.message ?? props.error?.message ?? "Unknown error";
 			stopTyping();
 			state.clearAccumulatedText();
+			state.clearPermissionState();
+			state.clearQuestionState();
 			sendNotice(bot.api, chatId, "error", msg);
 			break;
 		}
@@ -131,6 +133,8 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 			if (props.sessionID !== sessionID) return;
 			stopTyping();
 			state.clearAccumulatedText();
+			state.clearPermissionState();
+			state.clearQuestionState();
 			break;
 		}
 
@@ -164,7 +168,7 @@ export function processEvent(event: Event, bot: Bot, chatId: number): void {
 					...(converted.parseMode && { parse_mode: converted.parseMode }),
 				})
 				.then((msg) => {
-					state.addPendingPermission(msg.message_id, {
+					state.addPermissionState(msg.message_id, {
 						requestID: request.id,
 						messageId: msg.message_id,
 					});

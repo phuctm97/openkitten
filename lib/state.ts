@@ -2,7 +2,7 @@ import { eq } from "drizzle-orm";
 import { database } from "./database";
 import { profile } from "./schema";
 
-export interface PendingPermission {
+export interface PermissionEntry {
 	requestID: string;
 	messageId: number;
 }
@@ -31,7 +31,7 @@ export interface QuestionState {
 
 // Module-level mutable state
 const accumulatedText = new Map<string, string>();
-const pendingPermissions = new Map<number, PendingPermission>();
+const permissionState = new Map<number, PermissionEntry>();
 let questionState: QuestionState | null = null;
 
 // Session ID (database-backed with in-memory cache)
@@ -68,23 +68,23 @@ export function clearAccumulatedText(): void {
 	accumulatedText.clear();
 }
 
-// Pending permissions
-export function addPendingPermission(
+// Permission state
+export function addPermissionState(
 	messageId: number,
-	permission: PendingPermission,
+	permission: PermissionEntry,
 ): void {
-	pendingPermissions.set(messageId, permission);
+	permissionState.set(messageId, permission);
 }
-export function removePendingPermission(messageId: number): void {
-	pendingPermissions.delete(messageId);
+export function removePermissionState(messageId: number): void {
+	permissionState.delete(messageId);
 }
-export function clearPendingPermissions(): void {
-	pendingPermissions.clear();
+export function clearPermissionState(): void {
+	permissionState.clear();
 }
 export function getPermissionByMessageId(
 	messageId: number,
-): PendingPermission | undefined {
-	return pendingPermissions.get(messageId);
+): PermissionEntry | undefined {
+	return permissionState.get(messageId);
 }
 
 // Question state

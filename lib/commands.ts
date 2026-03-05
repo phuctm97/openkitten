@@ -33,7 +33,7 @@ export function registerCommands(
 		state.setSessionID(session.id);
 		state.clearAccumulatedText();
 		state.clearQuestionState();
-		state.clearPendingPermissions();
+		state.clearPermissionState();
 
 		sendNotice(ctx.api, ctx.chat.id, "started", "New session created.", {
 			language: "ID",
@@ -54,7 +54,7 @@ export function registerCommands(
 		stopTyping();
 		state.clearAccumulatedText();
 		state.clearQuestionState();
-		state.clearPendingPermissions();
+		state.clearPermissionState();
 
 		sendNotice(ctx.api, ctx.chat.id, "stopped", "Current request aborted.");
 	});

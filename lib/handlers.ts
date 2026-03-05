@@ -92,7 +92,7 @@ async function handlePermission(ctx: Context, data: string): Promise<void> {
 				);
 		});
 
-	state.removePendingPermission(messageId);
+	state.removePermissionState(messageId);
 }
 
 async function handleQuestion(ctx: Context, data: string): Promise<void> {
