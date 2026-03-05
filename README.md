@@ -83,6 +83,9 @@ File size limit: 20 MB (Telegram Bot API limit).
 Telegram <--> grammY Bot <--> Sandbox <--> OpenCode Server <--> AI Provider APIs
                   |                             |
           SQLite + In-memory State      Built-in Tools (bash, edit, read, webfetch, etc.)
+                  |                             |
+                  +-------- MCP Server ---------+
+                           (send_file)
 ```
 
 ### Sandbox
