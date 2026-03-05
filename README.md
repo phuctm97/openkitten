@@ -39,7 +39,6 @@ git clone https://github.com/phuctm97/openkitten.git
 cd openkitten
 bun install
 bun openkitten-up
-bun start
 ```
 
 ### Environment Variables
