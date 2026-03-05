@@ -154,6 +154,7 @@ export async function startMcpServer(
 	const httpServer = Bun.serve({
 		hostname: "127.0.0.1",
 		port,
+		idleTimeout: 255,
 		async fetch(req) {
 			const url = new URL(req.url);
 			if (url.pathname !== "/mcp") {
