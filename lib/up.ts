@@ -246,7 +246,7 @@ async function ensureServerPassword(): Promise<void> {
 			: "";
 		await Bun.write(
 			envFile,
-			existing + `\nOPENCODE_SERVER_PASSWORD="${password}"\n`,
+			`${existing}\nOPENCODE_SERVER_PASSWORD="${password}"\n`,
 			{
 				mode: 0o600,
 			},
