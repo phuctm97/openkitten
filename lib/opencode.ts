@@ -1,10 +1,12 @@
 import type { Event } from "@opencode-ai/sdk/v2";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2";
 
-export type EventCallback = (event: Event) => void;
+import {
+	OPENCODE_RECONNECT_MAX_MS,
+	OPENCODE_RECONNECT_MIN_MS,
+} from "~/lib/constants/opencode";
 
-const RECONNECT_BASE_MS = 1000;
-const RECONNECT_MAX_MS = 15000;
+export type EventCallback = (event: Event) => void;
 
 let client: ReturnType<typeof createOpencodeClient>;
 let cachedDirectory: string | null = null;
@@ -46,8 +48,8 @@ export function getDirectory(): string {
 
 function getReconnectDelay(attempt: number): number {
 	return Math.min(
-		RECONNECT_BASE_MS * 2 ** Math.max(0, attempt - 1),
-		RECONNECT_MAX_MS,
+		OPENCODE_RECONNECT_MIN_MS * 2 ** Math.max(0, attempt - 1),
+		OPENCODE_RECONNECT_MAX_MS,
 	);
 }
 

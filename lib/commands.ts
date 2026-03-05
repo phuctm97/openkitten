@@ -1,15 +1,11 @@
 import type { Bot } from "grammy";
-import type { BotCommand } from "grammy/types";
+import { BOT_COMMANDS } from "~/lib/constants/bot";
 import { stopTyping } from "~/lib/events";
 import { sendNotice } from "~/lib/notice";
 import { getClient, getDirectory } from "~/lib/opencode";
 import * as state from "~/lib/state";
 
-export const BOT_COMMANDS: BotCommand[] = [
-	{ command: "start", description: "Start a new session" },
-	{ command: "stop", description: "Abort the current request" },
-	{ command: "help", description: "Show help message" },
-];
+export { BOT_COMMANDS };
 
 export function registerCommands(
 	bot: Bot,

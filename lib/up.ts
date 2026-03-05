@@ -1,35 +1,27 @@
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
 import { defineCommand } from "citty";
 import pc from "picocolors";
+import {
+	CLI_ERROR,
+	CLI_INSTALLING,
+	CLI_MISSING,
+	CLI_OK,
+	CLI_SKIP,
+	CLI_WARN,
+} from "~/lib/constants/cli";
+import { SERVICE_PROJECT_DIR } from "~/lib/constants/service";
 import {
 	getServiceStatus,
 	installService,
 	supportedPlatform,
 } from "~/lib/service";
 
-const PROJECT_DIR = resolve(import.meta.dirname, "..");
-
-// Pad each tag to align text at a consistent column.
-// Longest non-transient tag is "[missing]" (9 chars), so pad to 10.
-function tag(colorFn: (s: string) => string, label: string, width = 10) {
-	return (
-		colorFn(`[${label}]`) + " ".repeat(Math.max(1, width - label.length - 2))
-	);
-}
-
-const OK = tag(pc.green, "ok");
-const MISSING = tag(pc.red, "missing");
-const WARN = tag(pc.yellow, "warn");
-const INSTALLING = tag(pc.yellow, "installing");
-const ERROR = tag(pc.red, "error");
-const SKIP = tag(pc.cyan, "skip");
-
 async function run(
 	cmd: string[],
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
 	const proc = Bun.spawn(cmd, {
-		cwd: PROJECT_DIR,
+		cwd: SERVICE_PROJECT_DIR,
 		stdout: "pipe",
 		stderr: "pipe",
 	});
@@ -56,7 +48,7 @@ async function updatePhase(): Promise<boolean> {
 			status.exitCode !== 0
 				? "failed to check git status"
 				: "working tree has uncommitted changes";
-		console.log(`${SKIP}Git — ${reason}`);
+		console.log(`${CLI_SKIP}Git — ${reason}`);
 		console.log();
 		return stoppedService;
 	}
@@ -64,7 +56,7 @@ async function updatePhase(): Promise<boolean> {
 	// 2. Check branch — if not main, skip
 	const branch = await run(["git", "rev-parse", "--abbrev-ref", "HEAD"]);
 	if (branch.exitCode !== 0 || branch.stdout !== "main") {
-		console.log(`${SKIP}Git — not on main branch (on "${branch.stdout}")`);
+		console.log(`${CLI_SKIP}Git — not on main branch (on "${branch.stdout}")`);
 		console.log();
 		return stoppedService;
 	}
@@ -72,7 +64,7 @@ async function updatePhase(): Promise<boolean> {
 	// 3. Fetch origin main — if fails, warn and continue
 	const fetch = await run(["git", "fetch", "origin", "main"]);
 	if (fetch.exitCode !== 0) {
-		console.log(`${WARN}Failed to fetch from origin`);
+		console.log(`${CLI_WARN}Failed to fetch from origin`);
 		console.log(`          ${pc.dim(fetch.stderr)}`);
 		console.log();
 		return stoppedService;
@@ -82,12 +74,12 @@ async function updatePhase(): Promise<boolean> {
 	const head = await run(["git", "rev-parse", "HEAD"]);
 	const remote = await run(["git", "rev-parse", "origin/main"]);
 	if (head.exitCode !== 0 || remote.exitCode !== 0) {
-		console.log(`${WARN}Failed to resolve git revisions`);
+		console.log(`${CLI_WARN}Failed to resolve git revisions`);
 		console.log();
 		return stoppedService;
 	}
 	if (head.stdout === remote.stdout) {
-		console.log(`${OK}Already up to date`);
+		console.log(`${CLI_OK}Already up to date`);
 		console.log();
 		return stoppedService;
 	}
@@ -111,26 +103,26 @@ async function updatePhase(): Promise<boolean> {
 		} else if (platform === "linux") {
 			await run(["systemctl", "--user", "stop", "openkitten.service"]);
 		}
-		console.log(`${OK}Stopped system service`);
+		console.log(`${CLI_OK}Stopped system service`);
 		stoppedService = true;
 	}
 
 	// 7. git pull --ff-only — if fails, warn and continue
 	const pull = await run(["git", "pull", "--ff-only", "origin", "main"]);
 	if (pull.exitCode !== 0) {
-		console.log(`${WARN}Failed to pull changes`);
+		console.log(`${CLI_WARN}Failed to pull changes`);
 		console.log(`          ${pc.dim(pull.stderr)}`);
 	} else {
-		console.log(`${OK}Pulled latest changes`);
+		console.log(`${CLI_OK}Pulled latest changes`);
 	}
 
 	// 8. bun install — if fails, warn and continue
 	const install = await run(["bun", "install"]);
 	if (install.exitCode !== 0) {
-		console.log(`${WARN}Failed to install dependencies`);
+		console.log(`${CLI_WARN}Failed to install dependencies`);
 		console.log(`          ${pc.dim(install.stderr)}`);
 	} else {
-		console.log(`${OK}Dependencies installed`);
+		console.log(`${CLI_OK}Dependencies installed`);
 	}
 
 	console.log();
@@ -142,24 +134,26 @@ async function updatePhase(): Promise<boolean> {
 // ---------------------------------------------------------------------------
 
 function checkBun(): boolean {
-	console.log(`${OK}Bun v${Bun.version}`);
+	console.log(`${CLI_OK}Bun v${Bun.version}`);
 	return true;
 }
 
 async function checkOpencode(): Promise<boolean> {
 	const which = Bun.which("opencode");
 	if (which) {
-		console.log(`${OK}opencode CLI (${pc.dim(which)})`);
+		console.log(`${CLI_OK}opencode CLI (${pc.dim(which)})`);
 		return true;
 	}
 
 	const localBin = join(process.cwd(), "node_modules", ".bin", "opencode");
 	if (await Bun.file(localBin).exists()) {
-		console.log(`${OK}opencode CLI (${pc.dim(localBin)})`);
+		console.log(`${CLI_OK}opencode CLI (${pc.dim(localBin)})`);
 		return true;
 	}
 
-	console.log(`${INSTALLING}opencode CLI — running \`bun add opencode-ai\`...`);
+	console.log(
+		`${CLI_INSTALLING}opencode CLI — running \`bun add opencode-ai\`...`,
+	);
 	const proc = Bun.spawn(["bun", "add", "opencode-ai"], {
 		stdout: "ignore",
 		stderr: "pipe",
@@ -168,18 +162,18 @@ async function checkOpencode(): Promise<boolean> {
 
 	if (exitCode !== 0) {
 		const stderr = await new Response(proc.stderr).text();
-		console.log(`${ERROR}opencode CLI — failed to install`);
+		console.log(`${CLI_ERROR}opencode CLI — failed to install`);
 		console.log(`          ${pc.dim(stderr.trim())}`);
 		return false;
 	}
 
 	const installedBin = join(process.cwd(), "node_modules", ".bin", "opencode");
 	if (await Bun.file(installedBin).exists()) {
-		console.log(`${OK}opencode CLI (${pc.dim(installedBin)})`);
+		console.log(`${CLI_OK}opencode CLI (${pc.dim(installedBin)})`);
 		return true;
 	}
 
-	console.log(`${ERROR}opencode CLI — installed but binary not found`);
+	console.log(`${CLI_ERROR}opencode CLI — installed but binary not found`);
 	return false;
 }
 
@@ -188,10 +182,10 @@ function checkTelegramEnv(): boolean {
 
 	const token = process.env.TELEGRAM_BOT_TOKEN;
 	if (token) {
-		console.log(`${OK}TELEGRAM_BOT_TOKEN`);
+		console.log(`${CLI_OK}TELEGRAM_BOT_TOKEN`);
 	} else {
 		ok = false;
-		console.log(`${MISSING}TELEGRAM_BOT_TOKEN`);
+		console.log(`${CLI_MISSING}TELEGRAM_BOT_TOKEN`);
 		console.log(
 			`          Create a bot via ${pc.bold("@BotFather")} on Telegram and set:`,
 		);
@@ -206,18 +200,18 @@ function checkTelegramEnv(): boolean {
 		if (Number.isNaN(userId) || userId <= 0 || !Number.isInteger(userId)) {
 			ok = false;
 			console.log(
-				`${MISSING}TELEGRAM_USER_ID (${pc.dim(`invalid: "${rawUserId}"`)})`,
+				`${CLI_MISSING}TELEGRAM_USER_ID (${pc.dim(`invalid: "${rawUserId}"`)})`,
 			);
 			console.log(`          Must be a positive integer.`);
 			console.log(
 				`          Send /start to ${pc.bold("@userinfobot")} on Telegram to find your ID.`,
 			);
 		} else {
-			console.log(`${OK}TELEGRAM_USER_ID (${userId})`);
+			console.log(`${CLI_OK}TELEGRAM_USER_ID (${userId})`);
 		}
 	} else {
 		ok = false;
-		console.log(`${MISSING}TELEGRAM_USER_ID`);
+		console.log(`${CLI_MISSING}TELEGRAM_USER_ID`);
 		console.log(
 			`          Send /start to ${pc.bold("@userinfobot")} on Telegram to find your numeric user ID.`,
 		);
@@ -231,7 +225,7 @@ function checkTelegramEnv(): boolean {
 
 async function ensureServerPassword(): Promise<void> {
 	if (process.env.OPENCODE_SERVER_PASSWORD) {
-		console.log(`${OK}OPENCODE_SERVER_PASSWORD`);
+		console.log(`${CLI_OK}OPENCODE_SERVER_PASSWORD`);
 		return;
 	}
 
@@ -252,10 +246,12 @@ async function ensureServerPassword(): Promise<void> {
 			},
 		);
 		process.env.OPENCODE_SERVER_PASSWORD = password;
-		console.log(`${OK}OPENCODE_SERVER_PASSWORD (generated)`);
+		console.log(`${CLI_OK}OPENCODE_SERVER_PASSWORD (generated)`);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
-		console.log(`${WARN}OPENCODE_SERVER_PASSWORD — failed to write .env.local`);
+		console.log(
+			`${CLI_WARN}OPENCODE_SERVER_PASSWORD — failed to write .env.local`,
+		);
 		console.log(`          ${pc.dim(msg)}`);
 	}
 }
@@ -265,7 +261,7 @@ function checkSandbox() {
 		const supported = SandboxManager.isSupportedPlatform();
 		if (!supported) {
 			console.log(
-				`${WARN}Sandbox — platform not supported (${process.platform}/${process.arch})`,
+				`${CLI_WARN}Sandbox — platform not supported (${process.platform}/${process.arch})`,
 			);
 			console.log(
 				`          The bot will still work with DANGEROUSLY_DISABLE_SANDBOX=1.`,
@@ -276,7 +272,7 @@ function checkSandbox() {
 		const { warnings, errors } = SandboxManager.checkDependencies();
 
 		if (errors.length > 0) {
-			console.log(`${WARN}Sandbox`);
+			console.log(`${CLI_WARN}Sandbox`);
 			for (const e of errors) {
 				console.log(`          ${pc.red(e)}`);
 			}
@@ -287,17 +283,17 @@ function checkSandbox() {
 		}
 
 		if (warnings.length > 0) {
-			console.log(`${WARN}Sandbox`);
+			console.log(`${CLI_WARN}Sandbox`);
 			for (const w of warnings) {
 				console.log(`          ${pc.yellow(w)}`);
 			}
 			return;
 		}
 
-		console.log(`${OK}Sandbox`);
+		console.log(`${CLI_OK}Sandbox`);
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
-		console.log(`${WARN}Sandbox — check failed`);
+		console.log(`${CLI_WARN}Sandbox — check failed`);
 		console.log(`          ${pc.dim(msg)}`);
 	}
 }
@@ -307,7 +303,7 @@ async function checkService(forceRestart: boolean): Promise<void> {
 		const platform = supportedPlatform();
 		if (!platform) {
 			console.log(
-				`${WARN}System service — not supported on ${process.platform}`,
+				`${CLI_WARN}System service — not supported on ${process.platform}`,
 			);
 			return;
 		}
@@ -316,12 +312,14 @@ async function checkService(forceRestart: boolean): Promise<void> {
 
 		if (status.installed && status.running) {
 			// Always restart so the service picks up any env / code changes
-			console.log(`${INSTALLING}System service — restarting...`);
+			console.log(`${CLI_INSTALLING}System service — restarting...`);
 			const result = await installService();
 			if (result.ok) {
-				console.log(`${OK}System service — restarted (${pc.dim(result.path)})`);
+				console.log(
+					`${CLI_OK}System service — restarted (${pc.dim(result.path)})`,
+				);
 			} else {
-				console.log(`${WARN}System service — restart failed`);
+				console.log(`${CLI_WARN}System service — restart failed`);
 				console.log(`          ${pc.dim(result.reason)}`);
 			}
 			return;
@@ -330,14 +328,14 @@ async function checkService(forceRestart: boolean): Promise<void> {
 		if (status.installed && !status.running) {
 			if (forceRestart) {
 				// Service was stopped by update phase — restart it
-				console.log(`${INSTALLING}System service — restarting...`);
+				console.log(`${CLI_INSTALLING}System service — restarting...`);
 				const result = await installService();
 				if (result.ok) {
 					console.log(
-						`${OK}System service — restarted (${pc.dim(result.path)})`,
+						`${CLI_OK}System service — restarted (${pc.dim(result.path)})`,
 					);
 				} else {
-					console.log(`${WARN}System service — restart failed`);
+					console.log(`${CLI_WARN}System service — restart failed`);
 					console.log(`          ${pc.dim(result.reason)}`);
 				}
 			} else {
@@ -345,25 +343,25 @@ async function checkService(forceRestart: boolean): Promise<void> {
 					platform === "darwin"
 						? `launchctl load ${status.path}`
 						: "systemctl --user start openkitten.service";
-				console.log(`${WARN}System service — installed but not running`);
+				console.log(`${CLI_WARN}System service — installed but not running`);
 				console.log(`          Run ${pc.dim(hint)} to start it.`);
 			}
 			return;
 		}
 
 		// Not installed — attempt install
-		console.log(`${INSTALLING}System service...`);
+		console.log(`${CLI_INSTALLING}System service...`);
 		const result = await installService();
 
 		if (result.ok) {
-			console.log(`${OK}System service (${pc.dim(result.path)})`);
+			console.log(`${CLI_OK}System service (${pc.dim(result.path)})`);
 		} else {
-			console.log(`${WARN}System service — install failed`);
+			console.log(`${CLI_WARN}System service — install failed`);
 			console.log(`          ${pc.dim(result.reason)}`);
 		}
 	} catch (err) {
 		const msg = err instanceof Error ? err.message : String(err);
-		console.log(`${WARN}System service — check failed`);
+		console.log(`${CLI_WARN}System service — check failed`);
 		console.log(`          ${pc.dim(msg)}`);
 	}
 }

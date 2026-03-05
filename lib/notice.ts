@@ -1,14 +1,7 @@
 import type { Api } from "grammy";
+import { BOT_NOTIFICATIONS } from "~/lib/constants/bot";
 
 type NoticeKind = "started" | "stopped" | "busy" | "error" | "help";
-
-const NOTICE_META: Record<NoticeKind, { emoji: string; title: string }> = {
-	started: { emoji: "🟢", title: "Started" },
-	stopped: { emoji: "🛑", title: "Stopped" },
-	busy: { emoji: "⏳", title: "Busy" },
-	error: { emoji: "⚠️", title: "Error" },
-	help: { emoji: "📖", title: "Help" },
-};
 
 function escapeMarkdownV2(text: string): string {
 	return text.replace(/([_*[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
@@ -21,7 +14,7 @@ export function sendNotice(
 	message: string,
 	codeBlock?: { language: string; content: string },
 ): void {
-	const { emoji, title } = NOTICE_META[kind];
+	const { emoji, title } = BOT_NOTIFICATIONS[kind];
 	const header = `${emoji} *${escapeMarkdownV2(title)}*`;
 	const body = escapeMarkdownV2(message)
 		.split("\n")

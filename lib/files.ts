@@ -1,5 +1,4 @@
 import { mkdirSync } from "node:fs";
-import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
@@ -8,9 +7,8 @@ import { InputFile } from "grammy";
 import mime from "mime";
 import { nanoid } from "nanoid";
 
-import { TELEGRAM_DOWNLOAD_TIMEOUT_MS } from "./telegram-constants";
-
-const TEMP_DIR = path.join(tmpdir(), "openkitten-files");
+import { FS_TEMP_DIR } from "~/lib/constants/fs";
+import { TELEGRAM_DOWNLOAD_TIMEOUT_MS } from "~/lib/constants/telegram";
 
 export async function downloadTelegramFile(
 	token: string,
@@ -42,7 +40,7 @@ export async function saveTempFile(
 	buffer: Buffer,
 	filename: string,
 ): Promise<string> {
-	const subDir = path.join(TEMP_DIR, nanoid());
+	const subDir = path.join(FS_TEMP_DIR, nanoid());
 	mkdirSync(subDir, { recursive: true });
 	const filePath = path.join(subDir, path.basename(filename));
 	await Bun.write(filePath, buffer);

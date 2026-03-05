@@ -1,21 +1,9 @@
 import { rmSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { defineCommand } from "citty";
 import pc from "picocolors";
+import { CLI_ERROR, CLI_OK, CLI_SKIP } from "~/lib/constants/cli";
+import { SERVICE_LOG_DIR } from "~/lib/constants/service";
 import { getServiceStatus, uninstallService } from "~/lib/service";
-
-const LOG_DIR = join(homedir(), ".local", "log", "openkitten");
-
-function tag(colorFn: (s: string) => string, label: string, width = 10) {
-	return (
-		colorFn(`[${label}]`) + " ".repeat(Math.max(1, width - label.length - 2))
-	);
-}
-
-const OK = tag(pc.green, "ok");
-const ERROR = tag(pc.red, "error");
-const SKIP = tag(pc.cyan, "skip");
 
 export default defineCommand({
 	meta: { description: "Stop and uninstall openkitten" },
@@ -29,7 +17,7 @@ export default defineCommand({
 		const status = await getServiceStatus();
 
 		if (!status.installed) {
-			console.log(`${SKIP}Service not installed — nothing to uninstall`);
+			console.log(`${CLI_SKIP}Service not installed — nothing to uninstall`);
 			console.log();
 			process.exit(0);
 		}
@@ -38,9 +26,9 @@ export default defineCommand({
 		const result = await uninstallService();
 
 		if (result.ok) {
-			console.log(`${OK}Service uninstalled`);
+			console.log(`${CLI_OK}Service uninstalled`);
 		} else {
-			console.log(`${ERROR}Failed to uninstall service`);
+			console.log(`${CLI_ERROR}Failed to uninstall service`);
 			console.log(`          ${pc.dim(result.reason ?? "unknown error")}`);
 			console.log();
 			process.exit(1);
@@ -48,11 +36,11 @@ export default defineCommand({
 
 		// 3. Remove log directory
 		try {
-			rmSync(LOG_DIR, { recursive: true, force: true });
-			console.log(`${OK}Removed logs (${pc.dim(LOG_DIR)})`);
+			rmSync(SERVICE_LOG_DIR, { recursive: true, force: true });
+			console.log(`${CLI_OK}Removed logs (${pc.dim(SERVICE_LOG_DIR)})`);
 		} catch (err) {
 			const msg = err instanceof Error ? err.message : String(err);
-			console.log(`${ERROR}Failed to remove logs`);
+			console.log(`${CLI_ERROR}Failed to remove logs`);
 			console.log(`          ${pc.dim(msg)}`);
 		}
 

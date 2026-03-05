@@ -3,6 +3,11 @@ import type { Event, FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
 import { defineCommand } from "citty";
 import { Bot, type Context } from "grammy";
 import { BOT_COMMANDS, registerCommands } from "~/lib/commands";
+import {
+	OPENCODE_SESSION_LOCKED_MAX_RETRIES,
+	OPENCODE_SESSION_LOCKED_RETRY_DELAY_MS,
+} from "~/lib/constants/opencode";
+import { TELEGRAM_MAX_FILE_SIZE } from "~/lib/constants/telegram";
 import { processEvent, stopTyping } from "~/lib/events";
 import {
 	buildFileParts,
@@ -23,10 +28,6 @@ import {
 } from "~/lib/opencode";
 import { createSandboxedServer } from "~/lib/sandbox";
 import * as state from "~/lib/state";
-import { TELEGRAM_FILE_MAX_SIZE } from "~/lib/telegram-constants";
-
-const SESSION_LOCKED_RETRY_DELAY_MS = 1000;
-const SESSION_LOCKED_MAX_RETRIES = 3;
 
 function validateEnv(): { token: string; userId: number } {
 	const token = process.env.TELEGRAM_BOT_TOKEN;
@@ -172,12 +173,12 @@ export default defineCommand({
 							: String(error);
 
 					if (errMsg.includes("SessionLocked")) {
-						if (retries < SESSION_LOCKED_MAX_RETRIES) {
+						if (retries < OPENCODE_SESSION_LOCKED_MAX_RETRIES) {
 							console.log(
-								`[bot] Session locked, retrying in ${SESSION_LOCKED_RETRY_DELAY_MS}ms (attempt ${retries + 1})`,
+								`[bot] Session locked, retrying in ${OPENCODE_SESSION_LOCKED_RETRY_DELAY_MS}ms (attempt ${retries + 1})`,
 							);
 							await new Promise((r) =>
-								setTimeout(r, SESSION_LOCKED_RETRY_DELAY_MS),
+								setTimeout(r, OPENCODE_SESSION_LOCKED_RETRY_DELAY_MS),
 							);
 							return prompt(retries + 1);
 						}
@@ -214,7 +215,7 @@ export default defineCommand({
 		bot.on("message:photo", async (ctx) => {
 			const photo = ctx.message.photo.at(-1);
 			if (!photo) return;
-			if (photo.file_size && photo.file_size > TELEGRAM_FILE_MAX_SIZE) {
+			if (photo.file_size && photo.file_size > TELEGRAM_MAX_FILE_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -239,7 +240,7 @@ export default defineCommand({
 		// Video messages
 		bot.on("message:video", async (ctx) => {
 			const video = ctx.message.video;
-			if (video.file_size && video.file_size > TELEGRAM_FILE_MAX_SIZE) {
+			if (video.file_size && video.file_size > TELEGRAM_MAX_FILE_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -265,7 +266,7 @@ export default defineCommand({
 		// Voice messages
 		bot.on("message:voice", async (ctx) => {
 			const voice = ctx.message.voice;
-			if (voice.file_size && voice.file_size > TELEGRAM_FILE_MAX_SIZE) {
+			if (voice.file_size && voice.file_size > TELEGRAM_MAX_FILE_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -295,7 +296,7 @@ export default defineCommand({
 		// Audio messages
 		bot.on("message:audio", async (ctx) => {
 			const audio = ctx.message.audio;
-			if (audio.file_size && audio.file_size > TELEGRAM_FILE_MAX_SIZE) {
+			if (audio.file_size && audio.file_size > TELEGRAM_MAX_FILE_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -321,7 +322,7 @@ export default defineCommand({
 		// Video note messages (round videos)
 		bot.on("message:video_note", async (ctx) => {
 			const videoNote = ctx.message.video_note;
-			if (videoNote.file_size && videoNote.file_size > TELEGRAM_FILE_MAX_SIZE) {
+			if (videoNote.file_size && videoNote.file_size > TELEGRAM_MAX_FILE_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -352,7 +353,7 @@ export default defineCommand({
 		// Sticker messages
 		bot.on("message:sticker", async (ctx) => {
 			const sticker = ctx.message.sticker;
-			if (sticker.file_size && sticker.file_size > TELEGRAM_FILE_MAX_SIZE) {
+			if (sticker.file_size && sticker.file_size > TELEGRAM_MAX_FILE_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}
@@ -388,7 +389,7 @@ export default defineCommand({
 		// Document messages
 		bot.on("message:document", async (ctx) => {
 			const doc = ctx.message.document;
-			if (doc.file_size && doc.file_size > TELEGRAM_FILE_MAX_SIZE) {
+			if (doc.file_size && doc.file_size > TELEGRAM_MAX_FILE_SIZE) {
 				sendNotice(ctx.api, ctx.chat.id, "error", "File too large (max 20MB).");
 				return;
 			}

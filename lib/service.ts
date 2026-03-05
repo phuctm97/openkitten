@@ -1,11 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { unlink } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-
-const SERVICE_LABEL = "com.openkitten.bot";
-const PROJECT_DIR = resolve(import.meta.dirname, "..");
-const LOG_DIR = join(homedir(), ".local", "log", "openkitten");
+import { dirname, join } from "node:path";
+import {
+	SERVICE_LABEL,
+	SERVICE_LOG_DIR,
+	SERVICE_PROJECT_DIR,
+} from "~/lib/constants/service";
 
 // ---------------------------------------------------------------------------
 // Platform detection
@@ -46,7 +47,7 @@ function bunPath(): string {
 function generatePlist(bun: string): string {
 	const home = homedir();
 	const pathEntries = [
-		join(PROJECT_DIR, "node_modules", ".bin"),
+		join(SERVICE_PROJECT_DIR, "node_modules", ".bin"),
 		"/opt/homebrew/bin",
 		join(home, ".bun", "bin"),
 		"/usr/local/bin",
@@ -69,7 +70,7 @@ function generatePlist(bun: string): string {
 	</array>
 
 	<key>WorkingDirectory</key>
-	<string>${PROJECT_DIR}</string>
+	<string>${SERVICE_PROJECT_DIR}</string>
 
 	<key>RunAtLoad</key>
 	<true/>
@@ -84,10 +85,10 @@ function generatePlist(bun: string): string {
 	</dict>
 
 	<key>StandardOutPath</key>
-	<string>${join(LOG_DIR, "stdout.log")}</string>
+	<string>${join(SERVICE_LOG_DIR, "stdout.log")}</string>
 
 	<key>StandardErrorPath</key>
-	<string>${join(LOG_DIR, "stderr.log")}</string>
+	<string>${join(SERVICE_LOG_DIR, "stderr.log")}</string>
 </dict>
 </plist>
 `;
@@ -96,7 +97,7 @@ function generatePlist(bun: string): string {
 function generateUnit(bun: string): string {
 	const home = homedir();
 	const pathEntries = [
-		join(PROJECT_DIR, "node_modules", ".bin"),
+		join(SERVICE_PROJECT_DIR, "node_modules", ".bin"),
 		join(home, ".bun", "bin"),
 		"/usr/local/bin",
 		"/usr/bin",
@@ -111,12 +112,12 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart=${bun} lib/index.ts serve
-WorkingDirectory=${PROJECT_DIR}
+WorkingDirectory=${SERVICE_PROJECT_DIR}
 Environment=PATH=${pathEntries}
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:${join(LOG_DIR, "stdout.log")}
-StandardError=append:${join(LOG_DIR, "stderr.log")}
+StandardOutput=append:${join(SERVICE_LOG_DIR, "stdout.log")}
+StandardError=append:${join(SERVICE_LOG_DIR, "stderr.log")}
 
 [Install]
 WantedBy=default.target
@@ -183,7 +184,7 @@ export async function installService(): Promise<
 	}
 
 	// Create log directory
-	mkdirSync(LOG_DIR, { recursive: true });
+	mkdirSync(SERVICE_LOG_DIR, { recursive: true });
 
 	const path = servicePath();
 

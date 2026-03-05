@@ -1,9 +1,10 @@
 import type { Api } from "grammy";
 import { convert } from "telegram-markdown-v2";
 import {
-	TELEGRAM_MESSAGE_CHUNK_LENGTH,
-	TELEGRAM_MESSAGE_MAX_LENGTH,
-} from "./telegram-constants";
+	TELEGRAM_MAX_MESSAGE_LENGTH,
+	TELEGRAM_SPLIT_MESSAGE_LENGTH,
+	TELEGRAM_SPLIT_MESSAGE_PRIORITIES,
+} from "~/lib/constants/telegram";
 
 // --- Content-aware message splitting (ported from NanoClaw) ---
 
@@ -52,22 +53,6 @@ function isInCodeBlock(
 	return null;
 }
 
-// Split priority: prefer breaking at higher-priority markdown boundaries.
-const SPLIT_PRIORITIES: ReadonlyArray<{ pattern: RegExp; offset: number }> = [
-	// 1. Before markdown header or horizontal rule
-	{ pattern: /\n(?=#{1,6} |---|___|\*\*\*)/g, offset: 0 },
-	// 2. Double newline (paragraph break)
-	{ pattern: /\n\n/g, offset: 0 },
-	// 3. Before list item
-	{ pattern: /\n(?=[-*] |\d+\. )/g, offset: 0 },
-	// 4. Single newline
-	{ pattern: /\n/g, offset: 0 },
-	// 5. Sentence ending
-	{ pattern: /[.!?] /g, offset: 1 },
-	// 6. Word boundary (space)
-	{ pattern: / /g, offset: 0 },
-];
-
 export function splitMessage(text: string, maxLength: number): string[] {
 	if (text.length <= maxLength) return [text];
 
@@ -78,7 +63,7 @@ export function splitMessage(text: string, maxLength: number): string[] {
 		const codeBlocks = findCodeBlockRanges(remaining);
 		let splitPos = -1;
 
-		for (const { pattern, offset } of SPLIT_PRIORITIES) {
+		for (const { pattern, offset } of TELEGRAM_SPLIT_MESSAGE_PRIORITIES) {
 			if (splitPos !== -1) break;
 
 			let best = -1;
@@ -149,7 +134,7 @@ export function convertWithFallback(text: string): {
 } {
 	try {
 		const formatted = convert(text);
-		if (formatted.length <= TELEGRAM_MESSAGE_MAX_LENGTH) {
+		if (formatted.length <= TELEGRAM_MAX_MESSAGE_LENGTH) {
 			return { text: formatted, parseMode: "MarkdownV2" };
 		}
 	} catch {
@@ -177,16 +162,16 @@ export async function sendFormattedMessage(
 		const trimmed = section.trim();
 		if (!trimmed) continue;
 
-		const chunks = splitMessage(trimmed, TELEGRAM_MESSAGE_CHUNK_LENGTH);
+		const chunks = splitMessage(trimmed, TELEGRAM_SPLIT_MESSAGE_LENGTH);
 
 		for (const chunk of chunks) {
 			let parts: string[];
 			try {
 				const formatted = convert(chunk);
-				if (formatted.length > TELEGRAM_MESSAGE_MAX_LENGTH) {
+				if (formatted.length > TELEGRAM_MAX_MESSAGE_LENGTH) {
 					// Layer 2: MarkdownV2 escaping expanded beyond the limit —
 					// re-split proportionally to preserve formatting.
-					const ratio = TELEGRAM_MESSAGE_MAX_LENGTH / formatted.length;
+					const ratio = TELEGRAM_MAX_MESSAGE_LENGTH / formatted.length;
 					const smallerLimit = Math.floor(chunk.length * ratio * 0.9);
 					parts = splitMessage(chunk, smallerLimit);
 				} else {
@@ -208,7 +193,7 @@ export async function sendFormattedMessage(
 			for (const sub of parts) {
 				try {
 					const subFormatted = convert(sub);
-					if (subFormatted.length <= TELEGRAM_MESSAGE_MAX_LENGTH) {
+					if (subFormatted.length <= TELEGRAM_MAX_MESSAGE_LENGTH) {
 						await api.sendMessage(chatId, subFormatted, {
 							parse_mode: "MarkdownV2",
 							link_preview_options: { is_disabled: true },
