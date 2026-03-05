@@ -148,12 +148,13 @@ function createMcpServer(): McpServer {
 	return server;
 }
 
-export async function startMcpServer(
-	port: number,
-): Promise<{ url: string; close: () => Promise<void> }> {
+export async function startMcpServer(): Promise<{
+	url: string;
+	close: () => Promise<void>;
+}> {
 	const httpServer = Bun.serve({
 		hostname: "127.0.0.1",
-		port,
+		port: 0,
 		idleTimeout: 255,
 		async fetch(req) {
 			const url = new URL(req.url);

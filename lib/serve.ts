@@ -62,11 +62,11 @@ export default defineCommand({
 		const { token, userId } = validateEnv();
 
 		console.log("[bot] Starting MCP server...");
-		const mcpServer = await startMcpServer(4097);
+		const mcpServer = await startMcpServer();
 		console.log(`[bot] MCP server running at ${mcpServer.url}`);
 
 		console.log("[bot] Starting OpenCode server...");
-		const server = await createSandboxedServer({ port: 4096 });
+		const server = await createSandboxedServer();
 		console.log(
 			`[bot] OpenCode server running at ${server.url} (sandbox: ${server.sandboxed ? "enabled" : "DISABLED"})`,
 		);

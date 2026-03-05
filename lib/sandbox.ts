@@ -502,8 +502,8 @@ function waitForServerReady(
 	},
 	timeout: number,
 	onFail?: () => Promise<void>,
-): Promise<void> {
-	return new Promise<void>((resolve, reject) => {
+): Promise<string> {
+	return new Promise<string>((resolve, reject) => {
 		const fail = (error: Error) => {
 			if (onFail) {
 				onFail().catch((err) => console.error("[sandbox] Cleanup error:", err));
@@ -530,10 +530,13 @@ function waitForServerReady(
 					if (done) break;
 					if (settled) continue;
 					output += decoder.decode(value, { stream: true });
-					if (output.includes("opencode server listening")) {
+					const match = output.match(
+						/opencode server listening on (https?:\/\/\S+)/,
+					);
+					if (match?.[1]) {
 						settled = true;
 						clearTimeout(id);
-						resolve();
+						resolve(match[1]);
 					}
 				}
 			} catch {
@@ -576,25 +579,19 @@ function waitForServerReady(
 
 // ── Spawn unsandboxed opencode subprocess ───────────────────────────────────
 
-async function spawnOpencodeServer(options: {
-	port: number;
-	timeout: number;
+async function spawnOpencodeServer(options?: {
+	timeout?: number;
 }): Promise<{ url: string; close: () => void }> {
-	const { port, timeout } = options;
+	const timeout = options?.timeout ?? 5000;
 	const opencodeBin = await resolveOpencodeBin();
-	const hostname = "127.0.0.1";
-	const url = `http://${hostname}:${port}`;
 
-	const proc = Bun.spawn(
-		[opencodeBin, "serve", "--hostname", hostname, "--port", String(port)],
-		{
-			stdin: "ignore",
-			stdout: "pipe",
-			stderr: "pipe",
-		},
-	);
+	const proc = Bun.spawn([opencodeBin, "serve", "--hostname", "127.0.0.1"], {
+		stdin: "ignore",
+		stdout: "pipe",
+		stderr: "pipe",
+	});
 
-	await waitForServerReady(proc, timeout);
+	const url = await waitForServerReady(proc, timeout);
 
 	return {
 		url,
@@ -620,17 +617,15 @@ const SANDBOX_CONFIG: SandboxRuntimeConfig = {
 };
 
 export async function createSandboxedServer(options?: {
-	port?: number;
 	timeout?: number;
 }): Promise<{ url: string; close: () => void; sandboxed: boolean }> {
-	const port = options?.port ?? 4096;
 	const timeout = options?.timeout ?? 5000;
 
 	if (process.env.DANGEROUSLY_DISABLE_SANDBOX === "1") {
 		console.warn(
 			"*** SANDBOX DISABLED *** Sandbox bypassed via DANGEROUSLY_DISABLE_SANDBOX",
 		);
-		const server = await spawnOpencodeServer({ port, timeout });
+		const server = await spawnOpencodeServer({ timeout });
 		return { ...server, sandboxed: false };
 	}
 
@@ -638,7 +633,7 @@ export async function createSandboxedServer(options?: {
 		console.warn(
 			"*** SANDBOX UNAVAILABLE *** Platform not supported, running without sandbox",
 		);
-		const server = await spawnOpencodeServer({ port, timeout });
+		const server = await spawnOpencodeServer({ timeout });
 		return { ...server, sandboxed: false };
 	}
 
@@ -648,14 +643,11 @@ export async function createSandboxedServer(options?: {
 			"*** SANDBOX UNAVAILABLE *** Missing dependencies, running without sandbox:",
 			deps.errors.join(", "),
 		);
-		const server = await spawnOpencodeServer({ port, timeout });
+		const server = await spawnOpencodeServer({ timeout });
 		return { ...server, sandboxed: false };
 	}
 
 	await SandboxManager.initialize(SANDBOX_CONFIG);
-
-	const hostname = "127.0.0.1";
-	const url = `http://${hostname}:${port}`;
 
 	let opencodeBin: string;
 	try {
@@ -665,7 +657,7 @@ export async function createSandboxedServer(options?: {
 		throw error;
 	}
 
-	const command = `'${opencodeBin.replace(/'/g, "'\\''")}' serve --hostname ${hostname} --port ${port}`;
+	const command = `'${opencodeBin.replace(/'/g, "'\\''")}' serve --hostname 127.0.0.1`;
 
 	let wrappedCommand: string;
 	try {
@@ -683,7 +675,9 @@ export async function createSandboxedServer(options?: {
 		stderr: "pipe",
 	});
 
-	await waitForServerReady(proc, timeout, () => SandboxManager.reset());
+	const url = await waitForServerReady(proc, timeout, () =>
+		SandboxManager.reset(),
+	);
 
 	return {
 		url,
