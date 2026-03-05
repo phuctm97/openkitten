@@ -4,7 +4,6 @@ import {
 	SandboxManager,
 	type SandboxRuntimeConfig,
 } from "@anthropic-ai/sandbox-runtime";
-import { createOpencodeServer } from "@opencode-ai/sdk/v2/server";
 
 const home = homedir();
 
@@ -492,6 +491,119 @@ async function resolveOpencodeBin(): Promise<string> {
 	);
 }
 
+// ── Wait for subprocess server ready ────────────────────────────────────────
+
+function waitForServerReady(
+	proc: {
+		stdout: ReadableStream<Uint8Array>;
+		stderr: ReadableStream<Uint8Array>;
+		kill(): void;
+		exited: Promise<number>;
+	},
+	timeout: number,
+	onFail?: () => Promise<void>,
+): Promise<void> {
+	return new Promise<void>((resolve, reject) => {
+		const fail = (error: Error) => {
+			if (onFail) {
+				onFail().catch((err) => console.error("[sandbox] Cleanup error:", err));
+			}
+			reject(error);
+		};
+
+		let output = "";
+		let settled = false;
+
+		const id = setTimeout(() => {
+			if (settled) return;
+			settled = true;
+			proc.kill();
+			fail(new Error(`Timeout waiting for server to start after ${timeout}ms`));
+		}, timeout);
+
+		(async () => {
+			const decoder = new TextDecoder();
+			const reader = proc.stdout.getReader();
+			try {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					if (settled) continue;
+					output += decoder.decode(value, { stream: true });
+					if (output.includes("opencode server listening")) {
+						settled = true;
+						clearTimeout(id);
+						resolve();
+					}
+				}
+			} catch {
+				// Stream closed
+			} finally {
+				reader.releaseLock();
+			}
+		})();
+
+		(async () => {
+			const decoder = new TextDecoder();
+			const reader = proc.stderr.getReader();
+			try {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					if (!settled) {
+						output += decoder.decode(value, { stream: true });
+					}
+				}
+			} catch {
+				// Stream closed
+			} finally {
+				reader.releaseLock();
+			}
+		})();
+
+		proc.exited.then((code) => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(id);
+			let msg = `Server exited with code ${code}`;
+			if (output.trim()) {
+				msg += `\nServer output: ${output}`;
+			}
+			fail(new Error(msg));
+		});
+	});
+}
+
+// ── Spawn unsandboxed opencode subprocess ───────────────────────────────────
+
+async function spawnOpencodeServer(options: {
+	port: number;
+	timeout: number;
+}): Promise<{ url: string; close: () => void }> {
+	const { port, timeout } = options;
+	const opencodeBin = await resolveOpencodeBin();
+	const hostname = "127.0.0.1";
+	const url = `http://${hostname}:${port}`;
+
+	const proc = Bun.spawn(
+		[opencodeBin, "serve", "--hostname", hostname, "--port", String(port)],
+		{
+			stdin: "ignore",
+			stdout: "pipe",
+			stderr: "pipe",
+		},
+	);
+
+	await waitForServerReady(proc, timeout);
+
+	return {
+		url,
+		close() {
+			proc.kill();
+		},
+	};
+}
+
 // ── Sandbox configuration ───────────────────────────────────────────────────
 
 const SANDBOX_CONFIG: SandboxRuntimeConfig = {
@@ -518,7 +630,7 @@ export async function createSandboxedServer(options?: {
 		console.warn(
 			"*** SANDBOX DISABLED *** Sandbox bypassed via DANGEROUSLY_DISABLE_SANDBOX",
 		);
-		const server = await createOpencodeServer({ port, timeout });
+		const server = await spawnOpencodeServer({ port, timeout });
 		return { ...server, sandboxed: false };
 	}
 
@@ -526,7 +638,7 @@ export async function createSandboxedServer(options?: {
 		console.warn(
 			"*** SANDBOX UNAVAILABLE *** Platform not supported, running without sandbox",
 		);
-		const server = await createOpencodeServer({ port, timeout });
+		const server = await spawnOpencodeServer({ port, timeout });
 		return { ...server, sandboxed: false };
 	}
 
@@ -536,7 +648,7 @@ export async function createSandboxedServer(options?: {
 			"*** SANDBOX UNAVAILABLE *** Missing dependencies, running without sandbox:",
 			deps.errors.join(", "),
 		);
-		const server = await createOpencodeServer({ port, timeout });
+		const server = await spawnOpencodeServer({ port, timeout });
 		return { ...server, sandboxed: false };
 	}
 
@@ -571,78 +683,7 @@ export async function createSandboxedServer(options?: {
 		stderr: "pipe",
 	});
 
-	await new Promise<void>((resolve, reject) => {
-		const fail = (error: Error) => {
-			SandboxManager.reset().catch((err) =>
-				console.error("[sandbox] Cleanup error:", err),
-			);
-			reject(error);
-		};
-
-		let output = "";
-		let settled = false;
-
-		const id = setTimeout(() => {
-			if (settled) return;
-			settled = true;
-			proc.kill();
-			fail(new Error(`Timeout waiting for server to start after ${timeout}ms`));
-		}, timeout);
-
-		// Read stdout for the ready signal (keep draining after settled to avoid back-pressure)
-		(async () => {
-			const decoder = new TextDecoder();
-			const reader = proc.stdout.getReader();
-			try {
-				while (true) {
-					const { done, value } = await reader.read();
-					if (done) break;
-					if (settled) continue;
-					output += decoder.decode(value, { stream: true });
-					if (output.includes("opencode server listening")) {
-						settled = true;
-						clearTimeout(id);
-						resolve();
-					}
-				}
-			} catch {
-				// Stream closed
-			} finally {
-				reader.releaseLock();
-			}
-		})();
-
-		// Read stderr into output (keep draining after settled to avoid back-pressure)
-		(async () => {
-			const decoder = new TextDecoder();
-			const reader = proc.stderr.getReader();
-			try {
-				while (true) {
-					const { done, value } = await reader.read();
-					if (done) break;
-					if (!settled) {
-						output += decoder.decode(value, { stream: true });
-					}
-				}
-			} catch {
-				// Stream closed
-			} finally {
-				reader.releaseLock();
-			}
-		})();
-
-		// Handle process exit
-		proc.exited.then((code) => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(id);
-			let msg = `Server exited with code ${code}`;
-			if (output.trim()) {
-				msg += `\nServer output: ${output}`;
-			}
-			fail(new Error(msg));
-		});
-	});
+	await waitForServerReady(proc, timeout, () => SandboxManager.reset());
 
 	return {
 		url,
