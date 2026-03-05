@@ -6,6 +6,8 @@ import {
 	SANDBOX_STARTUP_TIMEOUT_MS,
 } from "~/lib/constants/sandbox";
 
+type ServerHandle = { url: string; close: () => void };
+
 // ── Resolve opencode binary ─────────────────────────────────────────────────
 
 async function resolveOpencodeBin(): Promise<string> {
@@ -113,7 +115,7 @@ function waitForServerReady(
 
 async function spawnOpencodeServer(options?: {
 	timeout?: number;
-}): Promise<{ url: string; close: () => void }> {
+}): Promise<ServerHandle> {
 	const timeout = options?.timeout ?? SANDBOX_STARTUP_TIMEOUT_MS;
 	const opencodeBin = await resolveOpencodeBin();
 
@@ -137,7 +139,7 @@ async function spawnOpencodeServer(options?: {
 
 export async function createSandboxedServer(options?: {
 	timeout?: number;
-}): Promise<{ url: string; close: () => void; sandboxed: boolean }> {
+}): Promise<ServerHandle & { sandboxed: boolean }> {
 	const timeout = options?.timeout ?? SANDBOX_STARTUP_TIMEOUT_MS;
 
 	if (process.env.DANGEROUSLY_DISABLE_SANDBOX === "1") {

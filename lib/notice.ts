@@ -1,7 +1,6 @@
 import type { Api } from "grammy";
 import { BOT_NOTIFICATIONS } from "~/lib/constants/bot";
-
-type NoticeKind = "started" | "stopped" | "busy" | "error" | "help";
+import type { NoticeType } from "~/lib/types";
 
 function escapeMarkdownV2(text: string): string {
 	return text.replace(/([_*[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
@@ -10,7 +9,7 @@ function escapeMarkdownV2(text: string): string {
 export function sendNotice(
 	api: Api,
 	chatId: number,
-	kind: NoticeKind,
+	kind: NoticeType,
 	message: string,
 	codeBlock?: { language: string; content: string },
 ): void {

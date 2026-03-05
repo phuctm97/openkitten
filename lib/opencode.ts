@@ -6,7 +6,7 @@ import {
 	OPENCODE_RECONNECT_MIN_MS,
 } from "~/lib/constants/opencode";
 
-export type EventCallback = (event: Event) => void;
+type EventCallback = (event: Event) => void;
 
 let client: ReturnType<typeof createOpencodeClient>;
 let cachedDirectory: string | null = null;

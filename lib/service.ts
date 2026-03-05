@@ -9,11 +9,14 @@ import {
 	SERVICE_SYSTEMCTL_NAME,
 } from "~/lib/constants/service";
 
+type SupportedPlatform = "darwin" | "linux";
+type ServiceResult = { ok: true } | { ok: false; reason: string };
+
 // ---------------------------------------------------------------------------
 // Platform detection
 // ---------------------------------------------------------------------------
 
-export function supportedPlatform(): "darwin" | "linux" | null {
+export function supportedPlatform(): SupportedPlatform | null {
 	if (process.platform === "darwin") return "darwin";
 	if (process.platform === "linux") return "linux";
 	return null;
@@ -149,7 +152,7 @@ export async function getServiceStatus(): Promise<ServiceStatus> {
 	return { installed: true, running, path };
 }
 
-async function isRunning(platform: "darwin" | "linux"): Promise<boolean> {
+async function isRunning(platform: SupportedPlatform): Promise<boolean> {
 	try {
 		if (platform === "darwin") {
 			const proc = Bun.spawn(["launchctl", "list", SERVICE_LAUNCHCTL_NAME], {
@@ -212,7 +215,7 @@ export async function installService(): Promise<
 	return { ok: true, path };
 }
 
-async function stopExisting(platform: "darwin" | "linux"): Promise<void> {
+async function stopExisting(platform: SupportedPlatform): Promise<void> {
 	try {
 		if (platform === "darwin") {
 			const path = plistPath();
@@ -236,9 +239,9 @@ async function stopExisting(platform: "darwin" | "linux"): Promise<void> {
 }
 
 async function loadService(
-	platform: "darwin" | "linux",
+	platform: SupportedPlatform,
 	path: string,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<ServiceResult> {
 	if (platform === "darwin") {
 		const proc = Bun.spawn(["launchctl", "load", path], {
 			stdout: "ignore",
@@ -281,10 +284,7 @@ async function loadService(
 // Uninstall (exported for future use)
 // ---------------------------------------------------------------------------
 
-export async function uninstallService(): Promise<{
-	ok: boolean;
-	reason?: string;
-}> {
+export async function uninstallService(): Promise<ServiceResult> {
 	const platform = supportedPlatform();
 	if (!platform) return { ok: false, reason: "unsupported platform" };
 

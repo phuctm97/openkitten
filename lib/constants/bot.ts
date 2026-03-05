@@ -1,4 +1,5 @@
 import type { BotCommand } from "grammy/types";
+import type { NoticeType } from "~/lib/types";
 
 export const BOT_COMMANDS: BotCommand[] = [
 	{ command: "start", description: "Start a new session" },
@@ -6,10 +7,8 @@ export const BOT_COMMANDS: BotCommand[] = [
 	{ command: "help", description: "Show help message" },
 ];
 
-type NoticeKind = "started" | "stopped" | "busy" | "error" | "help";
-
 export const BOT_NOTIFICATIONS: Record<
-	NoticeKind,
+	NoticeType,
 	{ emoji: string; title: string }
 > = {
 	started: { emoji: "\u{1F7E2}", title: "Started" },
