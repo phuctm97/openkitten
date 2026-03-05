@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, unlinkSync } from "node:fs";
+import { mkdirSync } from "node:fs";
+import { unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
@@ -135,7 +136,7 @@ export async function getServiceStatus(): Promise<ServiceStatus> {
 	if (!platform) return { installed: false };
 
 	const path = servicePath();
-	if (!existsSync(path)) return { installed: false };
+	if (!(await Bun.file(path).exists())) return { installed: false };
 
 	const running = await isRunning(platform);
 	return { installed: true, running, path };
@@ -208,7 +209,7 @@ async function stopExisting(platform: "darwin" | "linux"): Promise<void> {
 	try {
 		if (platform === "darwin") {
 			const path = plistPath();
-			if (existsSync(path)) {
+			if (await Bun.file(path).exists()) {
 				const proc = Bun.spawn(["launchctl", "unload", path], {
 					stdout: "ignore",
 					stderr: "ignore",
@@ -281,7 +282,7 @@ export async function uninstallService(): Promise<{
 	if (!platform) return { ok: false, reason: "unsupported platform" };
 
 	const path = servicePath();
-	if (!existsSync(path)) return { ok: true }; // nothing to uninstall
+	if (!(await Bun.file(path).exists())) return { ok: true }; // nothing to uninstall
 
 	await stopExisting(platform);
 
@@ -294,7 +295,7 @@ export async function uninstallService(): Promise<{
 	}
 
 	try {
-		unlinkSync(path);
+		await unlink(path);
 	} catch (err) {
 		return {
 			ok: false,

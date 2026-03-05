@@ -1,5 +1,3 @@
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import {
@@ -477,7 +475,7 @@ const ALLOWED_DOMAINS: string[] = [
 
 // ── Resolve opencode binary ─────────────────────────────────────────────────
 
-function resolveOpencodeBin(): string {
+async function resolveOpencodeBin(): Promise<string> {
 	const fromPath = Bun.which("opencode");
 	if (fromPath) return fromPath;
 
@@ -487,7 +485,7 @@ function resolveOpencodeBin(): string {
 		".bin",
 		"opencode",
 	);
-	if (existsSync(local)) return local;
+	if (await Bun.file(local).exists()) return local;
 
 	throw new Error(
 		"opencode executable not found. Ensure the opencode-ai package is installed.",
@@ -549,7 +547,7 @@ export async function createSandboxedServer(options?: {
 
 	let opencodeBin: string;
 	try {
-		opencodeBin = resolveOpencodeBin();
+		opencodeBin = await resolveOpencodeBin();
 	} catch (error) {
 		await SandboxManager.reset();
 		throw error;
@@ -567,8 +565,10 @@ export async function createSandboxedServer(options?: {
 
 	console.log("[sandbox] Sandbox enabled");
 
-	const proc = spawn("sh", ["-c", wrappedCommand], {
-		stdio: ["ignore", "pipe", "pipe"],
+	const proc = Bun.spawn(["sh", "-c", wrappedCommand], {
+		stdin: "ignore",
+		stdout: "pipe",
+		stderr: "pipe",
 	});
 
 	await new Promise<void>((resolve, reject) => {
@@ -589,22 +589,50 @@ export async function createSandboxedServer(options?: {
 			fail(new Error(`Timeout waiting for server to start after ${timeout}ms`));
 		}, timeout);
 
-		proc.stdout.on("data", (chunk: Buffer) => {
-			if (settled) return;
-			output += chunk.toString();
-			if (output.includes("opencode server listening")) {
-				settled = true;
-				clearTimeout(id);
-				resolve();
+		// Read stdout for the ready signal (keep draining after settled to avoid back-pressure)
+		(async () => {
+			const decoder = new TextDecoder();
+			const reader = proc.stdout.getReader();
+			try {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					if (settled) continue;
+					output += decoder.decode(value, { stream: true });
+					if (output.includes("opencode server listening")) {
+						settled = true;
+						clearTimeout(id);
+						resolve();
+					}
+				}
+			} catch {
+				// Stream closed
+			} finally {
+				reader.releaseLock();
 			}
-		});
+		})();
 
-		proc.stderr.on("data", (chunk: Buffer) => {
-			if (settled) return;
-			output += chunk.toString();
-		});
+		// Read stderr into output (keep draining after settled to avoid back-pressure)
+		(async () => {
+			const decoder = new TextDecoder();
+			const reader = proc.stderr.getReader();
+			try {
+				while (true) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					if (!settled) {
+						output += decoder.decode(value, { stream: true });
+					}
+				}
+			} catch {
+				// Stream closed
+			} finally {
+				reader.releaseLock();
+			}
+		})();
 
-		proc.on("exit", (code) => {
+		// Handle process exit
+		proc.exited.then((code) => {
 			if (settled) return;
 			settled = true;
 			clearTimeout(id);
@@ -613,13 +641,6 @@ export async function createSandboxedServer(options?: {
 				msg += `\nServer output: ${output}`;
 			}
 			fail(new Error(msg));
-		});
-
-		proc.on("error", (error) => {
-			if (settled) return;
-			settled = true;
-			clearTimeout(id);
-			fail(error);
 		});
 	});
 

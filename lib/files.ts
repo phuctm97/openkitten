@@ -1,5 +1,5 @@
-import fs from "node:fs";
-import os from "node:os";
+import { mkdirSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import type { FilePartInput, TextPartInput } from "@opencode-ai/sdk/v2";
@@ -10,7 +10,7 @@ import { nanoid } from "nanoid";
 
 export const TELEGRAM_MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB Bot API limit
 const TELEGRAM_DOWNLOAD_TIMEOUT_MS = 60_000;
-const TEMP_DIR = path.join(os.tmpdir(), "openkitten-files");
+const TEMP_DIR = path.join(tmpdir(), "openkitten-files");
 
 export async function downloadTelegramFile(
 	token: string,
@@ -38,11 +38,14 @@ export async function downloadTelegramFile(
 	}
 }
 
-export function saveTempFile(buffer: Buffer, filename: string): string {
+export async function saveTempFile(
+	buffer: Buffer,
+	filename: string,
+): Promise<string> {
 	const subDir = path.join(TEMP_DIR, nanoid());
-	fs.mkdirSync(subDir, { recursive: true });
+	mkdirSync(subDir, { recursive: true });
 	const filePath = path.join(subDir, path.basename(filename));
-	fs.writeFileSync(filePath, buffer);
+	await Bun.write(filePath, buffer);
 	return filePath;
 }
 
@@ -95,7 +98,7 @@ export async function sendTelegramFile(
 		let buffer: Buffer;
 
 		if (url.startsWith("file://")) {
-			buffer = fs.readFileSync(url.slice(7));
+			buffer = Buffer.from(await Bun.file(url.slice(7)).arrayBuffer());
 		} else if (url.startsWith("http://") || url.startsWith("https://")) {
 			const res = await fetch(url, {
 				signal: AbortSignal.timeout(TELEGRAM_DOWNLOAD_TIMEOUT_MS),
@@ -107,7 +110,7 @@ export async function sendTelegramFile(
 			buffer = Buffer.from(await res.arrayBuffer());
 		} else {
 			// Treat as absolute path
-			buffer = fs.readFileSync(url);
+			buffer = Buffer.from(await Bun.file(url).arrayBuffer());
 		}
 
 		const name = resolveFilename(mimeType, filename);

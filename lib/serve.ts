@@ -195,7 +195,7 @@ export default defineCommand({
 				return;
 			}
 			const filename = resolveFilename("image/jpeg");
-			const filePath = saveTempFile(buffer, filename);
+			const filePath = await saveTempFile(buffer, filename);
 			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
 				filePath,
 				"image/jpeg",
@@ -221,7 +221,7 @@ export default defineCommand({
 			}
 			const mimeType = video.mime_type ?? "video/mp4";
 			const filename = resolveFilename(mimeType);
-			const filePath = saveTempFile(buffer, filename);
+			const filePath = await saveTempFile(buffer, filename);
 			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
 				filePath,
 				mimeType,
@@ -251,7 +251,7 @@ export default defineCommand({
 				return;
 			}
 			const filename = resolveFilename("audio/ogg");
-			const filePath = saveTempFile(buffer, filename);
+			const filePath = await saveTempFile(buffer, filename);
 			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
 				filePath,
 				"audio/ogg",
@@ -277,7 +277,7 @@ export default defineCommand({
 			}
 			const mimeType = audio.mime_type ?? "audio/mpeg";
 			const filename = resolveFilename(mimeType, audio.file_name);
-			const filePath = saveTempFile(buffer, filename);
+			const filePath = await saveTempFile(buffer, filename);
 			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
 				filePath,
 				mimeType,
@@ -311,7 +311,7 @@ export default defineCommand({
 				return;
 			}
 			const filename = resolveFilename("video/mp4");
-			const filePath = saveTempFile(buffer, filename);
+			const filePath = await saveTempFile(buffer, filename);
 			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
 				filePath,
 				"video/mp4",
@@ -347,7 +347,7 @@ export default defineCommand({
 					? "application/x-tgsticker"
 					: "image/webp";
 			const filename = resolveFilename(mimeType);
-			const filePath = saveTempFile(buffer, filename);
+			const filePath = await saveTempFile(buffer, filename);
 			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
 				filePath,
 				mimeType,
@@ -375,7 +375,7 @@ export default defineCommand({
 			}
 			const mimeType = doc.mime_type ?? "application/octet-stream";
 			const filename = resolveFilename(mimeType, doc.file_name);
-			const filePath = saveTempFile(buffer, filename);
+			const filePath = await saveTempFile(buffer, filename);
 			const parts: Array<TextPartInput | FilePartInput> = buildFileParts(
 				filePath,
 				mimeType,

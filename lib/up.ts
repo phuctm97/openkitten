@@ -1,5 +1,3 @@
-import { randomBytes } from "node:crypto";
-import { appendFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
 import { defineCommand } from "citty";
@@ -156,7 +154,7 @@ async function checkOpencode(): Promise<boolean> {
 	}
 
 	const localBin = join(process.cwd(), "node_modules", ".bin", "opencode");
-	if (existsSync(localBin)) {
+	if (await Bun.file(localBin).exists()) {
 		console.log(`${OK}opencode CLI (${pc.dim(localBin)})`);
 		return true;
 	}
@@ -176,7 +174,7 @@ async function checkOpencode(): Promise<boolean> {
 	}
 
 	const installedBin = join(process.cwd(), "node_modules", ".bin", "opencode");
-	if (existsSync(installedBin)) {
+	if (await Bun.file(installedBin).exists()) {
 		console.log(`${OK}opencode CLI (${pc.dim(installedBin)})`);
 		return true;
 	}
@@ -231,19 +229,28 @@ function checkTelegramEnv(): boolean {
 	return ok;
 }
 
-function ensureServerPassword(): void {
+async function ensureServerPassword(): Promise<void> {
 	if (process.env.OPENCODE_SERVER_PASSWORD) {
 		console.log(`${OK}OPENCODE_SERVER_PASSWORD`);
 		return;
 	}
 
-	const password = randomBytes(32).toString("hex");
+	const bytes = new Uint8Array(32);
+	crypto.getRandomValues(bytes);
+	const password = Buffer.from(bytes).toString("hex");
 	const envFile = join(process.cwd(), ".env.local");
 
 	try {
-		appendFileSync(envFile, `\nOPENCODE_SERVER_PASSWORD="${password}"\n`, {
-			mode: 0o600,
-		});
+		const existing = (await Bun.file(envFile).exists())
+			? await Bun.file(envFile).text()
+			: "";
+		await Bun.write(
+			envFile,
+			existing + `\nOPENCODE_SERVER_PASSWORD="${password}"\n`,
+			{
+				mode: 0o600,
+			},
+		);
 		process.env.OPENCODE_SERVER_PASSWORD = password;
 		console.log(`${OK}OPENCODE_SERVER_PASSWORD (generated)`);
 	} catch (err) {
@@ -383,7 +390,7 @@ async function setupPhase(stoppedService: boolean): Promise<boolean> {
 	console.log();
 
 	// 4. Server password (informational)
-	ensureServerPassword();
+	await ensureServerPassword();
 
 	console.log();
 

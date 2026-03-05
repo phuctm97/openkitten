@@ -1,4 +1,3 @@
-import fs from "node:fs";
 import path from "node:path";
 import { tool } from "@opencode-ai/plugin";
 
@@ -15,15 +14,13 @@ export default tool({
 	async execute(args) {
 		const resolved = path.resolve(args.path);
 
-		if (!fs.existsSync(resolved))
-			throw new Error(`File not found: ${resolved}`);
+		const file = Bun.file(resolved);
+		if (!(await file.exists())) throw new Error(`File not found: ${resolved}`);
 
-		const stats = fs.statSync(resolved);
-		if (!stats.isFile()) throw new Error(`Not a regular file: ${resolved}`);
-
-		if (stats.size > 20 * 1024 * 1024)
+		const size = file.size;
+		if (size > 20 * 1024 * 1024)
 			throw new Error(
-				`File too large (${(stats.size / 1024 / 1024).toFixed(1)}MB). Telegram limit is 20MB.`,
+				`File too large (${(size / 1024 / 1024).toFixed(1)}MB). Telegram limit is 20MB.`,
 			);
 
 		return `File "${path.basename(resolved)}" attached to response.`;
