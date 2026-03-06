@@ -1,11 +1,17 @@
 import { expect, test } from "bun:test";
 import { BunContext } from "@effect/platform-bun";
-import { Effect } from "effect";
+import { Console, Effect, Layer } from "effect";
 import { cli } from "~/lib/cli";
+
+const silentConsole = new Proxy({} as Console.Console, {
+	get: (_, prop) => (prop === Console.TypeId ? Console.TypeId : Effect.void),
+});
 
 const run = (...args: ReadonlyArray<string>) =>
 	cli(["bun", ".", ...args]).pipe(
-		Effect.provide(BunContext.layer),
+		Effect.provide(
+			Layer.merge(BunContext.layer, Console.setConsole(silentConsole)),
+		),
 		Effect.runPromise,
 	);
 
