@@ -1,5 +1,5 @@
 import { ConfigProvider, Effect, Layer } from "effect";
-import { assert, describe, expect, test, vi } from "vitest";
+import { assert, beforeEach, describe, expect, test, vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import pkg from "~/package.json" with { type: "json" };
 
@@ -28,6 +28,10 @@ const startSpy = vi.spyOn(GrammyBot.prototype, "start");
 const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
 
 const onSpy = vi.spyOn(GrammyBot.prototype, "on");
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 const validConfigLayer = Layer.setConfigProvider(
   ConfigProvider.fromJson({
