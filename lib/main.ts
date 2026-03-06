@@ -15,7 +15,7 @@ const down = Command.make("down", {}, () => Effect.void).pipe(
 	Command.withDescription("Stop and remove OpenKitten from system services."),
 );
 
-const root = Command.make(pkg.name, {}).pipe(
+const root = Command.make(pkg.name).pipe(
 	Command.withDescription(
 		"Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in capabilities people actually need.",
 	),

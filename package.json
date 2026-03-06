@@ -7,7 +7,9 @@
 	"scripts": {
 		"prepare": "bun prepare.ts",
 		"compile": "bun compile.ts",
-		"typecheck": "bun --bun tsc --build"
+		"typecheck": "bun --bun tsc --build",
+		"dev": "bun --hot --no-clear-screen . serve",
+		"start": "bun . serve"
 	},
 	"dependencies": {
 		"@effect/cli": "^0.73.2",
