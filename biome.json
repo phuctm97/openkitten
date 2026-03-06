@@ -4,5 +4,22 @@
 		"enabled": true,
 		"clientKind": "git",
 		"useIgnoreFile": true
+	},
+	"linter": {
+		"rules": {
+			"style": {
+				"noRestrictedImports": {
+					"level": "warn",
+					"options": {
+						"patterns": [
+							{
+								"group": ["./*", "../*"],
+								"message": "Use ~/* path aliases instead of relative imports."
+							}
+						]
+					}
+				}
+			}
+		}
 	}
 }
