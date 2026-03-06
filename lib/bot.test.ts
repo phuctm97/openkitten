@@ -1,4 +1,4 @@
-import { describe, expect, mock, spyOn, test } from "bun:test";
+import { describe, expect, test, vi } from "bun:test";
 import { ConfigProvider, Effect, Layer } from "effect";
 import { Bot } from "~/lib/bot";
 import { expectToBeDefined } from "~/lib/expect-to-be-defined";
@@ -19,13 +19,13 @@ class GrammyBot {
   on(_event: string, _handler: GrammyHandler) {}
 }
 
-mock.module("grammy", () => ({ Bot: GrammyBot }));
+vi.mock("grammy", () => ({ Bot: GrammyBot }));
 
-const startSpy = spyOn(GrammyBot.prototype, "start");
+const startSpy = vi.spyOn(GrammyBot.prototype, "start");
 
-const stopSpy = spyOn(GrammyBot.prototype, "stop");
+const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
 
-const onSpy = spyOn(GrammyBot.prototype, "on");
+const onSpy = vi.spyOn(GrammyBot.prototype, "on");
 
 const validConfigLayer = Layer.setConfigProvider(
   ConfigProvider.fromJson({
@@ -99,7 +99,7 @@ describe("handler", () => {
   });
 
   test("replies with prefixed text for authorized user", async () => {
-    const reply = mock();
+    const reply = vi.fn();
     await Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
@@ -118,7 +118,7 @@ describe("handler", () => {
   });
 
   test("ignores messages from unauthorized user", async () => {
-    const reply = mock();
+    const reply = vi.fn();
     await Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
