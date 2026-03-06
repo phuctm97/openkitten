@@ -1,12 +1,12 @@
 {
-	"include": ["prepare.ts", "compile.ts", "lib"],
-	"extends": "@tsconfig/bun/tsconfig.json",
-	"compilerOptions": {
-		"incremental": true,
-		"allowImportingTsExtensions": false,
-		"plugins": [{ "name": "@effect/language-service" }],
-		"paths": {
-			"~/*": ["./*"]
-		}
-	}
+  "include": ["prepare.ts", "compile.ts", "lib"],
+  "extends": "@tsconfig/bun/tsconfig.json",
+  "compilerOptions": {
+    "incremental": true,
+    "allowImportingTsExtensions": false,
+    "plugins": [{ "name": "@effect/language-service" }],
+    "paths": {
+      "~/*": ["./*"]
+    }
+  }
 }
