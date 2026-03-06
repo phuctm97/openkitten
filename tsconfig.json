@@ -4,6 +4,7 @@
 	"compilerOptions": {
 		"incremental": true,
 		"allowImportingTsExtensions": false,
+		"plugins": [{ "name": "@effect/language-service" }],
 		"paths": {
 			"~/*": ["./*"]
 		}

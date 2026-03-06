@@ -9,12 +9,16 @@
 		"compile": "bun compile.ts",
 		"typecheck": "bun --bun tsc --build"
 	},
+	"dependencies": {
+		"effect": "^3.19.19"
+	},
 	"devDependencies": {
-		"lefthook": "^2.1.2",
 		"@biomejs/biome": "^2.4.6",
+		"@effect/language-service": "^0.77.0",
+		"@tsconfig/bun": "^1.0.10",
 		"@types/bun": "^1.3.10",
 		"@types/node": "^25.3.5",
-		"@tsconfig/bun": "^1.0.10",
+		"lefthook": "^2.1.2",
 		"typescript": "^5.9.3"
 	}
 }
