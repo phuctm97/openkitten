@@ -7,7 +7,7 @@ export default defineConfig({
     include: ["test/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "istanbul",
-      reporter: ["html"],
+      reporter: ["text", "html"],
       include: ["lib/**/*.{ts,tsx}"],
       exclude: ["lib/main.ts"],
     },

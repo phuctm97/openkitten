@@ -62,6 +62,17 @@ describe("layer", () => {
     missingBotTokenConfigLayer,
   );
 
+  test("dies when start rejects", async () => {
+    const message = "start failed";
+    startSpy.mockRejectedValueOnce(new Error(message));
+    await expect(
+      Effect.gen(function* () {
+        const { fiber } = yield* Bot;
+        yield* fiber;
+      }).pipe(Effect.provide(validBotLayer), Effect.scoped, Effect.runPromise),
+    ).rejects.toThrow(message);
+  });
+
   test("fails without TELEGRAM_BOT_TOKEN", () =>
     expect(
       Bot.pipe(
