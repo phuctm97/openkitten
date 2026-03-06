@@ -1,5 +1,6 @@
 __MACOSX
 .DS_Store
+.reference
 node_modules
 *.tsbuildinfo
 dist

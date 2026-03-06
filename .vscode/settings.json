@@ -1,4 +1,10 @@
 {
   "typescript.tsdk": "node_modules/typescript/lib",
-  "typescript.enablePromptUseWorkspaceTsdk": true
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "files.exclude": {
+    ".reference": true,
+    "node_modules": true,
+    "*.tsbuildinfo": true,
+    "dist": true
+  }
 }

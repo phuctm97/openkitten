@@ -3,6 +3,7 @@
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "incremental": true,
+    "exactOptionalPropertyTypes": true,
     "allowImportingTsExtensions": false,
     "plugins": [{ "name": "@effect/language-service" }],
     "paths": {
