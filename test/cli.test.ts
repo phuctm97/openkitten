@@ -21,14 +21,12 @@ const botLayer = Layer.effect(
   }),
 );
 
-const upMock = vi.fn().mockResolvedValue(undefined);
-
-const downMock = vi.fn().mockResolvedValue(undefined);
-
-const scriptsLayer = Layer.succeed(Scripts, {
-  up: upMock,
-  down: downMock,
+const scriptsMock = Scripts.of({
+  up: vi.fn().mockResolvedValue(undefined),
+  down: vi.fn().mockResolvedValue(undefined),
 });
+
+const scriptsLayer = Layer.succeed(Scripts, scriptsMock);
 
 const testLayer = Layer.mergeAll(
   BunContext.layer,
@@ -44,14 +42,14 @@ it.live.fails("unknown command fails", () =>
 it.live("up command succeeds", () =>
   cli(["bun", ".", "up"]).pipe(
     Effect.provide(testLayer),
-    Effect.map(() => expect(upMock).toHaveBeenCalledOnce()),
+    Effect.map(() => expect(scriptsMock.up).toHaveBeenCalledOnce()),
   ),
 );
 
 it.live("down command succeeds", () =>
   cli(["bun", ".", "down"]).pipe(
     Effect.provide(testLayer),
-    Effect.map(() => expect(downMock).toHaveBeenCalledOnce()),
+    Effect.map(() => expect(scriptsMock.down).toHaveBeenCalledOnce()),
   ),
 );
 
