@@ -2,8 +2,12 @@
 	"name": "openkitten",
 	"version": "0.0.0",
 	"private": true,
-  "type": "module",
-  "devDependencies": {
+	"type": "module",
+	"scripts": {
+		"prepare": "lefthook install"
+	},
+	"devDependencies": {
+		"lefthook": "^2.1.2",
 		"@biomejs/biome": "^2.4.6",
 		"@types/bun": "^1.3.10",
 		"@types/node": "^25.3.5",

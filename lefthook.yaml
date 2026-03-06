@@ -1,0 +1,5 @@
+pre-commit:
+  commands:
+    format:
+      run: bun --bun biome check --write --staged --no-errors-on-unmatched
+      stage_fixed: true
