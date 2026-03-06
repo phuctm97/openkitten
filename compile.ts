@@ -1,6 +1,6 @@
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
-import pkg from "./package.json" with { type: "json" };
+import pkg from "~/package.json" with { type: "json" };
 
 await rm(join(import.meta.dir, "dist"), { recursive: true, force: true });
 

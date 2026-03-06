@@ -10,6 +10,8 @@
 		"typecheck": "bun --bun tsc --build"
 	},
 	"dependencies": {
+		"@effect/cli": "^0.73.2",
+		"@effect/platform-bun": "^0.87.1",
 		"effect": "^3.19.19"
 	},
 	"devDependencies": {
