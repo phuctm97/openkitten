@@ -4,7 +4,7 @@ Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in ca
 
 ## Stack
 
-Effect for the concurrent service kernel (bot, event streams, state, retries, subprocess supervision). Plain Bun for one-shot scripts (`up`, `down`, shell commands). Bridge with `Effect.promise()`.
+Effect for the concurrent service kernel (bot, event streams, state, retries, subprocess supervision, etc.). Plain Bun for one-shot scripts (`up`, `down`, shell commands, etc.). Bridge with `Effect.promise()`.
 
 Effect compiler errors mean you're not handling something — fix it properly, don't hack around it. If the Effect code is becoming too verbose or requires hacks to test, it's likely a better fit for plain Bun.
 
@@ -21,3 +21,7 @@ Never guess at Effect patterns — check the guide first.
 ## Bun
 
 Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js APIs only when there is no Bun alternative.
+
+## Testing
+
+Always aim for the highest possible code coverage. Don't test code that is non-reproducible, causes side effects during execution, or requires overly complex/verbose mocking.

@@ -1,6 +1,6 @@
 import { assert, describe, expect, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Layer } from "effect";
-import { beforeEach, vi } from "vitest";
+import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import pkg from "~/package.json" with { type: "json" };
 
@@ -30,18 +30,15 @@ const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
 
 const onSpy = vi.spyOn(GrammyBot.prototype, "on");
 
-beforeEach(() => {
-  vi.clearAllMocks();
-});
-
-const validConfigLayer = Layer.setConfigProvider(
-  ConfigProvider.fromJson({
-    TELEGRAM_BOT_TOKEN: "test:fake-token",
-    TELEGRAM_USER_ID: 123,
-  }),
+const validLayer = Layer.provideMerge(
+  Bot.layer,
+  Layer.setConfigProvider(
+    ConfigProvider.fromJson({
+      TELEGRAM_BOT_TOKEN: "test:fake-token",
+      TELEGRAM_USER_ID: 123,
+    }),
+  ),
 );
-
-const validBotLayer = Layer.provideMerge(Bot.layer, validConfigLayer);
 
 describe("layer", () => {
   it.live("calls start on acquire and stop on release", () =>
@@ -52,7 +49,7 @@ describe("layer", () => {
           yield* Effect.sleep(0);
           expect(startSpy).toHaveBeenCalledTimes(1);
           expect(stopSpy).not.toHaveBeenCalled();
-        }).pipe(Effect.provide(validBotLayer)),
+        }).pipe(Effect.provide(validLayer)),
       );
       expect(stopSpy).toHaveBeenCalledTimes(1);
     }),
@@ -63,33 +60,27 @@ describe("layer", () => {
     return Effect.gen(function* () {
       const { fiber } = yield* Bot;
       yield* fiber;
-    }).pipe(Effect.provide(validBotLayer));
+    }).pipe(Effect.provide(validLayer));
   });
 
-  const missingBotTokenConfigLayer = Layer.setConfigProvider(
-    ConfigProvider.fromJson({ TELEGRAM_USER_ID: 123 }),
-  );
-
-  const missingBotTokenBotLayer = Layer.provideMerge(
+  const missingBotTokenLayer = Layer.provideMerge(
     Bot.layer,
-    missingBotTokenConfigLayer,
+    Layer.setConfigProvider(ConfigProvider.fromJson({ TELEGRAM_USER_ID: 123 })),
   );
 
   it.scopedLive.fails("fails without TELEGRAM_BOT_TOKEN", () =>
-    Bot.pipe(Effect.provide(missingBotTokenBotLayer)),
+    Bot.pipe(Effect.provide(missingBotTokenLayer)),
   );
 
-  const missingUserIdConfigLayer = Layer.setConfigProvider(
-    ConfigProvider.fromJson({ TELEGRAM_BOT_TOKEN: "test:fake-token" }),
-  );
-
-  const missingUserIdBotLayer = Layer.provideMerge(
+  const missingUserIdLayer = Layer.provideMerge(
     Bot.layer,
-    missingUserIdConfigLayer,
+    Layer.setConfigProvider(
+      ConfigProvider.fromJson({ TELEGRAM_BOT_TOKEN: "test:fake-token" }),
+    ),
   );
 
   it.scopedLive.fails("fails without TELEGRAM_USER_ID", () =>
-    Bot.pipe(Effect.provide(missingUserIdBotLayer)),
+    Bot.pipe(Effect.provide(missingUserIdLayer)),
   );
 });
 
@@ -104,7 +95,7 @@ describe("handler", () => {
       assert.isDefined(onOrder);
       assert.isDefined(startOrder);
       expect(onOrder).toBeLessThan(startOrder);
-    }).pipe(Effect.provide(validBotLayer)),
+    }).pipe(Effect.provide(validLayer)),
   );
 
   it.scopedLive("replies with prefixed text for authorized user", () => {
@@ -123,7 +114,7 @@ describe("handler", () => {
         }),
       );
       expect(reply).toHaveBeenCalledWith(`[${pkg.name}] hello`);
-    }).pipe(Effect.provide(validBotLayer));
+    }).pipe(Effect.provide(validLayer));
   });
 
   it.scopedLive("ignores messages from unauthorized user", () => {
@@ -142,6 +133,6 @@ describe("handler", () => {
         }),
       );
       expect(reply).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validBotLayer));
+    }).pipe(Effect.provide(validLayer));
   });
 });

@@ -1,8 +1,10 @@
 import { BunContext } from "@effect/platform-bun";
 import { expect, it } from "@effect/vitest";
 import { Console, Effect, Layer, Option } from "effect";
+import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
+import { Scripts } from "~/lib/scripts";
 
 const consoleLayer = Console.setConsole(
   new Proxy({} as Console.Console, {
@@ -19,20 +21,43 @@ const botLayer = Layer.effect(
   }),
 );
 
-const wiredLayer = Layer.mergeAll(BunContext.layer, consoleLayer, botLayer);
+const upMock = vi.fn().mockResolvedValue(undefined);
 
-it.live.fails("unknown command fails", () =>
-  cli(["bun", ".", "unknown"]).pipe(Effect.provide(wiredLayer)),
+const downMock = vi.fn().mockResolvedValue(undefined);
+
+const scriptsLayer = Layer.succeed(Scripts, {
+  up: upMock,
+  down: downMock,
+});
+
+const testLayer = Layer.mergeAll(
+  BunContext.layer,
+  consoleLayer,
+  botLayer,
+  scriptsLayer,
 );
 
-for (const command of ["up", "down"])
-  it.live(`${command} command succeeds`, () =>
-    cli(["bun", ".", command]).pipe(Effect.provide(wiredLayer)),
-  );
+it.live.fails("unknown command fails", () =>
+  cli(["bun", ".", "unknown"]).pipe(Effect.provide(testLayer)),
+);
+
+it.live("up command succeeds", () =>
+  cli(["bun", ".", "up"]).pipe(
+    Effect.provide(testLayer),
+    Effect.map(() => expect(upMock).toHaveBeenCalledOnce()),
+  ),
+);
+
+it.live("down command succeeds", () =>
+  cli(["bun", ".", "down"]).pipe(
+    Effect.provide(testLayer),
+    Effect.map(() => expect(downMock).toHaveBeenCalledOnce()),
+  ),
+);
 
 it.live("serve command starts and can be interrupted", () =>
   cli(["bun", ".", "serve"]).pipe(
-    Effect.provide(wiredLayer),
+    Effect.provide(testLayer),
     Effect.timeout(0),
     Effect.option,
     Effect.map((opt) => expect(opt).toEqual(Option.none())),
