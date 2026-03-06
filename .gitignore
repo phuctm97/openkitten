@@ -4,5 +4,6 @@ __MACOSX
 node_modules
 *.tsbuildinfo
 dist
+coverage
 .env.local
 .env.*.local

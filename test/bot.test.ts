@@ -1,23 +1,25 @@
-import { describe, expect, test, vi } from "bun:test";
 import { ConfigProvider, Effect, Layer } from "effect";
+import { assert, describe, expect, test, vi } from "vitest";
 import { Bot } from "~/lib/bot";
-import { expectToBeDefined } from "~/lib/expect-to-be-defined";
 import pkg from "~/package.json" with { type: "json" };
 
 type GrammyHandler = (ctx: unknown) => Promise<unknown>;
 
-class GrammyBot {
-  private resolve?: () => void;
-  async start() {
-    return new Promise<void>((resolve) => {
-      this.resolve = resolve;
-    });
+const { GrammyBot } = vi.hoisted(() => {
+  class GrammyBot {
+    private resolve?: () => void;
+    async start() {
+      return new Promise<void>((resolve) => {
+        this.resolve = resolve;
+      });
+    }
+    async stop() {
+      this.resolve?.();
+    }
+    on(_event: string, _handler: GrammyHandler) {}
   }
-  async stop() {
-    this.resolve?.();
-  }
-  on(_event: string, _handler: GrammyHandler) {}
-}
+  return { GrammyBot };
+});
 
 vi.mock("grammy", () => ({ Bot: GrammyBot }));
 
@@ -92,8 +94,8 @@ describe("handler", () => {
       expect(onSpy).toHaveBeenCalledWith("message:text", expect.any(Function));
       const onOrder = onSpy.mock.invocationCallOrder.at(0);
       const startOrder = startSpy.mock.invocationCallOrder.at(0);
-      expectToBeDefined(onOrder);
-      expectToBeDefined(startOrder);
+      assert.isDefined(onOrder);
+      assert.isDefined(startOrder);
       expect(onOrder).toBeLessThan(startOrder);
     }).pipe(Effect.provide(validBotLayer), Effect.scoped, Effect.runPromise);
   });
@@ -104,7 +106,7 @@ describe("handler", () => {
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.calls.at(0);
-      expectToBeDefined(call);
+      assert.isDefined(call);
       const handler = call[1];
       yield* Effect.promise(async () =>
         handler({
@@ -123,7 +125,7 @@ describe("handler", () => {
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.calls.at(0);
-      expectToBeDefined(call);
+      assert.isDefined(call);
       const handler = call[1];
       yield* Effect.promise(async () =>
         handler({

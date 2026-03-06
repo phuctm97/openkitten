@@ -1,9 +1,14 @@
-import { expect, test } from "bun:test";
 import { BunContext } from "@effect/platform-bun";
-import { Effect, Layer, Option } from "effect";
+import { Console, Effect, Layer, Option } from "effect";
+import { expect, test } from "vitest";
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
-import { silentConsoleLayer } from "~/lib/silent-console-layer";
+
+const consoleLayer = Console.setConsole(
+  new Proxy({} as Console.Console, {
+    get: (_, prop) => (prop === Console.TypeId ? Console.TypeId : Effect.void),
+  }),
+);
 
 const botLayer = Layer.effect(
   Bot,
@@ -13,11 +18,7 @@ const botLayer = Layer.effect(
   }),
 );
 
-const wiredLayer = Layer.mergeAll(
-  BunContext.layer,
-  silentConsoleLayer,
-  botLayer,
-);
+const wiredLayer = Layer.mergeAll(BunContext.layer, consoleLayer, botLayer);
 
 const run = (...args: ReadonlyArray<string>) =>
   cli(["bun", ".", ...args]).pipe(

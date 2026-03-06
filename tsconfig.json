@@ -1,5 +1,5 @@
 {
-  "include": ["prepare.ts", "compile.ts", "lib"],
+  "include": ["vitest.config.ts", "prepare.ts", "compile.ts", "lib", "test"],
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "incremental": true,
