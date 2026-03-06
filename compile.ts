@@ -9,5 +9,4 @@ await Bun.build({
 	compile: { outfile: join(import.meta.dir, "dist", pkg.name) },
 	minify: true,
 	bytecode: true,
-	target: "bun",
 });
