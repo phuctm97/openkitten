@@ -10,7 +10,12 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     Bot,
     Effect.gen(function* () {
       const redactedToken = yield* Config.redacted("TELEGRAM_BOT_TOKEN");
+      const userId = yield* Config.integer("TELEGRAM_USER_ID");
       const grammyBot = new GrammyBot(Redacted.value(redactedToken));
+      grammyBot.on("message:text", (ctx) => {
+        if (ctx.from?.id === userId)
+          return ctx.reply(`[${pkg.name}] ${ctx.message.text}`);
+      });
       const fiber = yield* Effect.acquireRelease(
         Effect.async<void>((resume) => {
           grammyBot.start().then(
