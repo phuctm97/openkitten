@@ -83,7 +83,9 @@ async function installDarwin() {
     mkdir(plistDir, { recursive: true }),
   ]);
   await Bun.write(plistPath, plistContent);
-  await Bun.$`launchctl bootout gui/${uid}/${launchctlService}`.nothrow();
+  await Bun.$`launchctl bootout gui/${uid}/${launchctlService}`
+    .nothrow()
+    .quiet();
   await Bun.$`launchctl bootstrap gui/${uid} ${plistPath}`;
   console.log(`Service installed: ${plistPath}`);
 }
@@ -92,7 +94,9 @@ async function uninstallDarwin() {
   const uid = getuid();
   const logsDir = `${homedir()}/Library/Logs/${launchctlService}`;
   const plistPath = `${homedir()}/Library/LaunchAgents/${launchctlService}.plist`;
-  await Bun.$`launchctl bootout gui/${uid}/${launchctlService}`.nothrow();
+  await Bun.$`launchctl bootout gui/${uid}/${launchctlService}`
+    .nothrow()
+    .quiet();
   await Promise.all([
     rm(logsDir, { force: true, recursive: true }),
     rm(plistPath, { force: true }),
