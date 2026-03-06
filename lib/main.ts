@@ -1,5 +1,8 @@
 import { BunContext, BunRuntime } from "@effect/platform-bun";
-import { Effect } from "effect";
+import { Effect, Layer } from "effect";
+import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
 
-cli(Bun.argv).pipe(Effect.provide(BunContext.layer), BunRuntime.runMain);
+const wiredLayer = Layer.provideMerge(Bot.layer, BunContext.layer);
+
+cli(Bun.argv).pipe(Effect.provide(wiredLayer), BunRuntime.runMain);

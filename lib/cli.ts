@@ -1,10 +1,14 @@
 import { Command, Span } from "@effect/cli";
-import { Effect } from "effect";
+import { Effect, Fiber } from "effect";
+import { Bot } from "~/lib/bot";
 import pkg from "~/package.json" with { type: "json" };
 
-const serve = Command.make("serve", {}, () => Effect.void).pipe(
-  Command.withDescription("Start the OpenKitten server."),
-);
+const serve = Command.make("serve", {}, () =>
+  Effect.gen(function* () {
+    const bot = yield* Bot;
+    return yield* Fiber.join(bot.fiber);
+  }),
+).pipe(Command.withDescription("Start the OpenKitten server."));
 
 const up = Command.make("up", {}, () => Effect.void).pipe(
   Command.withDescription("Install and update OpenKitten as a system service."),
