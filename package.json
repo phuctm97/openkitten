@@ -6,7 +6,8 @@
 	"main": "lib/main.ts",
 	"scripts": {
 		"prepare": "bun prepare.ts",
-		"typecheck": "bun --bun tsc --build"
+		"typecheck": "bun --bun tsc --build",
+		"compile": "bun build --compile --minify --bytecode . --outfile dist/openkitten"
 	},
 	"devDependencies": {
 		"lefthook": "^2.1.2",
