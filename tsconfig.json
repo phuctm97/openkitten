@@ -1,0 +1,11 @@
+{
+  "include": [],
+  "extends": "@tsconfig/bun/tsconfig.json",
+  "compilerOptions": {
+    "incremental": true,
+    "allowImportingTsExtensions": false,
+    "paths": {
+      "~/*": ["./*"]
+    }
+  }
+}
