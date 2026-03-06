@@ -4,7 +4,8 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"prepare": "lefthook install"
+		"prepare": "bun prepare.ts",
+		"typecheck": "bun --bun tsc --build"
 	},
 	"devDependencies": {
 		"lefthook": "^2.1.2",
