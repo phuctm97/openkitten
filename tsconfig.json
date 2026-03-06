@@ -4,7 +4,11 @@
   "compilerOptions": {
     "incremental": true,
     "exactOptionalPropertyTypes": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": false,
     "plugins": [{ "name": "@effect/language-service" }],
     "paths": {
       "~/*": ["./*"]
