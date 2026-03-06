@@ -3,6 +3,7 @@
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
+	"main": "lib/main.ts",
 	"scripts": {
 		"prepare": "bun prepare.ts",
 		"typecheck": "bun --bun tsc --build"
