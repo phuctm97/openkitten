@@ -1,17 +1,23 @@
-## Effect Best Practices
+# OpenKitten
 
-**IMPORTANT:** Always consult effect-solutions before writing Effect code.
+Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in capabilities people actually need.
 
-1. Run `effect-solutions list` to see available guides
-2. Run `effect-solutions show <topic>...` for relevant patterns (supports multiple topics)
-3. Search `.reference/effect/` for real implementations
+## Stack
 
-Topics: quick-start, project-setup, tsconfig, basics, services-and-layers, data-modeling, error-handling, config, testing, cli.
+Effect for the concurrent service kernel (bot, event streams, state, retries, subprocess supervision). Plain Bun for one-shot scripts (`up`, `down`, shell commands). Bridge with `Effect.promise()`.
 
-Never guess at Effect patterns - check the guide first.
+Effect compiler errors mean you're not handling something — fix it properly, don't hack around it. If the Effect code is becoming too verbose or requires hacks to test, it's likely a better fit for plain Bun.
 
-## Effect Source Code
+## Effect
 
-The Effect repository is cloned to `.reference/effect/` for reference.
-Use this to explore APIs, find usage examples, and understand implementation
-details when the documentation isn't enough.
+Always consult effect-solutions before writing Effect code.
+
+1. `effect-solutions list` — see available guides
+2. `effect-solutions show <topic>...` — get patterns (supports multiple topics)
+3. `.reference/effect/` — real implementations for API exploration
+
+Never guess at Effect patterns — check the guide first.
+
+## Bun
+
+Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js APIs only when there is no Bun alternative.
