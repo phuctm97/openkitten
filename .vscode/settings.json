@@ -1,6 +1,9 @@
 {
   "typescript.tsdk": "node_modules/typescript/lib",
   "typescript.enablePromptUseWorkspaceTsdk": true,
+  "files.associations": {
+    ".env.*": "env"
+  },
   "files.exclude": {
     ".reference": true,
     "node_modules": true,
