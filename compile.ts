@@ -8,5 +8,6 @@ await Bun.build({
 	entrypoints: [join(import.meta.dir, pkg.main)],
 	compile: { outfile: join(import.meta.dir, "dist", pkg.name) },
 	minify: true,
+	splitting: true,
 	bytecode: true,
 });
