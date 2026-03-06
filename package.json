@@ -9,7 +9,9 @@
     "compile": "bun compile.ts",
     "typecheck": "bun --bun tsc --build",
     "dev": "bun --hot --no-clear-screen . serve",
-    "start": "bun . serve"
+    "start": "bun . serve",
+    "up": "bun . up",
+    "down": "bun . down"
   },
   "dependencies": {
     "@effect/cli": "^0.73.2",
