@@ -1,12 +1,13 @@
 import { BunContext } from "@effect/platform-bun";
+import { expect, it } from "@effect/vitest";
 import { Console, Effect, Layer, Option } from "effect";
-import { expect, test } from "vitest";
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
 
 const consoleLayer = Console.setConsole(
   new Proxy({} as Console.Console, {
-    get: (_, prop) => (prop === Console.TypeId ? Console.TypeId : Effect.void),
+    get: (_target, prop) =>
+      prop === Console.TypeId ? Console.TypeId : Effect.void,
   }),
 );
 
@@ -20,24 +21,20 @@ const botLayer = Layer.effect(
 
 const wiredLayer = Layer.mergeAll(BunContext.layer, consoleLayer, botLayer);
 
-const run = (...args: ReadonlyArray<string>) =>
-  cli(["bun", ".", ...args]).pipe(
-    Effect.provide(wiredLayer),
-    Effect.runPromise,
+it.live.fails("unknown command fails", () =>
+  cli(["bun", ".", "unknown"]).pipe(Effect.provide(wiredLayer)),
+);
+
+for (const command of ["up", "down"])
+  it.live(`${command} command succeeds`, () =>
+    cli(["bun", ".", command]).pipe(Effect.provide(wiredLayer)),
   );
 
-test("unknown command fails", () => expect(run("unknown")).rejects.toThrow());
-
-for (const cmd of ["up", "down"])
-  test(`${cmd} command succeeds`, () =>
-    expect(run(cmd)).resolves.toBeUndefined());
-
-test("serve command starts and can be interrupted", () =>
-  expect(
-    cli(["bun", ".", "serve"]).pipe(
-      Effect.provide(wiredLayer),
-      Effect.timeout(0),
-      Effect.option,
-      Effect.runPromise,
-    ),
-  ).resolves.toStrictEqual(Option.none()));
+it.live("serve command starts and can be interrupted", () =>
+  cli(["bun", ".", "serve"]).pipe(
+    Effect.provide(wiredLayer),
+    Effect.timeout(0),
+    Effect.option,
+    Effect.map((opt) => expect(opt).toEqual(Option.none())),
+  ),
+);

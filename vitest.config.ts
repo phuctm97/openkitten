@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     include: ["test/**/*.test.{ts,tsx}"],
+    setupFiles: ["test/setup.ts"],
     coverage: {
       provider: "istanbul",
       reporter: ["text", "html"],

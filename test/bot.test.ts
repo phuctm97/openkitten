@@ -1,5 +1,6 @@
+import { assert, describe, expect, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Layer } from "effect";
-import { assert, beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import pkg from "~/package.json" with { type: "json" };
 
@@ -16,7 +17,7 @@ const { GrammyBot } = vi.hoisted(() => {
     async stop() {
       this.resolve?.();
     }
-    on(_event: string, _handler: GrammyHandler) {}
+    on(_event: string, _callback: GrammyHandler) {}
   }
   return { GrammyBot };
 });
@@ -43,18 +44,30 @@ const validConfigLayer = Layer.setConfigProvider(
 const validBotLayer = Layer.provideMerge(Bot.layer, validConfigLayer);
 
 describe("layer", () => {
-  test("calls start on acquire and stop on release", async () => {
-    await Effect.gen(function* () {
-      yield* Bot;
-      yield* Effect.sleep(0);
-      expect(startSpy).toHaveBeenCalledTimes(1);
-      expect(stopSpy).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validBotLayer), Effect.scoped, Effect.runPromise);
-    expect(stopSpy).toHaveBeenCalledTimes(1);
+  it.live("calls start on acquire and stop on release", () =>
+    Effect.gen(function* () {
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* Bot;
+          yield* Effect.sleep(0);
+          expect(startSpy).toHaveBeenCalledTimes(1);
+          expect(stopSpy).not.toHaveBeenCalled();
+        }).pipe(Effect.provide(validBotLayer)),
+      );
+      expect(stopSpy).toHaveBeenCalledTimes(1);
+    }),
+  );
+
+  it.scopedLive.fails("dies when start rejects", () => {
+    startSpy.mockRejectedValueOnce(new Error("start failed"));
+    return Effect.gen(function* () {
+      const { fiber } = yield* Bot;
+      yield* fiber;
+    }).pipe(Effect.provide(validBotLayer));
   });
 
   const missingBotTokenConfigLayer = Layer.setConfigProvider(
-    ConfigProvider.fromJson({}),
+    ConfigProvider.fromJson({ TELEGRAM_USER_ID: 123 }),
   );
 
   const missingBotTokenBotLayer = Layer.provideMerge(
@@ -62,25 +75,9 @@ describe("layer", () => {
     missingBotTokenConfigLayer,
   );
 
-  test("dies when start rejects", async () => {
-    const message = "start failed";
-    startSpy.mockRejectedValueOnce(new Error(message));
-    await expect(
-      Effect.gen(function* () {
-        const { fiber } = yield* Bot;
-        yield* fiber;
-      }).pipe(Effect.provide(validBotLayer), Effect.scoped, Effect.runPromise),
-    ).rejects.toThrow(message);
-  });
-
-  test("fails without TELEGRAM_BOT_TOKEN", () =>
-    expect(
-      Bot.pipe(
-        Effect.provide(missingBotTokenBotLayer),
-        Effect.scoped,
-        Effect.runPromise,
-      ),
-    ).rejects.toThrow());
+  it.scopedLive.fails("fails without TELEGRAM_BOT_TOKEN", () =>
+    Bot.pipe(Effect.provide(missingBotTokenBotLayer)),
+  );
 
   const missingUserIdConfigLayer = Layer.setConfigProvider(
     ConfigProvider.fromJson({ TELEGRAM_BOT_TOKEN: "test:fake-token" }),
@@ -91,19 +88,14 @@ describe("layer", () => {
     missingUserIdConfigLayer,
   );
 
-  test("fails without TELEGRAM_USER_ID", () =>
-    expect(
-      Bot.pipe(
-        Effect.provide(missingUserIdBotLayer),
-        Effect.scoped,
-        Effect.runPromise,
-      ),
-    ).rejects.toThrow());
+  it.scopedLive.fails("fails without TELEGRAM_USER_ID", () =>
+    Bot.pipe(Effect.provide(missingUserIdBotLayer)),
+  );
 });
 
 describe("handler", () => {
-  test("is registered before start", async () => {
-    await Effect.gen(function* () {
+  it.scopedLive("is registered before start", () =>
+    Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
       expect(onSpy).toHaveBeenCalledWith("message:text", expect.any(Function));
@@ -112,12 +104,12 @@ describe("handler", () => {
       assert.isDefined(onOrder);
       assert.isDefined(startOrder);
       expect(onOrder).toBeLessThan(startOrder);
-    }).pipe(Effect.provide(validBotLayer), Effect.scoped, Effect.runPromise);
-  });
+    }).pipe(Effect.provide(validBotLayer)),
+  );
 
-  test("replies with prefixed text for authorized user", async () => {
+  it.scopedLive("replies with prefixed text for authorized user", () => {
     const reply = vi.fn();
-    await Effect.gen(function* () {
+    return Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.calls.at(0);
@@ -131,12 +123,12 @@ describe("handler", () => {
         }),
       );
       expect(reply).toHaveBeenCalledWith(`[${pkg.name}] hello`);
-    }).pipe(Effect.provide(validBotLayer), Effect.scoped, Effect.runPromise);
+    }).pipe(Effect.provide(validBotLayer));
   });
 
-  test("ignores messages from unauthorized user", async () => {
+  it.scopedLive("ignores messages from unauthorized user", () => {
     const reply = vi.fn();
-    await Effect.gen(function* () {
+    return Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.calls.at(0);
@@ -150,6 +142,6 @@ describe("handler", () => {
         }),
       );
       expect(reply).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validBotLayer), Effect.scoped, Effect.runPromise);
+    }).pipe(Effect.provide(validBotLayer));
   });
 });
