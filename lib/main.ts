@@ -8,6 +8,7 @@ import { cli } from "~/lib/cli";
 import { makeDatabaseLayer } from "~/lib/make-database-layer";
 import { OpenCode } from "~/lib/opencode";
 import { Scripts } from "~/lib/scripts";
+import { Shell } from "~/lib/shell";
 
 const projectDir = resolve(import.meta.dirname, "..");
 
@@ -180,9 +181,26 @@ const scriptsLayer = Layer.succeed(Scripts, {
   },
 });
 
+const shellLayer = Layer.succeed(
+  Shell,
+  (strings: TemplateStringsArray, ...values: Shell.Value[]) => {
+    const makeCommand = (dir?: string): Shell.Command =>
+      Object.assign(
+        Effect.promise(async () => {
+          let cmd = Bun.$(strings, ...values);
+          if (dir) cmd = cmd.cwd(dir);
+          return cmd.text();
+        }),
+        { cwd: (d: string) => makeCommand(d) },
+      );
+    return makeCommand();
+  },
+);
+
 const runLayer = Bot.layer.pipe(
   Layer.provideMerge(OpenCode.layer),
   Layer.provideMerge(databaseLayer),
+  Layer.provideMerge(shellLayer),
   Layer.provideMerge(scriptsLayer),
   Layer.provideMerge(BunContext.layer),
 );
