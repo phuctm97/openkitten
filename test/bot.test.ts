@@ -4,12 +4,16 @@ import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import pkg from "~/package.json" with { type: "json" };
 
-type GrammyHandler = (ctx: unknown) => Promise<unknown>;
+type GrammyEventHandler = (ctx: unknown) => Promise<unknown>;
+
+interface GrammyStartOptions {
+  onStart?: () => void;
+}
 
 const { GrammyBot } = vi.hoisted(() => {
   class GrammyBot {
     private resolve?: () => void;
-    async start(options?: { onStart?: () => void }) {
+    async start(options?: GrammyStartOptions) {
       options?.onStart?.();
       return new Promise<void>((resolve) => {
         this.resolve = resolve;
@@ -18,7 +22,7 @@ const { GrammyBot } = vi.hoisted(() => {
     async stop() {
       this.resolve?.();
     }
-    on(_event: string, _callback: GrammyHandler) {}
+    on(_event: string, _callback: GrammyEventHandler) {}
   }
   return { GrammyBot };
 });
