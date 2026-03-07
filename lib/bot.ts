@@ -76,8 +76,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               const result = yield* Effect.promise(() =>
                 opencode.client.session.create({}),
               );
-              if (!result.data)
-                return yield* Effect.die("Failed to create session");
+              if (result.error) return yield* Effect.die(result.error);
               sessionId = result.data.id;
               yield* Effect.logInfo("Bot.service created a new session").pipe(
                 Effect.annotateLogs("sessionId", sessionId),
@@ -103,8 +102,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 parts: [{ type: "text", text: ctx.message.text }],
               }),
             );
-            if (!result.data)
-              return yield* Effect.die("Failed to prompt session");
+            if (result.error) return yield* Effect.die(result.error);
             const replyText = result.data.parts
               .filter(isTextPart)
               .map((p) => p.text)

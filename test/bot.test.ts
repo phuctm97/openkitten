@@ -1,20 +1,9 @@
-import { BunContext } from "@effect/platform-bun";
 import { assert, describe, expect, it } from "@effect/vitest";
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
-import {
-  Cause,
-  ConfigProvider,
-  Effect,
-  Layer,
-  Logger,
-  Option,
-  Runtime,
-} from "effect";
+import { Cause, ConfigProvider, Effect, Layer, Option, Runtime } from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { Database } from "~/lib/database";
-import { makeDatabaseLayer } from "~/lib/make-database-layer";
-import { OpenCode } from "~/lib/opencode";
+import { defaultLayer } from "~/test/default-layer";
 
 interface GrammyBotContext {
   from?: { id: number };
@@ -96,23 +85,12 @@ vi.mock("~/lib/format-message", () => ({
   formatMessage: formatMessageMock,
 }));
 
-const openCodeLayer = Layer.effect(
-  OpenCode,
-  Effect.gen(function* () {
-    const fiber = yield* Effect.fork(Effect.never);
-    return { fiber, client: createOpencodeClient() };
-  }),
-);
-
 function makeLayer(config: Record<string, unknown>) {
   return Bot.layer.pipe(
-    Layer.provideMerge(openCodeLayer),
-    Layer.provideMerge(makeDatabaseLayer()),
     Layer.provideMerge(
       Layer.setConfigProvider(ConfigProvider.fromJson(config)),
     ),
-    Layer.provideMerge(BunContext.layer),
-    Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
+    Layer.provideMerge(defaultLayer),
   );
 }
 
@@ -284,9 +262,12 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("dies when session create returns no data", () =>
+  it.scopedLive("dies when session create returns error", () =>
     Effect.gen(function* () {
-      sessionCreateMock.mockResolvedValueOnce({ data: undefined });
+      sessionCreateMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("create failed"),
+      });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
@@ -305,9 +286,12 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("dies when session prompt returns no data", () =>
+  it.scopedLive("dies when session prompt returns error", () =>
     Effect.gen(function* () {
-      sessionPromptMock.mockResolvedValueOnce({ data: undefined });
+      sessionPromptMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("prompt failed"),
+      });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;

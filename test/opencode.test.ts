@@ -1,9 +1,14 @@
 import { CommandExecutor } from "@effect/platform";
+import { BunContext } from "@effect/platform-bun";
 import { expect, it } from "@effect/vitest";
-import { Effect, Layer, Logger, Stream } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { vi } from "vitest";
 import { OpenCode } from "~/lib/opencode";
+import { SandboxRuntimeConfig } from "~/lib/sandbox-runtime-config";
 import { textEncoder } from "~/lib/text-encoder";
+import { consoleLayer } from "~/test/console-layer";
+import { databaseLayer } from "~/test/database-layer";
+import { loggerLayer } from "~/test/logger-layer";
 
 const { createOpencodeClientMock } = vi.hoisted(() => ({
   createOpencodeClientMock: vi.fn().mockReturnValue({ session: {} }),
@@ -30,13 +35,17 @@ function mockLayer(stdout?: string, exitCode?: number) {
     },
   });
   return OpenCode.layer.pipe(
+    Layer.provideMerge(SandboxRuntimeConfig.layer),
+    Layer.provideMerge(databaseLayer),
+    Layer.provideMerge(consoleLayer),
+    Layer.provideMerge(loggerLayer),
     Layer.provideMerge(
       Layer.succeed(
         CommandExecutor.CommandExecutor,
         CommandExecutor.makeExecutor(() => Effect.succeed(proc)),
       ),
     ),
-    Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
+    Layer.provideMerge(BunContext.layer),
   );
 }
 
@@ -60,14 +69,14 @@ it.scopedLive.fails("dies when stdout has listening but no port", () =>
 
 it.scopedLive("completes when process exits with code 0", () =>
   Effect.gen(function* () {
-    const openCode = yield* OpenCode;
-    yield* openCode.fiber;
+    const opencode = yield* OpenCode;
+    yield* opencode.fiber;
   }).pipe(Effect.provide(mockLayer("listening on :4567\n", 0))),
 );
 
 it.scopedLive.fails("dies when process exits with non-zero code", () =>
   Effect.gen(function* () {
-    const openCode = yield* OpenCode;
-    yield* openCode.fiber;
+    const opencode = yield* OpenCode;
+    yield* opencode.fiber;
   }).pipe(Effect.provide(mockLayer("listening on :4567\n", 1))),
 );

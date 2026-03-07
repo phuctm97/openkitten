@@ -7,6 +7,7 @@ import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
 import { makeDatabaseLayer } from "~/lib/make-database-layer";
 import { OpenCode } from "~/lib/opencode";
+import { SandboxRuntimeConfig } from "~/lib/sandbox-runtime-config";
 import { Scripts } from "~/lib/scripts";
 import { Shell } from "~/lib/shell";
 
@@ -199,9 +200,10 @@ const shellLayer = Layer.succeed(
 
 const runLayer = Bot.layer.pipe(
   Layer.provideMerge(OpenCode.layer),
-  Layer.provideMerge(databaseLayer),
   Layer.provideMerge(shellLayer),
   Layer.provideMerge(scriptsLayer),
+  Layer.provideMerge(SandboxRuntimeConfig.layer),
+  Layer.provideMerge(databaseLayer),
   Layer.provideMerge(BunContext.layer),
 );
 

@@ -1,41 +1,15 @@
-import { BunContext } from "@effect/platform-bun";
 import { expect, it } from "@effect/vitest";
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
-import { Console, Effect, Layer, Logger, Option } from "effect";
+import { Effect, Layer, Option } from "effect";
 import { vi } from "vitest";
 
 vi.mock("@opencode-ai/sdk/v2/client", () => ({
   createOpencodeClient: () => ({}),
 }));
 
-import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
-import { makeDatabaseLayer } from "~/lib/make-database-layer";
-import { OpenCode } from "~/lib/opencode";
 import { Scripts } from "~/lib/scripts";
-
-const consoleLayer = Console.setConsole(
-  new Proxy({} as Console.Console, {
-    get: (_target, prop) =>
-      prop === Console.TypeId ? Console.TypeId : () => Effect.void,
-  }),
-);
-
-const botLayer = Layer.effect(
-  Bot,
-  Effect.gen(function* () {
-    const fiber = yield* Effect.fork(Effect.never);
-    return { fiber };
-  }),
-);
-
-const openCodeLayer = Layer.effect(
-  OpenCode,
-  Effect.gen(function* () {
-    const fiber = yield* Effect.fork(Effect.never);
-    return { fiber, client: createOpencodeClient() };
-  }),
-);
+import { botLayer } from "~/test/bot-layer";
+import { defaultLayer } from "~/test/default-layer";
 
 const scriptsMock = Scripts.of({
   up: vi.fn().mockResolvedValue(undefined),
@@ -44,15 +18,9 @@ const scriptsMock = Scripts.of({
 
 const scriptsLayer = Layer.succeed(Scripts, scriptsMock);
 
-const databaseLayer = makeDatabaseLayer();
-
 const testLayer = botLayer.pipe(
-  Layer.provideMerge(openCodeLayer),
-  Layer.provideMerge(databaseLayer),
   Layer.provideMerge(scriptsLayer),
-  Layer.provideMerge(BunContext.layer),
-  Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
-  Layer.provideMerge(consoleLayer),
+  Layer.provideMerge(defaultLayer),
 );
 
 it.scopedLive.fails("unknown command fails", () =>
