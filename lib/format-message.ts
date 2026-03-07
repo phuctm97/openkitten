@@ -1,6 +1,6 @@
 import { convert } from "telegram-markdown-v2";
 
-export interface MessageChunk {
+interface MessageChunk {
   text: string;
   formatted: boolean;
 }

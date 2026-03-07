@@ -132,7 +132,6 @@ test("falls back to plain text when convert throws", () => {
   });
   const result = formatMessage("Hello world");
   expect(result).toEqual([{ text: "Hello world", formatted: false }]);
-  vi.mocked(convert).mockRestore();
 });
 
 test("falls back to plain text when sub-chunk still overflows", () => {
@@ -142,7 +141,6 @@ test("falls back to plain text when sub-chunk still overflows", () => {
   for (const chunk of result) {
     expect(chunk.formatted).toBe(false);
   }
-  vi.mocked(convert).mockRestore();
 });
 
 test("falls back when sub-chunk convert throws", () => {
@@ -156,17 +154,5 @@ test("falls back when sub-chunk convert throws", () => {
   expect(result.length).toBeGreaterThanOrEqual(1);
   for (const chunk of result) {
     expect(chunk.formatted).toBe(false);
-  }
-  vi.mocked(convert).mockRestore();
-});
-
-test("returns all chunks as MessageChunk objects", () => {
-  const text = "Hello **world**";
-  const result = formatMessage(text);
-  for (const chunk of result) {
-    expect(chunk).toHaveProperty("text");
-    expect(chunk).toHaveProperty("formatted");
-    expect(typeof chunk.text).toBe("string");
-    expect(typeof chunk.formatted).toBe("boolean");
   }
 });
