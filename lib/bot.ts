@@ -34,8 +34,15 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       const database = yield* Database;
       const runtime = yield* Effect.runtime<Database>();
       const grammyBot = new GrammyBot(Redacted.value(redactedToken));
-      grammyBot.catch(({ error }) =>
-        Runtime.runPromise(runtime)(Effect.logError(error)),
+      grammyBot.catch(({ error, ctx }) =>
+        Runtime.runPromise(runtime)(
+          Effect.gen(function* () {
+            yield* Effect.logError(error);
+            yield* Effect.promise(() =>
+              ctx.reply("Something went wrong."),
+            ).pipe(Effect.ignore);
+          }),
+        ),
       );
       grammyBot.on("message:text", (ctx) => {
         if (ctx.from?.id !== userId) return;

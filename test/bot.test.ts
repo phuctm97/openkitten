@@ -7,9 +7,18 @@ import { Database } from "~/lib/database";
 import { makeDatabaseLayer } from "~/lib/make-database-layer";
 import { OpenCode } from "~/lib/opencode";
 
-type GrammyEventHandler = (ctx: unknown) => Promise<unknown>;
+interface GrammyBotContext {
+  from?: { id: number };
+  message?: { text: string };
+  reply: ReturnType<typeof vi.fn>;
+}
 
-type GrammyErrorHandler = (err: { error: unknown }) => Promise<unknown>;
+type GrammyEventHandler = (ctx: GrammyBotContext) => Promise<unknown>;
+
+type GrammyErrorHandler = (err: {
+  error: unknown;
+  ctx: GrammyBotContext;
+}) => Promise<unknown>;
 
 interface GrammyStartOptions {
   onStart?: () => void;
@@ -306,9 +315,11 @@ describe("handler", () => {
       const call = catchSpy.mock.lastCall;
       assert.isDefined(call);
       const errorHandler = call[0];
+      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
-        errorHandler({ error: new Error("test error") }),
+        errorHandler({ error: new Error("test error"), ctx: { reply } }),
       );
+      expect(reply).toHaveBeenCalledWith("Something went wrong.");
     }).pipe(Effect.provide(validLayer)),
   );
 });
