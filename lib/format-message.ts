@@ -5,8 +5,8 @@ export interface MessageChunk {
   formatted: boolean;
 }
 
-const TELEGRAM_MAX_LENGTH = 4096;
-const TELEGRAM_SPLIT_LENGTH = Math.floor(TELEGRAM_MAX_LENGTH * 0.8); // 3276
+const telegramMaxLength = 4096;
+const telegramSplitLength = Math.floor(telegramMaxLength * 0.8); // 3276
 
 // --- Content-aware message splitting ---
 
@@ -54,7 +54,7 @@ function isInCodeBlock(
   return null;
 }
 
-const SPLIT_PRIORITIES: ReadonlyArray<{ pattern: RegExp; offset: number }> = [
+const splitPriorities: ReadonlyArray<{ pattern: RegExp; offset: number }> = [
   { pattern: /\n(?=#{1,6} |---|___|\*\*\*)/g, offset: 0 },
   { pattern: /\n\n/g, offset: 0 },
   { pattern: /\n(?=[-*] |\d+\. )/g, offset: 0 },
@@ -73,7 +73,7 @@ function splitMessage(text: string, maxLength: number): string[] {
     const codeBlocks = findCodeBlockRanges(remaining);
     let splitPos = -1;
 
-    for (const { pattern, offset } of SPLIT_PRIORITIES) {
+    for (const { pattern, offset } of splitPriorities) {
       if (splitPos !== -1) break;
 
       let best = -1;
@@ -132,17 +132,17 @@ function splitMessage(text: string, maxLength: number): string[] {
 
 // --- Formatting pipeline ---
 
-const HR_PATTERN = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
+const hrPattern = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
 
 function tryConvert(chunk: string): MessageChunk[] {
   try {
     const formatted = convert(chunk);
-    if (formatted.length <= TELEGRAM_MAX_LENGTH) {
+    if (formatted.length <= telegramMaxLength) {
       return [{ text: formatted, formatted: true }];
     }
 
     // MarkdownV2 escaping expanded beyond the limit — re-split proportionally
-    const ratio = TELEGRAM_MAX_LENGTH / formatted.length;
+    const ratio = telegramMaxLength / formatted.length;
     const smallerLimit = Math.floor(chunk.length * ratio * 0.9);
     const subChunks = splitMessage(chunk, smallerLimit);
     const results: MessageChunk[] = [];
@@ -150,7 +150,7 @@ function tryConvert(chunk: string): MessageChunk[] {
     for (const sub of subChunks) {
       try {
         const subFormatted = convert(sub);
-        if (subFormatted.length <= TELEGRAM_MAX_LENGTH) {
+        if (subFormatted.length <= telegramMaxLength) {
           results.push({ text: subFormatted, formatted: true });
         } else {
           results.push({ text: sub, formatted: false });
@@ -167,14 +167,14 @@ function tryConvert(chunk: string): MessageChunk[] {
 }
 
 export function formatMessage(text: string): MessageChunk[] {
-  const sections = text.split(HR_PATTERN);
+  const sections = text.split(hrPattern);
   const results: MessageChunk[] = [];
 
   for (const section of sections) {
     const trimmed = section.trim();
     if (!trimmed) continue;
 
-    const chunks = splitMessage(trimmed, TELEGRAM_SPLIT_LENGTH);
+    const chunks = splitMessage(trimmed, telegramSplitLength);
     for (const chunk of chunks) {
       results.push(...tryConvert(chunk));
     }
