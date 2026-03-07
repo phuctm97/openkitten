@@ -79,14 +79,21 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
   }),
 }));
 
-const { formatErrorMock } = vi.hoisted(() => ({
+const { formatErrorMock, formatMessageMock } = vi.hoisted(() => ({
   formatErrorMock: vi
     .fn()
     .mockReturnValue([{ text: "raw error", markdown: "formatted error" }]),
+  formatMessageMock: vi
+    .fn()
+    .mockReturnValue([{ text: "AI response", markdown: "AI response" }]),
 }));
 
 vi.mock("~/lib/format-error", () => ({
   formatError: formatErrorMock,
+}));
+
+vi.mock("~/lib/format-message", () => ({
+  formatMessage: formatMessageMock,
 }));
 
 const openCodeLayer = Layer.effect(
@@ -183,7 +190,9 @@ describe("handler", () => {
         sessionID: "new-session-id",
         parts: [{ type: "text", text: "hello" }],
       });
-      expect(reply).toHaveBeenCalledWith("AI response");
+      expect(reply).toHaveBeenCalledWith(expect.any(String), {
+        parse_mode: "MarkdownV2",
+      });
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -215,7 +224,9 @@ describe("handler", () => {
         sessionID: "existing-session-id",
         parts: [{ type: "text", text: "hello" }],
       });
-      expect(reply).toHaveBeenCalledWith("AI response");
+      expect(reply).toHaveBeenCalledWith(expect.any(String), {
+        parse_mode: "MarkdownV2",
+      });
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -243,7 +254,9 @@ describe("handler", () => {
         }),
       );
       expect(sessionCreateMock).toHaveBeenCalledWith({});
-      expect(reply).toHaveBeenCalledWith("AI response");
+      expect(reply).toHaveBeenCalledWith(expect.any(String), {
+        parse_mode: "MarkdownV2",
+      });
       const profile = yield* database.profile.findById("default");
       assert.isTrue(Option.isSome(profile));
       expect(Option.getOrThrow(profile).activeSessionId).toEqual(
@@ -334,6 +347,54 @@ describe("handler", () => {
         }),
       );
       expect(reply).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("sends plain text reply for unformatted chunk", () =>
+    Effect.gen(function* () {
+      formatMessageMock.mockReturnValueOnce([{ text: "plain reply" }]);
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+          reply,
+        }),
+      );
+      expect(reply).toHaveBeenCalledTimes(1);
+      expect(reply).toHaveBeenCalledWith("plain reply");
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("falls back to plain text reply when MarkdownV2 fails", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("parse error"))
+        .mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+          reply,
+        }),
+      );
+      expect(reply).toHaveBeenCalledTimes(2);
+      const fallbackCall = reply.mock.calls.at(1);
+      assert.isDefined(fallbackCall);
+      expect(fallbackCall[1]).toBeUndefined();
     }).pipe(Effect.provide(validLayer)),
   );
 

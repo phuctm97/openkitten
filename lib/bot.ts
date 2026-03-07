@@ -14,6 +14,7 @@ import {
 import { Bot as GrammyBot } from "grammy";
 import { Database } from "~/lib/database";
 import { formatError } from "~/lib/format-error";
+import { formatMessage } from "~/lib/format-message";
 import { isTextPart } from "~/lib/is-text-part";
 import { OpenCode } from "~/lib/opencode";
 import pkg from "~/package.json" with { type: "json" };
@@ -117,7 +118,15 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               .join("\n")
               .trim();
             if (replyText) {
-              yield* Effect.promise(() => ctx.reply(replyText));
+              for (const { text, markdown } of formatMessage(replyText)) {
+                yield* Effect.promise(() =>
+                  markdown
+                    ? ctx
+                        .reply(markdown, { parse_mode: "MarkdownV2" })
+                        .catch(() => ctx.reply(text))
+                    : ctx.reply(text),
+                );
+              }
               yield* Effect.logInfo("Bot.service sent a reply");
             } else {
               yield* Effect.logWarning(
