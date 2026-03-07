@@ -37,28 +37,26 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             const cause = Runtime.isFiberFailure(error)
               ? Cause.squash(error[Runtime.FiberFailureCauseId])
               : error;
-            yield* Effect.logError(cause).pipe(
-              Effect.annotateLogs("debugHint", "Bot.handle"),
-            );
+            yield* Effect.logError(cause);
             yield* Bot.sendChunks(ctx, formatError(cause), {
               ignoreErrors: true,
             });
           }).pipe(
+            Effect.annotateLogs("debugHint", "Bot.handle"),
+            Effect.annotateLogs("userId", ctx.from?.id),
             Effect.annotateLogs("chatId", ctx.chat?.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
           ),
         ),
       );
       grammyBot.on("message:text", (ctx) => {
-        if (ctx.from?.id !== userId) {
-          return Runtime.runPromise(runtime)(
-            Effect.logWarning(
-              "Bot.service ignored a message from an unauthorized user",
-            ).pipe(Effect.annotateLogs("userId", ctx.from?.id)),
-          );
-        }
         return Runtime.runPromise(runtime)(
           Effect.gen(function* () {
+            if (ctx.from?.id !== userId) {
+              return yield* Effect.logWarning(
+                "Bot.service ignored a message from an unauthorized user",
+              );
+            }
             yield* Effect.logInfo("Bot.service received a message");
             const opencode = yield* OpenCode;
             const database = yield* Database;
@@ -120,6 +118,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
             }
           }).pipe(
+            Effect.annotateLogs("debugHint", "Bot.handle"),
+            Effect.annotateLogs("userId", ctx.from?.id),
             Effect.annotateLogs("chatId", ctx.chat.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
           ),
@@ -145,11 +145,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           Effect.gen(function* () {
             yield* Effect.logInfo("Bot.service is stopping");
             yield* Effect.promise(() => grammyBot.stop()).pipe(
-              Effect.catchAllCause((cause) =>
-                Effect.logError(cause).pipe(
-                  Effect.annotateLogs("debugHint", "Bot.stop"),
-                ),
-              ),
+              Effect.annotateLogs("debugHint", "Bot.stop"),
+              Effect.ignoreLogged,
             );
             yield* Effect.logInfo("Bot.service has stopped");
           }),
@@ -174,7 +171,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 .catch(() => ctx.reply(text))
             : ctx.reply(text),
         );
-        return ignoreErrors ? Effect.ignore(sendEffect) : sendEffect;
+        return ignoreErrors ? Effect.ignoreLogged(sendEffect) : sendEffect;
       },
       { discard: true },
     );
@@ -182,7 +179,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
 }
 
 export namespace Bot {
-  export type SendChunksOptions = {
+  export interface SendChunksOptions {
     ignoreErrors: boolean;
-  };
+  }
 }

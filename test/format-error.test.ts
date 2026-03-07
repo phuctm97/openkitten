@@ -27,7 +27,7 @@ test("formats non-Error value", () => {
 });
 
 test("preserves Trace label when markdown is absent", () => {
-  vi.mocked(convert).mockImplementation(() => {
+  vi.mocked(convert).mockImplementationOnce(() => {
     throw new Error("conversion failed");
   });
   const chunks = formatError(new Error("fail"));

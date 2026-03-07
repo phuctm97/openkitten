@@ -10,12 +10,23 @@ import { consoleLayer } from "~/test/console-layer";
 import { databaseLayer } from "~/test/database-layer";
 import { loggerLayer } from "~/test/logger-layer";
 
-const { createOpencodeClientMock } = vi.hoisted(() => ({
+const { createOpencodeClientMock, SandboxManagerMock } = vi.hoisted(() => ({
   createOpencodeClientMock: vi.fn().mockReturnValue({ session: {} }),
+  SandboxManagerMock: {
+    isSupportedPlatform: vi.fn().mockReturnValue(false),
+    checkDependencies: vi.fn().mockReturnValue({ errors: [] }),
+    initialize: vi.fn().mockResolvedValue(undefined),
+    reset: vi.fn().mockResolvedValue(undefined),
+    wrapWithSandbox: vi.fn().mockResolvedValue("sandbox-wrapped-command"),
+  },
 }));
 
 vi.mock("@opencode-ai/sdk/v2/client", () => ({
   createOpencodeClient: createOpencodeClientMock,
+}));
+
+vi.mock("@anthropic-ai/sandbox-runtime", () => ({
+  SandboxManager: SandboxManagerMock,
 }));
 
 function mockLayer(stdout?: string, exitCode?: number) {
@@ -80,3 +91,41 @@ it.scopedLive.fails("dies when process exits with non-zero code", () =>
     yield* opencode.fiber;
   }).pipe(Effect.provide(mockLayer("listening on :4567\n", 1))),
 );
+
+it.scopedLive("skips sandbox when platform is unsupported", () =>
+  Effect.gen(function* () {
+    yield* OpenCode;
+    expect(SandboxManagerMock.isSupportedPlatform).toHaveBeenCalled();
+    expect(SandboxManagerMock.initialize).not.toHaveBeenCalled();
+  }).pipe(Effect.provide(mockLayer("listening on :4567\n"))),
+);
+
+it.scopedLive("skips sandbox when dependencies have errors", () => {
+  SandboxManagerMock.isSupportedPlatform.mockReturnValueOnce(true);
+  SandboxManagerMock.checkDependencies.mockReturnValueOnce({
+    errors: ["missing bwrap"],
+  });
+  return Effect.gen(function* () {
+    yield* OpenCode;
+    expect(SandboxManagerMock.checkDependencies).toHaveBeenCalled();
+    expect(SandboxManagerMock.initialize).not.toHaveBeenCalled();
+  }).pipe(Effect.provide(mockLayer("listening on :4567\n")));
+});
+
+it.live("initializes and resets sandbox when available", () => {
+  SandboxManagerMock.isSupportedPlatform.mockReturnValueOnce(true);
+  return Effect.scoped(
+    Effect.gen(function* () {
+      yield* OpenCode;
+      expect(SandboxManagerMock.initialize).toHaveBeenCalled();
+    }).pipe(Effect.provide(mockLayer("listening on :4567\n"))),
+  ).pipe(Effect.tap(() => expect(SandboxManagerMock.reset).toHaveBeenCalled()));
+});
+
+it.scopedLive("wraps command with sandbox when sandbox is available", () => {
+  SandboxManagerMock.isSupportedPlatform.mockReturnValueOnce(true);
+  return Effect.gen(function* () {
+    yield* OpenCode;
+    expect(SandboxManagerMock.wrapWithSandbox).toHaveBeenCalled();
+  }).pipe(Effect.provide(mockLayer("listening on :4567\n")));
+});

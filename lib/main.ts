@@ -49,15 +49,13 @@ async function updateProjectDir() {
     await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(projectDir).text()
   ).trim();
   if (branch !== "main") {
-    console.log("Skipping update: not on main branch");
-    return;
+    return console.log("Skipping update: not on main branch");
   }
   const status = (
     await Bun.$`git status --porcelain`.cwd(projectDir).text()
   ).trim();
   if (status !== "") {
-    console.log("Skipping update: worktree is dirty");
-    return;
+    return console.log("Skipping update: worktree is dirty");
   }
   await Bun.$`git pull`.cwd(projectDir);
   await Bun.$`bun install`.cwd(projectDir);

@@ -1,10 +1,13 @@
 import { resolve } from "node:path";
+import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
 import { Command } from "@effect/platform";
 import {
   createOpencodeClient,
   type OpencodeClient,
 } from "@opencode-ai/sdk/v2/client";
 import { Context, Deferred, Effect, type Fiber, Layer, Stream } from "effect";
+import { quote } from "shell-quote";
+import { SandboxRuntimeConfig } from "~/lib/sandbox-runtime-config";
 import pkg from "~/package.json" with { type: "json" };
 
 export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
@@ -18,14 +21,7 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
       yield* Effect.addFinalizer(() =>
         Effect.logInfo("OpenCode.service has stopped"),
       );
-      const cmd = Command.make(
-        resolve(import.meta.dirname, "../node_modules/.bin/opencode"),
-        "serve",
-        "--hostname",
-        "127.0.0.1",
-        "--port",
-        "0",
-      ).pipe(Command.stderr("inherit"));
+      const cmd = yield* OpenCode.command();
       const proc = yield* Command.start(cmd);
       const portDeferred = yield* Deferred.make<number>();
       yield* proc.stdout.pipe(
@@ -50,7 +46,7 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         ),
         Effect.forkScoped,
       );
-      const port = yield* Deferred.await(portDeferred);
+      const portAwaited = yield* Deferred.await(portDeferred);
       const fiber = yield* proc.exitCode.pipe(
         Effect.orDie,
         Effect.flatMap((code) =>
@@ -60,14 +56,63 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         ),
         Effect.forkScoped,
       );
+      const client = createOpencodeClient({
+        baseUrl: `http://127.0.0.1:${portAwaited}`,
+      });
+      yield* Effect.logInfo("OpenCode.service is ready");
       yield* Effect.addFinalizer(() =>
         Effect.logInfo("OpenCode.service is stopping"),
       );
-      const client = createOpencodeClient({
-        baseUrl: `http://127.0.0.1:${port}`,
-      });
-      yield* Effect.logInfo("OpenCode.service is ready");
       return OpenCode.of({ fiber, client });
     }),
   );
+  static readonly argv = [
+    resolve(import.meta.dirname, "../node_modules/.bin/opencode"),
+    "serve",
+    "--hostname",
+    "127.0.0.1",
+    "--port",
+    "0",
+  ] as const;
+  static sandbox() {
+    return Effect.gen(function* () {
+      const config = yield* SandboxRuntimeConfig;
+      if (!SandboxManager.isSupportedPlatform()) {
+        yield* Effect.logWarning("Sandbox unavailable: platform not supported");
+        return false;
+      }
+      const deps = SandboxManager.checkDependencies();
+      if (deps.errors.length > 0) {
+        yield* Effect.logWarning(
+          `Sandbox unavailable: ${deps.errors.join(", ")}`,
+        );
+        return false;
+      }
+      yield* Effect.acquireRelease(
+        Effect.promise(() => SandboxManager.initialize(config)),
+        () =>
+          Effect.promise(() => SandboxManager.reset()).pipe(
+            Effect.annotateLogs("debugHint", "SandboxManager.reset"),
+            Effect.ignoreLogged,
+          ),
+      );
+      yield* Effect.logInfo("Sandbox enabled");
+      return true;
+    });
+  }
+  static command() {
+    return Effect.gen(function* () {
+      const sandboxed = yield* OpenCode.sandbox();
+      if (!sandboxed) {
+        return Command.make(...OpenCode.argv).pipe(Command.stderr("inherit"));
+      }
+      const raw = quote(OpenCode.argv);
+      const wrapped = yield* Effect.promise(() =>
+        SandboxManager.wrapWithSandbox(raw),
+      );
+      return Command.make("bash", "-c", wrapped).pipe(
+        Command.stderr("inherit"),
+      );
+    });
+  }
 }

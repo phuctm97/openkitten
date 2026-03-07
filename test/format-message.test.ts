@@ -129,7 +129,7 @@ test("hard cuts code block with no usable newline", () => {
 });
 
 test("falls back to plain text when convert throws", () => {
-  vi.mocked(convert).mockImplementation(() => {
+  vi.mocked(convert).mockImplementationOnce(() => {
     throw new Error("conversion failed");
   });
   const result = formatMessage("Hello world");
