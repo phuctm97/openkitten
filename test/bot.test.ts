@@ -284,9 +284,12 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("dies when session create returns no data", () =>
+  it.scopedLive("dies when session create returns error", () =>
     Effect.gen(function* () {
-      sessionCreateMock.mockResolvedValueOnce({ data: undefined });
+      sessionCreateMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("create failed"),
+      });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
@@ -305,9 +308,12 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("dies when session prompt returns no data", () =>
+  it.scopedLive("dies when session prompt returns error", () =>
     Effect.gen(function* () {
-      sessionPromptMock.mockResolvedValueOnce({ data: undefined });
+      sessionPromptMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("prompt failed"),
+      });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
