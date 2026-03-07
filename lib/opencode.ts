@@ -78,25 +78,33 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
     return Effect.gen(function* () {
       const config = yield* SandboxRuntimeConfig;
       if (!SandboxManager.isSupportedPlatform()) {
-        yield* Effect.logWarning("Sandbox unavailable: platform not supported");
+        yield* Effect.logWarning(
+          "OpenCode.sandbox is unavailable: platform not supported",
+        );
         return false;
       }
       const deps = SandboxManager.checkDependencies();
       if (deps.errors.length > 0) {
         yield* Effect.logWarning(
-          `Sandbox unavailable: ${deps.errors.join(", ")}`,
+          `OpenCode.sandbox is unavailable: ${deps.errors.join(", ")}`,
         );
         return false;
       }
       yield* Effect.acquireRelease(
-        Effect.promise(() => SandboxManager.initialize(config)),
+        Effect.logInfo("OpenCode.sandbox is initializing").pipe(
+          Effect.andThen(
+            Effect.promise(() => SandboxManager.initialize(config)),
+          ),
+          Effect.tap(Effect.logInfo("OpenCode.sandbox is initialized")),
+        ),
         () =>
-          Effect.promise(() => SandboxManager.reset()).pipe(
-            Effect.annotateLogs("debugHint", "SandboxManager.reset"),
+          Effect.logInfo("OpenCode.sandbox is disposing").pipe(
+            Effect.andThen(Effect.promise(() => SandboxManager.reset())),
+            Effect.tap(Effect.logInfo("OpenCode.sandbox is disposed")),
+            Effect.annotateLogs("debugHint", "OpenCode.sandbox"),
             Effect.ignoreLogged,
           ),
       );
-      yield* Effect.logInfo("Sandbox enabled");
       return true;
     });
   }
