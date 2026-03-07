@@ -72,9 +72,9 @@ async function installDarwin() {
   <key>RunAtLoad</key>
   <true/>
   <key>StandardOutPath</key>
-  <string>${logsDir}/stdout.log</string>
+  <string>${logsDir}/${launchctlService}.stdout.log</string>
   <key>StandardErrorPath</key>
-  <string>${logsDir}/stderr.log</string>
+  <string>${logsDir}/${launchctlService}.stderr.log</string>
 </dict>
 </plist>
 `;
