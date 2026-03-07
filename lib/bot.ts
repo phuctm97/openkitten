@@ -12,6 +12,7 @@ import {
 } from "effect";
 import { Bot as GrammyBot } from "grammy";
 import { Database } from "~/lib/database";
+import { formatError } from "~/lib/format-error";
 import { isTextPart } from "~/lib/is-text-part";
 import { OpenCode } from "~/lib/opencode";
 import pkg from "~/package.json" with { type: "json" };
@@ -34,9 +35,15 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             yield* Effect.logError(error).pipe(
               Effect.annotateLogs("source", "Bot.service"),
             );
-            yield* Effect.promise(() =>
-              ctx.reply("Something went wrong."),
-            ).pipe(Effect.ignore);
+            for (const { text, markdown } of formatError(error)) {
+              yield* Effect.promise(() =>
+                markdown
+                  ? ctx
+                      .reply(markdown, { parse_mode: "MarkdownV2" })
+                      .catch(() => ctx.reply(text))
+                  : ctx.reply(text),
+              ).pipe(Effect.ignore);
+            }
           }).pipe(
             Effect.annotateLogs("chatId", ctx.chat?.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),

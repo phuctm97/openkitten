@@ -1,5 +1,5 @@
 import { convert } from "telegram-markdown-v2";
-import { expect, test, vi } from "vitest";
+import { assert, expect, test, vi } from "vitest";
 import { formatMessage } from "~/lib/format-message";
 
 vi.mock("telegram-markdown-v2", { spy: true });
@@ -12,21 +12,21 @@ test("returns empty array for empty input", () => {
 test("formats simple text with MarkdownV2", () => {
   const result = formatMessage("Hello world");
   expect(result).toHaveLength(1);
-  expect(result[0]?.formatted).toBe(true);
+  expect(result[0]?.text).toBe("Hello world");
+  assert.isDefined(result[0]?.markdown);
 });
 
 test("handles bold and italic markdown", () => {
   const result = formatMessage("This is **bold** and *italic* text");
   expect(result).toHaveLength(1);
-  expect(result[0]?.formatted).toBe(true);
-  expect(result[0]?.text).toContain("bold");
+  expect(result[0]?.markdown).toContain("bold");
 });
 
 test("handles code blocks in formatted output", () => {
   const text = "Here is code:\n\n```js\nconst x = 1;\n```";
   const result = formatMessage(text);
   expect(result.length).toBeGreaterThanOrEqual(1);
-  expect(result[0]?.formatted).toBe(true);
+  assert.isDefined(result[0]?.markdown);
 });
 
 test("splits on horizontal rules into separate messages", () => {
@@ -50,6 +50,7 @@ test("skips empty sections from HR splits", () => {
   const result = formatMessage(text);
   expect(result.length).toBe(1);
   expect(result[0]?.text).toContain("Content here");
+  assert.isDefined(result[0]?.markdown);
 });
 
 test("handles long text that needs chunking", () => {
@@ -57,7 +58,7 @@ test("handles long text that needs chunking", () => {
   const result = formatMessage(paragraph);
   expect(result.length).toBeGreaterThan(1);
   for (const chunk of result) {
-    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+    expect((chunk.markdown ?? chunk.text).length).toBeLessThanOrEqual(4096);
   }
 });
 
@@ -76,7 +77,7 @@ test("splits text with a short code block followed by long content", () => {
   const result = formatMessage(text);
   expect(result.length).toBeGreaterThan(1);
   for (const chunk of result) {
-    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+    expect((chunk.markdown ?? chunk.text).length).toBeLessThanOrEqual(4096);
   }
 });
 
@@ -86,7 +87,7 @@ test("splits large code blocks with close/reopen fences", () => {
   const result = formatMessage(text);
   expect(result.length).toBeGreaterThan(1);
   for (const chunk of result) {
-    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+    expect((chunk.markdown ?? chunk.text).length).toBeLessThanOrEqual(4096);
   }
 });
 
@@ -95,7 +96,7 @@ test("handles overflow when MarkdownV2 escaping expands beyond limit", () => {
   const result = formatMessage(text);
   expect(result.length).toBeGreaterThanOrEqual(1);
   for (const chunk of result) {
-    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+    expect((chunk.markdown ?? chunk.text).length).toBeLessThanOrEqual(4096);
   }
 });
 
@@ -104,7 +105,7 @@ test("handles unclosed code blocks", () => {
   const result = formatMessage(text);
   expect(result.length).toBeGreaterThanOrEqual(1);
   for (const chunk of result) {
-    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+    expect((chunk.markdown ?? chunk.text).length).toBeLessThanOrEqual(4096);
   }
 });
 
@@ -113,7 +114,7 @@ test("hard cuts when no natural split points exist", () => {
   const result = formatMessage(text);
   expect(result.length).toBeGreaterThanOrEqual(1);
   for (const chunk of result) {
-    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+    expect((chunk.markdown ?? chunk.text).length).toBeLessThanOrEqual(4096);
   }
 });
 
@@ -131,7 +132,7 @@ test("falls back to plain text when convert throws", () => {
     throw new Error("conversion failed");
   });
   const result = formatMessage("Hello world");
-  expect(result).toEqual([{ text: "Hello world", formatted: false }]);
+  expect(result).toEqual([{ text: "Hello world" }]);
 });
 
 test("falls back to plain text when sub-chunk still overflows", () => {
@@ -139,7 +140,7 @@ test("falls back to plain text when sub-chunk still overflows", () => {
   const result = formatMessage("Hello world");
   expect(result.length).toBeGreaterThanOrEqual(1);
   for (const chunk of result) {
-    expect(chunk.formatted).toBe(false);
+    assert.isUndefined(chunk.markdown);
   }
 });
 
@@ -153,6 +154,6 @@ test("falls back when sub-chunk convert throws", () => {
   const result = formatMessage("Hello world");
   expect(result.length).toBeGreaterThanOrEqual(1);
   for (const chunk of result) {
-    expect(chunk.formatted).toBe(false);
+    assert.isUndefined(chunk.markdown);
   }
 });

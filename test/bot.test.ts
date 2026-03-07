@@ -46,6 +46,14 @@ const { GrammyBot } = vi.hoisted(() => {
 
 vi.mock("grammy", () => ({ Bot: GrammyBot }));
 
+const startSpy = vi.spyOn(GrammyBot.prototype, "start");
+
+const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
+
+const onSpy = vi.spyOn(GrammyBot.prototype, "on");
+
+const catchSpy = vi.spyOn(GrammyBot.prototype, "catch");
+
 const sessionCreateMock = vi.fn().mockResolvedValue({
   data: { id: "new-session-id" },
 });
@@ -63,13 +71,15 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
   }),
 }));
 
-const startSpy = vi.spyOn(GrammyBot.prototype, "start");
+const { formatErrorMock } = vi.hoisted(() => ({
+  formatErrorMock: vi
+    .fn()
+    .mockReturnValue([{ text: "raw error", markdown: "formatted error" }]),
+}));
 
-const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
-
-const onSpy = vi.spyOn(GrammyBot.prototype, "on");
-
-const catchSpy = vi.spyOn(GrammyBot.prototype, "catch");
+vi.mock("~/lib/format-error", () => ({
+  formatError: formatErrorMock,
+}));
 
 const openCodeLayer = Layer.effect(
   OpenCode,
@@ -319,7 +329,7 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("registers error handler", () =>
+  it.scopedLive("sends formatted error on catch", () =>
     Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
@@ -333,7 +343,56 @@ describe("handler", () => {
           ctx: { chat: { id: 123 }, reply },
         }),
       );
-      expect(reply).toHaveBeenCalledWith("Something went wrong.");
+      expect(reply).toHaveBeenCalled();
+      const firstCall = reply.mock.calls.at(0);
+      assert.isDefined(firstCall);
+      expect(firstCall[0]).toContain("error");
+      expect(firstCall[1]).toEqual({ parse_mode: "MarkdownV2" });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("falls back to raw text when MarkdownV2 reply fails", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = catchSpy.mock.lastCall;
+      assert.isDefined(call);
+      const errorHandler = call[0];
+      const reply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("parse error"))
+        .mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        errorHandler({
+          error: new Error("test error"),
+          ctx: { chat: { id: 123 }, reply },
+        }),
+      );
+      expect(reply).toHaveBeenCalledTimes(2);
+      const fallbackCall = reply.mock.calls.at(1);
+      assert.isDefined(fallbackCall);
+      expect(fallbackCall[0]).toContain("error");
+      expect(fallbackCall[1]).toBeUndefined();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("sends raw text for unformatted error chunk", () =>
+    Effect.gen(function* () {
+      formatErrorMock.mockReturnValueOnce([{ text: "plain error" }]);
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = catchSpy.mock.lastCall;
+      assert.isDefined(call);
+      const errorHandler = call[0];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        errorHandler({
+          error: new Error("test error"),
+          ctx: { chat: { id: 123 }, reply },
+        }),
+      );
+      expect(reply).toHaveBeenCalledTimes(1);
+      expect(reply).toHaveBeenCalledWith("plain error");
     }).pipe(Effect.provide(validLayer)),
   );
 });

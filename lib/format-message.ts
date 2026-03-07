@@ -2,7 +2,7 @@ import { convert } from "telegram-markdown-v2";
 
 interface MessageChunk {
   text: string;
-  formatted: boolean;
+  markdown?: string;
 }
 
 const telegramMaxLength = 4096;
@@ -130,33 +130,33 @@ const hrPattern = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
 
 function tryConvert(chunk: string): MessageChunk[] {
   try {
-    const formatted = convert(chunk);
-    if (formatted.length <= telegramMaxLength) {
-      return [{ text: formatted, formatted: true }];
+    const markdown = convert(chunk);
+    if (markdown.length <= telegramMaxLength) {
+      return [{ text: chunk, markdown }];
     }
 
     // MarkdownV2 escaping expanded beyond the limit — re-split proportionally
-    const ratio = telegramMaxLength / formatted.length;
+    const ratio = telegramMaxLength / markdown.length;
     const smallerLimit = Math.floor(chunk.length * ratio * 0.9);
     const subChunks = splitMessage(chunk, smallerLimit);
     const results: MessageChunk[] = [];
 
     for (const sub of subChunks) {
       try {
-        const subFormatted = convert(sub);
-        if (subFormatted.length <= telegramMaxLength) {
-          results.push({ text: subFormatted, formatted: true });
+        const subMarkdown = convert(sub);
+        if (subMarkdown.length <= telegramMaxLength) {
+          results.push({ text: sub, markdown: subMarkdown });
         } else {
-          results.push({ text: sub, formatted: false });
+          results.push({ text: sub });
         }
       } catch {
-        results.push({ text: sub, formatted: false });
+        results.push({ text: sub });
       }
     }
 
     return results;
   } catch {
-    return [{ text: chunk, formatted: false }];
+    return [{ text: chunk }];
   }
 }
 
