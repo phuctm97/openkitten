@@ -4,6 +4,7 @@ import { Console, Effect, Layer, Option } from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
+import { OpenCode } from "~/lib/opencode";
 import { Scripts } from "~/lib/scripts";
 
 const consoleLayer = Console.setConsole(
@@ -21,6 +22,14 @@ const botLayer = Layer.effect(
   }),
 );
 
+const openCodeLayer = Layer.effect(
+  OpenCode,
+  Effect.gen(function* () {
+    const fiber = yield* Effect.fork(Effect.never);
+    return { fiber, port: 4096 };
+  }),
+);
+
 const scriptsMock = Scripts.of({
   up: vi.fn().mockResolvedValue(undefined),
   down: vi.fn().mockResolvedValue(undefined),
@@ -32,6 +41,7 @@ const testLayer = Layer.mergeAll(
   BunContext.layer,
   consoleLayer,
   botLayer,
+  openCodeLayer,
   scriptsLayer,
 );
 

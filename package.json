@@ -15,9 +15,11 @@
   },
   "dependencies": {
     "@effect/cli": "^0.73.2",
+    "@effect/platform": "^0.94.5",
     "@effect/platform-bun": "^0.87.1",
     "effect": "^3.19.19",
-    "grammy": "^1.41.1"
+    "grammy": "^1.41.1",
+    "opencode-ai": "^1.2.20"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",

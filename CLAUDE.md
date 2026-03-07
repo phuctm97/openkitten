@@ -22,6 +22,14 @@ Never guess at Effect patterns — check the guide first.
 
 Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js APIs only when there is no Bun alternative.
 
-## Testing
+## Vitest
 
 Always aim for the highest possible code coverage. Don't test code that is non-reproducible, causes side effects during execution, or requires overly complex/verbose mocking.
+
+## Commands
+
+- `bun typecheck` — type check
+- `bun compile` — compile binary
+- `bun --bun biome check` — lint and format check (`--write` to auto-fix)
+- `bun --bun vitest run` — run tests (`--coverage` for coverage report)
+
