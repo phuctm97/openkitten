@@ -51,13 +51,12 @@ const openCodeLayer = Layer.effect(
 );
 
 function makeLayer(config: Record<string, unknown>) {
-  return Layer.provideMerge(
-    Bot.layer,
-    Layer.mergeAll(
+  return Bot.layer.pipe(
+    Layer.provideMerge(openCodeLayer),
+    Layer.provideMerge(
       Layer.setConfigProvider(ConfigProvider.fromJson(config)),
-      Logger.replace(Logger.defaultLogger, Logger.none),
-      openCodeLayer,
     ),
+    Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
   );
 }
 

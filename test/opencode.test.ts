@@ -21,13 +21,13 @@ function mockLayer(stdout?: string, exitCode?: number) {
     },
   });
   return OpenCode.layer.pipe(
-    Layer.provide(
+    Layer.provideMerge(
       Layer.succeed(
         CommandExecutor.CommandExecutor,
         CommandExecutor.makeExecutor(() => Effect.succeed(proc)),
       ),
     ),
-    Layer.provide(Logger.replace(Logger.defaultLogger, Logger.none)),
+    Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
   );
 }
 

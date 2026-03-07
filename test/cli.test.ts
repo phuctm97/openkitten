@@ -40,14 +40,14 @@ const scriptsLayer = Layer.succeed(Scripts, scriptsMock);
 
 const databaseLayer = makeDatabaseLayer();
 
-const testLayer = Layer.mergeAll(
-  consoleLayer,
-  botLayer,
-  openCodeLayer,
-  databaseLayer,
-  scriptsLayer,
-  Logger.replace(Logger.defaultLogger, Logger.none),
-).pipe(Layer.provideMerge(BunContext.layer));
+const testLayer = botLayer.pipe(
+  Layer.provideMerge(openCodeLayer),
+  Layer.provideMerge(databaseLayer),
+  Layer.provideMerge(scriptsLayer),
+  Layer.provideMerge(BunContext.layer),
+  Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
+  Layer.provideMerge(consoleLayer),
+);
 
 it.scopedLive.fails("unknown command fails", () =>
   cli(["bun", ".", "unknown"]).pipe(Effect.provide(testLayer)),

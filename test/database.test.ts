@@ -5,8 +5,8 @@ import { Database } from "~/lib/database";
 import { makeDatabaseLayer } from "~/lib/make-database-layer";
 
 const testLayer = makeDatabaseLayer().pipe(
-  Layer.provide(BunContext.layer),
-  Layer.provide(Logger.replace(Logger.defaultLogger, Logger.none)),
+  Layer.provideMerge(BunContext.layer),
+  Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
 );
 
 it.scopedLive("insert and find profile", () =>
