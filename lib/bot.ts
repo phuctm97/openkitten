@@ -37,17 +37,24 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       grammyBot.catch(({ error, ctx }) =>
         Runtime.runPromise(runtime)(
           Effect.gen(function* () {
-            yield* Effect.logError(error);
+            yield* Effect.logError("Handler error", error);
             yield* Effect.promise(() =>
               ctx.reply("Something went wrong."),
             ).pipe(Effect.ignore);
-          }),
+          }).pipe(Effect.annotateLogs("chatId", ctx.chat?.id)),
         ),
       );
       grammyBot.on("message:text", (ctx) => {
-        if (ctx.from?.id !== userId) return;
+        if (ctx.from?.id !== userId) {
+          return Runtime.runPromise(runtime)(
+            Effect.logWarning("Ignored message from unauthorized user").pipe(
+              Effect.annotateLogs("userId", ctx.from?.id),
+            ),
+          );
+        }
         return Runtime.runPromise(runtime)(
           Effect.gen(function* () {
+            yield* Effect.logInfo("Received message");
             const profile = yield* database.profile.findById("default");
             let sessionId: string;
             if (
@@ -55,6 +62,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Option.isSome(profile.value.activeSessionId)
             ) {
               sessionId = profile.value.activeSessionId.value;
+              yield* Effect.logDebug("Reusing session").pipe(
+                Effect.annotateLogs("sessionId", sessionId),
+              );
             } else {
               const result = yield* Effect.promise(() =>
                 opencodeClient.session.create({}),
@@ -62,6 +72,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               if (!result.data)
                 return yield* Effect.die("Failed to create session");
               sessionId = result.data.id;
+              yield* Effect.logInfo("Created session").pipe(
+                Effect.annotateLogs("sessionId", sessionId),
+              );
               if (Option.isNone(profile)) {
                 yield* database.profile.insert({
                   id: "default",
@@ -91,8 +104,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               .filter(Boolean)
               .join("\n")
               .trim();
-            if (replyText) yield* Effect.promise(() => ctx.reply(replyText));
-          }),
+            if (replyText) {
+              yield* Effect.promise(() => ctx.reply(replyText));
+              yield* Effect.logInfo("Sent reply");
+            } else {
+              yield* Effect.logWarning("No text in response");
+            }
+          }).pipe(Effect.annotateLogs("chatId", ctx.chat.id)),
         );
       });
       const ready = yield* Deferred.make<void>();
