@@ -1,11 +1,15 @@
+import { BunContext } from "@effect/platform-bun";
 import { assert, describe, expect, it } from "@effect/vitest";
-import { ConfigProvider, Effect, Layer, Logger } from "effect";
+import { ConfigProvider, Effect, Layer, Logger, Option } from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
+import { Database } from "~/lib/database";
+import { makeDatabaseLayer } from "~/lib/make-database-layer";
 import { OpenCode } from "~/lib/opencode";
-import pkg from "~/package.json" with { type: "json" };
 
 type GrammyEventHandler = (ctx: unknown) => Promise<unknown>;
+
+type GrammyErrorHandler = (err: { error: unknown }) => Promise<unknown>;
 
 interface GrammyStartOptions {
   onStart?: () => void;
@@ -24,16 +28,28 @@ const { GrammyBot } = vi.hoisted(() => {
       this.resolve?.();
     }
     on(_event: string, _callback: GrammyEventHandler) {}
+    catch(_handler: GrammyErrorHandler) {}
   }
   return { GrammyBot };
 });
 
 vi.mock("grammy", () => ({ Bot: GrammyBot }));
 
-const sessionListMock = vi.fn().mockResolvedValue({ data: [] });
+const sessionCreateMock = vi.fn().mockResolvedValue({
+  data: { id: "new-session-id" },
+});
+
+const sessionPromptMock = vi.fn().mockResolvedValue({
+  data: { parts: [{ type: "text", text: "AI response" }] },
+});
 
 vi.mock("@opencode-ai/sdk/v2/client", () => ({
-  createOpencodeClient: () => ({ session: { list: sessionListMock } }),
+  createOpencodeClient: () => ({
+    session: {
+      create: sessionCreateMock,
+      prompt: sessionPromptMock,
+    },
+  }),
 }));
 
 const startSpy = vi.spyOn(GrammyBot.prototype, "start");
@@ -41,6 +57,8 @@ const startSpy = vi.spyOn(GrammyBot.prototype, "start");
 const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
 
 const onSpy = vi.spyOn(GrammyBot.prototype, "on");
+
+const catchSpy = vi.spyOn(GrammyBot.prototype, "catch");
 
 const openCodeLayer = Layer.effect(
   OpenCode,
@@ -53,9 +71,11 @@ const openCodeLayer = Layer.effect(
 function makeLayer(config: Record<string, unknown>) {
   return Bot.layer.pipe(
     Layer.provideMerge(openCodeLayer),
+    Layer.provideMerge(makeDatabaseLayer()),
     Layer.provideMerge(
       Layer.setConfigProvider(ConfigProvider.fromJson(config)),
     ),
+    Layer.provideMerge(BunContext.layer),
     Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
   );
 }
@@ -113,41 +133,182 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("replies with prefixed text for authorized user", () => {
-    const reply = vi.fn();
-    return Effect.gen(function* () {
+  it.scopedLive("creates session and replies for authorized user", () =>
+    Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
-      const call = onSpy.mock.calls.at(0);
+      const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      yield* Effect.promise(async () =>
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           message: { text: "hello" },
           reply,
         }),
       );
-      expect(reply).toHaveBeenCalledWith(`[${pkg.name}] hello`);
-    }).pipe(Effect.provide(validLayer));
-  });
+      expect(sessionCreateMock).toHaveBeenCalledWith({});
+      expect(sessionPromptMock).toHaveBeenCalledWith({
+        sessionID: "new-session-id",
+        parts: [{ type: "text", text: "hello" }],
+      });
+      expect(reply).toHaveBeenCalledWith("AI response");
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("reuses existing session", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.profile.insert({
+        id: "default",
+        activeSessionId: Option.some("existing-session-id"),
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          message: { text: "hello" },
+          reply,
+        }),
+      );
+      expect(sessionCreateMock).not.toHaveBeenCalled();
+      expect(sessionPromptMock).toHaveBeenCalledWith({
+        sessionID: "existing-session-id",
+        parts: [{ type: "text", text: "hello" }],
+      });
+      expect(reply).toHaveBeenCalledWith("AI response");
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("updates profile when it exists without active session", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.profile.insert({
+        id: "default",
+        activeSessionId: Option.none(),
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          message: { text: "hello" },
+          reply,
+        }),
+      );
+      expect(sessionCreateMock).toHaveBeenCalledWith({});
+      expect(reply).toHaveBeenCalledWith("AI response");
+      const profile = yield* database.profile.findById("default");
+      assert.isTrue(Option.isSome(profile));
+      expect(Option.getOrThrow(profile).activeSessionId).toEqual(
+        Option.some("new-session-id"),
+      );
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("dies when session create returns no data", () =>
+    Effect.gen(function* () {
+      sessionCreateMock.mockResolvedValueOnce({ data: undefined });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          message: { text: "hello" },
+          reply,
+        }).catch(() => {}),
+      );
+      expect(reply).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("dies when session prompt returns no data", () =>
+    Effect.gen(function* () {
+      sessionPromptMock.mockResolvedValueOnce({ data: undefined });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          message: { text: "hello" },
+          reply,
+        }).catch(() => {}),
+      );
+      expect(reply).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("does not reply when response has no text parts", () =>
+    Effect.gen(function* () {
+      sessionPromptMock.mockResolvedValueOnce({
+        data: { parts: [{ type: "tool" }] },
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          message: { text: "hello" },
+          reply,
+        }),
+      );
+      expect(reply).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
 
   it.scopedLive("ignores messages from unauthorized user", () => {
     const reply = vi.fn();
     return Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
-      const call = onSpy.mock.calls.at(0);
+      const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      yield* Effect.promise(async () =>
-        handler({
-          from: { id: 999 },
-          message: { text: "hello" },
-          reply,
-        }),
-      );
+      handler({
+        from: { id: 999 },
+        message: { text: "hello" },
+        reply,
+      });
       expect(reply).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer));
   });
+
+  it.scopedLive("registers error handler", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = catchSpy.mock.lastCall;
+      assert.isDefined(call);
+      const errorHandler = call[0];
+      yield* Effect.promise(() =>
+        errorHandler({ error: new Error("test error") }),
+      );
+    }).pipe(Effect.provide(validLayer)),
+  );
 });
