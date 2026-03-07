@@ -71,6 +71,15 @@ test("preserves all content across chunks", () => {
   }
 });
 
+test("splits text with a short code block followed by long content", () => {
+  const text = `Intro.\n\n\`\`\`js\nconst x = 1;\n\`\`\`\n\n${"Word. ".repeat(600)}`;
+  const result = formatMessage(text);
+  expect(result.length).toBeGreaterThan(1);
+  for (const chunk of result) {
+    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+  }
+});
+
 test("splits large code blocks with close/reopen fences", () => {
   const lines = Array.from({ length: 200 }, (_, i) => `  const v${i} = ${i};`);
   const text = `\`\`\`typescript\n${lines.join("\n")}\n\`\`\``;
@@ -106,6 +115,15 @@ test("hard cuts when no natural split points exist", () => {
   for (const chunk of result) {
     expect(chunk.text.length).toBeLessThanOrEqual(4096);
   }
+});
+
+test("hard cuts code block with no usable newline", () => {
+  // Code block with continuous content — the only newline is right after the
+  // opening fence, too close to position 0 for a safe split, so it falls
+  // through to hard cut
+  const text = `\`\`\`js\n${"x".repeat(4000)}\n\`\`\``;
+  const result = formatMessage(text);
+  expect(result.length).toBeGreaterThan(1);
 });
 
 test("falls back to plain text when convert throws", () => {

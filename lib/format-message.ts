@@ -25,7 +25,7 @@ function findCodeBlockRanges(text: string): CodeBlockRange[] {
   for (let match = regex.exec(text); match !== null; match = regex.exec(text)) {
     if (openStart === null) {
       openStart = match.index;
-      openLang = match[1] ?? "";
+      openLang = match[0].slice(3);
     } else {
       ranges.push({
         start: openStart,
@@ -85,7 +85,6 @@ function splitMessage(text: string, maxLength: number): string[] {
       ) {
         const candidatePos = m.index + offset;
         if (candidatePos >= maxLength) break;
-        if (candidatePos <= 0) continue;
         if (!isInCodeBlock(candidatePos, codeBlocks)) {
           best = candidatePos;
         }
@@ -121,10 +120,7 @@ function splitMessage(text: string, maxLength: number): string[] {
     remaining = remaining.slice(splitPos).trimStart();
   }
 
-  if (remaining.length > 0) {
-    chunks.push(remaining);
-  }
-
+  chunks.push(remaining);
   return chunks;
 }
 
