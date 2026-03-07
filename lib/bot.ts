@@ -24,7 +24,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
   static readonly layer = Layer.scoped(
     Bot,
     Effect.gen(function* () {
-      yield* Effect.logInfo("Bot service is starting");
+      yield* Effect.logInfo("Bot.service is starting");
       const redactedToken = yield* Config.redacted("TELEGRAM_BOT_TOKEN");
       const userId = yield* Config.integer("TELEGRAM_USER_ID");
       const opencodeServer = yield* OpenCode;
@@ -37,24 +37,29 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       grammyBot.catch(({ error, ctx }) =>
         Runtime.runPromise(runtime)(
           Effect.gen(function* () {
-            yield* Effect.logError("Handler error", error);
+            yield* Effect.logError(error).pipe(
+              Effect.annotateLogs("source", "Bot.service"),
+            );
             yield* Effect.promise(() =>
               ctx.reply("Something went wrong."),
             ).pipe(Effect.ignore);
-          }).pipe(Effect.annotateLogs("chatId", ctx.chat?.id)),
+          }).pipe(
+            Effect.annotateLogs("chatId", ctx.chat?.id),
+            Effect.annotateLogs("messageId", ctx.message?.message_id),
+          ),
         ),
       );
       grammyBot.on("message:text", (ctx) => {
         if (ctx.from?.id !== userId) {
           return Runtime.runPromise(runtime)(
-            Effect.logWarning("Ignored message from unauthorized user").pipe(
-              Effect.annotateLogs("userId", ctx.from?.id),
-            ),
+            Effect.logWarning(
+              "Bot.service ignored a message from an unauthorized user",
+            ).pipe(Effect.annotateLogs("userId", ctx.from?.id)),
           );
         }
         return Runtime.runPromise(runtime)(
           Effect.gen(function* () {
-            yield* Effect.logInfo("Received message");
+            yield* Effect.logInfo("Bot.service received a message");
             const profile = yield* database.profile.findById("default");
             let sessionId: string;
             if (
@@ -62,9 +67,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Option.isSome(profile.value.activeSessionId)
             ) {
               sessionId = profile.value.activeSessionId.value;
-              yield* Effect.logDebug("Reusing session").pipe(
-                Effect.annotateLogs("sessionId", sessionId),
-              );
+              yield* Effect.logDebug(
+                "Bot.service reused an existing session",
+              ).pipe(Effect.annotateLogs("sessionId", sessionId));
             } else {
               const result = yield* Effect.promise(() =>
                 opencodeClient.session.create({}),
@@ -72,7 +77,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               if (!result.data)
                 return yield* Effect.die("Failed to create session");
               sessionId = result.data.id;
-              yield* Effect.logInfo("Created session").pipe(
+              yield* Effect.logInfo("Bot.service created a new session").pipe(
                 Effect.annotateLogs("sessionId", sessionId),
               );
               if (Option.isNone(profile)) {
@@ -106,11 +111,16 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               .trim();
             if (replyText) {
               yield* Effect.promise(() => ctx.reply(replyText));
-              yield* Effect.logInfo("Sent reply");
+              yield* Effect.logInfo("Bot.service sent a reply");
             } else {
-              yield* Effect.logWarning("No text in response");
+              yield* Effect.logWarning(
+                "Bot.service received an empty response",
+              );
             }
-          }).pipe(Effect.annotateLogs("chatId", ctx.chat.id)),
+          }).pipe(
+            Effect.annotateLogs("chatId", ctx.chat.id),
+            Effect.annotateLogs("messageId", ctx.message?.message_id),
+          ),
         );
       });
       const ready = yield* Deferred.make<void>();
@@ -131,13 +141,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         }).pipe(Effect.forkScoped),
         () =>
           Effect.gen(function* () {
-            yield* Effect.logInfo("Bot service is stopping");
+            yield* Effect.logInfo("Bot.service is stopping");
             yield* Effect.promise(() => grammyBot.stop()).pipe(Effect.ignore);
-            yield* Effect.logInfo("Bot service has stopped");
+            yield* Effect.logInfo("Bot.service has stopped");
           }),
       );
       yield* Deferred.await(ready);
-      yield* Effect.logInfo("Bot service is ready");
+      yield* Effect.logInfo("Bot.service is ready");
       return Bot.of({ fiber });
     }),
   );

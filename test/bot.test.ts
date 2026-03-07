@@ -10,7 +10,7 @@ import { OpenCode } from "~/lib/opencode";
 interface GrammyBotContext {
   from?: { id: number };
   chat?: { id: number };
-  message?: { text: string };
+  message?: { message_id: number; text: string };
   reply: ReturnType<typeof vi.fn>;
 }
 
@@ -155,7 +155,7 @@ describe("handler", () => {
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { text: "hello" },
+          message: { message_id: 1, text: "hello" },
           reply,
         }),
       );
@@ -187,7 +187,7 @@ describe("handler", () => {
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { text: "hello" },
+          message: { message_id: 1, text: "hello" },
           reply,
         }),
       );
@@ -219,7 +219,7 @@ describe("handler", () => {
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { text: "hello" },
+          message: { message_id: 1, text: "hello" },
           reply,
         }),
       );
@@ -246,7 +246,7 @@ describe("handler", () => {
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { text: "hello" },
+          message: { message_id: 1, text: "hello" },
           reply,
         }).catch(() => {}),
       );
@@ -267,7 +267,7 @@ describe("handler", () => {
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { text: "hello" },
+          message: { message_id: 1, text: "hello" },
           reply,
         }).catch(() => {}),
       );
@@ -290,7 +290,7 @@ describe("handler", () => {
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { text: "hello" },
+          message: { message_id: 1, text: "hello" },
           reply,
         }),
       );
@@ -310,7 +310,7 @@ describe("handler", () => {
         handler({
           from: { id: 999 },
           chat: { id: 999 },
-          message: { text: "hello" },
+          message: { message_id: 1, text: "hello" },
           reply,
         }),
       );
