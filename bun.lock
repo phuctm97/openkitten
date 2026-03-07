@@ -6,9 +6,13 @@
       "name": "openkitten",
       "dependencies": {
         "@effect/cli": "^0.73.2",
+        "@effect/experimental": "^0.58.0",
         "@effect/platform": "^0.94.5",
         "@effect/platform-bun": "^0.87.1",
+        "@effect/sql": "^0.49.0",
+        "@effect/sql-sqlite-bun": "^0.50.2",
         "@opencode-ai/sdk": "^1.2.20",
+        "change-case": "^5.4.4",
         "effect": "^3.19.19",
         "grammy": "^1.41.1",
         "opencode-ai": "^1.2.20",
@@ -101,6 +105,8 @@
     "@effect/rpc": ["@effect/rpc@0.73.2", "", { "dependencies": { "msgpackr": "^1.11.4" }, "peerDependencies": { "@effect/platform": "^0.94.5", "effect": "^3.19.18" } }, "sha512-td7LHDgBOYKg+VgGWEelD8rSAmvjXz7am17vfxZROX5qIYuvH7drL/z4p5xQFadhHZ7DYdlFpqdO9ggc77OCIw=="],
 
     "@effect/sql": ["@effect/sql@0.49.0", "", { "dependencies": { "uuid": "^11.0.3" }, "peerDependencies": { "@effect/experimental": "^0.58.0", "@effect/platform": "^0.94.0", "effect": "^3.19.13" } }, "sha512-9UEKR+z+MrI/qMAmSvb/RiD9KlgIazjZUCDSpwNgm0lEK9/Q6ExEyfziiYFVCPiptp52cBw8uBHRic8hHnwqXA=="],
+
+    "@effect/sql-sqlite-bun": ["@effect/sql-sqlite-bun@0.50.2", "", { "peerDependencies": { "@effect/experimental": "^0.58.0", "@effect/platform": "^0.94.4", "@effect/sql": "^0.49.0", "effect": "^3.19.16" } }, "sha512-bd+rwFMjZ53OZhOnzQ0Zdef9IK2lgd0xP3M/553Y+aZjqOctMjhZmd3PVi8JjR+pRgSzN5XBu9Gly97t0aPsug=="],
 
     "@effect/typeclass": ["@effect/typeclass@0.38.0", "", { "peerDependencies": { "effect": "^3.19.0" } }, "sha512-lMUcJTRtG8KXhXoczapZDxbLK5os7M6rn0zkvOgncJW++A0UyelZfMVMKdT5R+fgpZcsAU/1diaqw3uqLJwGxA=="],
 
@@ -315,6 +321,8 @@
     "caniuse-lite": ["caniuse-lite@1.0.30001777", "", {}, "sha512-tmN+fJxroPndC74efCdp12j+0rk0RHwV5Jwa1zWaFVyw2ZxAuPeG8ZgWC3Wz7uSjT3qMRQ5XHZ4COgQmsCMJAQ=="],
 
     "chai": ["chai@6.2.2", "", {}, "sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg=="],
+
+    "change-case": ["change-case@5.4.4", "", {}, "sha512-HRQyTk2/YPEkt9TnUPbOpr64Uw3KOicFWPVBb+xiHvd6eBx/qPr9xqfBFDT8P2vWsvvz4jbEkfDe71W3VyNu2w=="],
 
     "convert-source-map": ["convert-source-map@2.0.0", "", {}, "sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg=="],
 

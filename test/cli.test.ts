@@ -4,6 +4,7 @@ import { Console, Effect, Layer, Logger, Option } from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
+import { makeDatabaseLayer } from "~/lib/make-database-layer";
 import { OpenCode } from "~/lib/opencode";
 import { Scripts } from "~/lib/scripts";
 
@@ -37,34 +38,36 @@ const scriptsMock = Scripts.of({
 
 const scriptsLayer = Layer.succeed(Scripts, scriptsMock);
 
+const databaseLayer = makeDatabaseLayer();
+
 const testLayer = Layer.mergeAll(
-  BunContext.layer,
   consoleLayer,
   botLayer,
   openCodeLayer,
+  databaseLayer,
   scriptsLayer,
   Logger.replace(Logger.defaultLogger, Logger.none),
-);
+).pipe(Layer.provideMerge(BunContext.layer));
 
-it.live.fails("unknown command fails", () =>
+it.scopedLive.fails("unknown command fails", () =>
   cli(["bun", ".", "unknown"]).pipe(Effect.provide(testLayer)),
 );
 
-it.live("up command succeeds", () =>
+it.scopedLive("up command succeeds", () =>
   cli(["bun", ".", "up"]).pipe(
     Effect.provide(testLayer),
     Effect.map(() => expect(scriptsMock.up).toHaveBeenCalledOnce()),
   ),
 );
 
-it.live("down command succeeds", () =>
+it.scopedLive("down command succeeds", () =>
   cli(["bun", ".", "down"]).pipe(
     Effect.provide(testLayer),
     Effect.map(() => expect(scriptsMock.down).toHaveBeenCalledOnce()),
   ),
 );
 
-it.live("serve command starts and can be interrupted", () =>
+it.scopedLive("serve command starts and can be interrupted", () =>
   cli(["bun", ".", "serve"]).pipe(
     Effect.provide(testLayer),
     Effect.timeout(0),

@@ -5,6 +5,7 @@ import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { Effect, Layer } from "effect";
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
+import { makeDatabaseLayer } from "~/lib/make-database-layer";
 import { OpenCode } from "~/lib/opencode";
 import { Scripts } from "~/lib/scripts";
 
@@ -26,12 +27,23 @@ class MissingGetuidError extends Error {
   }
 }
 
-function getuid() {
+function getUserId() {
   if (!process.getuid) throw new MissingGetuidError();
   return process.getuid();
 }
 
-async function update() {
+function getDataDir() {
+  switch (process.platform) {
+    case "darwin":
+      return `${homedir()}/Library/Application Support/OpenKitten`;
+    case "linux":
+      return `${homedir()}/.local/share/openkitten`;
+    default:
+      throw new UnsupportedPlatformError();
+  }
+}
+
+async function updateProjectDir() {
   const branch = (
     await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(projectDir).text()
   ).trim();
@@ -51,7 +63,7 @@ async function update() {
 }
 
 async function installDarwin() {
-  const uid = getuid();
+  const userId = getUserId();
   const logsDir = `${homedir()}/Library/Logs/${launchctlService}`;
   const plistDir = `${homedir()}/Library/LaunchAgents`;
   const plistPath = `${plistDir}/${launchctlService}.plist`;
@@ -84,18 +96,18 @@ async function installDarwin() {
     mkdir(plistDir, { recursive: true }),
   ]);
   await Bun.write(plistPath, plistContent);
-  await Bun.$`launchctl bootout gui/${uid}/${launchctlService}`
+  await Bun.$`launchctl bootout gui/${userId}/${launchctlService}`
     .nothrow()
     .quiet();
-  await Bun.$`launchctl bootstrap gui/${uid} ${plistPath}`;
+  await Bun.$`launchctl bootstrap gui/${userId} ${plistPath}`;
   console.log(`Service installed: ${plistPath}`);
 }
 
 async function uninstallDarwin() {
-  const uid = getuid();
+  const userId = getUserId();
   const logsDir = `${homedir()}/Library/Logs/${launchctlService}`;
   const plistPath = `${homedir()}/Library/LaunchAgents/${launchctlService}.plist`;
-  await Bun.$`launchctl bootout gui/${uid}/${launchctlService}`
+  await Bun.$`launchctl bootout gui/${userId}/${launchctlService}`
     .nothrow()
     .quiet();
   await Promise.all([
@@ -136,9 +148,17 @@ async function uninstallLinux() {
   console.log("Service removed.");
 }
 
+const databaseLayer = Layer.unwrapEffect(
+  Effect.gen(function* () {
+    const dataDir = getDataDir();
+    yield* Effect.promise(() => mkdir(dataDir, { recursive: true }));
+    return makeDatabaseLayer(`${dataDir}/bot.db`);
+  }),
+);
+
 const scriptsLayer = Layer.succeed(Scripts, {
   up: async () => {
-    await update();
+    await updateProjectDir();
     switch (process.platform) {
       case "darwin":
         return installDarwin();
@@ -162,6 +182,7 @@ const scriptsLayer = Layer.succeed(Scripts, {
 
 const runLayer = Bot.layer.pipe(
   Layer.provideMerge(OpenCode.layer),
+  Layer.provideMerge(databaseLayer),
   Layer.provideMerge(scriptsLayer),
   Layer.provideMerge(BunContext.layer),
 );
