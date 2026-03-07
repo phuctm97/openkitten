@@ -2,6 +2,7 @@ import { assert, describe, expect, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
+import { OpenCode } from "~/lib/opencode";
 import pkg from "~/package.json" with { type: "json" };
 
 type GrammyEventHandler = (ctx: unknown) => Promise<unknown>;
@@ -29,11 +30,25 @@ const { GrammyBot } = vi.hoisted(() => {
 
 vi.mock("grammy", () => ({ Bot: GrammyBot }));
 
+const sessionListMock = vi.fn().mockResolvedValue({ data: [] });
+
+vi.mock("@opencode-ai/sdk/v2/client", () => ({
+  createOpencodeClient: () => ({ session: { list: sessionListMock } }),
+}));
+
 const startSpy = vi.spyOn(GrammyBot.prototype, "start");
 
 const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
 
 const onSpy = vi.spyOn(GrammyBot.prototype, "on");
+
+const openCodeLayer = Layer.effect(
+  OpenCode,
+  Effect.gen(function* () {
+    const fiber = yield* Effect.fork(Effect.never);
+    return { fiber, port: 4096 };
+  }),
+);
 
 function makeLayer(config: Record<string, unknown>) {
   return Layer.provideMerge(
@@ -41,6 +56,7 @@ function makeLayer(config: Record<string, unknown>) {
     Layer.mergeAll(
       Layer.setConfigProvider(ConfigProvider.fromJson(config)),
       Logger.replace(Logger.defaultLogger, Logger.none),
+      openCodeLayer,
     ),
   );
 }

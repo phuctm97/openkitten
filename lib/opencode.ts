@@ -1,20 +1,18 @@
 import { resolve } from "node:path";
 import { Command } from "@effect/platform";
 import { Context, Deferred, Effect, type Fiber, Layer, Stream } from "effect";
-import { annotateTag } from "~/lib/annotate-tag";
-import { makeTag } from "~/lib/make-tag";
+import pkg from "~/package.json" with { type: "json" };
 
-export class OpenCode extends Context.Tag(makeTag("OpenCode"))<
+export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
   OpenCode,
   { readonly fiber: Fiber.RuntimeFiber<void>; readonly port: number }
 >() {
-  static readonly annotate = annotateTag(OpenCode);
   static readonly layer = Layer.scoped(
     OpenCode,
     Effect.gen(function* () {
-      yield* Effect.logInfo("Starting");
+      yield* Effect.logInfo("OpenCode service is starting");
       yield* Effect.addFinalizer(() =>
-        Effect.logInfo("Stopped").pipe(OpenCode.annotate),
+        Effect.logInfo("OpenCode service has stopped"),
       );
       const cmd = Command.make(
         resolve(import.meta.dirname, "../node_modules/.bin/opencode"),
@@ -59,10 +57,10 @@ export class OpenCode extends Context.Tag(makeTag("OpenCode"))<
         Effect.forkScoped,
       );
       yield* Effect.addFinalizer(() =>
-        Effect.logInfo("Stopping").pipe(OpenCode.annotate),
+        Effect.logInfo("OpenCode service is stopping"),
       );
-      yield* Effect.logInfo("Ready");
+      yield* Effect.logInfo("OpenCode service is ready");
       return OpenCode.of({ fiber, port });
-    }).pipe(OpenCode.annotate),
+    }),
   );
 }

@@ -1,7 +1,7 @@
 import { Context } from "effect";
-import { makeTag } from "~/lib/make-tag";
+import pkg from "~/package.json" with { type: "json" };
 
-export class Scripts extends Context.Tag(makeTag("Scripts"))<
+export class Scripts extends Context.Tag(`${pkg.name}/Scripts`)<
   Scripts,
   { readonly up: () => Promise<void>; readonly down: () => Promise<void> }
 >() {}

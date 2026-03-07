@@ -160,7 +160,8 @@ const scriptsLayer = Layer.succeed(Scripts, {
   },
 });
 
-const runLayer = Layer.mergeAll(Bot.layer, OpenCode.layer).pipe(
+const runLayer = Bot.layer.pipe(
+  Layer.provideMerge(OpenCode.layer),
   Layer.provideMerge(scriptsLayer),
   Layer.provideMerge(BunContext.layer),
 );

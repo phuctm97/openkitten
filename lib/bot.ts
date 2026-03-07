@@ -1,3 +1,4 @@
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 import {
   Config,
   Context,
@@ -9,19 +10,17 @@ import {
   Redacted,
 } from "effect";
 import { Bot as GrammyBot } from "grammy";
-import { annotateTag } from "~/lib/annotate-tag";
-import { makeTag } from "~/lib/make-tag";
+import { OpenCode } from "~/lib/opencode";
 import pkg from "~/package.json" with { type: "json" };
 
-export class Bot extends Context.Tag(makeTag("Bot"))<
+export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
   Bot,
   { readonly fiber: Fiber.RuntimeFiber<void> }
 >() {
-  static readonly annotate = annotateTag(Bot);
   static readonly layer = Layer.scoped(
     Bot,
     Effect.gen(function* () {
-      yield* Effect.logInfo("Starting");
+      yield* Effect.logInfo("Bot service is starting");
       const redactedToken = yield* Config.redacted("TELEGRAM_BOT_TOKEN");
       const userId = yield* Config.integer("TELEGRAM_USER_ID");
       const grammyBot = new GrammyBot(Redacted.value(redactedToken));
@@ -47,14 +46,20 @@ export class Bot extends Context.Tag(makeTag("Bot"))<
         }).pipe(Effect.forkScoped),
         () =>
           Effect.gen(function* () {
-            yield* Effect.logInfo("Stopping");
+            yield* Effect.logInfo("Bot service is stopping");
             yield* Effect.promise(() => grammyBot.stop()).pipe(Effect.ignore);
-            yield* Effect.logInfo("Stopped");
-          }).pipe(Bot.annotate),
+            yield* Effect.logInfo("Bot service has stopped");
+          }),
       );
       yield* Deferred.await(ready);
-      yield* Effect.logInfo("Ready");
+      yield* Effect.logInfo("Bot service is ready");
+      const opencodeServer = yield* OpenCode;
+      const opencodeClient = createOpencodeClient({
+        baseUrl: `http://127.0.0.1:${opencodeServer.port}`,
+      });
+      yield* Effect.promise(() => opencodeClient.session.list());
+      yield* Effect.logInfo("OpenCode client is connected");
       return Bot.of({ fiber });
-    }).pipe(Bot.annotate),
+    }),
   );
 }
