@@ -136,6 +136,25 @@ describe("layer", () => {
     }),
   );
 
+  it.live("logs error when stop rejects", () =>
+    Effect.gen(function* () {
+      stopSpy.mockImplementationOnce(function (
+        this: InstanceType<typeof GrammyBot>,
+      ) {
+        const original = GrammyBot.prototype.stop;
+        return original.call(this).then(() => {
+          throw new Error("stop failed");
+        });
+      });
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* Bot;
+          yield* Effect.sleep(0);
+        }).pipe(Effect.provide(validLayer)),
+      );
+    }),
+  );
+
   it.scopedLive.fails("dies when start rejects", () => {
     startSpy.mockRejectedValueOnce(new Error("start failed"));
     return Effect.gen(function* () {

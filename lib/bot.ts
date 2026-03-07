@@ -38,7 +38,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ? Cause.squash(error[Runtime.FiberFailureCauseId])
               : error;
             yield* Effect.logError(cause).pipe(
-              Effect.annotateLogs("source", "Bot.service"),
+              Effect.annotateLogs("debugHint", "Bot.handle"),
             );
             yield* Bot.sendChunks(ctx, formatError(cause), {
               ignoreErrors: true,
@@ -146,7 +146,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         () =>
           Effect.gen(function* () {
             yield* Effect.logInfo("Bot.service is stopping");
-            yield* Effect.promise(() => grammyBot.stop()).pipe(Effect.ignore);
+            yield* Effect.promise(() => grammyBot.stop()).pipe(
+              Effect.catchAllCause((cause) =>
+                Effect.logError(cause).pipe(
+                  Effect.annotateLogs("debugHint", "Bot.stop"),
+                ),
+              ),
+            );
             yield* Effect.logInfo("Bot.service has stopped");
           }),
       );
@@ -163,14 +169,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     return Effect.forEach(
       chunks,
       ({ text, markdown }) => {
-        const send = Effect.promise(() =>
+        const sendEffect = Effect.promise(() =>
           markdown
             ? ctx
                 .reply(markdown, { parse_mode: "MarkdownV2" })
                 .catch(() => ctx.reply(text))
             : ctx.reply(text),
         );
-        return ignoreErrors ? Effect.ignore(send) : send;
+        return ignoreErrors ? Effect.ignore(sendEffect) : sendEffect;
       },
       { discard: true },
     );
