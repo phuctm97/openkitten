@@ -22,11 +22,12 @@ test("handles bold and italic markdown", () => {
   expect(result[0]?.markdown).toContain("bold");
 });
 
-test("handles code blocks in formatted output", () => {
+test("preserves code block language in formatted output", () => {
   const text = "Here is code:\n\n```js\nconst x = 1;\n```";
   const result = formatMessage(text);
   expect(result.length).toBeGreaterThanOrEqual(1);
   assert.isDefined(result[0]?.markdown);
+  expect(result[0].markdown).toContain("```js\n");
 });
 
 test("splits on horizontal rules into separate messages", () => {

@@ -1,4 +1,5 @@
 import {
+  Cause,
   Config,
   Context,
   Deferred,
@@ -32,10 +33,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       grammyBot.catch(({ error, ctx }) =>
         Runtime.runPromise(runtime)(
           Effect.gen(function* () {
-            yield* Effect.logError(error).pipe(
+            const cause = Runtime.isFiberFailure(error)
+              ? Cause.squash(error[Runtime.FiberFailureCauseId])
+              : error;
+            yield* Effect.logError(cause).pipe(
               Effect.annotateLogs("source", "Bot.service"),
             );
-            for (const { text, markdown } of formatError(error)) {
+            for (const { text, markdown } of formatError(cause)) {
               yield* Effect.promise(() =>
                 markdown
                   ? ctx

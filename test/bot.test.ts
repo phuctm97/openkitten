@@ -1,7 +1,15 @@
 import { BunContext } from "@effect/platform-bun";
 import { assert, describe, expect, it } from "@effect/vitest";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
-import { ConfigProvider, Effect, Layer, Logger, Option } from "effect";
+import {
+  Cause,
+  ConfigProvider,
+  Effect,
+  Layer,
+  Logger,
+  Option,
+  Runtime,
+} from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { Database } from "~/lib/database";
@@ -348,6 +356,29 @@ describe("handler", () => {
       assert.isDefined(firstCall);
       expect(firstCall[0]).toContain("error");
       expect(firstCall[1]).toEqual({ parse_mode: "MarkdownV2" });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("unwraps FiberFailure before formatting", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = catchSpy.mock.lastCall;
+      assert.isDefined(call);
+      const errorHandler = call[0];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      const fiberFailure = Runtime.makeFiberFailure(
+        Cause.die(new Error("wrapped error")),
+      );
+      yield* Effect.promise(() =>
+        errorHandler({
+          error: fiberFailure,
+          ctx: { chat: { id: 123 }, reply },
+        }),
+      );
+      expect(formatErrorMock).toHaveBeenCalledWith(
+        expect.objectContaining({ message: "wrapped error" }),
+      );
     }).pipe(Effect.provide(validLayer)),
   );
 

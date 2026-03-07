@@ -128,9 +128,24 @@ function splitMessage(text: string, maxLength: number): string[] {
 
 const hrPattern = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
 
+function extractCodeBlockLangs(text: string): string[] {
+  return Array.from(text.matchAll(/^```(\w+)/gm), (m) => m[0].slice(3));
+}
+
+function restoreCodeBlockLangs(text: string, langs: string[]): string {
+  if (langs.length === 0) return text;
+  let i = 0;
+  let open = false;
+  return text.replace(/^```$/gm, () => {
+    open = !open;
+    return open && i < langs.length ? `\`\`\`${langs[i++]}` : "```";
+  });
+}
+
 function tryConvert(chunk: string): MessageChunk[] {
   try {
-    const markdown = convert(chunk);
+    const langs = extractCodeBlockLangs(chunk);
+    const markdown = restoreCodeBlockLangs(convert(chunk), langs);
     if (markdown.length <= telegramMaxLength) {
       return [{ text: chunk, markdown }];
     }
@@ -143,7 +158,8 @@ function tryConvert(chunk: string): MessageChunk[] {
 
     for (const sub of subChunks) {
       try {
-        const subMarkdown = convert(sub);
+        const subLangs = extractCodeBlockLangs(sub);
+        const subMarkdown = restoreCodeBlockLangs(convert(sub), subLangs);
         if (subMarkdown.length <= telegramMaxLength) {
           results.push({ text: sub, markdown: subMarkdown });
         } else {
