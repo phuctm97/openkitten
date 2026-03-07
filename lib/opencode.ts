@@ -10,9 +10,9 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
   static readonly layer = Layer.scoped(
     OpenCode,
     Effect.gen(function* () {
-      yield* Effect.logInfo("OpenCode service is starting");
+      yield* Effect.logInfo("OpenCode.service is starting");
       yield* Effect.addFinalizer(() =>
-        Effect.logInfo("OpenCode service has stopped"),
+        Effect.logInfo("OpenCode.service has stopped"),
       );
       const cmd = Command.make(
         resolve(import.meta.dirname, "../node_modules/.bin/opencode"),
@@ -57,9 +57,9 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         Effect.forkScoped,
       );
       yield* Effect.addFinalizer(() =>
-        Effect.logInfo("OpenCode service is stopping"),
+        Effect.logInfo("OpenCode.service is stopping"),
       );
-      yield* Effect.logInfo("OpenCode service is ready");
+      yield* Effect.logInfo("OpenCode.service is ready");
       return OpenCode.of({ fiber, port });
     }),
   );

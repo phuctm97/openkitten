@@ -7,9 +7,19 @@ import { Database } from "~/lib/database";
 import { makeDatabaseLayer } from "~/lib/make-database-layer";
 import { OpenCode } from "~/lib/opencode";
 
-type GrammyEventHandler = (ctx: unknown) => Promise<unknown>;
+interface GrammyBotContext {
+  from?: { id: number };
+  chat?: { id: number };
+  message?: { message_id: number; text: string };
+  reply: ReturnType<typeof vi.fn>;
+}
 
-type GrammyErrorHandler = (err: { error: unknown }) => Promise<unknown>;
+type GrammyEventHandler = (ctx: GrammyBotContext) => Promise<unknown>;
+
+type GrammyErrorHandler = (err: {
+  error: unknown;
+  ctx: GrammyBotContext;
+}) => Promise<unknown>;
 
 interface GrammyStartOptions {
   onStart?: () => void;
@@ -144,7 +154,8 @@ describe("handler", () => {
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
-          message: { text: "hello" },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
           reply,
         }),
       );
@@ -175,7 +186,8 @@ describe("handler", () => {
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
-          message: { text: "hello" },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
           reply,
         }),
       );
@@ -206,7 +218,8 @@ describe("handler", () => {
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
-          message: { text: "hello" },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
           reply,
         }),
       );
@@ -232,7 +245,8 @@ describe("handler", () => {
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
-          message: { text: "hello" },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
           reply,
         }).catch(() => {}),
       );
@@ -252,7 +266,8 @@ describe("handler", () => {
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
-          message: { text: "hello" },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
           reply,
         }).catch(() => {}),
       );
@@ -274,7 +289,8 @@ describe("handler", () => {
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
-          message: { text: "hello" },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
           reply,
         }),
       );
@@ -282,22 +298,25 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("ignores messages from unauthorized user", () => {
-    const reply = vi.fn();
-    return Effect.gen(function* () {
+  it.scopedLive("ignores messages from unauthorized user", () =>
+    Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      handler({
-        from: { id: 999 },
-        message: { text: "hello" },
-        reply,
-      });
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 999 },
+          chat: { id: 999 },
+          message: { message_id: 1, text: "hello" },
+          reply,
+        }),
+      );
       expect(reply).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer));
-  });
+    }).pipe(Effect.provide(validLayer)),
+  );
 
   it.scopedLive("registers error handler", () =>
     Effect.gen(function* () {
@@ -306,9 +325,14 @@ describe("handler", () => {
       const call = catchSpy.mock.lastCall;
       assert.isDefined(call);
       const errorHandler = call[0];
+      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
-        errorHandler({ error: new Error("test error") }),
+        errorHandler({
+          error: new Error("test error"),
+          ctx: { chat: { id: 123 }, reply },
+        }),
       );
+      expect(reply).toHaveBeenCalledWith("Something went wrong.");
     }).pipe(Effect.provide(validLayer)),
   );
 });
