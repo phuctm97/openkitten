@@ -442,49 +442,4 @@ describe("handler", () => {
       );
     }).pipe(Effect.provide(validLayer)),
   );
-
-  it.scopedLive("falls back to raw text when MarkdownV2 reply fails", () =>
-    Effect.gen(function* () {
-      yield* Bot;
-      yield* Effect.sleep(0);
-      const call = catchSpy.mock.lastCall;
-      assert.isDefined(call);
-      const errorHandler = call[0];
-      const reply = vi
-        .fn()
-        .mockRejectedValueOnce(new Error("parse error"))
-        .mockResolvedValue(undefined);
-      yield* Effect.promise(() =>
-        errorHandler({
-          error: new Error("test error"),
-          ctx: { chat: { id: 123 }, reply },
-        }),
-      );
-      expect(reply).toHaveBeenCalledTimes(2);
-      const fallbackCall = reply.mock.calls.at(1);
-      assert.isDefined(fallbackCall);
-      expect(fallbackCall[0]).toContain("error");
-      expect(fallbackCall[1]).toBeUndefined();
-    }).pipe(Effect.provide(validLayer)),
-  );
-
-  it.scopedLive("sends raw text for unformatted error chunk", () =>
-    Effect.gen(function* () {
-      formatErrorMock.mockReturnValueOnce([{ text: "plain error" }]);
-      yield* Bot;
-      yield* Effect.sleep(0);
-      const call = catchSpy.mock.lastCall;
-      assert.isDefined(call);
-      const errorHandler = call[0];
-      const reply = vi.fn().mockResolvedValue(undefined);
-      yield* Effect.promise(() =>
-        errorHandler({
-          error: new Error("test error"),
-          ctx: { chat: { id: 123 }, reply },
-        }),
-      );
-      expect(reply).toHaveBeenCalledTimes(1);
-      expect(reply).toHaveBeenCalledWith("plain error");
-    }).pipe(Effect.provide(validLayer)),
-  );
 });

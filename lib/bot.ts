@@ -11,7 +11,7 @@ import {
   Redacted,
   Runtime,
 } from "effect";
-import { Bot as GrammyBot } from "grammy";
+import { Bot as GrammyBot, type Context as GrammyContext } from "grammy";
 import { Database } from "~/lib/database";
 import { formatError } from "~/lib/format-error";
 import { formatMessage } from "~/lib/format-message";
@@ -40,15 +40,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             yield* Effect.logError(cause).pipe(
               Effect.annotateLogs("source", "Bot.service"),
             );
-            for (const { text, markdown } of formatError(cause)) {
-              yield* Effect.promise(() =>
-                markdown
-                  ? ctx
-                      .reply(markdown, { parse_mode: "MarkdownV2" })
-                      .catch(() => ctx.reply(text))
-                  : ctx.reply(text),
-              ).pipe(Effect.ignore);
-            }
+            yield* Bot.sendChunks(ctx, formatError(cause), {
+              ignoreErrors: true,
+            });
           }).pipe(
             Effect.annotateLogs("chatId", ctx.chat?.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
@@ -118,15 +112,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               .join("\n")
               .trim();
             if (replyText) {
-              for (const { text, markdown } of formatMessage(replyText)) {
-                yield* Effect.promise(() =>
-                  markdown
-                    ? ctx
-                        .reply(markdown, { parse_mode: "MarkdownV2" })
-                        .catch(() => ctx.reply(text))
-                    : ctx.reply(text),
-                );
-              }
+              yield* Bot.sendChunks(ctx, formatMessage(replyText), {
+                ignoreErrors: false,
+              });
               yield* Effect.logInfo("Bot.service sent a reply");
             } else {
               yield* Effect.logWarning(
@@ -167,4 +155,30 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       return Bot.of({ fiber });
     }),
   );
+  static sendChunks(
+    ctx: GrammyContext,
+    chunks: ReturnType<typeof formatMessage>,
+    { ignoreErrors }: Bot.SendChunksOptions,
+  ) {
+    return Effect.forEach(
+      chunks,
+      ({ text, markdown }) => {
+        const send = Effect.promise(() =>
+          markdown
+            ? ctx
+                .reply(markdown, { parse_mode: "MarkdownV2" })
+                .catch(() => ctx.reply(text))
+            : ctx.reply(text),
+        );
+        return ignoreErrors ? Effect.ignore(send) : send;
+      },
+      { discard: true },
+    );
+  }
+}
+
+export namespace Bot {
+  export type SendChunksOptions = {
+    ignoreErrors: boolean;
+  };
 }
