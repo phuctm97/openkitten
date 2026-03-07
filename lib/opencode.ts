@@ -8,10 +8,14 @@ export class OpenCode extends Context.Tag(makeTag("OpenCode"))<
   OpenCode,
   { readonly fiber: Fiber.RuntimeFiber<void>; readonly port: number }
 >() {
+  static readonly annotate = annotateTag(OpenCode);
   static readonly layer = Layer.scoped(
     OpenCode,
     Effect.gen(function* () {
       yield* Effect.logInfo("Starting");
+      yield* Effect.addFinalizer(() =>
+        Effect.logInfo("Stopped").pipe(OpenCode.annotate),
+      );
       const cmd = Command.make(
         resolve(import.meta.dirname, "../node_modules/.bin/opencode"),
         "serve",
@@ -54,8 +58,11 @@ export class OpenCode extends Context.Tag(makeTag("OpenCode"))<
         ),
         Effect.forkScoped,
       );
+      yield* Effect.addFinalizer(() =>
+        Effect.logInfo("Stopping").pipe(OpenCode.annotate),
+      );
       yield* Effect.logInfo("Ready");
       return OpenCode.of({ fiber, port });
-    }).pipe(annotateTag(OpenCode)),
+    }).pipe(OpenCode.annotate),
   );
 }

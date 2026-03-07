@@ -17,6 +17,7 @@ export class Bot extends Context.Tag(makeTag("Bot"))<
   Bot,
   { readonly fiber: Fiber.RuntimeFiber<void> }
 >() {
+  static readonly annotate = annotateTag(Bot);
   static readonly layer = Layer.scoped(
     Bot,
     Effect.gen(function* () {
@@ -44,11 +45,16 @@ export class Bot extends Context.Tag(makeTag("Bot"))<
               },
             );
         }).pipe(Effect.forkScoped),
-        () => Effect.promise(() => grammyBot.stop()).pipe(Effect.ignore),
+        () =>
+          Effect.gen(function* () {
+            yield* Effect.logInfo("Stopping");
+            yield* Effect.promise(() => grammyBot.stop()).pipe(Effect.ignore);
+            yield* Effect.logInfo("Stopped");
+          }).pipe(Bot.annotate),
       );
       yield* Deferred.await(ready);
       yield* Effect.logInfo("Ready");
       return Bot.of({ fiber });
-    }).pipe(annotateTag(Bot)),
+    }).pipe(Bot.annotate),
   );
 }
