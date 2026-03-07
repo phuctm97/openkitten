@@ -1,11 +1,15 @@
 import { resolve } from "node:path";
 import { Command } from "@effect/platform";
+import {
+  createOpencodeClient,
+  type OpencodeClient,
+} from "@opencode-ai/sdk/v2/client";
 import { Context, Deferred, Effect, type Fiber, Layer, Stream } from "effect";
 import pkg from "~/package.json" with { type: "json" };
 
 export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
   OpenCode,
-  { readonly fiber: Fiber.RuntimeFiber<void>; readonly port: number }
+  { readonly fiber: Fiber.RuntimeFiber<void>; readonly client: OpencodeClient }
 >() {
   static readonly layer = Layer.scoped(
     OpenCode,
@@ -59,8 +63,11 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
       yield* Effect.addFinalizer(() =>
         Effect.logInfo("OpenCode.service is stopping"),
       );
+      const client = createOpencodeClient({
+        baseUrl: `http://127.0.0.1:${port}`,
+      });
       yield* Effect.logInfo("OpenCode.service is ready");
-      return OpenCode.of({ fiber, port });
+      return OpenCode.of({ fiber, client });
     }),
   );
 }
