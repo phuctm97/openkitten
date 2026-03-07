@@ -9,7 +9,6 @@ const serve = Command.make("serve", {}, () =>
   Effect.gen(function* () {
     const bot = yield* Bot;
     const openCode = yield* OpenCode;
-    yield* Effect.logInfo("All services ready");
     return yield* Fiber.join(Fiber.zip(bot.fiber, openCode.fiber));
   }),
 ).pipe(Command.withDescription("Start the OpenKitten server."));
