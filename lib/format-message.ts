@@ -63,7 +63,7 @@ const SPLIT_PRIORITIES: ReadonlyArray<{ pattern: RegExp; offset: number }> = [
   { pattern: / /g, offset: 0 },
 ];
 
-export function splitMessage(text: string, maxLength: number): string[] {
+function splitMessage(text: string, maxLength: number): string[] {
   if (text.length <= maxLength) return [text];
 
   const chunks: string[] = [];
