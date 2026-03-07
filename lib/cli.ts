@@ -8,8 +8,8 @@ import pkg from "~/package.json" with { type: "json" };
 const serve = Command.make("serve", {}, () =>
   Effect.gen(function* () {
     const bot = yield* Bot;
-    const openCode = yield* OpenCode;
-    return yield* Fiber.join(Fiber.zip(bot.fiber, openCode.fiber));
+    const opencode = yield* OpenCode;
+    return yield* Fiber.join(Fiber.zip(bot.fiber, opencode.fiber));
   }),
 ).pipe(Command.withDescription("Start the OpenKitten server."));
 

@@ -69,14 +69,14 @@ it.scopedLive.fails("dies when stdout has listening but no port", () =>
 
 it.scopedLive("completes when process exits with code 0", () =>
   Effect.gen(function* () {
-    const openCode = yield* OpenCode;
-    yield* openCode.fiber;
+    const opencode = yield* OpenCode;
+    yield* opencode.fiber;
   }).pipe(Effect.provide(mockLayer("listening on :4567\n", 0))),
 );
 
 it.scopedLive.fails("dies when process exits with non-zero code", () =>
   Effect.gen(function* () {
-    const openCode = yield* OpenCode;
-    yield* openCode.fiber;
+    const opencode = yield* OpenCode;
+    yield* opencode.fiber;
   }).pipe(Effect.provide(mockLayer("listening on :4567\n", 1))),
 );
