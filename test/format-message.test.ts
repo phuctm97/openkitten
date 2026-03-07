@@ -1,5 +1,8 @@
-import { expect, test } from "vitest";
+import { convert } from "telegram-markdown-v2";
+import { expect, test, vi } from "vitest";
 import { formatMessage } from "~/lib/format-message";
+
+vi.mock("telegram-markdown-v2", { spy: true });
 
 test("returns empty array for empty input", () => {
   expect(formatMessage("")).toEqual([]);
@@ -68,10 +71,75 @@ test("preserves all content across chunks", () => {
   }
 });
 
-test("falls back to plain text when conversion fails", () => {
-  const weirdText = `${"```\n".repeat(50)}content${"\n```".repeat(50)}`;
-  const result = formatMessage(weirdText);
+test("splits large code blocks with close/reopen fences", () => {
+  const lines = Array.from({ length: 200 }, (_, i) => `  const v${i} = ${i};`);
+  const text = `\`\`\`typescript\n${lines.join("\n")}\n\`\`\``;
+  const result = formatMessage(text);
+  expect(result.length).toBeGreaterThan(1);
+  for (const chunk of result) {
+    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+  }
+});
+
+test("handles overflow when MarkdownV2 escaping expands beyond limit", () => {
+  const text = "!.()_~`>#+-=|{}.!".repeat(200);
+  const result = formatMessage(text);
   expect(result.length).toBeGreaterThanOrEqual(1);
+  for (const chunk of result) {
+    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+  }
+});
+
+test("handles unclosed code blocks", () => {
+  const text = `\`\`\`python\n${"x = 1\n".repeat(600)}`;
+  const result = formatMessage(text);
+  expect(result.length).toBeGreaterThanOrEqual(1);
+  for (const chunk of result) {
+    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+  }
+});
+
+test("hard cuts when no natural split points exist", () => {
+  const text = "x".repeat(4000);
+  const result = formatMessage(text);
+  expect(result.length).toBeGreaterThanOrEqual(1);
+  for (const chunk of result) {
+    expect(chunk.text.length).toBeLessThanOrEqual(4096);
+  }
+});
+
+test("falls back to plain text when convert throws", () => {
+  vi.mocked(convert).mockImplementation(() => {
+    throw new Error("conversion failed");
+  });
+  const result = formatMessage("Hello world");
+  expect(result).toEqual([{ text: "Hello world", formatted: false }]);
+  vi.mocked(convert).mockRestore();
+});
+
+test("falls back to plain text when sub-chunk still overflows", () => {
+  vi.mocked(convert).mockReturnValue("x".repeat(5000));
+  const result = formatMessage("Hello world");
+  expect(result.length).toBeGreaterThanOrEqual(1);
+  for (const chunk of result) {
+    expect(chunk.formatted).toBe(false);
+  }
+  vi.mocked(convert).mockRestore();
+});
+
+test("falls back when sub-chunk convert throws", () => {
+  let callCount = 0;
+  vi.mocked(convert).mockImplementation(() => {
+    callCount++;
+    if (callCount === 1) return "x".repeat(5000);
+    throw new Error("sub-chunk failed");
+  });
+  const result = formatMessage("Hello world");
+  expect(result.length).toBeGreaterThanOrEqual(1);
+  for (const chunk of result) {
+    expect(chunk.formatted).toBe(false);
+  }
+  vi.mocked(convert).mockRestore();
 });
 
 test("returns all chunks as MessageChunk objects", () => {

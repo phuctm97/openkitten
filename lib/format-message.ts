@@ -84,10 +84,8 @@ function splitMessage(text: string, maxLength: number): string[] {
         m = searchRegex.exec(remaining)
       ) {
         const candidatePos = m.index + offset;
-        if (candidatePos <= 0 || candidatePos >= maxLength) {
-          if (candidatePos >= maxLength) break;
-          continue;
-        }
+        if (candidatePos >= maxLength) break;
+        if (candidatePos <= 0) continue;
         if (!isInCodeBlock(candidatePos, codeBlocks)) {
           best = candidatePos;
         }
