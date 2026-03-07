@@ -1,20 +1,9 @@
-import { BunContext } from "@effect/platform-bun";
 import { assert, describe, expect, it } from "@effect/vitest";
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
-import {
-  Cause,
-  ConfigProvider,
-  Effect,
-  Layer,
-  Logger,
-  Option,
-  Runtime,
-} from "effect";
+import { Cause, ConfigProvider, Effect, Layer, Option, Runtime } from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { Database } from "~/lib/database";
-import { makeDatabaseLayer } from "~/lib/make-database-layer";
-import { OpenCode } from "~/lib/opencode";
+import { defaultLayer } from "~/test/default-layer";
 
 interface GrammyBotContext {
   from?: { id: number };
@@ -96,23 +85,12 @@ vi.mock("~/lib/format-message", () => ({
   formatMessage: formatMessageMock,
 }));
 
-const openCodeLayer = Layer.effect(
-  OpenCode,
-  Effect.gen(function* () {
-    const fiber = yield* Effect.fork(Effect.never);
-    return { fiber, client: createOpencodeClient() };
-  }),
-);
-
 function makeLayer(config: Record<string, unknown>) {
   return Bot.layer.pipe(
-    Layer.provideMerge(openCodeLayer),
-    Layer.provideMerge(makeDatabaseLayer()),
     Layer.provideMerge(
       Layer.setConfigProvider(ConfigProvider.fromJson(config)),
     ),
-    Layer.provideMerge(BunContext.layer),
-    Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
+    Layer.provideMerge(defaultLayer),
   );
 }
 

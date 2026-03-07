@@ -1,13 +1,7 @@
-import { BunContext } from "@effect/platform-bun";
 import { expect, it } from "@effect/vitest";
-import { Effect, Layer, Logger, Option } from "effect";
+import { Effect, Option } from "effect";
 import { Database } from "~/lib/database";
-import { makeDatabaseLayer } from "~/lib/make-database-layer";
-
-const testLayer = makeDatabaseLayer().pipe(
-  Layer.provideMerge(BunContext.layer),
-  Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
-);
+import { defaultLayer } from "~/test/default-layer";
 
 it.scopedLive("insert and find profile", () =>
   Effect.gen(function* () {
@@ -25,5 +19,5 @@ it.scopedLive("insert and find profile", () =>
     const foundProfile = yield* database.profile.findById("default");
     expect(Option.isSome(foundProfile)).toBe(true);
     expect(Option.getOrThrow(foundProfile).id).toBe("default");
-  }).pipe(Effect.provide(testLayer)),
+  }).pipe(Effect.provide(defaultLayer)),
 );

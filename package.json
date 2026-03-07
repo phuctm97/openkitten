@@ -14,6 +14,7 @@
     "down": "bun . down"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "^0.0.39",
     "@effect/cli": "^0.73.2",
     "@effect/experimental": "^0.58.0",
     "@effect/platform": "^0.94.5",

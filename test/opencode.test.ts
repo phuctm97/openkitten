@@ -1,9 +1,14 @@
 import { CommandExecutor } from "@effect/platform";
+import { BunContext } from "@effect/platform-bun";
 import { expect, it } from "@effect/vitest";
-import { Effect, Layer, Logger, Stream } from "effect";
+import { Effect, Layer, Stream } from "effect";
 import { vi } from "vitest";
 import { OpenCode } from "~/lib/opencode";
+import { SandboxRuntimeConfig } from "~/lib/sandbox-runtime-config";
 import { textEncoder } from "~/lib/text-encoder";
+import { consoleLayer } from "~/test/console-layer";
+import { databaseLayer } from "~/test/database-layer";
+import { loggerLayer } from "~/test/logger-layer";
 
 const { createOpencodeClientMock } = vi.hoisted(() => ({
   createOpencodeClientMock: vi.fn().mockReturnValue({ session: {} }),
@@ -30,13 +35,17 @@ function mockLayer(stdout?: string, exitCode?: number) {
     },
   });
   return OpenCode.layer.pipe(
+    Layer.provideMerge(SandboxRuntimeConfig.layer),
+    Layer.provideMerge(databaseLayer),
+    Layer.provideMerge(consoleLayer),
+    Layer.provideMerge(loggerLayer),
     Layer.provideMerge(
       Layer.succeed(
         CommandExecutor.CommandExecutor,
         CommandExecutor.makeExecutor(() => Effect.succeed(proc)),
       ),
     ),
-    Layer.provideMerge(Logger.replace(Logger.defaultLogger, Logger.none)),
+    Layer.provideMerge(BunContext.layer),
   );
 }
 
