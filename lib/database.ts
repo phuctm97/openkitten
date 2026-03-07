@@ -39,6 +39,7 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
         tableName: "profile",
         idColumn: "id",
       });
+      yield* Effect.logInfo("Database connection is established");
       return { profile };
     }),
   );
