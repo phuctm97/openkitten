@@ -1,5 +1,6 @@
 import { BunContext } from "@effect/platform-bun";
 import { assert, describe, expect, it } from "@effect/vitest";
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { ConfigProvider, Effect, Layer, Logger, Option } from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
@@ -74,7 +75,7 @@ const openCodeLayer = Layer.effect(
   OpenCode,
   Effect.gen(function* () {
     const fiber = yield* Effect.fork(Effect.never);
-    return { fiber, port: 4096 };
+    return { fiber, client: createOpencodeClient() };
   }),
 );
 

@@ -1,4 +1,3 @@
-import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 import {
   Config,
   Context,
@@ -27,12 +26,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       yield* Effect.logInfo("Bot.service is starting");
       const redactedToken = yield* Config.redacted("TELEGRAM_BOT_TOKEN");
       const userId = yield* Config.integer("TELEGRAM_USER_ID");
-      const opencodeServer = yield* OpenCode;
-      const opencodeClient = createOpencodeClient({
-        baseUrl: `http://127.0.0.1:${opencodeServer.port}`,
-      });
-      const database = yield* Database;
-      const runtime = yield* Effect.runtime<Database>();
+      const runtime = yield* Effect.runtime<OpenCode | Database>();
       const grammyBot = new GrammyBot(Redacted.value(redactedToken));
       grammyBot.catch(({ error, ctx }) =>
         Runtime.runPromise(runtime)(
@@ -60,6 +54,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         return Runtime.runPromise(runtime)(
           Effect.gen(function* () {
             yield* Effect.logInfo("Bot.service received a message");
+            const opencode = yield* OpenCode;
+            const database = yield* Database;
             const profile = yield* database.profile.findById("default");
             let sessionId: string;
             if (
@@ -72,7 +68,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ).pipe(Effect.annotateLogs("sessionId", sessionId));
             } else {
               const result = yield* Effect.promise(() =>
-                opencodeClient.session.create({}),
+                opencode.client.session.create({}),
               );
               if (!result.data)
                 return yield* Effect.die("Failed to create session");
@@ -96,7 +92,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               }
             }
             const result = yield* Effect.promise(() =>
-              opencodeClient.session.prompt({
+              opencode.client.session.prompt({
                 sessionID: sessionId,
                 parts: [{ type: "text", text: ctx.message.text }],
               }),

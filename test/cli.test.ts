@@ -1,7 +1,13 @@
 import { BunContext } from "@effect/platform-bun";
 import { expect, it } from "@effect/vitest";
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { Console, Effect, Layer, Logger, Option } from "effect";
 import { vi } from "vitest";
+
+vi.mock("@opencode-ai/sdk/v2/client", () => ({
+  createOpencodeClient: () => ({}),
+}));
+
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
 import { makeDatabaseLayer } from "~/lib/make-database-layer";
@@ -27,7 +33,7 @@ const openCodeLayer = Layer.effect(
   OpenCode,
   Effect.gen(function* () {
     const fiber = yield* Effect.fork(Effect.never);
-    return { fiber, port: 4096 };
+    return { fiber, client: createOpencodeClient() };
   }),
 );
 

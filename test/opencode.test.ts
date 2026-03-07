@@ -1,8 +1,17 @@
 import { CommandExecutor } from "@effect/platform";
 import { expect, it } from "@effect/vitest";
 import { Effect, Layer, Logger, Stream } from "effect";
+import { vi } from "vitest";
 import { OpenCode } from "~/lib/opencode";
 import { textEncoder } from "~/lib/text-encoder";
+
+const { createOpencodeClientMock } = vi.hoisted(() => ({
+  createOpencodeClientMock: vi.fn().mockReturnValue({ session: {} }),
+}));
+
+vi.mock("@opencode-ai/sdk/v2/client", () => ({
+  createOpencodeClient: createOpencodeClientMock,
+}));
 
 function mockLayer(stdout?: string, exitCode?: number) {
   const proc = new Proxy({} as CommandExecutor.Process, {
@@ -31,11 +40,13 @@ function mockLayer(stdout?: string, exitCode?: number) {
   );
 }
 
-it.scopedLive("exposes parsed port", () => {
+it.scopedLive("creates client with parsed port", () => {
   const port = 1024 + Math.floor(Math.random() * 64511);
   return Effect.gen(function* () {
-    const openCode = yield* OpenCode;
-    expect(openCode.port).toBe(port);
+    yield* OpenCode;
+    expect(createOpencodeClientMock).toHaveBeenCalledWith({
+      baseUrl: `http://127.0.0.1:${port}`,
+    });
   }).pipe(Effect.provide(mockLayer(`starting...\nlistening on :${port}\n`)));
 });
 
