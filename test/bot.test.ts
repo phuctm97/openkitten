@@ -1,5 +1,5 @@
 import { assert, describe, expect, it } from "@effect/vitest";
-import { ConfigProvider, Effect, Layer } from "effect";
+import { ConfigProvider, Effect, Layer, Logger } from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import pkg from "~/package.json" with { type: "json" };
@@ -9,7 +9,8 @@ type GrammyHandler = (ctx: unknown) => Promise<unknown>;
 const { GrammyBot } = vi.hoisted(() => {
   class GrammyBot {
     private resolve?: () => void;
-    async start() {
+    async start(options?: { onStart?: () => void }) {
+      options?.onStart?.();
       return new Promise<void>((resolve) => {
         this.resolve = resolve;
       });
@@ -30,15 +31,20 @@ const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
 
 const onSpy = vi.spyOn(GrammyBot.prototype, "on");
 
-const validLayer = Layer.provideMerge(
-  Bot.layer,
-  Layer.setConfigProvider(
-    ConfigProvider.fromJson({
-      TELEGRAM_BOT_TOKEN: "test:fake-token",
-      TELEGRAM_USER_ID: 123,
-    }),
-  ),
-);
+function makeLayer(config: Record<string, unknown>) {
+  return Layer.provideMerge(
+    Bot.layer,
+    Layer.mergeAll(
+      Layer.setConfigProvider(ConfigProvider.fromJson(config)),
+      Logger.replace(Logger.defaultLogger, Logger.none),
+    ),
+  );
+}
+
+const validLayer = makeLayer({
+  TELEGRAM_BOT_TOKEN: "test:fake-token",
+  TELEGRAM_USER_ID: 123,
+});
 
 describe("layer", () => {
   it.live("calls start on acquire and stop on release", () =>
@@ -63,24 +69,14 @@ describe("layer", () => {
     }).pipe(Effect.provide(validLayer));
   });
 
-  const missingBotTokenLayer = Layer.provideMerge(
-    Bot.layer,
-    Layer.setConfigProvider(ConfigProvider.fromJson({ TELEGRAM_USER_ID: 123 })),
-  );
-
   it.scopedLive.fails("fails without TELEGRAM_BOT_TOKEN", () =>
-    Bot.pipe(Effect.provide(missingBotTokenLayer)),
-  );
-
-  const missingUserIdLayer = Layer.provideMerge(
-    Bot.layer,
-    Layer.setConfigProvider(
-      ConfigProvider.fromJson({ TELEGRAM_BOT_TOKEN: "test:fake-token" }),
-    ),
+    Bot.pipe(Effect.provide(makeLayer({ TELEGRAM_USER_ID: 123 }))),
   );
 
   it.scopedLive.fails("fails without TELEGRAM_USER_ID", () =>
-    Bot.pipe(Effect.provide(missingUserIdLayer)),
+    Bot.pipe(
+      Effect.provide(makeLayer({ TELEGRAM_BOT_TOKEN: "test:fake-token" })),
+    ),
   );
 });
 

@@ -1,6 +1,6 @@
 import { CommandExecutor } from "@effect/platform";
 import { expect, it } from "@effect/vitest";
-import { Effect, Layer, Stream } from "effect";
+import { Effect, Layer, Logger, Stream } from "effect";
 import { OpenCode } from "~/lib/opencode";
 import { textEncoder } from "~/lib/text-encoder";
 
@@ -27,6 +27,7 @@ function mockLayer(stdout?: string, exitCode?: number) {
         CommandExecutor.makeExecutor(() => Effect.succeed(proc)),
       ),
     ),
+    Layer.provide(Logger.replace(Logger.defaultLogger, Logger.none)),
   );
 }
 

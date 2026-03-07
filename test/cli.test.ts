@@ -1,6 +1,6 @@
 import { BunContext } from "@effect/platform-bun";
 import { expect, it } from "@effect/vitest";
-import { Console, Effect, Layer, Option } from "effect";
+import { Console, Effect, Layer, Logger, Option } from "effect";
 import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
@@ -43,6 +43,7 @@ const testLayer = Layer.mergeAll(
   botLayer,
   openCodeLayer,
   scriptsLayer,
+  Logger.replace(Logger.defaultLogger, Logger.none),
 );
 
 it.live.fails("unknown command fails", () =>

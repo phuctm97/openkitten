@@ -1,15 +1,17 @@
 import { resolve } from "node:path";
 import { Command } from "@effect/platform";
 import { Context, Deferred, Effect, type Fiber, Layer, Stream } from "effect";
-import pkg from "~/package.json" with { type: "json" };
+import { annotateTag } from "~/lib/annotate-tag";
+import { makeTag } from "~/lib/make-tag";
 
-export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
+export class OpenCode extends Context.Tag(makeTag("OpenCode"))<
   OpenCode,
   { readonly fiber: Fiber.RuntimeFiber<void>; readonly port: number }
 >() {
   static readonly layer = Layer.scoped(
     OpenCode,
     Effect.gen(function* () {
+      yield* Effect.logInfo("Starting");
       const cmd = Command.make(
         resolve(import.meta.dirname, "../node_modules/.bin/opencode"),
         "serve",
@@ -52,7 +54,8 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         ),
         Effect.forkScoped,
       );
+      yield* Effect.logInfo("Ready");
       return OpenCode.of({ fiber, port });
-    }),
+    }).pipe(annotateTag(OpenCode)),
   );
 }
