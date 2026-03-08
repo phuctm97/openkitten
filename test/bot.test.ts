@@ -1,6 +1,14 @@
 import { assert, describe, expect, it } from "@effect/vitest";
-import { Cause, ConfigProvider, Effect, Layer, Option, Runtime } from "effect";
-import { vi } from "vitest";
+import {
+  Cause,
+  ConfigProvider,
+  Deferred,
+  Effect,
+  Layer,
+  Option,
+  Runtime,
+} from "effect";
+import { beforeEach, vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { Database } from "~/lib/database";
 import { defaultLayer } from "~/test/default-layer";
@@ -13,58 +21,140 @@ interface GrammyBotContext {
   reply: ReturnType<typeof vi.fn>;
 }
 
-type GrammyEventHandler = (ctx: GrammyBotContext) => Promise<unknown>;
-
 type GrammyErrorHandler = (err: {
   error: unknown;
   ctx: GrammyBotContext;
 }) => Promise<unknown>;
 
+type GrammyEventHandler = (ctx: GrammyBotContext) => Promise<unknown>;
+
 interface GrammyStartOptions {
   onStart?: () => void;
 }
 
-const { GrammyBot } = vi.hoisted(() => {
+// --- Mock grammY bot and SSE event stream ---
+// Must be in vi.hoisted() so vi.mock() can reference them at module scope.
+const { GrammyBot, eventRef, createEventController } = vi.hoisted(() => {
   class GrammyBot {
     private resolve?: () => void;
+
     async start(options?: GrammyStartOptions) {
       options?.onStart?.();
       return new Promise<void>((resolve) => {
         this.resolve = resolve;
       });
     }
+
     async stop() {
       this.resolve?.();
     }
-    on(_event: string, _callback: GrammyEventHandler) {}
+
     catch(_handler: GrammyErrorHandler) {}
+
+    on(_event: string, _callback: GrammyEventHandler) {}
   }
-  return { GrammyBot };
+
+  // Controllable async iterator that simulates OpenCode's SSE event stream.
+  // Uses a plain AsyncIterator (not async generator) so that return() can
+  // synchronously resolve a pending next() — async generators queue return()
+  // while executing, which causes deadlocks on scope teardown.
+  function createEventController() {
+    let nextResolve: ((value: IteratorResult<unknown>) => void) | undefined;
+    const queued: unknown[] = [];
+
+    function push(event: unknown) {
+      if (nextResolve) {
+        const r = nextResolve;
+        nextResolve = undefined;
+        r({ done: false, value: event });
+      } else {
+        queued.push(event);
+      }
+    }
+
+    function stream(): AsyncIterable<unknown> {
+      const iterator: AsyncIterator<unknown> = {
+        async next() {
+          const event = queued.shift();
+          if (event !== undefined) {
+            return { done: false as const, value: event };
+          }
+          return new Promise((r) => {
+            nextResolve = r;
+          });
+        },
+        async return() {
+          if (nextResolve) {
+            const r = nextResolve;
+            nextResolve = undefined;
+            r({ done: true, value: undefined });
+          }
+          return { done: true as const, value: undefined };
+        },
+      };
+      return { [Symbol.asyncIterator]: () => iterator };
+    }
+
+    return { push, stream };
+  }
+
+  const eventRef = { current: createEventController() };
+
+  return { GrammyBot, eventRef, createEventController };
 });
 
 vi.mock("grammy", () => ({ Bot: GrammyBot }));
 
 const startSpy = vi.spyOn(GrammyBot.prototype, "start");
-
 const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
-
 const onSpy = vi.spyOn(GrammyBot.prototype, "on");
-
 const catchSpy = vi.spyOn(GrammyBot.prototype, "catch");
 
 const sessionCreateMock = vi.fn().mockResolvedValue({
   data: { id: "new-session-id" },
 });
 
-const sessionPromptMock = vi.fn().mockResolvedValue({
-  data: { parts: [{ type: "text", text: "AI response" }] },
+// Default mock: immediately pushes a completed assistant message event so the
+// handler's Deferred resolves without delay. Individual tests override this
+// when they need different behavior (errors, empty parts, etc.).
+const sessionPromptAsyncMock = vi
+  .fn()
+  .mockImplementation(async (args: { sessionID: string }) => {
+    eventRef.current.push({
+      type: "message.updated",
+      properties: {
+        info: {
+          id: "msg-1",
+          sessionID: args.sessionID,
+          role: "assistant",
+          time: { created: 1, completed: 2 },
+        },
+      },
+    });
+    return { data: undefined };
+  });
+
+const sessionMessageMock = vi.fn().mockResolvedValue({
+  data: {
+    info: { id: "msg-1", role: "assistant" },
+    parts: [{ type: "text", text: "AI response" }],
+  },
 });
+
+// Exposed as a spy so tests can override with broken streams for reconnect tests
+const eventSubscribeMock = vi
+  .fn()
+  .mockImplementation(async () => ({ stream: eventRef.current.stream() }));
 
 vi.mock("@opencode-ai/sdk/v2/client", () => ({
   createOpencodeClient: () => ({
     session: {
       create: sessionCreateMock,
-      prompt: sessionPromptMock,
+      promptAsync: sessionPromptAsyncMock,
+      message: sessionMessageMock,
+    },
+    event: {
+      subscribe: eventSubscribeMock,
     },
   }),
 }));
@@ -85,6 +175,11 @@ vi.mock("~/lib/format-error", () => ({
 vi.mock("~/lib/format-message", () => ({
   formatMessage: formatMessageMock,
 }));
+
+// Each test gets a fresh event stream so pushed events don't leak between tests
+beforeEach(() => {
+  eventRef.current = createEventController();
+});
 
 function makeLayer(config: Record<string, unknown>) {
   return Bot.layer.pipe(
@@ -185,7 +280,7 @@ describe("handler", () => {
         }),
       );
       expect(sessionCreateMock).toHaveBeenCalledWith({});
-      expect(sessionPromptMock).toHaveBeenCalledWith({
+      expect(sessionPromptAsyncMock).toHaveBeenCalledWith({
         sessionID: "new-session-id",
         parts: [{ type: "text", text: "hello" }],
       });
@@ -219,7 +314,7 @@ describe("handler", () => {
         }),
       );
       expect(sessionCreateMock).not.toHaveBeenCalled();
-      expect(sessionPromptMock).toHaveBeenCalledWith({
+      expect(sessionPromptAsyncMock).toHaveBeenCalledWith({
         sessionID: "existing-session-id",
         parts: [{ type: "text", text: "hello" }],
       });
@@ -264,6 +359,9 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
+  // Error tests use Effect.promise(async () => expect(...).rejects.toThrow())
+  // instead of it.scopedLive.fails because we need post-failure assertions
+  // (e.g. reply not called), which .fails doesn't support.
   it.scopedLive("dies when session create returns error", () =>
     Effect.gen(function* () {
       sessionCreateMock.mockResolvedValueOnce({
@@ -276,24 +374,125 @@ describe("handler", () => {
       assert.isDefined(call);
       const handler = call[1];
       const reply = vi.fn().mockResolvedValue(undefined);
-      yield* Effect.promise(() =>
-        handler({
-          from: { id: 123 },
-          chat: { id: 123 },
-          message: { message_id: 1, text: "hello" },
-          reply,
-        }).catch(() => {}),
-      );
+      yield* Effect.promise(async () => {
+        await expect(
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+            reply,
+          }),
+        ).rejects.toThrow();
+      });
       expect(reply).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
   it.scopedLive("dies when session prompt returns error", () =>
     Effect.gen(function* () {
-      sessionPromptMock.mockResolvedValueOnce({
+      sessionPromptAsyncMock.mockResolvedValueOnce({
         data: undefined,
         error: new Error("prompt failed"),
       });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(async () => {
+        await expect(
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+            reply,
+          }),
+        ).rejects.toThrow();
+      });
+      expect(reply).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("sends error to Telegram on session.error event", () =>
+    Effect.gen(function* () {
+      sessionPromptAsyncMock.mockImplementationOnce(
+        async (args: { sessionID: string }) => {
+          eventRef.current.push({
+            type: "session.error",
+            properties: {
+              sessionID: args.sessionID,
+              error: { message: "provider auth failed" },
+            },
+          });
+          return { data: undefined };
+        },
+      );
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(async () => {
+        await expect(
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+            reply,
+          }),
+        ).rejects.toThrow();
+      });
+      expect(formatErrorMock).toHaveBeenCalled();
+      expect(reply).toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("ignores events for unknown sessions", () =>
+    Effect.gen(function* () {
+      sessionPromptAsyncMock.mockImplementationOnce(
+        async (args: { sessionID: string }) => {
+          // Push events for a session that has no pending entry
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-x",
+                sessionID: "unknown-session",
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+              },
+            },
+          });
+          eventRef.current.push({
+            type: "session.error",
+            properties: { sessionID: "unknown-session", error: "oops" },
+          });
+          eventRef.current.push({
+            type: "session.error",
+            properties: {},
+          });
+          // Push an unrelated event type (should be silently ignored)
+          eventRef.current.push({
+            type: "session.idle",
+            properties: { sessionID: args.sessionID },
+          });
+          // Then push the real completion event
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-1",
+                sessionID: args.sessionID,
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+              },
+            },
+          });
+          return { data: undefined };
+        },
+      );
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
@@ -306,16 +505,96 @@ describe("handler", () => {
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
           reply,
-        }).catch(() => {}),
+        }),
       );
+      // The unknown session events were silently skipped
+      expect(reply).toHaveBeenCalledTimes(1);
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("ignores incomplete assistant messages", () =>
+    Effect.gen(function* () {
+      sessionPromptAsyncMock.mockImplementationOnce(
+        async (args: { sessionID: string }) => {
+          // Push an incomplete message first (no time.completed), then a complete one
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-1",
+                sessionID: args.sessionID,
+                role: "assistant",
+                time: { created: 1 },
+              },
+            },
+          });
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-1",
+                sessionID: args.sessionID,
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+              },
+            },
+          });
+          return { data: undefined };
+        },
+      );
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+          reply,
+        }),
+      );
+      // session.message should only be called once (for the completed message)
+      expect(sessionMessageMock).toHaveBeenCalledTimes(1);
+      expect(reply).toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("dies when session.message returns error", () =>
+    Effect.gen(function* () {
+      sessionMessageMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("message fetch failed"),
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      yield* Effect.promise(async () => {
+        await expect(
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+            reply,
+          }),
+        ).rejects.toThrow();
+      });
       expect(reply).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
   it.scopedLive("does not reply when response has no text parts", () =>
     Effect.gen(function* () {
-      sessionPromptMock.mockResolvedValueOnce({
-        data: { parts: [{ type: "tool" }] },
+      sessionMessageMock.mockResolvedValueOnce({
+        data: {
+          info: { id: "msg-1", role: "assistant" },
+          parts: [{ type: "tool" }],
+        },
       });
       yield* Bot;
       yield* Effect.sleep(0);
@@ -446,5 +725,91 @@ describe("handler", () => {
         expect.objectContaining({ message: "wrapped error" }),
       );
     }).pipe(Effect.provide(validLayer)),
+  );
+
+  // Verifies that when the SSE stream errors, the bot reconnects and
+  // continues processing events on the new connection.
+  it.scopedLive(
+    "reconnects event stream after error",
+    () => {
+      // Must set mock before Effect.provide constructs the layer,
+      // since subscribe is called during Bot layer construction.
+      const broken: AsyncIterable<unknown> = {
+        [Symbol.asyncIterator]: () => ({
+          async next() {
+            throw new Error("SSE connection lost");
+          },
+          async return() {
+            return { done: true as const, value: undefined };
+          },
+        }),
+      };
+      eventSubscribeMock.mockImplementationOnce(async () => ({
+        stream: broken,
+      }));
+
+      return Effect.gen(function* () {
+        yield* Bot;
+        // Wait for reconnect delay (5s) + margin for the second subscribe
+        yield* Effect.sleep("6 seconds");
+
+        // Second subscribe call uses the default mock (eventRef.current),
+        // so the bot should be functional again.
+        expect(eventSubscribeMock).toHaveBeenCalledTimes(2);
+        const call = onSpy.mock.lastCall;
+        assert.isDefined(call);
+        const handler = call[1];
+        const reply = vi.fn().mockResolvedValue(undefined);
+        yield* Effect.promise(() =>
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+            reply,
+          }),
+        );
+        expect(reply).toHaveBeenCalled();
+      }).pipe(Effect.provide(validLayer));
+    },
+    { timeout: 10_000 },
+  );
+
+  // Verifies that pending deferreds are failed on shutdown so handler
+  // fibers don't hang forever.
+  it.live("fails pending deferreds on shutdown", () =>
+    Effect.gen(function* () {
+      // Use a promptAsync that registers the pending entry but never
+      // pushes an event, so the deferred stays pending until shutdown.
+      sessionPromptAsyncMock.mockResolvedValueOnce({ data: undefined });
+      const handlerResult = yield* Deferred.make<string>();
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* Bot;
+          yield* Effect.sleep(0);
+          const call = onSpy.mock.lastCall;
+          assert.isDefined(call);
+          const handler = call[1];
+          // Fire handler in background — it will block on Deferred.await
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+            reply: vi.fn().mockResolvedValue(undefined),
+          }).then(
+            () =>
+              Deferred.unsafeDone(handlerResult, Effect.succeed("resolved")),
+            () =>
+              Deferred.unsafeDone(handlerResult, Effect.succeed("rejected")),
+          );
+          // Give handler time to register the pending prompt
+          yield* Effect.sleep(50);
+          // Scope closes here — finalizer should fail the pending deferred
+        }).pipe(Effect.provide(validLayer)),
+      );
+      // Give the promise .then() callback time to fire
+      yield* Effect.sleep(50);
+      const result = yield* Deferred.await(handlerResult);
+      expect(result).toBe("rejected");
+    }),
   );
 });
