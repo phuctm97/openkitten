@@ -54,48 +54,77 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               yield* Ref.get(pendingRef),
               info.sessionID,
             );
-            if (Option.isNone(pending)) return;
-            const { sendChunks, done } = pending.value;
-            // Fetch the full message to get all parts (text, tool, etc.)
-            const msgResult = yield* Effect.promise(() =>
-              opencode.client.session.message({
-                sessionID: info.sessionID,
-                messageID: info.id,
-              }),
-            );
-            if (msgResult.error) {
-              yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
-              return yield* Deferred.die(done, msgResult.error);
-            }
-            const replyText = msgResult.data.parts
-              .filter(isTextPart)
-              .map((p) => p.text)
-              .filter(Boolean)
-              .join("\n")
-              .trim();
-            if (replyText) {
-              yield* sendChunks(formatMessage(replyText), {
-                ignoreErrors: false,
-              });
-              yield* Effect.logTrace("Bot.service sent a reply");
-            } else {
+            if (Option.isNone(pending)) {
               yield* Effect.logWarning(
-                "Bot.service received an empty response",
-              );
+                "Bot.service ignored a message.updated for an unknown session",
+              ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
+              return;
             }
-            yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
-            yield* Deferred.succeed(done, undefined);
+            const { sendChunks, done, userId, chatId } = pending.value;
+            yield* Effect.gen(function* () {
+              // Fetch the full message to get all parts (text, tool, etc.)
+              const msgResult = yield* Effect.promise(() =>
+                opencode.client.session.message({
+                  sessionID: info.sessionID,
+                  messageID: info.id,
+                }),
+              );
+              if (msgResult.error) {
+                yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
+                return yield* Deferred.die(done, msgResult.error);
+              }
+              const replyText = msgResult.data.parts
+                .filter(isTextPart)
+                .map((p) => p.text)
+                .filter(Boolean)
+                .join("\n")
+                .trim();
+              if (replyText) {
+                yield* sendChunks(formatMessage(replyText), {
+                  ignoreErrors: false,
+                });
+                yield* Effect.logTrace("Bot.service sent a reply");
+              } else {
+                yield* Effect.logWarning(
+                  "Bot.service received an empty response",
+                );
+              }
+              yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
+              yield* Deferred.succeed(done, undefined);
+            }).pipe(
+              Effect.annotateLogs("sessionId", info.sessionID),
+              Effect.annotateLogs("userId", userId),
+              Effect.annotateLogs("chatId", chatId),
+            );
           } else if (event.type === "session.error") {
             const { sessionID, error } = event.properties;
-            if (!sessionID) return;
+            if (!sessionID) {
+              yield* Effect.logWarning(
+                "Bot.service ignored a session.error without sessionID",
+              );
+              return;
+            }
             const pending = HashMap.get(yield* Ref.get(pendingRef), sessionID);
-            if (Option.isNone(pending)) return;
-            const { sendChunks, done } = pending.value;
-            yield* sendChunks(formatError(error), {
-              ignoreErrors: false,
-            });
-            yield* Ref.update(pendingRef, HashMap.remove(sessionID));
-            yield* Deferred.die(done, error);
+            if (Option.isNone(pending)) {
+              yield* Effect.logWarning(
+                "Bot.service ignored a session.error for an unknown session",
+              ).pipe(Effect.annotateLogs("sessionId", sessionID));
+              return;
+            }
+            const { sendChunks, done, userId, chatId } = pending.value;
+            yield* Effect.gen(function* () {
+              yield* sendChunks(formatError(error), {
+                ignoreErrors: false,
+              });
+              yield* Ref.update(pendingRef, HashMap.remove(sessionID));
+              // Succeed (not die) — the error was already sent to the user above,
+              // dying here would trigger grammY's catch handler and send it again.
+              yield* Deferred.succeed(done, undefined);
+            }).pipe(
+              Effect.annotateLogs("sessionId", sessionID),
+              Effect.annotateLogs("userId", userId),
+              Effect.annotateLogs("chatId", chatId),
+            );
           }
         });
 
@@ -141,7 +170,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             ),
           ),
         ),
-      ).pipe(Effect.annotateLogs("debugHint", "Bot.stream"), Effect.forkScoped);
+      ).pipe(Effect.forkScoped);
 
       // Fail all pending deferreds on shutdown so handler fibers don't hang
       yield* Effect.addFinalizer(() =>
@@ -169,7 +198,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ignoreErrors: true,
             });
           }).pipe(
-            Effect.annotateLogs("debugHint", "Bot.handle"),
+            Effect.annotateLogs("debugHint", "Bot.service"),
             Effect.annotateLogs("userId", ctx.from?.id),
             Effect.annotateLogs("chatId", ctx.chat?.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
@@ -230,10 +259,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               chunks: ReturnType<typeof formatMessage>,
               opts: Bot.SendChunksOptions,
             ) => Bot.sendChunks(ctx, chunks, opts);
-            yield* Ref.update(
-              pendingRef,
-              HashMap.set(sessionId, { sendChunks, done }),
-            );
+            const pending: Bot.PendingPrompt = {
+              sendChunks,
+              done,
+              userId: ctx.from?.id,
+              chatId: ctx.chat.id,
+            };
+            yield* Ref.update(pendingRef, HashMap.set(sessionId, pending));
 
             const result = yield* Effect.promise(() =>
               opencode.client.session.promptAsync({
@@ -249,7 +281,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             // Wait for event stream to resolve
             yield* Deferred.await(done);
           }).pipe(
-            Effect.annotateLogs("debugHint", "Bot.handle"),
             Effect.annotateLogs("userId", ctx.from?.id),
             Effect.annotateLogs("chatId", ctx.chat.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
@@ -276,7 +307,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           Effect.gen(function* () {
             yield* Effect.logDebug("Bot.service is stopping");
             yield* Effect.promise(() => grammyBot.stop()).pipe(
-              Effect.annotateLogs("debugHint", "Bot.stop"),
               Effect.ignoreLogged,
             );
             yield* Effect.logInfo("Bot.service has stopped");
@@ -318,6 +348,8 @@ export namespace Bot {
       opts: Bot.SendChunksOptions,
     ) => Effect.Effect<void>;
     readonly done: Deferred.Deferred<void>;
+    readonly userId: number | undefined;
+    readonly chatId: number;
   }
   export interface SendChunksOptions {
     ignoreErrors: boolean;

@@ -438,16 +438,16 @@ describe("handler", () => {
       assert.isDefined(call);
       const handler = call[1];
       const reply = vi.fn().mockResolvedValue(undefined);
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "hello" },
-            reply,
-          }),
-        ).rejects.toThrow();
-      });
+      // session.error is an expected path — the error is sent to the user
+      // and the handler completes normally (no throw).
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+          reply,
+        }),
+      );
       expect(formatErrorMock).toHaveBeenCalled();
       expect(reply).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
@@ -511,7 +511,7 @@ describe("handler", () => {
           reply,
         }),
       );
-      // The unknown session events were silently skipped
+      // The unknown session events were logged and skipped
       expect(reply).toHaveBeenCalledTimes(1);
     }).pipe(Effect.provide(validLayer)),
   );

@@ -146,7 +146,6 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
           Effect.logDebug("OpenCode.sandbox is disposing").pipe(
             Effect.andThen(Effect.promise(() => SandboxManager.reset())),
             Effect.tap(Effect.logDebug("OpenCode.sandbox is disposed")),
-            Effect.annotateLogs("debugHint", "OpenCode.sandbox"),
             Effect.ignoreLogged,
           ),
       );
