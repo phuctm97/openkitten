@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { Effect, Layer } from "effect";
+import pc from "picocolors";
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
 import { makeDatabaseLayer } from "~/lib/make-database-layer";
@@ -45,18 +46,24 @@ function getDataDir() {
   }
 }
 
+async function ensureDataDir() {
+  const dataDir = getDataDir();
+  await mkdir(dataDir, { recursive: true });
+  return dataDir;
+}
+
 async function updateProjectDir() {
   const branch = (
     await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(projectDir).text()
   ).trim();
   if (branch !== "main") {
-    return console.log("Skipping update: not on main branch");
+    return console.log(pc.yellow("~ Skipped update — not on main branch"));
   }
   const status = (
     await Bun.$`git status --porcelain`.cwd(projectDir).text()
   ).trim();
   if (status !== "") {
-    return console.log("Skipping update: worktree is dirty");
+    return console.log(pc.yellow("~ Skipped update — worktree is dirty"));
   }
   await Bun.$`git pull`.cwd(projectDir);
   await Bun.$`bun install`.cwd(projectDir);
@@ -100,7 +107,7 @@ async function installDarwin() {
     .nothrow()
     .quiet();
   await Bun.$`launchctl bootstrap gui/${userId} ${plistPath}`;
-  console.log(`Service installed: ${plistPath}`);
+  console.log(`${pc.green("+ Installed service")} ${pc.dim(plistPath)}`);
 }
 
 async function uninstallDarwin() {
@@ -114,7 +121,7 @@ async function uninstallDarwin() {
     rm(logsDir, { force: true, recursive: true }),
     rm(plistPath, { force: true }),
   ]);
-  console.log("Service removed.");
+  console.log(`${pc.green("- Removed service")} ${pc.dim(plistPath)}`);
 }
 
 async function installLinux() {
@@ -137,7 +144,7 @@ WantedBy=default.target
   await Bun.write(unitPath, unitContent);
   await Bun.$`systemctl --user daemon-reload`;
   await Bun.$`systemctl --user enable --now ${systemctlService}`;
-  console.log(`Service installed: ${unitPath}`);
+  console.log(`${pc.green("+ Installed service")} ${pc.dim(unitPath)}`);
 }
 
 async function uninstallLinux() {
@@ -145,15 +152,37 @@ async function uninstallLinux() {
   const unitPath = `${homedir()}/.config/systemd/user/${systemctlService}.service`;
   await rm(unitPath, { force: true });
   await Bun.$`systemctl --user daemon-reload`;
-  console.log("Service removed.");
+  console.log(`${pc.green("- Removed service")} ${pc.dim(unitPath)}`);
 }
+
+const shellLayer = Layer.succeed(
+  Shell,
+  (strings: TemplateStringsArray, ...values: Shell.Value[]) => {
+    const makeCommand = (dir?: string): Shell.Command =>
+      Object.assign(
+        Effect.promise(async () => {
+          let cmd = Bun.$(strings, ...values);
+          if (dir) cmd = cmd.cwd(dir);
+          return cmd.text();
+        }),
+        { cwd: (d: string) => makeCommand(d) },
+      );
+    return makeCommand();
+  },
+);
 
 const databaseLayer = Layer.unwrapEffect(
   Effect.gen(function* () {
-    const dataDir = getDataDir();
-    yield* Effect.promise(() => mkdir(dataDir, { recursive: true }));
+    const dataDir = yield* Effect.promise(ensureDataDir);
     return makeDatabaseLayer(`${dataDir}/bot.db`);
   }),
+);
+
+const serverLayer = Bot.layer.pipe(
+  Layer.provideMerge(OpenCode.layer),
+  Layer.provideMerge(SandboxRuntimeConfig.layer),
+  Layer.provideMerge(shellLayer),
+  Layer.provideMerge(databaseLayer),
 );
 
 const scriptsLayer = Layer.succeed(Scripts, {
@@ -180,29 +209,7 @@ const scriptsLayer = Layer.succeed(Scripts, {
   },
 });
 
-const shellLayer = Layer.succeed(
-  Shell,
-  (strings: TemplateStringsArray, ...values: Shell.Value[]) => {
-    const makeCommand = (dir?: string): Shell.Command =>
-      Object.assign(
-        Effect.promise(async () => {
-          let cmd = Bun.$(strings, ...values);
-          if (dir) cmd = cmd.cwd(dir);
-          return cmd.text();
-        }),
-        { cwd: (d: string) => makeCommand(d) },
-      );
-    return makeCommand();
-  },
+cli({ argv: Bun.argv, serverLayer, scriptsLayer }).pipe(
+  Effect.provide(BunContext.layer),
+  BunRuntime.runMain,
 );
-
-const runLayer = Bot.layer.pipe(
-  Layer.provideMerge(OpenCode.layer),
-  Layer.provideMerge(shellLayer),
-  Layer.provideMerge(scriptsLayer),
-  Layer.provideMerge(SandboxRuntimeConfig.layer),
-  Layer.provideMerge(databaseLayer),
-  Layer.provideMerge(BunContext.layer),
-);
-
-cli(Bun.argv).pipe(Effect.provide(runLayer), BunRuntime.runMain);

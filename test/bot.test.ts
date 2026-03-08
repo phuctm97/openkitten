@@ -4,6 +4,7 @@ import { vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { Database } from "~/lib/database";
 import { defaultLayer } from "~/test/default-layer";
+import { opencodeLayer } from "~/test/opencode-layer";
 
 interface GrammyBotContext {
   from?: { id: number };
@@ -90,6 +91,7 @@ function makeLayer(config: Record<string, unknown>) {
     Layer.provideMerge(
       Layer.setConfigProvider(ConfigProvider.fromJson(config)),
     ),
+    Layer.provideMerge(opencodeLayer),
     Layer.provideMerge(defaultLayer),
   );
 }
