@@ -447,6 +447,46 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
+  it.scopedLive("sends error to user when session.error send fails", () =>
+    Effect.gen(function* () {
+      sessionPromptAsyncMock.mockImplementationOnce(
+        async (args: { sessionID: string }) => {
+          eventRef.current.push({
+            type: "session.error",
+            properties: {
+              sessionID: args.sessionID,
+              error: { message: "provider auth failed" },
+            },
+          });
+          return { data: undefined };
+        },
+      );
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      // Both MarkdownV2 and plain text fallback must fail to trigger a defect
+      const reply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("MarkdownV2 failed"))
+        .mockRejectedValueOnce(new Error("plain text failed"))
+        .mockResolvedValue(undefined);
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+          reply,
+        }),
+      );
+      yield* Effect.sleep(0);
+      // First two calls failed (session.error send), third call succeeded
+      // (catchAllDefect sent the Telegram error to user)
+      expect(reply).toHaveBeenCalledTimes(3);
+    }).pipe(Effect.provide(validLayer)),
+  );
+
   it.scopedLive("ignores events for unknown sessions", () =>
     Effect.gen(function* () {
       sessionPromptAsyncMock.mockImplementationOnce(
@@ -804,7 +844,7 @@ describe("handler", () => {
       assert.isDefined(call);
       const handler = call[1];
       const reply = vi.fn().mockResolvedValue(undefined);
-      // First call: session.message rejects → defect caught, stream continues
+      // First call: session.message rejects → defect caught, error sent to user
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
@@ -814,7 +854,8 @@ describe("handler", () => {
         }),
       );
       yield* Effect.sleep(0);
-      expect(reply).not.toHaveBeenCalled();
+      expect(formatErrorMock).toHaveBeenCalledTimes(1);
+      expect(reply).toHaveBeenCalledTimes(1);
       // Second call: uses default mocks → should work normally
       yield* Effect.promise(() =>
         handler({
@@ -825,7 +866,7 @@ describe("handler", () => {
         }),
       );
       yield* Effect.sleep(0);
-      expect(reply).toHaveBeenCalled();
+      expect(reply).toHaveBeenCalledTimes(2);
     }).pipe(Effect.provide(validLayer)),
   );
 });

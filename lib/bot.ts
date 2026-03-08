@@ -71,6 +71,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 }),
               );
               if (msgResult.error) {
+                yield* Effect.logError(msgResult.error).pipe(
+                  Effect.annotateLogs("debugHint", "Bot.service"),
+                );
                 yield* sendChunks(formatError(msgResult.error), {
                   ignoreErrors: false,
                 });
@@ -93,6 +96,16 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 );
               }
             }).pipe(
+              Effect.catchAllDefect((defect) =>
+                Effect.gen(function* () {
+                  yield* Effect.logError(defect).pipe(
+                    Effect.annotateLogs("debugHint", "Bot.service"),
+                  );
+                  yield* sendChunks(formatError(defect), {
+                    ignoreErrors: true,
+                  });
+                }),
+              ),
               Effect.annotateLogs("sessionId", info.sessionID),
               Effect.annotateLogs("userId", userId),
               Effect.annotateLogs("chatId", chatId),
@@ -114,9 +127,22 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             }
             const { sendChunks, userId, chatId } = pending.value;
             yield* Ref.update(pendingRef, HashMap.remove(sessionID));
-            yield* sendChunks(formatError(error), {
-              ignoreErrors: false,
+            yield* Effect.gen(function* () {
+              yield* Effect.logWarning(error);
+              yield* sendChunks(formatError(error), {
+                ignoreErrors: false,
+              });
             }).pipe(
+              Effect.catchAllDefect((defect) =>
+                Effect.gen(function* () {
+                  yield* Effect.logError(defect).pipe(
+                    Effect.annotateLogs("debugHint", "Bot.service"),
+                  );
+                  yield* sendChunks(formatError(defect), {
+                    ignoreErrors: true,
+                  });
+                }),
+              ),
               Effect.annotateLogs("sessionId", sessionID),
               Effect.annotateLogs("userId", userId),
               Effect.annotateLogs("chatId", chatId),
@@ -154,17 +180,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               return Effect.sync(() => {
                 iter.return?.(undefined);
               });
-            }).pipe(
-              Effect.flatMap((event) =>
-                processEvent(event).pipe(
-                  Effect.catchAllDefect((defect) =>
-                    Effect.logError(defect).pipe(
-                      Effect.annotateLogs("debugHint", "Bot.service"),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            }).pipe(Effect.flatMap(processEvent)),
           );
         }),
       );
