@@ -37,12 +37,12 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       const opencode = yield* OpenCode;
 
       // Tracks in-flight prompts keyed by sessionId so the event stream fiber
-      // can resolve the handler's Deferred when a response arrives.
+      // can send the reply to Telegram when a response arrives.
       const pendingRef = yield* Ref.make(
         HashMap.empty<string, Bot.PendingPrompt>(),
       );
 
-      /** Handles a single SSE event: resolves or fails the pending handler's Deferred. */
+      /** Handles a single SSE event: sends the reply or error to Telegram. */
       const processEvent = (event: Event) =>
         Effect.gen(function* () {
           if (event.type === "message.updated") {
@@ -60,7 +60,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
               return;
             }
-            const { sendChunks, done, userId, chatId } = pending.value;
+            const { sendChunks, userId, chatId } = pending.value;
+            yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
             yield* Effect.gen(function* () {
               // Fetch the full message to get all parts (text, tool, etc.)
               const msgResult = yield* Effect.promise(() =>
@@ -70,8 +71,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 }),
               );
               if (msgResult.error) {
-                yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
-                return yield* Deferred.die(done, msgResult.error);
+                yield* sendChunks(formatError(msgResult.error), {
+                  ignoreErrors: false,
+                });
+                return;
               }
               const replyText = msgResult.data.parts
                 .filter(isTextPart)
@@ -89,8 +92,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   "Bot.service received an empty response",
                 );
               }
-              yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
-              yield* Deferred.succeed(done, undefined);
             }).pipe(
               Effect.annotateLogs("sessionId", info.sessionID),
               Effect.annotateLogs("userId", userId),
@@ -111,15 +112,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ).pipe(Effect.annotateLogs("sessionId", sessionID));
               return;
             }
-            const { sendChunks, done, userId, chatId } = pending.value;
-            yield* Effect.gen(function* () {
-              yield* sendChunks(formatError(error), {
-                ignoreErrors: false,
-              });
-              yield* Ref.update(pendingRef, HashMap.remove(sessionID));
-              // Succeed (not die) — the error was already sent to the user above,
-              // dying here would trigger grammY's catch handler and send it again.
-              yield* Deferred.succeed(done, undefined);
+            const { sendChunks, userId, chatId } = pending.value;
+            yield* Ref.update(pendingRef, HashMap.remove(sessionID));
+            yield* sendChunks(formatError(error), {
+              ignoreErrors: false,
             }).pipe(
               Effect.annotateLogs("sessionId", sessionID),
               Effect.annotateLogs("userId", userId),
@@ -158,7 +154,17 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               return Effect.sync(() => {
                 iter.return?.(undefined);
               });
-            }).pipe(Effect.flatMap(processEvent)),
+            }).pipe(
+              Effect.flatMap((event) =>
+                processEvent(event).pipe(
+                  Effect.catchAllDefect((defect) =>
+                    Effect.logError(defect).pipe(
+                      Effect.annotateLogs("debugHint", "Bot.service"),
+                    ),
+                  ),
+                ),
+              ),
+            ),
           );
         }),
       );
@@ -171,19 +177,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ),
         ),
       ).pipe(Effect.forkScoped);
-
-      // Fail all pending deferreds on shutdown so handler fibers don't hang
-      yield* Effect.addFinalizer(() =>
-        Effect.gen(function* () {
-          const pending = yield* Ref.get(pendingRef);
-          yield* Effect.forEach(
-            HashMap.values(pending),
-            ({ done }) =>
-              Deferred.die(done, new Error("Bot.service is shutting down")),
-            { discard: true },
-          );
-        }),
-      );
 
       // grammY bot — error handler, message handler, and lifecycle
       const grammyBot = new GrammyBot(Redacted.value(redactedToken));
@@ -254,14 +247,12 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             );
 
             // Register pending prompt before firing async prompt
-            const done = yield* Deferred.make<void>();
             const sendChunks = (
               chunks: ReturnType<typeof formatMessage>,
               opts: Bot.SendChunksOptions,
             ) => Bot.sendChunks(ctx, chunks, opts);
             const pending: Bot.PendingPrompt = {
               sendChunks,
-              done,
               userId: ctx.from?.id,
               chatId: ctx.chat.id,
             };
@@ -277,9 +268,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               yield* Ref.update(pendingRef, HashMap.remove(sessionId));
               return yield* Effect.die(result.error);
             }
-
-            // Wait for event stream to resolve
-            yield* Deferred.await(done);
           }).pipe(
             Effect.annotateLogs("userId", ctx.from?.id),
             Effect.annotateLogs("chatId", ctx.chat.id),
@@ -347,7 +335,6 @@ export namespace Bot {
       chunks: ReturnType<typeof formatMessage>,
       opts: Bot.SendChunksOptions,
     ) => Effect.Effect<void>;
-    readonly done: Deferred.Deferred<void>;
     readonly userId: number | undefined;
     readonly chatId: number;
   }

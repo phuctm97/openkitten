@@ -1,13 +1,5 @@
 import { assert, describe, expect, it } from "@effect/vitest";
-import {
-  Cause,
-  ConfigProvider,
-  Deferred,
-  Effect,
-  Layer,
-  Option,
-  Runtime,
-} from "effect";
+import { Cause, ConfigProvider, Effect, Layer, Option, Runtime } from "effect";
 import { beforeEach, vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { Database } from "~/lib/database";
@@ -117,8 +109,8 @@ const sessionCreateMock = vi.fn().mockResolvedValue({
 });
 
 // Default mock: immediately pushes a completed assistant message event so the
-// handler's Deferred resolves without delay. Individual tests override this
-// when they need different behavior (errors, empty parts, etc.).
+// event stream fiber processes the reply without delay. Individual tests
+// override this when they need different behavior (errors, empty parts, etc.).
 const sessionPromptAsyncMock = vi
   .fn()
   .mockImplementation(async (args: { sessionID: string }) => {
@@ -283,6 +275,7 @@ describe("handler", () => {
           reply,
         }),
       );
+      yield* Effect.sleep(0);
       expect(sessionCreateMock).toHaveBeenCalledWith({});
       expect(sessionPromptAsyncMock).toHaveBeenCalledWith({
         sessionID: "new-session-id",
@@ -317,6 +310,7 @@ describe("handler", () => {
           reply,
         }),
       );
+      yield* Effect.sleep(0);
       expect(sessionCreateMock).not.toHaveBeenCalled();
       expect(sessionPromptAsyncMock).toHaveBeenCalledWith({
         sessionID: "existing-session-id",
@@ -351,6 +345,7 @@ describe("handler", () => {
           reply,
         }),
       );
+      yield* Effect.sleep(0);
       expect(sessionCreateMock).toHaveBeenCalledWith({});
       expect(reply).toHaveBeenCalledWith(expect.any(String), {
         parse_mode: "MarkdownV2",
@@ -438,8 +433,6 @@ describe("handler", () => {
       assert.isDefined(call);
       const handler = call[1];
       const reply = vi.fn().mockResolvedValue(undefined);
-      // session.error is an expected path — the error is sent to the user
-      // and the handler completes normally (no throw).
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
@@ -448,6 +441,7 @@ describe("handler", () => {
           reply,
         }),
       );
+      yield* Effect.sleep(0);
       expect(formatErrorMock).toHaveBeenCalled();
       expect(reply).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
@@ -511,6 +505,7 @@ describe("handler", () => {
           reply,
         }),
       );
+      yield* Effect.sleep(0);
       // The unknown session events were logged and skipped
       expect(reply).toHaveBeenCalledTimes(1);
     }).pipe(Effect.provide(validLayer)),
@@ -560,13 +555,14 @@ describe("handler", () => {
           reply,
         }),
       );
+      yield* Effect.sleep(0);
       // session.message should only be called once (for the completed message)
       expect(sessionMessageMock).toHaveBeenCalledTimes(1);
       expect(reply).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("dies when session.message returns error", () =>
+  it.scopedLive("sends error when session.message returns error", () =>
     Effect.gen(function* () {
       sessionMessageMock.mockResolvedValueOnce({
         data: undefined,
@@ -578,17 +574,17 @@ describe("handler", () => {
       assert.isDefined(call);
       const handler = call[1];
       const reply = vi.fn().mockResolvedValue(undefined);
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "hello" },
-            reply,
-          }),
-        ).rejects.toThrow();
-      });
-      expect(reply).not.toHaveBeenCalled();
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+          reply,
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(formatErrorMock).toHaveBeenCalled();
+      expect(reply).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -614,6 +610,7 @@ describe("handler", () => {
           reply,
         }),
       );
+      yield* Effect.sleep(0);
       expect(reply).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
@@ -655,6 +652,7 @@ describe("handler", () => {
           reply,
         }),
       );
+      yield* Effect.sleep(0);
       expect(reply).toHaveBeenCalledTimes(1);
       expect(reply).toHaveBeenCalledWith("plain reply");
     }).pipe(Effect.provide(validLayer)),
@@ -679,6 +677,7 @@ describe("handler", () => {
           reply,
         }),
       );
+      yield* Effect.sleep(0);
       expect(reply).toHaveBeenCalledTimes(2);
       const fallbackCall = reply.mock.calls.at(1);
       assert.isDefined(fallbackCall);
@@ -772,48 +771,61 @@ describe("handler", () => {
             reply,
           }),
         );
+        yield* Effect.sleep(0);
         expect(reply).toHaveBeenCalled();
       }).pipe(Effect.provide(validLayer));
     },
     { timeout: 10_000 },
   );
 
-  // Verifies that pending deferreds are failed on shutdown so handler
-  // fibers don't hang forever.
-  it.live("fails pending deferreds on shutdown", () =>
+  it.scopedLive("continues event stream after processEvent defect", () =>
     Effect.gen(function* () {
-      // Use a promptAsync that registers the pending entry but never
-      // pushes an event, so the deferred stays pending until shutdown.
-      sessionPromptAsyncMock.mockResolvedValueOnce({ data: undefined });
-      const handlerResult = yield* Deferred.make<string>();
-      yield* Effect.scoped(
-        Effect.gen(function* () {
-          yield* Bot;
-          yield* Effect.sleep(0);
-          const call = onSpy.mock.lastCall;
-          assert.isDefined(call);
-          const handler = call[1];
-          // Fire handler in background — it will block on Deferred.await
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "hello" },
-            reply: vi.fn().mockResolvedValue(undefined),
-          }).then(
-            () =>
-              Deferred.unsafeDone(handlerResult, Effect.succeed("resolved")),
-            () =>
-              Deferred.unsafeDone(handlerResult, Effect.succeed("rejected")),
-          );
-          // Give handler time to register the pending prompt
-          yield* Effect.sleep(50);
-          // Scope closes here — finalizer should fail the pending deferred
-        }).pipe(Effect.provide(validLayer)),
+      // First call rejects (defect), second call uses the default mock
+      sessionMessageMock.mockRejectedValueOnce(new Error("network error"));
+      sessionPromptAsyncMock.mockImplementationOnce(
+        async (args: { sessionID: string }) => {
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-1",
+                sessionID: args.sessionID,
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+              },
+            },
+          });
+          return { data: undefined };
+        },
       );
-      // Give the promise .then() callback time to fire
-      yield* Effect.sleep(50);
-      const result = yield* Deferred.await(handlerResult);
-      expect(result).toBe("rejected");
-    }),
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      const reply = vi.fn().mockResolvedValue(undefined);
+      // First call: session.message rejects → defect caught, stream continues
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+          reply,
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(reply).not.toHaveBeenCalled();
+      // Second call: uses default mocks → should work normally
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+          reply,
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(reply).toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
   );
 });
