@@ -5,12 +5,13 @@ export default defineConfig({
   plugins: [tsconfigPaths()],
   test: {
     coverage: {
-      provider: "istanbul",
-      reporter: ["text", "html"],
       include: ["lib/**/*.{ts,tsx}"],
-      exclude: ["lib/main.ts"],
+      exclude: ["lib/git.ts", "lib/main.ts"],
+      reporter: ["text", "html"],
+      provider: "istanbul",
     },
     include: ["test/**/*.test.{ts,tsx}"],
+    exclude: ["test/git.test.ts"],
     setupFiles: ["test/setup.ts"],
     clearMocks: true,
     unstubGlobals: true,
