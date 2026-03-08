@@ -101,7 +101,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
 
       // Each iteration subscribes to the SSE stream, consumes events, and
       // cleans up the iterator via acquireRelease. On disconnect or error,
-      // catchAllCause logs and waits before the next iteration reconnects.
+      // catchAllDefect logs and waits before the next iteration reconnects.
       const consumeEventStream = Effect.scoped(
         Effect.gen(function* () {
           yield* Effect.logDebug("Bot.stream is connecting");
@@ -135,12 +135,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       );
       yield* Effect.forever(
         consumeEventStream.pipe(
-          Effect.catchAllCause((cause) => {
-            if (Cause.isInterruptedOnly(cause)) return Effect.interrupt;
-            return Effect.logWarning(
-              "Bot.stream disconnected, reconnecting",
-            ).pipe(Effect.andThen(Effect.sleep("5 seconds")));
-          }),
+          Effect.catchAllDefect(() =>
+            Effect.logWarning("Bot.stream disconnected, reconnecting").pipe(
+              Effect.andThen(Effect.sleep("5 seconds")),
+            ),
+          ),
         ),
       ).pipe(Effect.annotateLogs("debugHint", "Bot.stream"), Effect.forkScoped);
 
