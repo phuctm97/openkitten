@@ -26,7 +26,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
   static readonly layer = Layer.scoped(
     Bot,
     Effect.gen(function* () {
-      yield* Effect.logInfo("Bot.service is starting");
+      yield* Effect.logDebug("Bot.service is starting");
       const redactedToken = yield* Config.redacted("TELEGRAM_BOT_TOKEN");
       const userId = yield* Config.integer("TELEGRAM_USER_ID");
       const runtime = yield* Effect.runtime<OpenCode | Database>();
@@ -57,7 +57,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 "Bot.service ignored a message from an unauthorized user",
               );
             }
-            yield* Effect.logInfo("Bot.service received a message");
+            yield* Effect.logTrace("Bot.service received a message");
             const opencode = yield* OpenCode;
             const database = yield* Database;
             const profile = yield* database.profile.findById("default");
@@ -94,6 +94,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 });
               }
             }
+            yield* Effect.logTrace("Bot.service is prompting OpenCode").pipe(
+              Effect.annotateLogs("sessionId", sessionId),
+            );
             const result = yield* Effect.promise(() =>
               opencode.client.session.prompt({
                 sessionID: sessionId,
@@ -111,7 +114,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               yield* Bot.sendChunks(ctx, formatMessage(replyText), {
                 ignoreErrors: false,
               });
-              yield* Effect.logInfo("Bot.service sent a reply");
+              yield* Effect.logTrace("Bot.service sent a reply");
             } else {
               yield* Effect.logWarning(
                 "Bot.service received an empty response",
@@ -143,7 +146,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         }).pipe(Effect.forkScoped),
         () =>
           Effect.gen(function* () {
-            yield* Effect.logInfo("Bot.service is stopping");
+            yield* Effect.logDebug("Bot.service is stopping");
             yield* Effect.promise(() => grammyBot.stop()).pipe(
               Effect.annotateLogs("debugHint", "Bot.stop"),
               Effect.ignoreLogged,

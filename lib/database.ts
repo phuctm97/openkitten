@@ -33,13 +33,14 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
   static readonly layer = Layer.effect(
     Database,
     Effect.gen(function* () {
+      yield* Effect.logDebug("Database.service is migrating");
       yield* SqliteMigrator.run({ loader });
       const profile = yield* Model.makeRepository(ProfileModel, {
         spanPrefix: "Profile",
         tableName: "profile",
         idColumn: "id",
       });
-      yield* Effect.logInfo("Database.connection is established");
+      yield* Effect.logInfo("Database.service is ready");
       return { profile };
     }),
   );

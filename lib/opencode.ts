@@ -17,7 +17,7 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
   static readonly layer = Layer.scoped(
     OpenCode,
     Effect.gen(function* () {
-      yield* Effect.logInfo("OpenCode.service is starting");
+      yield* Effect.logDebug("OpenCode.service is starting");
       yield* Effect.addFinalizer(() =>
         Effect.logInfo("OpenCode.service has stopped"),
       );
@@ -47,6 +47,9 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         Effect.forkScoped,
       );
       const portAwaited = yield* Deferred.await(portDeferred);
+      yield* Effect.logDebug("OpenCode.service parsed port").pipe(
+        Effect.annotateLogs("port", portAwaited),
+      );
       const fiber = yield* proc.exitCode.pipe(
         Effect.orDie,
         Effect.flatMap((code) =>
@@ -61,7 +64,7 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
       });
       yield* Effect.logInfo("OpenCode.service is ready");
       yield* Effect.addFinalizer(() =>
-        Effect.logInfo("OpenCode.service is stopping"),
+        Effect.logDebug("OpenCode.service is stopping"),
       );
       return OpenCode.of({ fiber, client });
     }),
@@ -91,16 +94,16 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         return false;
       }
       yield* Effect.acquireRelease(
-        Effect.logInfo("OpenCode.sandbox is initializing").pipe(
+        Effect.logDebug("OpenCode.sandbox is initializing").pipe(
           Effect.andThen(
             Effect.promise(() => SandboxManager.initialize(config)),
           ),
-          Effect.tap(Effect.logInfo("OpenCode.sandbox is initialized")),
+          Effect.tap(Effect.logDebug("OpenCode.sandbox is initialized")),
         ),
         () =>
-          Effect.logInfo("OpenCode.sandbox is disposing").pipe(
+          Effect.logDebug("OpenCode.sandbox is disposing").pipe(
             Effect.andThen(Effect.promise(() => SandboxManager.reset())),
-            Effect.tap(Effect.logInfo("OpenCode.sandbox is disposed")),
+            Effect.tap(Effect.logDebug("OpenCode.sandbox is disposed")),
             Effect.annotateLogs("debugHint", "OpenCode.sandbox"),
             Effect.ignoreLogged,
           ),
@@ -112,8 +115,10 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
     return Effect.gen(function* () {
       const sandboxed = yield* OpenCode.sandbox();
       if (!sandboxed) {
+        yield* Effect.logWarning("OpenCode.service is unsandboxed");
         return Command.make(...OpenCode.argv).pipe(Command.stderr("inherit"));
       }
+      yield* Effect.logInfo("OpenCode.service is sandboxed");
       const raw = quote(OpenCode.argv);
       const wrapped = yield* Effect.promise(() =>
         SandboxManager.wrapWithSandbox(raw),
