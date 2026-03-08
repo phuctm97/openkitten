@@ -12,7 +12,6 @@ interface GrammyBotContext {
   from?: { id: number };
   chat?: { id: number };
   message?: { message_id: number; text: string };
-  reply: ReturnType<typeof vi.fn>;
 }
 
 type GrammyErrorHandler = (err: {
@@ -28,74 +27,78 @@ interface GrammyStartOptions {
 
 // --- Mock grammY bot and SSE event stream ---
 // Must be in vi.hoisted() so vi.mock() can reference them at module scope.
-const { GrammyBot, eventRef, createEventController } = vi.hoisted(() => {
-  class GrammyBot {
-    private resolve?: () => void;
+const { GrammyBot, sendMessageMock, eventRef, createEventController } =
+  vi.hoisted(() => {
+    const sendMessageMock = vi.fn().mockResolvedValue(undefined);
 
-    async start(options?: GrammyStartOptions) {
-      options?.onStart?.();
-      return new Promise<void>((resolve) => {
-        this.resolve = resolve;
-      });
-    }
+    class GrammyBot {
+      api = { sendMessage: sendMessageMock };
+      private resolve?: () => void;
 
-    async stop() {
-      this.resolve?.();
-    }
-
-    catch(_handler: GrammyErrorHandler) {}
-
-    on(_event: string, _callback: GrammyEventHandler) {}
-  }
-
-  // Controllable async iterator that simulates OpenCode's SSE event stream.
-  // Uses a plain AsyncIterator (not async generator) so that return() can
-  // synchronously resolve a pending next() — async generators queue return()
-  // while executing, which causes deadlocks on scope teardown.
-  function createEventController() {
-    let nextResolve: ((value: IteratorResult<unknown>) => void) | undefined;
-    const queued: unknown[] = [];
-
-    function push(event: unknown) {
-      if (nextResolve) {
-        const r = nextResolve;
-        nextResolve = undefined;
-        r({ done: false, value: event });
-      } else {
-        queued.push(event);
+      async start(options?: GrammyStartOptions) {
+        options?.onStart?.();
+        return new Promise<void>((resolve) => {
+          this.resolve = resolve;
+        });
       }
+
+      async stop() {
+        this.resolve?.();
+      }
+
+      catch(_handler: GrammyErrorHandler) {}
+
+      on(_event: string, _callback: GrammyEventHandler) {}
     }
 
-    function stream(): AsyncIterable<unknown> {
-      const iterator: AsyncIterator<unknown> = {
-        async next() {
-          const event = queued.shift();
-          if (event !== undefined) {
-            return { done: false as const, value: event };
-          }
-          return new Promise((r) => {
-            nextResolve = r;
-          });
-        },
-        async return() {
-          if (nextResolve) {
-            const r = nextResolve;
-            nextResolve = undefined;
-            r({ done: true, value: undefined });
-          }
-          return { done: true as const, value: undefined };
-        },
-      };
-      return { [Symbol.asyncIterator]: () => iterator };
+    // Controllable async iterator that simulates OpenCode's SSE event stream.
+    // Uses a plain AsyncIterator (not async generator) so that return() can
+    // synchronously resolve a pending next() — async generators queue return()
+    // while executing, which causes deadlocks on scope teardown.
+    function createEventController() {
+      let nextResolve: ((value: IteratorResult<unknown>) => void) | undefined;
+      const queued: unknown[] = [];
+
+      function push(event: unknown) {
+        if (nextResolve) {
+          const r = nextResolve;
+          nextResolve = undefined;
+          r({ done: false, value: event });
+        } else {
+          queued.push(event);
+        }
+      }
+
+      function stream(): AsyncIterable<unknown> {
+        const iterator: AsyncIterator<unknown> = {
+          async next() {
+            const event = queued.shift();
+            if (event !== undefined) {
+              return { done: false as const, value: event };
+            }
+            return new Promise((r) => {
+              nextResolve = r;
+            });
+          },
+          async return() {
+            if (nextResolve) {
+              const r = nextResolve;
+              nextResolve = undefined;
+              r({ done: true, value: undefined });
+            }
+            return { done: true as const, value: undefined };
+          },
+        };
+        return { [Symbol.asyncIterator]: () => iterator };
+      }
+
+      return { push, stream };
     }
 
-    return { push, stream };
-  }
+    const eventRef = { current: createEventController() };
 
-  const eventRef = { current: createEventController() };
-
-  return { GrammyBot, eventRef, createEventController };
-});
+    return { GrammyBot, sendMessageMock, eventRef, createEventController };
+  });
 
 vi.mock("grammy", () => ({ Bot: GrammyBot }));
 
@@ -172,9 +175,10 @@ vi.mock("~/lib/format-message", () => ({
 
 // --- Test setup ---
 
-// Each test gets a fresh event stream so pushed events don't leak between tests
+// Each test gets a fresh event stream and sendMessage mock so state doesn't leak
 beforeEach(() => {
   eventRef.current = createEventController();
+  sendMessageMock.mockClear();
 });
 
 function makeLayer(config: Record<string, unknown>) {
@@ -266,13 +270,11 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
@@ -281,7 +283,7 @@ describe("handler", () => {
         sessionID: "new-session-id",
         parts: [{ type: "text", text: "hello" }],
       });
-      expect(reply).toHaveBeenCalledWith(expect.any(String), {
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
     }).pipe(Effect.provide(validLayer)),
@@ -301,13 +303,11 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
@@ -316,7 +316,7 @@ describe("handler", () => {
         sessionID: "existing-session-id",
         parts: [{ type: "text", text: "hello" }],
       });
-      expect(reply).toHaveBeenCalledWith(expect.any(String), {
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
     }).pipe(Effect.provide(validLayer)),
@@ -336,18 +336,16 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
       expect(sessionCreateMock).toHaveBeenCalledWith({});
-      expect(reply).toHaveBeenCalledWith(expect.any(String), {
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
       const profile = yield* database.profile.findById("default");
@@ -372,18 +370,16 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(async () => {
         await expect(
           handler({
             from: { id: 123 },
             chat: { id: 123 },
             message: { message_id: 1, text: "hello" },
-            reply,
           }),
         ).rejects.toThrow();
       });
-      expect(reply).not.toHaveBeenCalled();
+      expect(sendMessageMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -398,18 +394,16 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(async () => {
         await expect(
           handler({
             from: { id: 123 },
             chat: { id: 123 },
             message: { message_id: 1, text: "hello" },
-            reply,
           }),
         ).rejects.toThrow();
       });
-      expect(reply).not.toHaveBeenCalled();
+      expect(sendMessageMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -432,18 +426,16 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
       expect(formatErrorMock).toHaveBeenCalled();
-      expect(reply).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -461,29 +453,27 @@ describe("handler", () => {
           return { data: undefined };
         },
       );
+      // Both MarkdownV2 and plain text fallback must fail to trigger a defect
+      sendMessageMock
+        .mockRejectedValueOnce(new Error("MarkdownV2 failed"))
+        .mockRejectedValueOnce(new Error("plain text failed"))
+        .mockResolvedValue(undefined);
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      // Both MarkdownV2 and plain text fallback must fail to trigger a defect
-      const reply = vi
-        .fn()
-        .mockRejectedValueOnce(new Error("MarkdownV2 failed"))
-        .mockRejectedValueOnce(new Error("plain text failed"))
-        .mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
       // First two calls failed (session.error send), third call succeeded
       // (catchAllDefect sent the Telegram error to user)
-      expect(reply).toHaveBeenCalledTimes(3);
+      expect(sendMessageMock).toHaveBeenCalledTimes(3);
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -536,18 +526,16 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
       // The unknown session events were logged and skipped
-      expect(reply).toHaveBeenCalledTimes(1);
+      expect(sendMessageMock).toHaveBeenCalledTimes(1);
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -586,19 +574,17 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
       // session.message should only be called once (for the completed message)
       expect(sessionMessageMock).toHaveBeenCalledTimes(1);
-      expect(reply).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -613,18 +599,16 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
       expect(formatErrorMock).toHaveBeenCalled();
-      expect(reply).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -641,17 +625,15 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
-      expect(reply).not.toHaveBeenCalled();
+      expect(sendMessageMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -662,16 +644,14 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 999 },
           chat: { id: 999 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
-      expect(reply).not.toHaveBeenCalled();
+      expect(sendMessageMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -683,45 +663,42 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
-      expect(reply).toHaveBeenCalledTimes(1);
-      expect(reply).toHaveBeenCalledWith("plain reply");
+      expect(sendMessageMock).toHaveBeenCalledTimes(1);
+      expect(sendMessageMock).toHaveBeenCalledWith(123, "plain reply");
     }).pipe(Effect.provide(validLayer)),
   );
 
   it.scopedLive("falls back to plain text reply when MarkdownV2 fails", () =>
     Effect.gen(function* () {
+      sendMessageMock
+        .mockRejectedValueOnce(new Error("parse error"))
+        .mockResolvedValue(undefined);
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi
-        .fn()
-        .mockRejectedValueOnce(new Error("parse error"))
-        .mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
-      expect(reply).toHaveBeenCalledTimes(2);
-      const fallbackCall = reply.mock.calls.at(1);
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
+      const fallbackCall = sendMessageMock.mock.calls.at(1);
       assert.isDefined(fallbackCall);
-      expect(fallbackCall[1]).toBeUndefined();
+      // Fallback call: sendMessage(chatId, text) — no parse_mode
+      expect(fallbackCall[2]).toBeUndefined();
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -732,18 +709,18 @@ describe("handler", () => {
       const call = catchSpy.mock.lastCall;
       assert.isDefined(call);
       const errorHandler = call[0];
-      const reply = vi.fn().mockResolvedValue(undefined);
       yield* Effect.promise(() =>
         errorHandler({
           error: new Error("test error"),
-          ctx: { chat: { id: 123 }, reply },
+          ctx: { chat: { id: 123 } },
         }),
       );
-      expect(reply).toHaveBeenCalled();
-      const firstCall = reply.mock.calls.at(0);
+      expect(sendMessageMock).toHaveBeenCalled();
+      const firstCall = sendMessageMock.mock.calls.at(0);
       assert.isDefined(firstCall);
-      expect(firstCall[0]).toContain("error");
-      expect(firstCall[1]).toEqual({ parse_mode: "MarkdownV2" });
+      expect(firstCall[0]).toBe(123);
+      expect(firstCall[1]).toContain("error");
+      expect(firstCall[2]).toEqual({ parse_mode: "MarkdownV2" });
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -754,14 +731,13 @@ describe("handler", () => {
       const call = catchSpy.mock.lastCall;
       assert.isDefined(call);
       const errorHandler = call[0];
-      const reply = vi.fn().mockResolvedValue(undefined);
       const fiberFailure = Runtime.makeFiberFailure(
         Cause.die(new Error("wrapped error")),
       );
       yield* Effect.promise(() =>
         errorHandler({
           error: fiberFailure,
-          ctx: { chat: { id: 123 }, reply },
+          ctx: { chat: { id: 123 } },
         }),
       );
       expect(formatErrorMock).toHaveBeenCalledWith(
@@ -802,17 +778,15 @@ describe("handler", () => {
         const call = onSpy.mock.lastCall;
         assert.isDefined(call);
         const handler = call[1];
-        const reply = vi.fn().mockResolvedValue(undefined);
         yield* Effect.promise(() =>
           handler({
             from: { id: 123 },
             chat: { id: 123 },
             message: { message_id: 1, text: "hello" },
-            reply,
           }),
         );
         yield* Effect.sleep(0);
-        expect(reply).toHaveBeenCalled();
+        expect(sendMessageMock).toHaveBeenCalled();
       }).pipe(Effect.provide(validLayer));
     },
     { timeout: 10_000 },
@@ -843,30 +817,27 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      const reply = vi.fn().mockResolvedValue(undefined);
       // First call: session.message rejects → defect caught, error sent to user
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
       expect(formatErrorMock).toHaveBeenCalledTimes(1);
-      expect(reply).toHaveBeenCalledTimes(1);
+      expect(sendMessageMock).toHaveBeenCalledTimes(1);
       // Second call: uses default mocks → should work normally
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
           message: { message_id: 1, text: "hello" },
-          reply,
         }),
       );
       yield* Effect.sleep(0);
-      expect(reply).toHaveBeenCalledTimes(2);
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
     }).pipe(Effect.provide(validLayer)),
   );
 });
