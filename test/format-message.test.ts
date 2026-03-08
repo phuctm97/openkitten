@@ -146,12 +146,11 @@ test("falls back to plain text when sub-chunk still overflows", () => {
 });
 
 test("falls back when sub-chunk convert throws", () => {
-  let callCount = 0;
-  vi.mocked(convert).mockImplementation(() => {
-    callCount++;
-    if (callCount === 1) return "x".repeat(5000);
-    throw new Error("sub-chunk failed");
-  });
+  vi.mocked(convert)
+    .mockReturnValueOnce("x".repeat(5000))
+    .mockImplementation(() => {
+      throw new Error("sub-chunk failed");
+    });
   const result = formatMessage("Hello world");
   expect(result.length).toBeGreaterThanOrEqual(1);
   for (const chunk of result) {
