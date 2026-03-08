@@ -159,7 +159,7 @@ async function installDarwin() {
   await Bun.$`launchctl bootstrap gui/${userId} ${plistPath}`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   note(
-    `Open Telegram and start chatting with your bot!\n\nTo update:\n  bun up\n\nTo uninstall:\n  bun down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/${launchctlService}/*.log\n  or open Console.app and filter by "${launchctlService}"`,
+    `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun up\n\nTo uninstall:\n  bun down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/${launchctlService}/*.log\n  or open Console.app and filter by "${launchctlService}"`,
     "Next steps",
   );
 }
@@ -215,7 +215,7 @@ WantedBy=default.target
   }
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   note(
-    `Open Telegram and start chatting with your bot!\n\nTo update:\n  bun up\n\nTo uninstall:\n  bun down\n\nTroubleshooting:\n  journalctl --user -u ${systemctlService} -f`,
+    `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun up\n\nTo uninstall:\n  bun down\n\nTroubleshooting:\n  journalctl --user -u ${systemctlService} -f`,
     "Next steps",
   );
 }
@@ -262,7 +262,7 @@ const serverLayer = Bot.layer.pipe(
 
 const scriptsLayer = Layer.succeed(Scripts, {
   up: async () => {
-    intro("OpenKitten");
+    intro("😼 OpenKitten");
     await updateProjectDir();
     switch (process.platform) {
       case "darwin":
@@ -274,15 +274,15 @@ const scriptsLayer = Layer.succeed(Scripts, {
       default:
         throw new UnsupportedPlatformError();
     }
-    outro("You're all set! OpenKitten is running.");
+    outro("Meow! Your kitten is up and running.");
   },
   down: async () => {
-    intro("OpenKitten");
+    intro("😼 OpenKitten");
     const shouldContinue = await confirm({
       message: "Are you sure you want to uninstall OpenKitten?",
     });
     if (isCancel(shouldContinue) || !shouldContinue) {
-      cancel("Cancelled operation.");
+      cancel("Phew! Your kitten lives another day.");
       return;
     }
     switch (process.platform) {
@@ -296,7 +296,7 @@ const scriptsLayer = Layer.succeed(Scripts, {
         throw new UnsupportedPlatformError();
     }
     note(`To reinstall:\n  bun up`, "Changed your mind?");
-    outro("OpenKitten has been uninstalled.");
+    outro("Your kitten has left the chat.");
   },
 });
 
