@@ -1,69 +1,42 @@
 import { Effect, Layer } from "effect";
-import type { GenericContainer, StartedTestContainer } from "testcontainers";
 import { Shell } from "~/lib/shell";
 
-class CommandError extends Error {
-  constructor(
-    readonly command: string,
-    readonly exitCode: number,
-    readonly stdout: string,
-    readonly stderr: string,
-  ) {
-    super(`Command failed (${exitCode})`);
-  }
-}
-
 interface MakeDockerLayerOptions {
+  readonly image: string;
   readonly commands?: string[];
-  readonly shell?: string;
 }
 
 export function makeDockerLayer(
-  container: GenericContainer,
-  options?: MakeDockerLayerOptions,
+  options: MakeDockerLayerOptions,
 ): Layer.Layer<Shell> {
-  const sh = options?.shell || "sh";
   return Layer.scoped(
     Shell,
     Effect.gen(function* () {
-      const started = yield* Effect.acquireRelease(
-        Effect.promise(() =>
-          container.withCommand(["sleep", "infinity"]).start(),
-        ),
-        (c: StartedTestContainer) => Effect.promise(() => c.stop()),
+      const containerId = yield* Effect.acquireRelease(
+        Effect.promise(async () => {
+          const id = (
+            await Bun.$`docker run -d --entrypoint sh ${options.image} -c "sleep infinity"`.text()
+          ).trim();
+          try {
+            for (const command of options.commands ?? []) {
+              await Bun.$`docker exec ${id} sh -c ${command}`.quiet();
+            }
+          } catch (error) {
+            await Bun.$`docker rm -f ${id}`.quiet().nothrow();
+            throw error;
+          }
+          return id;
+        }),
+        (id) =>
+          Effect.promise(() => Bun.$`docker rm -f ${id}`.quiet().nothrow()),
       );
-      for (const command of options?.commands ?? []) {
-        const result = yield* Effect.promise(() =>
-          started.exec([sh, "-c", command]),
-        );
-        if (result.exitCode !== 0) {
-          return yield* Effect.die(
-            new CommandError(
-              command,
-              result.exitCode,
-              result.stdout,
-              result.stderr,
-            ),
-          );
-        }
-      }
       return (strings: TemplateStringsArray, ...values: Shell.Value[]) => {
         const makeCommand = (dir?: string): Shell.Command =>
           Object.assign(
             Effect.promise(async () => {
               const command = String.raw(strings, ...values);
-              const result = await started.exec([sh, "-c", command], {
-                ...(dir ? { workingDir: dir } : {}),
-              });
-              if (result.exitCode !== 0) {
-                throw new CommandError(
-                  command,
-                  result.exitCode,
-                  result.stdout,
-                  result.stderr,
-                );
-              }
-              return result.stdout;
+              const containerArgs = dir ? ["-w", dir] : [];
+              return Bun.$`docker exec ${containerArgs} ${containerId} sh -c ${command}`.text();
             }),
             { cwd: (d: string) => makeCommand(d) },
           );
