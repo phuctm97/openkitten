@@ -1,9 +1,10 @@
 import { mkdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
+import { styleText } from "node:util";
+import { intro, log, note, outro, spinner, taskLog } from "@clack/prompts";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { Effect, Layer } from "effect";
-import pc from "picocolors";
 import { Bot } from "~/lib/bot";
 import { cli } from "~/lib/cli";
 import { makeDatabaseLayer } from "~/lib/make-database-layer";
@@ -52,21 +53,54 @@ async function ensureDataDir() {
   return dataDir;
 }
 
+async function runTask(title: string, success: string, cmd: string[]) {
+  const tl = taskLog({ title });
+  const proc = Bun.spawn(cmd, {
+    cwd: projectDir,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const forward = async (stream: ReadableStream<Uint8Array>) => {
+    const decoder = new TextDecoder();
+    for await (const chunk of stream) {
+      for (const line of decoder.decode(chunk).split("\n")) {
+        if (line) tl.message(line);
+      }
+    }
+  };
+  await Promise.all([forward(proc.stdout), forward(proc.stderr)]);
+  const code = await proc.exited;
+  if (code === 0) {
+    tl.success(success);
+  } else {
+    tl.error(`Failed with exit code ${code}`, { showLog: true });
+    throw new Error(`${cmd.join(" ")} exited with code ${code}`);
+  }
+}
+
 async function updateProjectDir() {
   const branch = (
     await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(projectDir).text()
   ).trim();
   if (branch !== "main") {
-    return console.log(pc.yellow("~ Skipped update — not on main branch"));
+    return log.warn(
+      `Skipped update\n${styleText("dim", "Not on main branch")}`,
+    );
   }
   const status = (
     await Bun.$`git status --porcelain`.cwd(projectDir).text()
   ).trim();
   if (status !== "") {
-    return console.log(pc.yellow("~ Skipped update — worktree is dirty"));
+    return log.warn(`Skipped update\n${styleText("dim", "Worktree is dirty")}`);
   }
-  await Bun.$`git pull`.cwd(projectDir);
-  await Bun.$`bun install`.cwd(projectDir);
+  await runTask("Pulling latest changes", "Pulled latest changes", [
+    "git",
+    "pull",
+  ]);
+  await runTask("Installing dependencies", "Installed dependencies", [
+    "bun",
+    "install",
+  ]);
 }
 
 async function installDarwin() {
@@ -98,22 +132,34 @@ async function installDarwin() {
 </dict>
 </plist>
 `;
+  const s = spinner({ indicator: "timer" });
+  s.start("Installing service");
+  const wasRunning =
+    (
+      await Bun.$`launchctl bootout gui/${userId}/${launchctlService}`
+        .nothrow()
+        .quiet()
+    ).exitCode === 0;
+  if (wasRunning) s.message("Restarting service");
   await Promise.all([
     mkdir(logsDir, { recursive: true }),
     mkdir(plistDir, { recursive: true }),
   ]);
   await Bun.write(plistPath, plistContent);
-  await Bun.$`launchctl bootout gui/${userId}/${launchctlService}`
-    .nothrow()
-    .quiet();
   await Bun.$`launchctl bootstrap gui/${userId} ${plistPath}`;
-  console.log(`${pc.green("+ Installed service")} ${pc.dim(plistPath)}`);
+  s.stop(wasRunning ? "Restarted service" : "Installed service");
+  note(
+    `View logs:\n  tail -f ${logsDir}/${launchctlService}.stderr.log\n\nStop the service:\n  openkitten down`,
+    "Next steps",
+  );
 }
 
 async function uninstallDarwin() {
   const userId = getUserId();
   const logsDir = `${homedir()}/Library/Logs/${launchctlService}`;
   const plistPath = `${homedir()}/Library/LaunchAgents/${launchctlService}.plist`;
+  const s = spinner({ indicator: "timer" });
+  s.start("Removing service");
   await Bun.$`launchctl bootout gui/${userId}/${launchctlService}`
     .nothrow()
     .quiet();
@@ -121,7 +167,7 @@ async function uninstallDarwin() {
     rm(logsDir, { force: true, recursive: true }),
     rm(plistPath, { force: true }),
   ]);
-  console.log(`${pc.green("- Removed service")} ${pc.dim(plistPath)}`);
+  s.stop("Removed service");
 }
 
 async function installLinux() {
@@ -140,19 +186,38 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 `;
+  const s = spinner({ indicator: "timer" });
+  s.start("Installing service");
+  const wasRunning =
+    (
+      await Bun.$`systemctl --user is-active ${systemctlService}`
+        .nothrow()
+        .quiet()
+    ).exitCode === 0;
+  if (wasRunning) s.message("Restarting service");
   await mkdir(unitDir, { recursive: true });
   await Bun.write(unitPath, unitContent);
   await Bun.$`systemctl --user daemon-reload`;
-  await Bun.$`systemctl --user enable --now ${systemctlService}`;
-  console.log(`${pc.green("+ Installed service")} ${pc.dim(unitPath)}`);
+  if (wasRunning) {
+    await Bun.$`systemctl --user restart ${systemctlService}`;
+  } else {
+    await Bun.$`systemctl --user enable --now ${systemctlService}`;
+  }
+  s.stop(wasRunning ? "Restarted service" : "Installed service");
+  note(
+    `View logs:\n  journalctl --user -u ${systemctlService} -f\n\nStop the service:\n  openkitten down`,
+    "Next steps",
+  );
 }
 
 async function uninstallLinux() {
+  const s = spinner({ indicator: "timer" });
+  s.start("Removing service");
   await Bun.$`systemctl --user disable --now ${systemctlService}`;
   const unitPath = `${homedir()}/.config/systemd/user/${systemctlService}.service`;
   await rm(unitPath, { force: true });
   await Bun.$`systemctl --user daemon-reload`;
-  console.log(`${pc.green("- Removed service")} ${pc.dim(unitPath)}`);
+  s.stop("Removed service");
 }
 
 const shellLayer = Layer.succeed(
@@ -187,25 +252,33 @@ const serverLayer = Bot.layer.pipe(
 
 const scriptsLayer = Layer.succeed(Scripts, {
   up: async () => {
+    intro("OpenKitten");
     await updateProjectDir();
     switch (process.platform) {
       case "darwin":
-        return installDarwin();
+        await installDarwin();
+        break;
       case "linux":
-        return installLinux();
+        await installLinux();
+        break;
       default:
         throw new UnsupportedPlatformError();
     }
+    outro("You're all set! OpenKitten is running.");
   },
   down: async () => {
+    intro("OpenKitten");
     switch (process.platform) {
       case "darwin":
-        return uninstallDarwin();
+        await uninstallDarwin();
+        break;
       case "linux":
-        return uninstallLinux();
+        await uninstallLinux();
+        break;
       default:
         throw new UnsupportedPlatformError();
     }
+    outro("OpenKitten has been stopped and removed.");
   },
 });
 
