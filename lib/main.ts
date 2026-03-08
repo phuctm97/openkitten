@@ -274,7 +274,7 @@ const scriptsLayer = Layer.succeed(Scripts, {
       default:
         throw new UnsupportedPlatformError();
     }
-    outro("Meow! Your kitten is up and running.");
+    outro("Meow! Your kitten is up and running. 😻");
   },
   down: async () => {
     intro("😼 OpenKitten");
@@ -282,7 +282,7 @@ const scriptsLayer = Layer.succeed(Scripts, {
       message: "Are you sure you want to uninstall OpenKitten?",
     });
     if (isCancel(shouldContinue) || !shouldContinue) {
-      cancel("Phew! Your kitten lives another day.");
+      cancel("Phew! Your kitten lives another day. 😻");
       return;
     }
     switch (process.platform) {
@@ -296,7 +296,7 @@ const scriptsLayer = Layer.succeed(Scripts, {
         throw new UnsupportedPlatformError();
     }
     note(`To reinstall:\n  bun up`, "Changed your mind?");
-    outro("Your kitten has left the chat.");
+    outro("Your kitten has left the chat. 😿");
   },
 });
 
