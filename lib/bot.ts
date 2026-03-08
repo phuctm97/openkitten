@@ -26,6 +26,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
   Bot,
   { readonly fiber: Fiber.RuntimeFiber<void> }
 >() {
+  /** Manages the grammY bot lifecycle, SSE event stream, and pending prompt coordination. */
   static readonly layer = Layer.scoped(
     Bot,
     Effect.gen(function* () {
@@ -41,7 +42,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         HashMap.empty<string, Bot.PendingPrompt>(),
       );
 
-      // Handles a single SSE event: resolves or fails the pending handler's Deferred.
+      /** Handles a single SSE event: resolves or fails the pending handler's Deferred. */
       const processEvent = (event: Event) =>
         Effect.gen(function* () {
           if (event.type === "message.updated") {
@@ -287,6 +288,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       return Bot.of({ fiber });
     }),
   );
+
+  /** Sends chunks to Telegram, falling back to plain text if MarkdownV2 fails. */
   static sendChunks(
     ctx: GrammyContext,
     chunks: ReturnType<typeof formatMessage>,

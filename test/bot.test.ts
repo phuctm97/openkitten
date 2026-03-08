@@ -14,6 +14,8 @@ import { Database } from "~/lib/database";
 import { defaultLayer } from "~/test/default-layer";
 import { opencodeLayer } from "~/test/opencode-layer";
 
+// --- Types for grammY mock ---
+
 interface GrammyBotContext {
   from?: { id: number };
   chat?: { id: number };
@@ -175,6 +177,8 @@ vi.mock("~/lib/format-error", () => ({
 vi.mock("~/lib/format-message", () => ({
   formatMessage: formatMessageMock,
 }));
+
+// --- Test setup ---
 
 // Each test gets a fresh event stream so pushed events don't leak between tests
 beforeEach(() => {

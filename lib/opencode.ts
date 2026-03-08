@@ -22,6 +22,10 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
   OpenCode,
   { readonly fiber: Fiber.RuntimeFiber<void>; readonly client: OpencodeClient }
 >() {
+  /**
+   * Spawns the `opencode serve` subprocess, parses its port from stdout,
+   * and creates an SDK client pointed at that port.
+   */
   static readonly layer = Layer.scoped(
     OpenCode,
     Effect.gen(function* () {
@@ -29,8 +33,12 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
       yield* Effect.addFinalizer(() =>
         Effect.logInfo("OpenCode.service has stopped"),
       );
+
       const cmd = yield* OpenCode.command();
       const proc = yield* Command.start(cmd);
+
+      // Scan stdout for the "listening on :PORT" line. The deferred is
+      // resolved with the port number or failed if stdout closes first.
       const portDeferred = yield* Deferred.make<number>();
       yield* proc.stdout.pipe(
         Stream.decodeText(),
@@ -46,6 +54,7 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
               );
         }),
         Stream.runDrain,
+        // If stdout closes without ever printing a port, fail the deferred
         Effect.ensuring(
           Deferred.die(
             portDeferred,
@@ -54,10 +63,14 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         ),
         Effect.forkScoped,
       );
+
       const portAwaited = yield* Deferred.await(portDeferred);
       yield* Effect.logDebug("OpenCode.service parsed port").pipe(
         Effect.annotateLogs("port", portAwaited),
       );
+
+      // Monitor the process exit code in a background fiber so a non-zero
+      // exit propagates as a defect to the scope.
       const fiber = yield* proc.exitCode.pipe(
         Effect.orDie,
         Effect.flatMap((code) =>
@@ -67,6 +80,7 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         ),
         Effect.forkScoped,
       );
+
       const client = createOpencodeClient({
         baseUrl: `http://127.0.0.1:${portAwaited}`,
       });
@@ -77,6 +91,8 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
       return OpenCode.of({ fiber, client });
     }),
   );
+
+  /** Arguments for `opencode serve` — port 0 lets the OS pick a free port. */
   static readonly argv = [
     resolve(import.meta.dirname, "../node_modules/.bin/opencode"),
     "serve",
@@ -85,6 +101,8 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
     "--port",
     "0",
   ] as const;
+
+  /** Returns `true` if sandbox is active, `false` if unavailable or force-disabled. */
   static sandbox() {
     return Effect.gen(function* () {
       const disableSandbox = yield* Config.string(
@@ -99,13 +117,16 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         );
         return false;
       }
+
       const config = yield* SandboxRuntimeConfig;
+
       if (!SandboxManager.isSupportedPlatform()) {
         yield* Effect.logWarning(
           "OpenCode.sandbox is unavailable: platform not supported",
         );
         return false;
       }
+
       const deps = SandboxManager.checkDependencies();
       if (deps.errors.length > 0) {
         yield* Effect.logWarning(
@@ -113,6 +134,7 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         );
         return false;
       }
+
       yield* Effect.acquireRelease(
         Effect.logDebug("OpenCode.sandbox is initializing").pipe(
           Effect.andThen(
@@ -131,6 +153,8 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
       return true;
     });
   }
+
+  /** Builds the `opencode serve` command, optionally wrapped in a sandbox. */
   static command() {
     return Effect.gen(function* () {
       const sandboxed = yield* OpenCode.sandbox();

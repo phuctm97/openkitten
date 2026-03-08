@@ -10,6 +10,8 @@ import { consoleLayer } from "~/test/console-layer";
 import { databaseLayer } from "~/test/database-layer";
 import { loggerLayer } from "~/test/logger-layer";
 
+// --- Mocks ---
+// Hoisted so vi.mock() can reference them at module scope.
 const { createOpencodeClientMock, SandboxManagerMock } = vi.hoisted(() => ({
   createOpencodeClientMock: vi.fn().mockReturnValue({ session: {} }),
   SandboxManagerMock: {
@@ -29,6 +31,8 @@ vi.mock("@anthropic-ai/sandbox-runtime", () => ({
   SandboxManager: SandboxManagerMock,
 }));
 
+// Uses a Proxy to provide only the Process properties OpenCode actually reads,
+// avoiding the need to construct a full Process object.
 function mockLayer(stdout?: string, exitCode?: number) {
   const proc = new Proxy({} as CommandExecutor.Process, {
     get: (_, prop) => {
@@ -60,6 +64,8 @@ function mockLayer(stdout?: string, exitCode?: number) {
   );
 }
 
+// --- Port parsing ---
+
 it.scopedLive("creates client with parsed port", () => {
   const port = 1024 + Math.floor(Math.random() * 64511);
   return Effect.gen(function* () {
@@ -78,6 +84,8 @@ it.scopedLive.fails("dies when stdout has listening but no port", () =>
   Layer.launch(mockLayer("listening without port\n")),
 );
 
+// --- Process exit ---
+
 it.scopedLive("completes when process exits with code 0", () =>
   Effect.gen(function* () {
     const opencode = yield* OpenCode;
@@ -91,6 +99,8 @@ it.scopedLive.fails("dies when process exits with non-zero code", () =>
     yield* opencode.fiber;
   }).pipe(Effect.provide(mockLayer("listening on :4567\n", 1))),
 );
+
+// --- Sandbox ---
 
 it.scopedLive("skips sandbox when platform is unsupported", () =>
   Effect.gen(function* () {
@@ -112,6 +122,8 @@ it.scopedLive("skips sandbox when dependencies have errors", () => {
   }).pipe(Effect.provide(mockLayer("listening on :4567\n")));
 });
 
+// Uses it.live (not scopedLive) + manual Effect.scoped to assert that
+// SandboxManager.reset() is called AFTER the scope closes.
 it.live("initializes and resets sandbox when available", () => {
   SandboxManagerMock.isSupportedPlatform.mockReturnValueOnce(true);
   return Effect.scoped(
