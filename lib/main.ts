@@ -2,7 +2,17 @@ import { mkdir, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { styleText } from "node:util";
-import { intro, log, note, outro, spinner, taskLog } from "@clack/prompts";
+import {
+  cancel,
+  confirm,
+  intro,
+  isCancel,
+  log,
+  note,
+  outro,
+  spinner,
+  taskLog,
+} from "@clack/prompts";
 import { BunContext, BunRuntime } from "@effect/platform-bun";
 import { Effect, Layer } from "effect";
 import { Bot } from "~/lib/bot";
@@ -149,7 +159,7 @@ async function installDarwin() {
   await Bun.$`launchctl bootstrap gui/${userId} ${plistPath}`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   note(
-    `View logs:\n  tail -f ${logsDir}/${launchctlService}.stderr.log\n\nStop the service:\n  openkitten down`,
+    `Open Telegram and start chatting with your bot!\n\nTo update:\n  bun up\n\nTo uninstall:\n  bun down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/${launchctlService}/*.log\n  or open Console.app and filter by "${launchctlService}"`,
     "Next steps",
   );
 }
@@ -205,7 +215,7 @@ WantedBy=default.target
   }
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   note(
-    `View logs:\n  journalctl --user -u ${systemctlService} -f\n\nStop the service:\n  openkitten down`,
+    `Open Telegram and start chatting with your bot!\n\nTo update:\n  bun up\n\nTo uninstall:\n  bun down\n\nTroubleshooting:\n  journalctl --user -u ${systemctlService} -f`,
     "Next steps",
   );
 }
@@ -268,6 +278,13 @@ const scriptsLayer = Layer.succeed(Scripts, {
   },
   down: async () => {
     intro("OpenKitten");
+    const shouldContinue = await confirm({
+      message: "Are you sure you want to uninstall OpenKitten?",
+    });
+    if (isCancel(shouldContinue) || !shouldContinue) {
+      cancel("Cancelled operation.");
+      return;
+    }
     switch (process.platform) {
       case "darwin":
         await uninstallDarwin();
@@ -278,7 +295,8 @@ const scriptsLayer = Layer.succeed(Scripts, {
       default:
         throw new UnsupportedPlatformError();
     }
-    outro("OpenKitten has been stopped and removed.");
+    note(`To reinstall:\n  bun up`, "Changed your mind?");
+    outro("OpenKitten has been uninstalled.");
   },
 });
 
