@@ -1,7 +1,7 @@
 import { CommandExecutor } from "@effect/platform";
 import { BunContext } from "@effect/platform-bun";
 import { expect, it } from "@effect/vitest";
-import { Effect, Layer, Stream } from "effect";
+import { ConfigProvider, Effect, Layer, Stream } from "effect";
 import { vi } from "vitest";
 import { OpenCode } from "~/lib/opencode";
 import { SandboxRuntimeConfig } from "~/lib/sandbox-runtime-config";
@@ -129,3 +129,18 @@ it.scopedLive("wraps command with sandbox when sandbox is available", () => {
     expect(SandboxManagerMock.wrapWithSandbox).toHaveBeenCalled();
   }).pipe(Effect.provide(mockLayer("listening on :4567\n")));
 });
+
+for (const value of ["1", "true", "TRUE"]) {
+  it.scopedLive(`skips sandbox when DANGEROUSLY_DISABLE_SANDBOX=${value}`, () =>
+    Effect.gen(function* () {
+      yield* OpenCode;
+      expect(SandboxManagerMock.isSupportedPlatform).not.toHaveBeenCalled();
+      expect(SandboxManagerMock.initialize).not.toHaveBeenCalled();
+    }).pipe(
+      Effect.provide(mockLayer("listening on :4567\n")),
+      Effect.withConfigProvider(
+        ConfigProvider.fromJson({ DANGEROUSLY_DISABLE_SANDBOX: value }),
+      ),
+    ),
+  );
+}

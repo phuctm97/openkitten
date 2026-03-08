@@ -35,12 +35,12 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
     Effect.gen(function* () {
       yield* Effect.logDebug("Database.service is migrating");
       yield* SqliteMigrator.run({ loader });
+      yield* Effect.logDebug("Database.service is migrated");
       const profile = yield* Model.makeRepository(ProfileModel, {
         spanPrefix: "Profile",
         tableName: "profile",
         idColumn: "id",
       });
-      yield* Effect.logInfo("Database.service is ready");
       return { profile };
     }),
   );

@@ -5,7 +5,15 @@ import {
   createOpencodeClient,
   type OpencodeClient,
 } from "@opencode-ai/sdk/v2/client";
-import { Context, Deferred, Effect, type Fiber, Layer, Stream } from "effect";
+import {
+  Config,
+  Context,
+  Deferred,
+  Effect,
+  type Fiber,
+  Layer,
+  Stream,
+} from "effect";
 import { quote } from "shell-quote";
 import { SandboxRuntimeConfig } from "~/lib/sandbox-runtime-config";
 import pkg from "~/package.json" with { type: "json" };
@@ -79,6 +87,18 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
   ] as const;
   static sandbox() {
     return Effect.gen(function* () {
+      const disableSandbox = yield* Config.string(
+        "DANGEROUSLY_DISABLE_SANDBOX",
+      ).pipe(
+        Config.map((s) => s.toLowerCase()),
+        Config.withDefault(""),
+      );
+      if (disableSandbox === "1" || disableSandbox === "true") {
+        yield* Effect.logWarning(
+          "OpenCode.sandbox is force-disabled via DANGEROUSLY_DISABLE_SANDBOX",
+        );
+        return false;
+      }
       const config = yield* SandboxRuntimeConfig;
       if (!SandboxManager.isSupportedPlatform()) {
         yield* Effect.logWarning(
