@@ -72,6 +72,7 @@ it.scopedLive("creates client with parsed port", () => {
     yield* OpenCode;
     expect(createOpencodeClientMock).toHaveBeenCalledWith({
       baseUrl: `http://127.0.0.1:${port}`,
+      headers: { Authorization: expect.stringMatching(/^Basic /) },
     });
   }).pipe(Effect.provide(mockLayer(`starting...\nlistening on :${port}\n`)));
 });

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
 import { Command } from "@effect/platform";
@@ -34,8 +35,17 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
         Effect.logInfo("OpenCode.service has stopped"),
       );
 
+      const username = pkg.name;
+      const password = randomBytes(32).toString("base64url");
+
       const cmd = yield* OpenCode.command();
-      const proc = yield* Command.start(cmd);
+      const proc = yield* cmd.pipe(
+        Command.env({
+          OPENCODE_SERVER_USERNAME: username,
+          OPENCODE_SERVER_PASSWORD: password,
+        }),
+        Command.start,
+      );
 
       // Scan stdout for the "listening on :PORT" line. The deferred is
       // resolved with the port number or failed if stdout closes first.
@@ -83,6 +93,9 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
 
       const client = createOpencodeClient({
         baseUrl: `http://127.0.0.1:${portAwaited}`,
+        headers: {
+          Authorization: `Basic ${btoa(`${username}:${password}`)}`,
+        },
       });
       yield* Effect.logInfo("OpenCode.service is ready");
       yield* Effect.addFinalizer(() =>
