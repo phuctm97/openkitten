@@ -207,8 +207,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             sessions,
             (session) =>
               Effect.gen(function* () {
-                const initialLimit = 10;
-                let limit = initialLimit;
+                let limit = 10;
                 let messages: Array<AssistantMessage> = [];
                 let foundOverlap = false;
                 while (!foundOverlap) {
