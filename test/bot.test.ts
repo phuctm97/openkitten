@@ -1,5 +1,13 @@
 import { assert, describe, expect, it } from "@effect/vitest";
-import { Cause, ConfigProvider, Effect, Layer, Option, Runtime } from "effect";
+import {
+  Cause,
+  ConfigProvider,
+  Effect,
+  Layer,
+  Option,
+  Runtime,
+  TestClock,
+} from "effect";
 import { beforeEach, vi } from "vitest";
 import { Bot } from "~/lib/bot";
 import { Database } from "~/lib/database";
@@ -724,6 +732,23 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
+  it.scopedLive("skips reply when catch ctx has no chat", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = catchSpy.mock.lastCall;
+      assert.isDefined(call);
+      const errorHandler = call[0];
+      yield* Effect.promise(() =>
+        errorHandler({
+          error: new Error("test error"),
+          ctx: {},
+        }),
+      );
+      expect(sendMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
   it.scopedLive("unwraps FiberFailure before formatting", () =>
     Effect.gen(function* () {
       yield* Bot;
@@ -748,49 +773,45 @@ describe("handler", () => {
 
   // Verifies that when the SSE stream errors, the bot reconnects and
   // continues processing events on the new connection.
-  it.scopedLive(
-    "reconnects event stream after error",
-    () => {
-      // Must set mock before Effect.provide constructs the layer,
-      // since subscribe is called during Bot layer construction.
-      const broken: AsyncIterable<unknown> = {
-        [Symbol.asyncIterator]: () => ({
-          async next() {
-            throw new Error("SSE connection lost");
-          },
-          async return() {
-            return { done: true as const, value: undefined };
-          },
+  it.scoped("reconnects event stream after error", () => {
+    // Must set mock before Effect.provide constructs the layer,
+    // since subscribe is called during Bot layer construction.
+    const broken: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]: () => ({
+        async next() {
+          throw new Error("SSE connection lost");
+        },
+        async return() {
+          return { done: true as const, value: undefined };
+        },
+      }),
+    };
+    eventSubscribeMock.mockImplementationOnce(async () => ({
+      stream: broken,
+    }));
+
+    return Effect.gen(function* () {
+      yield* Bot;
+      // Advance TestClock past the 5-second reconnect delay
+      yield* TestClock.adjust("5 seconds");
+
+      // Second subscribe call uses the default mock (eventRef.current),
+      // so the bot should be functional again.
+      expect(eventSubscribeMock).toHaveBeenCalledTimes(2);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
         }),
-      };
-      eventSubscribeMock.mockImplementationOnce(async () => ({
-        stream: broken,
-      }));
-
-      return Effect.gen(function* () {
-        yield* Bot;
-        // Wait for reconnect delay (5s) + margin for the second subscribe
-        yield* Effect.sleep("6 seconds");
-
-        // Second subscribe call uses the default mock (eventRef.current),
-        // so the bot should be functional again.
-        expect(eventSubscribeMock).toHaveBeenCalledTimes(2);
-        const call = onSpy.mock.lastCall;
-        assert.isDefined(call);
-        const handler = call[1];
-        yield* Effect.promise(() =>
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "hello" },
-          }),
-        );
-        yield* Effect.sleep(0);
-        expect(sendMessageMock).toHaveBeenCalled();
-      }).pipe(Effect.provide(validLayer));
-    },
-    { timeout: 10_000 },
-  );
+      );
+      yield* Effect.yieldNow();
+      expect(sendMessageMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer));
+  });
 
   it.scopedLive("continues event stream after processEvent defect", () =>
     Effect.gen(function* () {
