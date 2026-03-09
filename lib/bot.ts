@@ -275,7 +275,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               return Effect.sync(() => {
                 iter.return?.(undefined);
               });
-            }).pipe(Effect.flatMap(processEvent)),
+            }).pipe(
+              Effect.tap((event) => Effect.forkScoped(processEvent(event))),
+            ),
           );
         }),
       );
