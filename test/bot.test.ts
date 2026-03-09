@@ -4,6 +4,7 @@ import {
   ConfigProvider,
   Effect,
   Layer,
+  Option,
   Runtime,
   TestClock,
 } from "effect";
@@ -154,6 +155,10 @@ const sessionStatusMock = vi.fn().mockResolvedValue({
   data: {},
 });
 
+const sessionDeleteMock = vi.fn().mockResolvedValue({
+  data: undefined,
+});
+
 // Exposed as a spy so tests can override with broken streams for reconnect tests
 const eventSubscribeMock = vi
   .fn()
@@ -163,6 +168,7 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
   createOpencodeClient: () => ({
     session: {
       create: sessionCreateMock,
+      delete: sessionDeleteMock,
       promptAsync: sessionPromptAsyncMock,
       message: sessionMessageMock,
       status: sessionStatusMock,
@@ -205,6 +211,7 @@ vi.mock("~/lib/format-message", () => ({
 beforeEach(() => {
   eventRef.current = createEventController();
   sendMessageMock.mockClear();
+  sessionDeleteMock.mockClear();
   sessionStatusMock.mockClear();
 });
 
@@ -347,6 +354,134 @@ describe("handler", () => {
       expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive(
+    "resolves concurrent session insert via unique constraint",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        // Pre-insert the "winner" session (the one that won the race)
+        yield* database.session.insert({
+          sessionKey: "c:123",
+          sessionId: "winner-session-id",
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+        // First findById returns None (simulates the race window where
+        // neither handler has inserted yet), retry returns the winner's row.
+        const originalFindById = database.session.findById.bind(
+          database.session,
+        );
+        let findByIdCallCount = 0;
+        vi.spyOn(database.session, "findById").mockImplementation(
+          (...args: Parameters<typeof database.session.findById>) => {
+            findByIdCallCount++;
+            if (findByIdCallCount === 1) return Effect.succeed(Option.none());
+            return originalFindById(...args);
+          },
+        );
+        // Insert defects as if the loser hit unique constraint
+        vi.spyOn(database.session, "insert").mockImplementationOnce(() =>
+          Effect.die(new Error("UNIQUE constraint failed")),
+        );
+        // The loser creates its own OpenCode session
+        sessionCreateMock.mockResolvedValueOnce({
+          data: { id: "loser-session-id" },
+        });
+        yield* Bot;
+        yield* Effect.sleep(0);
+        const call = onSpy.mock.lastCall;
+        assert.isDefined(call);
+        const handler = call[1];
+        yield* Effect.promise(() =>
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+          }),
+        );
+        yield* Effect.sleep(0);
+        // Should have deleted the loser's orphaned session
+        expect(sessionDeleteMock).toHaveBeenCalledWith({
+          sessionID: "loser-session-id",
+        });
+        // Should have prompted with the winner's session ID
+        expect(sessionPromptAsyncMock).toHaveBeenCalledWith({
+          sessionID: "winner-session-id",
+          parts: [{ type: "text", text: "hello" }],
+        });
+      }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("dies when insert defects and no winner found", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      vi.spyOn(database.session, "insert").mockImplementationOnce(() =>
+        Effect.die(new Error("disk I/O error")),
+      );
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(async () => {
+        await expect(
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+          }),
+        ).rejects.toThrow("disk I/O error");
+      });
+      expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("dies when orphaned session delete fails", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      // Pre-insert the winner
+      yield* database.session.insert({
+        sessionKey: "c:123",
+        sessionId: "winner-session-id",
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      const originalFindById = database.session.findById.bind(database.session);
+      let findByIdCallCount = 0;
+      vi.spyOn(database.session, "findById").mockImplementation(
+        (...args: Parameters<typeof database.session.findById>) => {
+          findByIdCallCount++;
+          if (findByIdCallCount === 1) return Effect.succeed(Option.none());
+          return originalFindById(...args);
+        },
+      );
+      vi.spyOn(database.session, "insert").mockImplementationOnce(() =>
+        Effect.die(new Error("UNIQUE constraint failed")),
+      );
+      sessionCreateMock.mockResolvedValueOnce({
+        data: { id: "orphan-session-id" },
+      });
+      sessionDeleteMock.mockResolvedValueOnce({
+        error: new Error("delete failed"),
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(async () => {
+        await expect(
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+          }),
+        ).rejects.toThrow("delete failed");
+      });
+      expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 

@@ -252,29 +252,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               threadId,
               dmTopicId,
             });
-            const existing = yield* database.session.findById(key);
-            let sessionId: string;
-            if (Option.isSome(existing)) {
-              sessionId = existing.value.sessionId;
-              yield* Effect.logDebug(
-                "Bot.service reused an existing session",
-              ).pipe(Effect.annotateLogs("sessionId", sessionId));
-            } else {
-              const result = yield* Effect.promise(() =>
-                opencode.client.session.create({}),
-              );
-              if (result.error) return yield* Effect.die(result.error);
-              sessionId = result.data.id;
-              yield* database.session.insert({
-                sessionKey: key,
-                sessionId,
-                createdAt: undefined,
-                updatedAt: undefined,
-              });
-              yield* Effect.logInfo("Bot.service created a new session").pipe(
-                Effect.annotateLogs("sessionId", sessionId),
-              );
-            }
+            const sessionId = yield* Bot.findOrCreateSession(
+              database,
+              opencode,
+              key,
+            );
             // Check if session is busy via status API
             const statusResult = yield* Effect.promise(() =>
               opencode.client.session.status({}),
@@ -375,6 +357,62 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       else if (part.startsWith("d:")) dmTopicId = Number(part.slice(2));
     }
     return { chatId, threadId, dmTopicId };
+  }
+
+  /**
+   * Finds an existing session by key, or creates one. If a concurrent insert
+   * races and wins, catches the unique-constraint defect and re-lookups.
+   */
+  static findOrCreateSession(
+    database: Context.Tag.Service<typeof Database>,
+    opencode: Context.Tag.Service<typeof OpenCode>,
+    key: string,
+  ) {
+    return Effect.gen(function* () {
+      const existing = yield* database.session.findById(key);
+      if (Option.isSome(existing)) {
+        yield* Effect.logDebug("Bot.service reused an existing session").pipe(
+          Effect.annotateLogs("sessionId", existing.value.sessionId),
+        );
+        return existing.value.sessionId;
+      }
+      const result = yield* Effect.promise(() =>
+        opencode.client.session.create({}),
+      );
+      if (result.error) return yield* Effect.die(result.error);
+      const sessionId = result.data.id;
+      return yield* database.session
+        .insert({
+          sessionKey: key,
+          sessionId,
+          createdAt: undefined,
+          updatedAt: undefined,
+        })
+        .pipe(
+          Effect.tap(
+            Effect.logInfo("Bot.service created a new session").pipe(
+              Effect.annotateLogs("sessionId", sessionId),
+            ),
+          ),
+          Effect.as(sessionId),
+          Effect.catchAllDefect((defect) =>
+            Effect.gen(function* () {
+              const raced = yield* database.session.findById(key);
+              if (Option.isNone(raced)) return yield* Effect.die(defect);
+              // Clean up the orphaned OpenCode session from the losing race
+              const deleteResult = yield* Effect.promise(() =>
+                opencode.client.session.delete({ sessionID: sessionId }),
+              );
+              if (deleteResult.error)
+                return yield* Effect.die(deleteResult.error);
+              yield* Effect.logDebug(
+                "Bot.service resolved a concurrent session insert",
+              ).pipe(Effect.annotateLogs("sessionId", raced.value.sessionId));
+              return raced.value.sessionId;
+            }),
+          ),
+        );
+    });
   }
 
   /** Sends chunks to Telegram, falling back to plain text if MarkdownV2 fails. */
