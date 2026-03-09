@@ -197,7 +197,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 iter.return?.(undefined);
               }),
           );
-          yield* Ref.set(reconnectAttempt, 0);
           // Reconcile messages that completed while disconnected. Fetches
           // the newest messages per session, expanding the window until an
           // already-claimed message is found, then processes unclaimed ones
@@ -267,7 +266,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               return Effect.sync(() => {
                 iter.return?.(undefined);
               });
-            }).pipe(Effect.flatMap(processEvent)),
+            }).pipe(
+              Effect.tap(() => Ref.set(reconnectAttempt, 0)),
+              Effect.flatMap(processEvent),
+            ),
           );
         }),
       );
