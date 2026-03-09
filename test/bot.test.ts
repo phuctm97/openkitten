@@ -126,14 +126,16 @@ const sessionCreateMock = vi.fn().mockResolvedValue({
 
 // Default mock: pushes a completed assistant message event so the event stream
 // fiber processes the reply without delay. Tests override for other behavior.
+let msgCounter = 0;
 const sessionPromptAsyncMock = vi
   .fn()
   .mockImplementation(async (args: { sessionID: string }) => {
+    const msgId = `msg-${++msgCounter}`;
     eventRef.current.push({
       type: "message.updated",
       properties: {
         info: {
-          id: "msg-1",
+          id: msgId,
           sessionID: args.sessionID,
           role: "assistant",
           time: { created: 1, completed: 2 },
@@ -216,6 +218,7 @@ vi.mock("~/lib/format-message", () => ({
 // Each test gets a fresh event stream and sendMessage mock so state doesn't leak
 beforeEach(() => {
   eventRef.current = createEventController();
+  msgCounter = 0;
   sendMessageMock.mockClear();
   sessionDeleteMock.mockClear();
   sessionStatusMock.mockClear();
@@ -822,6 +825,55 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
+  it.scopedLive("deduplicates completed messages with same id", () =>
+    Effect.gen(function* () {
+      sessionPromptAsyncMock.mockImplementationOnce(
+        async (args: { sessionID: string }) => {
+          // Push the same completed message twice
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-dup",
+                sessionID: args.sessionID,
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+              },
+            },
+          });
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-dup",
+                sessionID: args.sessionID,
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+              },
+            },
+          });
+          return { data: undefined };
+        },
+      );
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      // session.message should only be called once despite two identical events
+      expect(sessionMessageMock).toHaveBeenCalledTimes(1);
+      expect(sendMessageMock).toHaveBeenCalledTimes(1);
+    }).pipe(Effect.provide(validLayer)),
+  );
+
   it.scopedLive("sends error when session.message returns error", () =>
     Effect.gen(function* () {
       sessionMessageMock.mockResolvedValueOnce({
@@ -1201,11 +1253,12 @@ describe("handler", () => {
       sessionMessageMock.mockRejectedValueOnce(new Error("network error"));
       sessionPromptAsyncMock.mockImplementationOnce(
         async (args: { sessionID: string }) => {
+          const msgId = `msg-${++msgCounter}`;
           eventRef.current.push({
             type: "message.updated",
             properties: {
               info: {
-                id: "msg-1",
+                id: msgId,
                 sessionID: args.sessionID,
                 role: "assistant",
                 time: { created: 1, completed: 2 },

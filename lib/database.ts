@@ -12,6 +12,12 @@ class SessionModel extends Model.Class<SessionModel>(`${pkg.name}/Session`)({
   updatedAt: Model.DateTimeUpdate,
 }) {}
 
+class MessageModel extends Model.Class<MessageModel>(`${pkg.name}/Message`)({
+  id: Schema.String,
+  sessionId: Schema.String,
+  createdAt: Schema.Number,
+}) {}
+
 const loader = SqliteMigrator.fromRecord({
   "0001_create_session": Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
@@ -25,11 +31,22 @@ const loader = SqliteMigrator.fromRecord({
       UNIQUE(chat_id, thread_id, dm_topic_id)
     )`;
   }),
+  "0002_create_message": Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    yield* sql`CREATE TABLE message (
+      id TEXT PRIMARY KEY NOT NULL,
+      session_id TEXT NOT NULL REFERENCES session(id),
+      created_at INTEGER NOT NULL
+    )`;
+  }),
 });
 
 export class Database extends Context.Tag(`${pkg.name}/Database`)<
   Database,
-  { readonly session: Database.SessionRepository }
+  {
+    readonly session: Database.SessionRepository;
+    readonly message: Database.MessageRepository;
+  }
 >() {
   static readonly layer = Layer.effect(
     Database,
@@ -39,6 +56,11 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
       const sessionRepository = yield* Model.makeRepository(SessionModel, {
         spanPrefix: "Session",
         tableName: "session",
+        idColumn: "id",
+      });
+      const messageRepository = yield* Model.makeRepository(MessageModel, {
+        spanPrefix: "Message",
+        tableName: "message",
         idColumn: "id",
       });
       yield* Effect.logDebug("Database.service is connected");
@@ -53,23 +75,45 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
                 sql`SELECT * FROM session WHERE chat_id = ${chatId} AND thread_id = ${threadId} AND dm_topic_id = ${dmTopicId}`,
             })(`${chatId}:${threadId}:${dmTopicId}`).pipe(Effect.orDie),
         },
+        message: {
+          ...messageRepository,
+          claim: ({ id, sessionId, createdAt }) =>
+            sql`INSERT INTO message (id, session_id, created_at) VALUES (${id}, ${sessionId}, ${createdAt}) ON CONFLICT(id) DO NOTHING RETURNING id`.pipe(
+              Effect.map((rows) => rows.length > 0),
+              Effect.orDie,
+            ),
+        },
       });
     }),
   );
 }
 
 export namespace Database {
-  export type SessionRepository = Effect.Effect.Success<
-    ReturnType<typeof Model.makeRepository<typeof SessionModel, "id">>
-  > & {
-    readonly findByChat: (
-      options: SessionFindByChatOptions,
-    ) => Effect.Effect<Option.Option<SessionModel>>;
-  };
-
   export interface SessionFindByChatOptions {
     readonly chatId: number;
     readonly threadId: number;
     readonly dmTopicId: number;
   }
+
+  export type SessionRepository = Effect.Effect.Success<
+    ReturnType<typeof Model.makeRepository<typeof SessionModel, "id">>
+  > & {
+    /** Finds a session by its chat, thread, and DM topic IDs. */
+    readonly findByChat: (
+      options: SessionFindByChatOptions,
+    ) => Effect.Effect<Option.Option<SessionModel>>;
+  };
+
+  export interface MessageClaimOptions {
+    readonly id: string;
+    readonly sessionId: string;
+    readonly createdAt: number;
+  }
+
+  export type MessageRepository = Effect.Effect.Success<
+    ReturnType<typeof Model.makeRepository<typeof MessageModel, "id">>
+  > & {
+    /** Attempts to claim a message ID. Returns true if inserted, false if already exists. */
+    readonly claim: (options: MessageClaimOptions) => Effect.Effect<boolean>;
+  };
 }

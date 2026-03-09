@@ -61,6 +61,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
               return;
             }
+            // Claim the message ID to prevent duplicate processing
+            const claimed = yield* database.message.claim({
+              id: info.id,
+              sessionId: info.sessionID,
+              createdAt: info.time.created,
+            });
+            if (!claimed) return;
             const sendOpts = {
               client,
               chatId: session.value.chatId,

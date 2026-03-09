@@ -63,3 +63,31 @@ it.scopedLive("findByChat returns none for unknown", () =>
     expect(Option.isNone(notFound)).toBe(true);
   }).pipe(Effect.provide(defaultLayer)),
 );
+
+it.scopedLive(
+  "message.claim returns true on first insert, false on duplicate",
+  () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "session-1",
+        chatId: 123,
+        threadId: 0,
+        dmTopicId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      const first = yield* database.message.claim({
+        id: "msg-1",
+        sessionId: "session-1",
+        createdAt: 1000,
+      });
+      expect(first).toBe(true);
+      const second = yield* database.message.claim({
+        id: "msg-1",
+        sessionId: "session-1",
+        createdAt: 1000,
+      });
+      expect(second).toBe(false);
+    }).pipe(Effect.provide(defaultLayer)),
+);
