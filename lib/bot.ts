@@ -296,24 +296,26 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             );
             if (localBusy) return yield* rejectBusy;
 
-            yield* Effect.logTrace("Bot.service is prompting OpenCode").pipe(
-              Effect.annotateLogs("sessionId", sessionId),
-            );
-            const result = yield* Effect.promise(() =>
-              opencode.client.session.promptAsync({
-                sessionID: sessionId,
-                parts: [{ type: "text", text: ctx.message.text }],
-              }),
-            ).pipe(
+            yield* Effect.gen(function* () {
+              yield* Effect.logTrace("Bot.service is prompting OpenCode").pipe(
+                Effect.annotateLogs("sessionId", sessionId),
+              );
+              const result = yield* Effect.promise(() =>
+                opencode.client.session.promptAsync({
+                  sessionID: sessionId,
+                  parts: [{ type: "text", text: ctx.message.text }],
+                }),
+              );
+              if (result.error) {
+                return yield* Effect.die(result.error);
+              }
+              yield* Effect.logTrace("Bot.service prompted OpenCode").pipe(
+                Effect.annotateLogs("sessionId", sessionId),
+              );
+            }).pipe(
               Effect.ensuring(
                 Ref.update(promptingRef, HashSet.remove(sessionId)),
               ),
-            );
-            if (result.error) {
-              return yield* Effect.die(result.error);
-            }
-            yield* Effect.logTrace("Bot.service prompted OpenCode").pipe(
-              Effect.annotateLogs("sessionId", sessionId),
             );
           }).pipe(
             Effect.annotateLogs("userId", ctx.from?.id),
