@@ -110,11 +110,12 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 });
               }),
             ),
-            Effect.annotateLogs("sessionId", message.sessionID),
-            Effect.annotateLogs("chatId", session.chatId),
-            Effect.annotateLogs("threadId", sendOpts.threadId),
           );
-        });
+        }).pipe(
+          Effect.annotateLogs("sessionId", message.sessionID),
+          Effect.annotateLogs("chatId", session.chatId),
+          Effect.annotateLogs("threadId", session.threadId || undefined),
+        );
 
       /** Handles a single SSE event: sends the reply or error to Telegram. */
       const processEvent = (event: Event) =>
@@ -179,7 +180,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Effect.annotateLogs("threadId", sendOpts.threadId),
             );
           }
-        });
+        }).pipe(
+          Effect.catchAllDefect((defect) =>
+            Effect.logError(defect).pipe(
+              Effect.annotateLogs("debugHint", "Bot.processEvent"),
+            ),
+          ),
+        );
 
       // Each iteration subscribes to the SSE stream, consumes events, and
       // cleans up the iterator via acquireRelease. On disconnect or error,
@@ -245,9 +252,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 Effect.catchAllDefect((defect) =>
                   Effect.logWarning(defect).pipe(
                     Effect.annotateLogs("debugHint", "Bot.service"),
-                    Effect.annotateLogs("sessionId", session.id),
                   ),
                 ),
+                Effect.annotateLogs("sessionId", session.id),
               ),
             { concurrency: "unbounded", discard: true },
           );

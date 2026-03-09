@@ -1323,6 +1323,46 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
+  it.scopedLive(
+    "continues event stream after findById defect in processEvent",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        // Make findById defect once, then restore normal behavior
+        vi.spyOn(database.session, "findById").mockImplementationOnce(() =>
+          Effect.die(new Error("DB locked")),
+        );
+        yield* Bot;
+        yield* Effect.sleep(0);
+        // Push event that will hit the defective findById
+        eventRef.current.push({
+          type: "message.updated",
+          properties: {
+            info: {
+              id: "msg-defect",
+              sessionID: "any-session",
+              role: "assistant",
+              time: { created: 1, completed: 2 },
+            },
+          },
+        });
+        yield* Effect.sleep(0);
+        // Stream should still be alive — send a normal message
+        const call = onSpy.mock.lastCall;
+        assert.isDefined(call);
+        const handler = call[1];
+        yield* Effect.promise(() =>
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+          }),
+        );
+        yield* Effect.sleep(0);
+        expect(sendMessageMock).toHaveBeenCalled();
+      }).pipe(Effect.provide(validLayer)),
+  );
+
   it.scopedLive("replies in correct forum thread", () =>
     Effect.gen(function* () {
       yield* Bot;
