@@ -394,18 +394,19 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           Effect.as(sessionId),
           Effect.catchAllDefect((defect) =>
             Effect.gen(function* () {
+              // Clean up the orphaned OpenCode session from the losing race
+              // before looking up the winner, so it never lingers on failure.
+              const deleteResult = yield* Effect.promise(() =>
+                opencode.client.session.delete({ sessionID: sessionId }),
+              );
+              if (deleteResult.error)
+                return yield* Effect.die(deleteResult.error);
               const raced = yield* database.session.findByChat({
                 chatId,
                 threadId: dbThreadId,
                 dmTopicId: dbDmTopicId,
               });
               if (Option.isNone(raced)) return yield* Effect.die(defect);
-              // Clean up the orphaned OpenCode session from the losing race
-              const deleteResult = yield* Effect.promise(() =>
-                opencode.client.session.delete({ sessionID: sessionId }),
-              );
-              if (deleteResult.error)
-                return yield* Effect.die(deleteResult.error);
               yield* Effect.logDebug(
                 "Bot.service resolved a concurrent session insert",
               ).pipe(Effect.annotateLogs("sessionId", raced.value.id));
@@ -431,17 +432,34 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     };
     return Effect.forEach(
       chunks,
-      ({ text, markdown }) => {
-        const sendEffect = Effect.promise(() =>
-          markdown
-            ? client.api
-                .sendMessage(chatId, markdown, {
-                  parse_mode: "MarkdownV2",
-                  ...threadOpts,
-                })
-                .catch(() => client.api.sendMessage(chatId, text, threadOpts))
-            : client.api.sendMessage(chatId, text, threadOpts),
-        );
+      ({ markdown, text }) => {
+        const sendEffect = markdown
+          ? Effect.promise(() =>
+              client.api.sendMessage(chatId, markdown, {
+                parse_mode: "MarkdownV2",
+                ...threadOpts,
+              }),
+            ).pipe(
+              Effect.catchAllDefect((defect) =>
+                Effect.gen(function* () {
+                  yield* Effect.logDebug(defect).pipe(
+                    Effect.annotateLogs("debugHint", "Bot.service"),
+                  );
+                  yield* Effect.logDebug(
+                    "Bot.service failed to deliver a MarkdownV2 message",
+                  ).pipe(
+                    Effect.annotateLogs("markdown", markdown),
+                    Effect.annotateLogs("text", text),
+                  );
+                  yield* Effect.promise(() =>
+                    client.api.sendMessage(chatId, text, threadOpts),
+                  );
+                }),
+              ),
+            )
+          : Effect.promise(() =>
+              client.api.sendMessage(chatId, text, threadOpts),
+            );
         return ignoreErrors ? Effect.ignoreLogged(sendEffect) : sendEffect;
       },
       { discard: true },
