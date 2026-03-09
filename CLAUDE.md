@@ -8,15 +8,20 @@ Effect for the concurrent service kernel (bot, event streams, state, retries, su
 
 Effect compiler errors mean you're not handling something — fix it properly, don't hack around it. If the Effect code is becoming too verbose or requires hacks to test, it's likely a better fit for plain Bun.
 
+## Vendor
+
+`.vendor/` contains cloned source repos of open-source libraries we depend on. Use them to explore real implementations, understand internals, and verify API behavior.
+
+When you need to understand how a library works internally, ensure its source is cloned and up to date in `.vendor/<name>/`. Examples: `.vendor/effect/`, `.vendor/opencode/`, `.vendor/grammy/`.
+
 ## Effect
 
 Always consult effect-solutions before writing Effect code.
 
 1. `effect-solutions list` — see available guides
 2. `effect-solutions show <topic>...` — get patterns (supports multiple topics)
-3. `.vendor/effect/` — real implementations for API exploration
 
-Never guess at Effect patterns — check the guide first.
+Never guess at Effect patterns — consult effect-solutions and the source code first.
 
 ## Bun
 
