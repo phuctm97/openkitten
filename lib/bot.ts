@@ -252,6 +252,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             { concurrency: "unbounded", discard: true },
           );
           yield* Ref.set(reconnectAttempt, 0);
+          yield* Effect.logDebug("Bot.stream is connected");
           // Uses Effect.async (interruptible) instead of Stream.fromAsyncIterable
           // (which uses Effect.tryPromise internally and deadlocks on scope close).
           // The cleanup callback calls iter.return() to unblock a pending next().
@@ -444,7 +445,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         threadId: dbThreadId,
       });
       if (Option.isSome(existing)) {
-        yield* Effect.logDebug("Bot.service reused an existing session").pipe(
+        yield* Effect.logTrace("Bot.service reused an existing session").pipe(
           Effect.annotateLogs("sessionId", existing.value.id),
         );
         return existing.value.id;
