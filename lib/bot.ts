@@ -38,7 +38,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       const opencode = yield* OpenCode;
       const database = yield* Database;
 
-      // Created early so processEvent can reference client.api.
+      // grammY bot — created early so processEvent can reference client.api.
       // Handlers and lifecycle are registered further below.
       const client = new GrammyBot(Redacted.value(redactedToken));
 
@@ -211,7 +211,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         ),
       ).pipe(Effect.forkScoped);
 
-      // grammY — error handler, message handler, and lifecycle
+      // grammY bot — error handler, message handler, and lifecycle
       client.catch(({ error, ctx }) =>
         Runtime.runPromise(runtime)(
           Effect.gen(function* () {
