@@ -256,13 +256,15 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             }
             yield* Effect.logTrace("Bot.service received a message");
             const database = yield* Database;
-            const profile = yield* database.profile.findById("default");
+            const key = Bot.sessionKey({
+              chatId: ctx.chat.id,
+              threadId,
+              dmTopicId,
+            });
+            const existing = yield* database.session.findById(key);
             let sessionId: string;
-            if (
-              Option.isSome(profile) &&
-              Option.isSome(profile.value.activeSessionId)
-            ) {
-              sessionId = profile.value.activeSessionId.value;
+            if (Option.isSome(existing)) {
+              sessionId = existing.value.sessionId;
               yield* Effect.logDebug(
                 "Bot.service reused an existing session",
               ).pipe(Effect.annotateLogs("sessionId", sessionId));
@@ -272,27 +274,22 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
               if (result.error) return yield* Effect.die(result.error);
               sessionId = result.data.id;
+              yield* database.session.insert({
+                sessionKey: key,
+                sessionId,
+                createdAt: undefined,
+                updatedAt: undefined,
+              });
               yield* Effect.logInfo("Bot.service created a new session").pipe(
                 Effect.annotateLogs("sessionId", sessionId),
               );
-              if (Option.isNone(profile)) {
-                yield* database.profile.insert({
-                  id: "default",
-                  activeSessionId: Option.some(sessionId),
-                  createdAt: undefined,
-                  updatedAt: undefined,
-                });
-              } else {
-                yield* database.profile.update({
-                  id: profile.value.id,
-                  activeSessionId: Option.some(sessionId),
-                  updatedAt: undefined,
-                });
-              }
             }
             // Reject if the session already has a pending prompt
-            const existing = HashMap.get(yield* Ref.get(pendingRef), sessionId);
-            if (Option.isSome(existing)) {
+            const pendingEntry = HashMap.get(
+              yield* Ref.get(pendingRef),
+              sessionId,
+            );
+            if (Option.isSome(pendingEntry)) {
               yield* Effect.logDebug(
                 "Bot.service rejected a message while busy",
               ).pipe(Effect.annotateLogs("sessionId", sessionId));
@@ -370,6 +367,18 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     }),
   );
 
+  /** Builds a session key from chat/thread/DM topic IDs. */
+  static sessionKey({
+    chatId,
+    threadId,
+    dmTopicId,
+  }: Bot.SessionKeyOptions): string {
+    const parts = [`c:${chatId}`];
+    if (dmTopicId !== undefined) parts.push(`d:${dmTopicId}`);
+    if (threadId !== undefined) parts.push(`t:${threadId}`);
+    return parts.join("/");
+  }
+
   /** Sends chunks to Telegram, falling back to plain text if MarkdownV2 fails. */
   static sendChunks(
     { bot, chatId, ignoreErrors, threadId, dmTopicId }: Bot.SendChunksOptions,
@@ -405,6 +414,11 @@ export namespace Bot {
     readonly chatId: number;
     readonly threadId: number | undefined;
     readonly dmTopicId: number | undefined;
+  }
+  export interface SessionKeyOptions {
+    chatId: number;
+    threadId: number | undefined;
+    dmTopicId: number | undefined;
   }
   export interface SendChunksOptions {
     bot: GrammyBot;

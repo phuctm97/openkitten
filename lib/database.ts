@@ -3,23 +3,23 @@ import { SqliteMigrator } from "@effect/sql-sqlite-bun";
 import { Context, Effect, Layer, Schema } from "effect";
 import pkg from "~/package.json" with { type: "json" };
 
-class ProfileModel extends Model.Class<ProfileModel>(`${pkg.name}/Profile`)({
-  id: Schema.String,
-  activeSessionId: Model.FieldOption(Schema.String),
+class SessionModel extends Model.Class<SessionModel>(`${pkg.name}/Session`)({
+  sessionKey: Schema.String,
+  sessionId: Schema.String,
   createdAt: Model.DateTimeInsert,
   updatedAt: Model.DateTimeUpdate,
 }) {}
 
-type ProfileRepository = Effect.Effect.Success<
-  ReturnType<typeof Model.makeRepository<typeof ProfileModel, "id">>
+type SessionRepository = Effect.Effect.Success<
+  ReturnType<typeof Model.makeRepository<typeof SessionModel, "sessionKey">>
 >;
 
 const loader = SqliteMigrator.fromRecord({
-  "0001_create_profile": Effect.gen(function* () {
+  "0001_create_session": Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
-    yield* sql`CREATE TABLE profile (
-      id TEXT PRIMARY KEY NOT NULL,
-      active_session_id TEXT,
+    yield* sql`CREATE TABLE session (
+      session_key TEXT PRIMARY KEY NOT NULL,
+      session_id TEXT NOT NULL UNIQUE,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )`;
@@ -28,19 +28,19 @@ const loader = SqliteMigrator.fromRecord({
 
 export class Database extends Context.Tag(`${pkg.name}/Database`)<
   Database,
-  { readonly profile: ProfileRepository }
+  { readonly session: SessionRepository }
 >() {
   static readonly layer = Layer.effect(
     Database,
     Effect.gen(function* () {
       yield* SqliteMigrator.run({ loader });
-      const profile = yield* Model.makeRepository(ProfileModel, {
-        spanPrefix: "Profile",
-        tableName: "profile",
-        idColumn: "id",
+      const session = yield* Model.makeRepository(SessionModel, {
+        spanPrefix: "Session",
+        tableName: "session",
+        idColumn: "sessionKey",
       });
       yield* Effect.logDebug("Database.service is connected");
-      return { profile };
+      return { session };
     }),
   );
 }

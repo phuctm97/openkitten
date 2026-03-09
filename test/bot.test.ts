@@ -4,7 +4,6 @@ import {
   ConfigProvider,
   Effect,
   Layer,
-  Option,
   Runtime,
   TestClock,
 } from "effect";
@@ -314,9 +313,9 @@ describe("handler", () => {
   it.scopedLive("reuses existing session", () =>
     Effect.gen(function* () {
       const database = yield* Database;
-      yield* database.profile.insert({
-        id: "default",
-        activeSessionId: Option.some("existing-session-id"),
+      yield* database.session.insert({
+        sessionKey: "c:123",
+        sessionId: "existing-session-id",
         createdAt: undefined,
         updatedAt: undefined,
       });
@@ -344,36 +343,70 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("updates profile when it exists without active session", () =>
+  it.scopedLive("creates separate sessions for different threads", () =>
     Effect.gen(function* () {
-      const database = yield* Database;
-      yield* database.profile.insert({
-        id: "default",
-        activeSessionId: Option.none(),
-        createdAt: undefined,
-        updatedAt: undefined,
-      });
+      // Each promptAsync must push its own completion event
+      sessionCreateMock
+        .mockResolvedValueOnce({ data: { id: "session-a" } })
+        .mockResolvedValueOnce({ data: { id: "session-b" } });
+      sessionPromptAsyncMock
+        .mockImplementationOnce(async (args: { sessionID: string }) => {
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-1",
+                sessionID: args.sessionID,
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+              },
+            },
+          });
+          return { data: undefined };
+        })
+        .mockImplementationOnce(async (args: { sessionID: string }) => {
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-2",
+                sessionID: args.sessionID,
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+              },
+            },
+          });
+          return { data: undefined };
+        });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
+      // Message in thread 42
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { message_id: 1, text: "hello" },
+          message: { message_id: 1, text: "hello", message_thread_id: 42 },
         }),
       );
       yield* Effect.sleep(0);
-      expect(sessionCreateMock).toHaveBeenCalledWith({});
-      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
-        parse_mode: "MarkdownV2",
-      });
-      const profile = yield* database.profile.findById("default");
-      assert.isTrue(Option.isSome(profile));
-      expect(Option.getOrThrow(profile).activeSessionId).toEqual(
-        Option.some("new-session-id"),
+      // Message in thread 43
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 2, text: "world", message_thread_id: 43 },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionCreateMock).toHaveBeenCalledTimes(2);
+      expect(sessionPromptAsyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionID: "session-a" }),
+      );
+      expect(sessionPromptAsyncMock).toHaveBeenCalledWith(
+        expect.objectContaining({ sessionID: "session-b" }),
       );
     }).pipe(Effect.provide(validLayer)),
   );
@@ -711,6 +744,57 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
+  it.scopedLive("different threads are not blocked by each other", () =>
+    Effect.gen(function* () {
+      // Thread 42's promptAsync does NOT push an event, so it stays busy
+      sessionCreateMock
+        .mockResolvedValueOnce({ data: { id: "session-a" } })
+        .mockResolvedValueOnce({ data: { id: "session-b" } });
+      sessionPromptAsyncMock
+        .mockResolvedValueOnce({ data: undefined })
+        .mockImplementationOnce(async (args: { sessionID: string }) => {
+          eventRef.current.push({
+            type: "message.updated",
+            properties: {
+              info: {
+                id: "msg-1",
+                sessionID: args.sessionID,
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+              },
+            },
+          });
+          return { data: undefined };
+        });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      // Thread 42: pending, stays busy
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello", message_thread_id: 42 },
+        }),
+      );
+      yield* Effect.sleep(0);
+      // Thread 43: should NOT be blocked by thread 42
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 2, text: "world", message_thread_id: 43 },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionCreateMock).toHaveBeenCalledTimes(2);
+      expect(sessionPromptAsyncMock).toHaveBeenCalledTimes(2);
+      expect(formatBusyMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
   it.scopedLive("sends plain text reply for unformatted chunk", () =>
     Effect.gen(function* () {
       formatMessageMock.mockReturnValueOnce([{ text: "plain reply" }]);
@@ -1023,6 +1107,7 @@ describe("handler", () => {
             message_id: 1,
             text: "hello",
             message_thread_id: 42,
+            direct_messages_topic: { topic_id: 7 },
           },
         }),
       );
@@ -1030,7 +1115,10 @@ describe("handler", () => {
       expect(sendMessageMock).toHaveBeenCalledTimes(2);
       const fallbackCall = sendMessageMock.mock.calls.at(1);
       assert.isDefined(fallbackCall);
-      expect(fallbackCall[2]).toEqual({ message_thread_id: 42 });
+      expect(fallbackCall[2]).toEqual({
+        message_thread_id: 42,
+        direct_messages_topic_id: 7,
+      });
     }).pipe(Effect.provide(validLayer)),
   );
 });
