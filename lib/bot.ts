@@ -52,7 +52,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         message: AssistantMessage,
       ) =>
         Effect.gen(function* () {
-          // Claim the message ID to prevent duplicate processing
           const claimed = yield* database.message.claim({
             id: message.id,
             sessionId: message.sessionID,
@@ -65,7 +64,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             threadId: session.threadId || undefined,
           };
           yield* Effect.gen(function* () {
-            // Fetch the full message to get all parts (text, tool, etc.)
             const msgResult = yield* Effect.promise(() =>
               opencode.client.session.message({
                 sessionID: message.sessionID,
@@ -328,7 +326,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 });
               });
 
-              // Check if session is busy via status API
               const statusResult = yield* Effect.promise(() =>
                 opencode.client.session.status({}),
               );
@@ -406,8 +403,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
   );
 
   /**
-   * Finds an existing session by chat IDs, or creates one. If a concurrent
-   * insert races and wins, catches the unique-constraint defect and re-lookups.
+   * Finds an existing session by chat and thread IDs, or creates one. If a
+   * concurrent insert races and wins, catches the unique-constraint defect
+   * and retries the lookup.
    */
   static findOrCreateSession({
     database,

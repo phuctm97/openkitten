@@ -37,8 +37,8 @@ interface GrammyStartOptions {
   onStart?: () => void;
 }
 
-// --- Mock grammY bot and SSE event stream ---
-// Must be in vi.hoisted() so vi.mock() can reference them at module scope.
+// --- Mocks ---
+// Hoisted so vi.mock() can reference them at module scope.
 const { GrammyBot, sendMessageMock, eventRef, createEventController } =
   vi.hoisted(() => {
     const sendMessageMock = vi.fn().mockResolvedValue(undefined);
