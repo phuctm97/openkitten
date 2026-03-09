@@ -1232,8 +1232,8 @@ describe("handler", () => {
 
     return Effect.gen(function* () {
       yield* Bot;
-      // Advance TestClock past the 5-second reconnect delay
-      yield* TestClock.adjust("5 seconds");
+      // Advance TestClock past the 1-second initial reconnect delay
+      yield* TestClock.adjust("1 second");
 
       // Second subscribe call uses the default mock (eventRef.current),
       // so the bot should be functional again.
@@ -1251,6 +1251,29 @@ describe("handler", () => {
       yield* Effect.yieldNow();
       expect(sendMessageMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer));
+  });
+
+  it.scoped("crashes after max reconnect attempts", () => {
+    // All subscribe calls fail
+    const defaultImpl = eventSubscribeMock.getMockImplementation();
+    eventSubscribeMock.mockImplementation(async () => {
+      throw new Error("SSE connection refused");
+    });
+
+    return Effect.gen(function* () {
+      yield* Bot;
+      // Advance clock through all 10 attempts:
+      // 1s + 2s + 4s + 8s + 16s + 30s + 30s + 30s + 30s + 30s = 181s
+      yield* TestClock.adjust("181 seconds");
+      // The fiber should have crashed — subscribe was called 11 times
+      // (1 initial + 10 retries) before dying on the 11th failure
+      expect(eventSubscribeMock).toHaveBeenCalledTimes(11);
+    }).pipe(
+      Effect.ensuring(
+        Effect.sync(() => eventSubscribeMock.mockImplementation(defaultImpl)),
+      ),
+      Effect.provide(validLayer),
+    );
   });
 
   it.scopedLive("continues event stream after processEvent defect", () =>

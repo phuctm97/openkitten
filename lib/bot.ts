@@ -190,6 +190,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       // Each iteration subscribes to the SSE stream, consumes events, and
       // cleans up the iterator via acquireRelease. On disconnect or error,
       // catchAllDefect logs and waits before the next iteration reconnects.
+      const reconnectAttempt = yield* Ref.make(0);
       const consumeEventStream = Effect.scoped(
         Effect.gen(function* () {
           yield* Effect.logDebug("Bot.stream is connecting");
@@ -202,6 +203,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 iter.return?.(undefined);
               }),
           );
+          yield* Ref.set(reconnectAttempt, 0);
           // Reconcile any messages that completed while disconnected.
           // Fetches all messages per session and lets claim() skip duplicates.
           yield* Effect.gen(function* () {
@@ -251,12 +253,24 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           );
         }),
       );
+      const maxReconnectAttempts = 10;
       yield* Effect.forever(
         consumeEventStream.pipe(
-          Effect.catchAllDefect(() =>
-            Effect.logWarning("Bot.stream disconnected, reconnecting").pipe(
-              Effect.andThen(Effect.sleep("5 seconds")),
-            ),
+          Effect.catchAllDefect((defect) =>
+            Effect.gen(function* () {
+              const attempt = yield* Ref.getAndUpdate(
+                reconnectAttempt,
+                (n) => n + 1,
+              );
+              if (attempt >= maxReconnectAttempts) {
+                return yield* Effect.die(defect);
+              }
+              const delay = Math.min(1000 * 2 ** attempt, 30_000);
+              yield* Effect.logWarning(
+                "Bot.stream disconnected, reconnecting",
+              ).pipe(Effect.annotateLogs("delay", `${delay}ms`));
+              yield* Effect.sleep(delay);
+            }),
           ),
         ),
       ).pipe(Effect.forkScoped);
