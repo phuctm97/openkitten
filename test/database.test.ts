@@ -23,3 +23,30 @@ it.scopedLive("insert and find session", () =>
     expect(Option.isNone(notFound)).toBe(true);
   }).pipe(Effect.provide(defaultLayer)),
 );
+
+it.scopedLive("findBySessionId returns matching session", () =>
+  Effect.gen(function* () {
+    const database = yield* Database;
+    yield* database.session.insert({
+      sessionKey: "c:456/t:10",
+      sessionId: "target-session",
+      createdAt: undefined,
+      updatedAt: undefined,
+    });
+    const found = yield* database.session.findBySessionId("target-session");
+    expect(Option.isSome(found)).toBe(true);
+    const value = Option.getOrThrow(found);
+    expect(value.sessionKey).toBe("c:456/t:10");
+    expect(value.sessionId).toBe("target-session");
+  }).pipe(Effect.provide(defaultLayer)),
+);
+
+it.scopedLive("findBySessionId returns none for unknown", () =>
+  Effect.gen(function* () {
+    const database = yield* Database;
+    const notFound = yield* database.session.findBySessionId(
+      "nonexistent-session",
+    );
+    expect(Option.isNone(notFound)).toBe(true);
+  }).pipe(Effect.provide(defaultLayer)),
+);

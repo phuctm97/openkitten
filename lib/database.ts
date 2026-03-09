@@ -1,6 +1,6 @@
-import { Model, SqlClient } from "@effect/sql";
+import { Model, SqlClient, SqlSchema } from "@effect/sql";
 import { SqliteMigrator } from "@effect/sql-sqlite-bun";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, type Option, Schema } from "effect";
 import pkg from "~/package.json" with { type: "json" };
 
 class SessionModel extends Model.Class<SessionModel>(`${pkg.name}/Session`)({
@@ -12,7 +12,11 @@ class SessionModel extends Model.Class<SessionModel>(`${pkg.name}/Session`)({
 
 type SessionRepository = Effect.Effect.Success<
   ReturnType<typeof Model.makeRepository<typeof SessionModel, "sessionKey">>
->;
+> & {
+  readonly findBySessionId: (
+    sessionId: string,
+  ) => Effect.Effect<Option.Option<SessionModel>>;
+};
 
 const loader = SqliteMigrator.fromRecord({
   "0001_create_session": Effect.gen(function* () {
@@ -34,13 +38,25 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
     Database,
     Effect.gen(function* () {
       yield* SqliteMigrator.run({ loader });
-      const session = yield* Model.makeRepository(SessionModel, {
+      const sql = yield* SqlClient.SqlClient;
+      const sessionRepository = yield* Model.makeRepository(SessionModel, {
         spanPrefix: "Session",
         tableName: "session",
         idColumn: "sessionKey",
       });
       yield* Effect.logDebug("Database.service is connected");
-      return { session };
+      return {
+        session: {
+          ...sessionRepository,
+          findBySessionId: (sessionId: string) =>
+            SqlSchema.findOne({
+              Request: Schema.String,
+              Result: SessionModel,
+              execute: (sid) =>
+                sql`SELECT * FROM session WHERE session_id = ${sid}`,
+            })(sessionId).pipe(Effect.orDie),
+        },
+      };
     }),
   );
 }

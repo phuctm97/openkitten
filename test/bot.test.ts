@@ -150,6 +150,10 @@ const sessionMessageMock = vi.fn().mockResolvedValue({
   },
 });
 
+const sessionStatusMock = vi.fn().mockResolvedValue({
+  data: {},
+});
+
 // Exposed as a spy so tests can override with broken streams for reconnect tests
 const eventSubscribeMock = vi
   .fn()
@@ -161,6 +165,7 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
       create: sessionCreateMock,
       promptAsync: sessionPromptAsyncMock,
       message: sessionMessageMock,
+      status: sessionStatusMock,
     },
     event: {
       subscribe: eventSubscribeMock,
@@ -200,6 +205,7 @@ vi.mock("~/lib/format-message", () => ({
 beforeEach(() => {
   eventRef.current = createEventController();
   sendMessageMock.mockClear();
+  sessionStatusMock.mockClear();
 });
 
 function makeLayer(config: Record<string, unknown>) {
@@ -300,6 +306,7 @@ describe("handler", () => {
       );
       yield* Effect.sleep(0);
       expect(sessionCreateMock).toHaveBeenCalledWith({});
+      expect(sessionStatusMock).toHaveBeenCalledWith({});
       expect(sessionPromptAsyncMock).toHaveBeenCalledWith({
         sessionID: "new-session-id",
         parts: [{ type: "text", text: "hello" }],
@@ -462,6 +469,30 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
+  it.scopedLive("dies when session status returns error", () =>
+    Effect.gen(function* () {
+      sessionStatusMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("status failed"),
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(async () => {
+        await expect(
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+          }),
+        ).rejects.toThrow();
+      });
+      expect(sendMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
   it.scopedLive("sends error to Telegram on session.error event", () =>
     Effect.gen(function* () {
       sessionPromptAsyncMock.mockImplementationOnce(
@@ -536,7 +567,7 @@ describe("handler", () => {
     Effect.gen(function* () {
       sessionPromptAsyncMock.mockImplementationOnce(
         async (args: { sessionID: string }) => {
-          // Push events for a session that has no pending entry
+          // Push events for a session that has no DB entry
           eventRef.current.push({
             type: "message.updated",
             properties: {
@@ -667,7 +698,7 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("does not reply when response has no text parts", () =>
+  it.scopedLive("does not send when response has no text parts", () =>
     Effect.gen(function* () {
       sessionMessageMock.mockResolvedValueOnce({
         data: {
@@ -710,16 +741,16 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("sends busy message when session has pending prompt", () =>
+  it.scopedLive("sends busy message when session status is busy", () =>
     Effect.gen(function* () {
-      // Make promptAsync NOT push an event so the pending entry stays
-      sessionPromptAsyncMock.mockResolvedValueOnce({ data: undefined });
+      sessionStatusMock.mockResolvedValueOnce({
+        data: { "new-session-id": { type: "busy" } },
+      });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      // First message: registers pending prompt
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
@@ -728,28 +759,52 @@ describe("handler", () => {
         }),
       );
       yield* Effect.sleep(0);
-      expect(sessionPromptAsyncMock).toHaveBeenCalledTimes(1);
-      sendMessageMock.mockClear();
-      // Second message: session is busy
+      expect(formatBusyMock).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalledTimes(1);
+      expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("handles retry status as busy", () =>
+    Effect.gen(function* () {
+      sessionStatusMock.mockResolvedValueOnce({
+        data: {
+          "new-session-id": {
+            type: "retry",
+            attempt: 1,
+            message: "rate limited",
+            next: 5000,
+          },
+        },
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { message_id: 2, text: "hello again" },
+          message: { message_id: 1, text: "hello" },
         }),
       );
+      yield* Effect.sleep(0);
       expect(formatBusyMock).toHaveBeenCalled();
       expect(sendMessageMock).toHaveBeenCalledTimes(1);
-      expect(sessionPromptAsyncMock).toHaveBeenCalledTimes(1);
+      expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
   it.scopedLive("different threads are not blocked by each other", () =>
     Effect.gen(function* () {
-      // Thread 42's promptAsync does NOT push an event, so it stays busy
       sessionCreateMock
         .mockResolvedValueOnce({ data: { id: "session-a" } })
         .mockResolvedValueOnce({ data: { id: "session-b" } });
+      // Both sessions are idle
+      sessionStatusMock
+        .mockResolvedValueOnce({ data: {} })
+        .mockResolvedValueOnce({ data: {} });
       sessionPromptAsyncMock
         .mockResolvedValueOnce({ data: undefined })
         .mockImplementationOnce(async (args: { sessionID: string }) => {
@@ -771,7 +826,7 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      // Thread 42: pending, stays busy
+      // Thread 42
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
@@ -1048,14 +1103,20 @@ describe("handler", () => {
 
   it.scopedLive("sends busy message to correct thread", () =>
     Effect.gen(function* () {
-      // Make promptAsync NOT push an event so the pending entry stays
+      // First call: status returns idle, second call: status returns busy
+      sessionStatusMock
+        .mockResolvedValueOnce({ data: {} })
+        .mockResolvedValueOnce({
+          data: { "new-session-id": { type: "busy" } },
+        });
+      // Make promptAsync NOT push an event
       sessionPromptAsyncMock.mockResolvedValueOnce({ data: undefined });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      // First message: registers pending prompt in thread 42
+      // First message: registers session in thread 42
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
@@ -1121,4 +1182,65 @@ describe("handler", () => {
       });
     }).pipe(Effect.provide(validLayer)),
   );
+});
+
+describe("getSessionKey", () => {
+  it("builds key from chatId only", () => {
+    expect(
+      Bot.getSessionKey({
+        chatId: 123,
+        threadId: undefined,
+        dmTopicId: undefined,
+      }),
+    ).toBe("c:123");
+  });
+
+  it("builds key with threadId", () => {
+    expect(
+      Bot.getSessionKey({ chatId: 123, threadId: 42, dmTopicId: undefined }),
+    ).toBe("c:123/t:42");
+  });
+
+  it("builds key with dmTopicId", () => {
+    expect(
+      Bot.getSessionKey({ chatId: 123, threadId: undefined, dmTopicId: 7 }),
+    ).toBe("c:123/d:7");
+  });
+
+  it("builds key with both", () => {
+    expect(Bot.getSessionKey({ chatId: 123, threadId: 42, dmTopicId: 7 })).toBe(
+      "c:123/t:42/d:7",
+    );
+  });
+});
+
+describe("parseSessionKey", () => {
+  it("is inverse of getSessionKey", () => {
+    const opts = { chatId: 123, threadId: 42, dmTopicId: 7 };
+    expect(Bot.parseSessionKey(Bot.getSessionKey(opts))).toEqual(opts);
+  });
+
+  it("handles chatId only", () => {
+    expect(Bot.parseSessionKey("c:456")).toEqual({
+      chatId: 456,
+      threadId: undefined,
+      dmTopicId: undefined,
+    });
+  });
+
+  it("handles dmTopicId without threadId", () => {
+    expect(Bot.parseSessionKey("c:123/d:7")).toEqual({
+      chatId: 123,
+      threadId: undefined,
+      dmTopicId: 7,
+    });
+  });
+
+  it("ignores unknown prefixes", () => {
+    expect(Bot.parseSessionKey("c:123/x:99/t:42")).toEqual({
+      chatId: 123,
+      threadId: 42,
+      dmTopicId: undefined,
+    });
+  });
 });

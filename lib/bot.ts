@@ -7,11 +7,9 @@ import {
   Effect,
   Exit,
   type Fiber,
-  HashMap,
   Layer,
   Option,
   Redacted,
-  Ref,
   Runtime,
 } from "effect";
 import { Bot as GrammyBot } from "grammy";
@@ -27,7 +25,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
   Bot,
   { readonly fiber: Fiber.RuntimeFiber<void> }
 >() {
-  /** Manages the grammY bot lifecycle, SSE event stream, and pending prompt coordination. */
+  /** Manages the grammY bot lifecycle and SSE event stream. */
   static readonly layer = Layer.scoped(
     Bot,
     Effect.gen(function* () {
@@ -36,12 +34,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       const userId = yield* Config.integer("TELEGRAM_USER_ID");
       const runtime = yield* Effect.runtime<Database>();
       const opencode = yield* OpenCode;
-
-      // Tracks in-flight prompts keyed by sessionId so the event stream fiber
-      // can send the reply to Telegram when a response arrives.
-      const pendingRef = yield* Ref.make(
-        HashMap.empty<string, Bot.PendingPrompt>(),
-      );
+      const database = yield* Database;
 
       // grammY bot — created early so processEvent can use grammyBot.api.
       // Handlers and lifecycle are registered further below.
@@ -55,24 +48,24 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             // Only act on fully completed assistant messages
             if (info.role !== "assistant" || info.time.completed === undefined)
               return;
-            const pending = HashMap.get(
-              yield* Ref.get(pendingRef),
+            const session = yield* database.session.findBySessionId(
               info.sessionID,
             );
-            if (Option.isNone(pending)) {
-              yield* Effect.logWarning(
+            if (Option.isNone(session)) {
+              yield* Effect.logDebug(
                 "Bot.service ignored a message.updated for an unknown session",
               ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
               return;
             }
-            const { userId, chatId, threadId, dmTopicId } = pending.value;
+            const { chatId, threadId, dmTopicId } = Bot.parseSessionKey(
+              session.value.sessionKey,
+            );
             const sendOpts = {
               bot: grammyBot,
               chatId,
               threadId,
               dmTopicId,
             };
-            yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
             yield* Effect.gen(function* () {
               // Fetch the full message to get all parts (text, tool, etc.)
               const msgResult = yield* Effect.promise(() =>
@@ -104,8 +97,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 );
                 yield* Effect.logTrace("Bot.service sent a reply");
               } else {
-                yield* Effect.logWarning(
-                  "Bot.service received an empty response",
+                yield* Effect.logDebug(
+                  "Bot.service received a non-text message",
                 );
               }
             }).pipe(
@@ -121,7 +114,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 }),
               ),
               Effect.annotateLogs("sessionId", info.sessionID),
-              Effect.annotateLogs("userId", userId),
               Effect.annotateLogs("chatId", chatId),
             );
           } else if (event.type === "session.error") {
@@ -132,21 +124,22 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
               return;
             }
-            const pending = HashMap.get(yield* Ref.get(pendingRef), sessionID);
-            if (Option.isNone(pending)) {
-              yield* Effect.logWarning(
+            const session = yield* database.session.findBySessionId(sessionID);
+            if (Option.isNone(session)) {
+              yield* Effect.logDebug(
                 "Bot.service ignored a session.error for an unknown session",
               ).pipe(Effect.annotateLogs("sessionId", sessionID));
               return;
             }
-            const { userId, chatId, threadId, dmTopicId } = pending.value;
+            const { chatId, threadId, dmTopicId } = Bot.parseSessionKey(
+              session.value.sessionKey,
+            );
             const sendOpts = {
               bot: grammyBot,
               chatId,
               threadId,
               dmTopicId,
             };
-            yield* Ref.update(pendingRef, HashMap.remove(sessionID));
             yield* Effect.gen(function* () {
               yield* Effect.logWarning(error);
               yield* Bot.sendChunks(
@@ -166,7 +159,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 }),
               ),
               Effect.annotateLogs("sessionId", sessionID),
-              Effect.annotateLogs("userId", userId),
               Effect.annotateLogs("chatId", chatId),
             );
           }
@@ -255,8 +247,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
             }
             yield* Effect.logTrace("Bot.service received a message");
-            const database = yield* Database;
-            const key = Bot.sessionKey({
+            const key = Bot.getSessionKey({
               chatId: ctx.chat.id,
               threadId,
               dmTopicId,
@@ -284,12 +275,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 Effect.annotateLogs("sessionId", sessionId),
               );
             }
-            // Reject if the session already has a pending prompt
-            const pendingEntry = HashMap.get(
-              yield* Ref.get(pendingRef),
-              sessionId,
+            // Check if session is busy via status API
+            const statusResult = yield* Effect.promise(() =>
+              opencode.client.session.status({}),
             );
-            if (Option.isSome(pendingEntry)) {
+            if (statusResult.error)
+              return yield* Effect.die(statusResult.error);
+            const sessionStatus = statusResult.data[sessionId];
+            if (sessionStatus && sessionStatus.type !== "idle") {
               yield* Effect.logDebug(
                 "Bot.service rejected a message while busy",
               ).pipe(Effect.annotateLogs("sessionId", sessionId));
@@ -309,16 +302,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             yield* Effect.logTrace("Bot.service is prompting OpenCode").pipe(
               Effect.annotateLogs("sessionId", sessionId),
             );
-
-            // Register pending prompt before firing async prompt
-            const pending: Bot.PendingPrompt = {
-              userId: ctx.from?.id,
-              chatId: ctx.chat.id,
-              threadId,
-              dmTopicId,
-            };
-            yield* Ref.update(pendingRef, HashMap.set(sessionId, pending));
-
             const result = yield* Effect.promise(() =>
               opencode.client.session.promptAsync({
                 sessionID: sessionId,
@@ -326,9 +309,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               }),
             );
             if (result.error) {
-              yield* Ref.update(pendingRef, HashMap.remove(sessionId));
               return yield* Effect.die(result.error);
             }
+            yield* Effect.logTrace("Bot.service prompted OpenCode").pipe(
+              Effect.annotateLogs("sessionId", sessionId),
+            );
           }).pipe(
             Effect.annotateLogs("userId", ctx.from?.id),
             Effect.annotateLogs("chatId", ctx.chat.id),
@@ -368,15 +353,28 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
   );
 
   /** Builds a session key from chat/thread/DM topic IDs. */
-  static sessionKey({
+  static getSessionKey({
     chatId,
     threadId,
     dmTopicId,
   }: Bot.SessionKeyOptions): string {
     const parts = [`c:${chatId}`];
-    if (dmTopicId !== undefined) parts.push(`d:${dmTopicId}`);
     if (threadId !== undefined) parts.push(`t:${threadId}`);
+    if (dmTopicId !== undefined) parts.push(`d:${dmTopicId}`);
     return parts.join("/");
+  }
+
+  /** Parses a session key back into its component IDs. */
+  static parseSessionKey(key: string): Bot.SessionKeyOptions {
+    let chatId = 0;
+    let threadId: number | undefined;
+    let dmTopicId: number | undefined;
+    for (const part of key.split("/")) {
+      if (part.startsWith("c:")) chatId = Number(part.slice(2));
+      else if (part.startsWith("t:")) threadId = Number(part.slice(2));
+      else if (part.startsWith("d:")) dmTopicId = Number(part.slice(2));
+    }
+    return { chatId, threadId, dmTopicId };
   }
 
   /** Sends chunks to Telegram, falling back to plain text if MarkdownV2 fails. */
@@ -409,12 +407,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
 }
 
 export namespace Bot {
-  export interface PendingPrompt {
-    readonly userId: number | undefined;
-    readonly chatId: number;
-    readonly threadId: number | undefined;
-    readonly dmTopicId: number | undefined;
-  }
   export interface SessionKeyOptions {
     chatId: number;
     threadId: number | undefined;
