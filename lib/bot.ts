@@ -7,6 +7,7 @@ import {
   Effect,
   Exit,
   type Fiber,
+  HashMap,
   HashSet,
   Layer,
   Option,
@@ -46,6 +47,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       // TOCTOU race between checking session.status() and calling promptAsync.
       const promptingRef = yield* Ref.make(HashSet.empty<string>());
 
+      // Per-session watermark of the highest time.created we've processed.
+      // Lets reconciliation skip already-delivered messages on reconnect.
+      const reconciledRef = yield* Ref.make(HashMap.empty<string, number>());
+
       /** Claims and delivers a completed assistant message to Telegram. */
       const processCompletedAssistantMessage = (
         session: Database.Session,
@@ -56,6 +61,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             id: message.id,
             sessionId: message.sessionID,
             createdAt: message.time.created,
+          });
+          yield* Ref.update(reconciledRef, (map) => {
+            const prev = HashMap.get(map, session.id).pipe(
+              Option.getOrElse(() => 0),
+            );
+            return message.time.created > prev
+              ? HashMap.set(map, session.id, message.time.created)
+              : map;
           });
           if (!claimed) return;
           const sendOpts = {
@@ -198,29 +211,46 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               }),
           );
           yield* Ref.set(reconnectAttempt, 0);
-          // Reconcile any messages that completed while disconnected.
-          // Fetches all messages per session and lets claim() skip duplicates.
+          // Reconcile messages that completed while disconnected. Uses a
+          // per-session watermark to skip already-processed messages and
+          // reconciles sessions in parallel while keeping messages sequential.
           yield* Effect.gen(function* () {
+            const watermarks = yield* Ref.get(reconciledRef);
             const sessions = yield* database.session.findAll();
-            for (const session of sessions) {
-              const result = yield* Effect.promise(() =>
-                opencode.client.session.messages({ sessionID: session.id }),
-              );
-              if (result.error) {
-                yield* Effect.logDebug(result.error).pipe(
-                  Effect.annotateLogs("debugHint", "Bot.service"),
-                  Effect.annotateLogs("sessionId", session.id),
-                );
-                continue;
-              }
-              for (const msg of result.data) {
-                if (
-                  msg.info.role === "assistant" &&
-                  msg.info.time.completed !== undefined
-                )
-                  yield* processCompletedAssistantMessage(session, msg.info);
-              }
-            }
+            yield* Effect.forEach(
+              sessions,
+              (session) =>
+                Effect.gen(function* () {
+                  const watermark = HashMap.get(watermarks, session.id).pipe(
+                    Option.getOrElse(() => 0),
+                  );
+                  const result = yield* Effect.promise(() =>
+                    opencode.client.session.messages({
+                      sessionID: session.id,
+                    }),
+                  );
+                  if (result.error) return yield* Effect.die(result.error);
+                  for (const msg of result.data) {
+                    if (
+                      msg.info.role === "assistant" &&
+                      msg.info.time.completed !== undefined &&
+                      msg.info.time.created > watermark
+                    )
+                      yield* processCompletedAssistantMessage(
+                        session,
+                        msg.info,
+                      );
+                  }
+                }).pipe(
+                  Effect.catchAllDefect((defect) =>
+                    Effect.logWarning(defect).pipe(
+                      Effect.annotateLogs("debugHint", "Bot.service"),
+                      Effect.annotateLogs("sessionId", session.id),
+                    ),
+                  ),
+                ),
+              { concurrency: "unbounded", discard: true },
+            );
           }).pipe(
             Effect.catchAllDefect((defect) =>
               Effect.logWarning(defect).pipe(
