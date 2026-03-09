@@ -119,6 +119,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ),
               Effect.annotateLogs("sessionId", info.sessionID),
               Effect.annotateLogs("chatId", session.value.chatId),
+              Effect.annotateLogs("threadId", sendOpts.threadId),
+              Effect.annotateLogs("dmTopicId", sendOpts.dmTopicId),
             );
           } else if (event.type === "session.error") {
             const { sessionID, error } = event.properties;
@@ -163,6 +165,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ),
               Effect.annotateLogs("sessionId", sessionID),
               Effect.annotateLogs("chatId", session.value.chatId),
+              Effect.annotateLogs("threadId", sendOpts.threadId),
+              Effect.annotateLogs("dmTopicId", sendOpts.dmTopicId),
             );
           }
         });
@@ -232,8 +236,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           }).pipe(
             Effect.annotateLogs("debugHint", "Bot.service"),
             Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("chatId", ctx.chat?.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
+            Effect.annotateLogs("chatId", ctx.chat?.id),
+            Effect.annotateLogs("threadId", ctx.message?.message_thread_id),
+            Effect.annotateLogs(
+              "dmTopicId",
+              ctx.message?.direct_messages_topic?.topic_id,
+            ),
           ),
         ),
       );
@@ -308,8 +317,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             );
           }).pipe(
             Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("chatId", ctx.chat.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
+            Effect.annotateLogs("chatId", ctx.chat.id),
+            Effect.annotateLogs("threadId", threadId),
+            Effect.annotateLogs("dmTopicId", dmTopicId),
           ),
         );
       });
