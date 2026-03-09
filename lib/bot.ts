@@ -38,9 +38,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       const opencode = yield* OpenCode;
       const database = yield* Database;
 
-      // grammY bot — created early so processEvent can use grammyBot.api.
+      // Created early so processEvent can reference client.api.
       // Handlers and lifecycle are registered further below.
-      const grammyBot = new GrammyBot(Redacted.value(redactedToken));
+      const client = new GrammyBot(Redacted.value(redactedToken));
 
       // Tracks sessions with in-flight promptAsync calls to prevent the
       // TOCTOU race between checking session.status() and calling promptAsync.
@@ -62,7 +62,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               return;
             }
             const sendOpts = {
-              bot: grammyBot,
+              client,
               chatId: session.value.chatId,
               threadId: session.value.threadId || undefined,
               dmTopicId: session.value.dmTopicId || undefined,
@@ -79,10 +79,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 yield* Effect.logError(msgResult.error).pipe(
                   Effect.annotateLogs("debugHint", "Bot.service"),
                 );
-                yield* Bot.sendChunks(
-                  { ...sendOpts, ignoreErrors: false },
-                  formatError(msgResult.error),
-                );
+                yield* Bot.sendChunks({
+                  ...sendOpts,
+                  chunks: formatError(msgResult.error),
+                  ignoreErrors: false,
+                });
                 return;
               }
               const replyText = msgResult.data.parts
@@ -92,10 +93,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 .join("\n")
                 .trim();
               if (replyText) {
-                yield* Bot.sendChunks(
-                  { ...sendOpts, ignoreErrors: false },
-                  formatMessage(replyText),
-                );
+                yield* Bot.sendChunks({
+                  ...sendOpts,
+                  chunks: formatMessage(replyText),
+                  ignoreErrors: false,
+                });
                 yield* Effect.logTrace("Bot.service sent a reply");
               } else {
                 yield* Effect.logDebug(
@@ -108,10 +110,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   yield* Effect.logError(defect).pipe(
                     Effect.annotateLogs("debugHint", "Bot.service"),
                   );
-                  yield* Bot.sendChunks(
-                    { ...sendOpts, ignoreErrors: true },
-                    formatError(defect),
-                  );
+                  yield* Bot.sendChunks({
+                    ...sendOpts,
+                    chunks: formatError(defect),
+                    ignoreErrors: true,
+                  });
                 }),
               ),
               Effect.annotateLogs("sessionId", info.sessionID),
@@ -133,27 +136,29 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               return;
             }
             const sendOpts = {
-              bot: grammyBot,
+              client,
               chatId: session.value.chatId,
               threadId: session.value.threadId || undefined,
               dmTopicId: session.value.dmTopicId || undefined,
             };
             yield* Effect.gen(function* () {
               yield* Effect.logWarning(error);
-              yield* Bot.sendChunks(
-                { ...sendOpts, ignoreErrors: false },
-                formatError(error),
-              );
+              yield* Bot.sendChunks({
+                ...sendOpts,
+                chunks: formatError(error),
+                ignoreErrors: false,
+              });
             }).pipe(
               Effect.catchAllDefect((defect) =>
                 Effect.gen(function* () {
                   yield* Effect.logError(defect).pipe(
                     Effect.annotateLogs("debugHint", "Bot.service"),
                   );
-                  yield* Bot.sendChunks(
-                    { ...sendOpts, ignoreErrors: true },
-                    formatError(defect),
-                  );
+                  yield* Bot.sendChunks({
+                    ...sendOpts,
+                    chunks: formatError(defect),
+                    ignoreErrors: true,
+                  });
                 }),
               ),
               Effect.annotateLogs("sessionId", sessionID),
@@ -206,8 +211,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         ),
       ).pipe(Effect.forkScoped);
 
-      // grammY bot — error handler, message handler, and lifecycle
-      grammyBot.catch(({ error, ctx }) =>
+      // grammY — error handler, message handler, and lifecycle
+      client.catch(({ error, ctx }) =>
         Runtime.runPromise(runtime)(
           Effect.gen(function* () {
             const cause = Runtime.isFiberFailure(error)
@@ -215,16 +220,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               : error;
             yield* Effect.logError(cause);
             if (ctx.chat) {
-              yield* Bot.sendChunks(
-                {
-                  bot: grammyBot,
-                  ignoreErrors: true,
-                  chatId: ctx.chat.id,
-                  threadId: ctx.message?.message_thread_id,
-                  dmTopicId: ctx.message?.direct_messages_topic?.topic_id,
-                },
-                formatError(cause),
-              );
+              yield* Bot.sendChunks({
+                client,
+                chunks: formatError(cause),
+                ignoreErrors: true,
+                chatId: ctx.chat.id,
+                threadId: ctx.message?.message_thread_id,
+                dmTopicId: ctx.message?.direct_messages_topic?.topic_id,
+              });
             }
           }).pipe(
             Effect.annotateLogs("debugHint", "Bot.service"),
@@ -234,7 +237,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ),
         ),
       );
-      grammyBot.on("message:text", (ctx) => {
+      client.on("message:text", (ctx) => {
         const threadId = ctx.message?.message_thread_id;
         const dmTopicId = ctx.message?.direct_messages_topic?.topic_id;
         return Runtime.runPromise(runtime)(
@@ -245,27 +248,25 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
             }
             yield* Effect.logTrace("Bot.service received a message");
-            const sessionId = yield* Bot.findOrCreateSession(
+            const sessionId = yield* Bot.findOrCreateSession({
               database,
               opencode,
-              ctx.chat.id,
+              chatId: ctx.chat.id,
               threadId,
               dmTopicId,
-            );
+            });
             const rejectBusy = Effect.gen(function* () {
               yield* Effect.logDebug(
                 "Bot.service rejected a message while busy",
               ).pipe(Effect.annotateLogs("sessionId", sessionId));
-              yield* Bot.sendChunks(
-                {
-                  bot: grammyBot,
-                  ignoreErrors: false,
-                  chatId: ctx.chat.id,
-                  threadId,
-                  dmTopicId,
-                },
-                formatBusy(),
-              );
+              yield* Bot.sendChunks({
+                client,
+                chunks: formatBusy(),
+                ignoreErrors: false,
+                chatId: ctx.chat.id,
+                threadId,
+                dmTopicId,
+              });
             });
 
             // Check if session is busy via status API
@@ -317,7 +318,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       const ready = yield* Deferred.make<void>();
       const fiber = yield* Effect.acquireRelease(
         Effect.async<void>((resume) => {
-          grammyBot
+          client
             .start({ onStart: () => Deferred.unsafeDone(ready, Exit.void) })
             .then(
               () => {
@@ -333,7 +334,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         () =>
           Effect.gen(function* () {
             yield* Effect.logDebug("Bot.service is stopping");
-            yield* Effect.promise(() => grammyBot.stop()).pipe(
+            yield* Effect.promise(() => client.stop()).pipe(
               Effect.ignoreLogged,
             );
             yield* Effect.logInfo("Bot.service has stopped");
@@ -341,7 +342,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       );
       yield* Deferred.await(ready);
       yield* Effect.logInfo("Bot.service is ready");
-      return Bot.of({ fiber, client: grammyBot });
+      return Bot.of({ fiber, client });
     }),
   );
 
@@ -349,13 +350,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
    * Finds an existing session by chat IDs, or creates one. If a concurrent
    * insert races and wins, catches the unique-constraint defect and re-lookups.
    */
-  static findOrCreateSession(
-    database: Context.Tag.Service<typeof Database>,
-    opencode: Context.Tag.Service<typeof OpenCode>,
-    chatId: number,
-    threadId: number | undefined,
-    dmTopicId: number | undefined,
-  ) {
+  static findOrCreateSession({
+    database,
+    opencode,
+    chatId,
+    threadId,
+    dmTopicId,
+  }: Bot.FindOrCreateSessionOptions) {
     const dbThreadId = threadId ?? 0;
     const dbDmTopicId = dmTopicId ?? 0;
     return Effect.gen(function* () {
@@ -416,10 +417,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
   }
 
   /** Sends chunks to Telegram, falling back to plain text if MarkdownV2 fails. */
-  static sendChunks(
-    { bot, chatId, ignoreErrors, threadId, dmTopicId }: Bot.SendChunksOptions,
-    chunks: ReturnType<typeof formatMessage>,
-  ) {
+  static sendChunks({
+    client,
+    chunks,
+    ignoreErrors,
+    chatId,
+    threadId,
+    dmTopicId,
+  }: Bot.SendChunksOptions) {
     const threadOpts = {
       ...(threadId !== undefined && { message_thread_id: threadId }),
       ...(dmTopicId !== undefined && { direct_messages_topic_id: dmTopicId }),
@@ -429,13 +434,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       ({ text, markdown }) => {
         const sendEffect = Effect.promise(() =>
           markdown
-            ? bot.api
+            ? client.api
                 .sendMessage(chatId, markdown, {
                   parse_mode: "MarkdownV2",
                   ...threadOpts,
                 })
-                .catch(() => bot.api.sendMessage(chatId, text, threadOpts))
-            : bot.api.sendMessage(chatId, text, threadOpts),
+                .catch(() => client.api.sendMessage(chatId, text, threadOpts))
+            : client.api.sendMessage(chatId, text, threadOpts),
         );
         return ignoreErrors ? Effect.ignoreLogged(sendEffect) : sendEffect;
       },
@@ -445,11 +450,20 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
 }
 
 export namespace Bot {
+  export interface FindOrCreateSessionOptions {
+    readonly database: Context.Tag.Service<typeof Database>;
+    readonly opencode: Context.Tag.Service<typeof OpenCode>;
+    readonly chatId: number;
+    readonly threadId: number | undefined;
+    readonly dmTopicId: number | undefined;
+  }
+
   export interface SendChunksOptions {
-    bot: GrammyBot;
-    ignoreErrors: boolean;
-    chatId: number;
-    threadId: number | undefined;
-    dmTopicId: number | undefined;
+    readonly client: GrammyBot;
+    readonly chunks: ReturnType<typeof formatMessage>;
+    readonly ignoreErrors: boolean;
+    readonly chatId: number;
+    readonly threadId: number | undefined;
+    readonly dmTopicId: number | undefined;
   }
 }
