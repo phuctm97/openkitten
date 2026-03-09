@@ -63,7 +63,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             client,
             chatId: session.chatId,
             threadId: session.threadId || undefined,
-            dmTopicId: session.dmTopicId || undefined,
           };
           yield* Effect.gen(function* () {
             // Fetch the full message to get all parts (text, tool, etc.)
@@ -116,7 +115,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             Effect.annotateLogs("sessionId", message.sessionID),
             Effect.annotateLogs("chatId", session.chatId),
             Effect.annotateLogs("threadId", sendOpts.threadId),
-            Effect.annotateLogs("dmTopicId", sendOpts.dmTopicId),
           );
         });
 
@@ -157,7 +155,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               client,
               chatId: session.value.chatId,
               threadId: session.value.threadId || undefined,
-              dmTopicId: session.value.dmTopicId || undefined,
             };
             yield* Effect.gen(function* () {
               yield* Effect.logWarning(error);
@@ -182,7 +179,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Effect.annotateLogs("sessionId", sessionID),
               Effect.annotateLogs("chatId", session.value.chatId),
               Effect.annotateLogs("threadId", sendOpts.threadId),
-              Effect.annotateLogs("dmTopicId", sendOpts.dmTopicId),
             );
           }
         });
@@ -292,7 +288,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 ignoreErrors: true,
                 chatId: ctx.chat.id,
                 threadId: ctx.message?.message_thread_id,
-                dmTopicId: ctx.message?.direct_messages_topic?.topic_id,
               });
             }
           }).pipe(
@@ -300,16 +295,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             Effect.annotateLogs("messageId", ctx.message?.message_id),
             Effect.annotateLogs("chatId", ctx.chat?.id),
             Effect.annotateLogs("threadId", ctx.message?.message_thread_id),
-            Effect.annotateLogs(
-              "dmTopicId",
-              ctx.message?.direct_messages_topic?.topic_id,
-            ),
           ),
         ),
       );
       client.on("message:text", (ctx) => {
         const threadId = ctx.message?.message_thread_id;
-        const dmTopicId = ctx.message?.direct_messages_topic?.topic_id;
         return Runtime.runPromise(runtime)(
           Effect.gen(function* () {
             if (ctx.from?.id !== userId) {
@@ -323,7 +313,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               opencode,
               chatId: ctx.chat.id,
               threadId,
-              dmTopicId,
             });
             yield* Effect.gen(function* () {
               const rejectBusy = Effect.gen(function* () {
@@ -336,7 +325,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   ignoreErrors: false,
                   chatId: ctx.chat.id,
                   threadId,
-                  dmTopicId,
                 });
               });
 
@@ -381,7 +369,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             Effect.annotateLogs("messageId", ctx.message?.message_id),
             Effect.annotateLogs("chatId", ctx.chat.id),
             Effect.annotateLogs("threadId", threadId),
-            Effect.annotateLogs("dmTopicId", dmTopicId),
           ),
         );
       });
@@ -427,15 +414,12 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     opencode,
     chatId,
     threadId,
-    dmTopicId,
   }: Bot.FindOrCreateSessionOptions) {
     const dbThreadId = threadId ?? 0;
-    const dbDmTopicId = dmTopicId ?? 0;
     return Effect.gen(function* () {
       const existing = yield* database.session.findByChat({
         chatId,
         threadId: dbThreadId,
-        dmTopicId: dbDmTopicId,
       });
       if (Option.isSome(existing)) {
         yield* Effect.logDebug("Bot.service reused an existing session").pipe(
@@ -453,7 +437,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           id: sessionId,
           chatId,
           threadId: dbThreadId,
-          dmTopicId: dbDmTopicId,
           createdAt: undefined,
           updatedAt: undefined,
         })
@@ -476,7 +459,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               const raced = yield* database.session.findByChat({
                 chatId,
                 threadId: dbThreadId,
-                dmTopicId: dbDmTopicId,
               });
               if (Option.isNone(raced)) return yield* Effect.die(defect);
               yield* Effect.logDebug(
@@ -496,11 +478,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     ignoreErrors,
     chatId,
     threadId,
-    dmTopicId,
   }: Bot.SendChunksOptions) {
     const threadOpts = {
       ...(threadId !== undefined && { message_thread_id: threadId }),
-      ...(dmTopicId !== undefined && { direct_messages_topic_id: dmTopicId }),
     };
     return Effect.forEach(
       chunks,
@@ -545,7 +525,6 @@ export namespace Bot {
     readonly opencode: Context.Tag.Service<typeof OpenCode>;
     readonly chatId: number;
     readonly threadId: number | undefined;
-    readonly dmTopicId: number | undefined;
   }
 
   export interface SendChunksOptions {
@@ -554,6 +533,5 @@ export namespace Bot {
     readonly ignoreErrors: boolean;
     readonly chatId: number;
     readonly threadId: number | undefined;
-    readonly dmTopicId: number | undefined;
   }
 }

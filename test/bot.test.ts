@@ -23,7 +23,6 @@ interface GrammyBotContext {
     message_id: number;
     text: string;
     message_thread_id?: number;
-    direct_messages_topic?: { topic_id: number };
   };
 }
 
@@ -346,7 +345,6 @@ describe("handler", () => {
         id: "existing-session-id",
         chatId: 123,
         threadId: 0,
-        dmTopicId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });
@@ -384,7 +382,6 @@ describe("handler", () => {
           id: "winner-session-id",
           chatId: 123,
           threadId: 0,
-          dmTopicId: 0,
           createdAt: undefined,
           updatedAt: undefined,
         });
@@ -466,7 +463,6 @@ describe("handler", () => {
         id: "winner-session-id",
         chatId: 123,
         threadId: 0,
-        dmTopicId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });
@@ -1255,7 +1251,8 @@ describe("handler", () => {
 
   it.scoped("crashes after max reconnect attempts", () => {
     // All subscribe calls fail
-    const defaultImpl = eventSubscribeMock.getMockImplementation();
+    const defaultImpl =
+      eventSubscribeMock.getMockImplementation() ?? (() => {});
     eventSubscribeMock.mockImplementation(async () => {
       throw new Error("SSE connection refused");
     });
@@ -1352,32 +1349,6 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("replies in correct DM topic", () =>
-    Effect.gen(function* () {
-      yield* Bot;
-      yield* Effect.sleep(0);
-      const call = onSpy.mock.lastCall;
-      assert.isDefined(call);
-      const handler = call[1];
-      yield* Effect.promise(() =>
-        handler({
-          from: { id: 123 },
-          chat: { id: 123 },
-          message: {
-            message_id: 1,
-            text: "hello",
-            direct_messages_topic: { topic_id: 7 },
-          },
-        }),
-      );
-      yield* Effect.sleep(0);
-      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
-        parse_mode: "MarkdownV2",
-        direct_messages_topic_id: 7,
-      });
-    }).pipe(Effect.provide(validLayer)),
-  );
-
   it.scopedLive("sends busy message to correct thread", () =>
     Effect.gen(function* () {
       // First call: status returns idle, second call: status returns busy
@@ -1445,7 +1416,6 @@ describe("handler", () => {
             message_id: 1,
             text: "hello",
             message_thread_id: 42,
-            direct_messages_topic: { topic_id: 7 },
           },
         }),
       );
@@ -1455,7 +1425,6 @@ describe("handler", () => {
       assert.isDefined(fallbackCall);
       expect(fallbackCall[2]).toEqual({
         message_thread_id: 42,
-        direct_messages_topic_id: 7,
       });
     }).pipe(Effect.provide(validLayer)),
   );
@@ -1468,7 +1437,6 @@ describe("handler", () => {
         id: "session-reconcile",
         chatId: 123,
         threadId: 0,
-        dmTopicId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });
@@ -1512,7 +1480,6 @@ describe("handler", () => {
         id: "session-claimed",
         chatId: 123,
         threadId: 0,
-        dmTopicId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });
@@ -1551,7 +1518,6 @@ describe("handler", () => {
         id: "session-err",
         chatId: 123,
         threadId: 0,
-        dmTopicId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });
@@ -1573,7 +1539,6 @@ describe("handler", () => {
         id: "session-defect",
         chatId: 123,
         threadId: 0,
-        dmTopicId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });

@@ -10,14 +10,12 @@ it.scopedLive("insert and find session", () =>
       id: "session-1",
       chatId: 123,
       threadId: 42,
-      dmTopicId: 0,
       createdAt: undefined,
       updatedAt: undefined,
     });
     expect(inserted.id).toBe("session-1");
     expect(inserted.chatId).toBe(123);
     expect(inserted.threadId).toBe(42);
-    expect(inserted.dmTopicId).toBe(0);
     expect(inserted.createdAt).toBeDefined();
     expect(inserted.updatedAt).toBeDefined();
     const found = yield* database.session.findById("session-1");
@@ -35,14 +33,12 @@ it.scopedLive("findByChat returns matching session", () =>
       id: "target-session",
       chatId: 456,
       threadId: 10,
-      dmTopicId: 0,
       createdAt: undefined,
       updatedAt: undefined,
     });
     const found = yield* database.session.findByChat({
       chatId: 456,
       threadId: 10,
-      dmTopicId: 0,
     });
     expect(Option.isSome(found)).toBe(true);
     const value = Option.getOrThrow(found);
@@ -58,7 +54,6 @@ it.scopedLive("findByChat returns none for unknown", () =>
     const notFound = yield* database.session.findByChat({
       chatId: 999,
       threadId: 0,
-      dmTopicId: 0,
     });
     expect(Option.isNone(notFound)).toBe(true);
   }).pipe(Effect.provide(defaultLayer)),
@@ -73,7 +68,6 @@ it.scopedLive(
         id: "session-1",
         chatId: 123,
         threadId: 0,
-        dmTopicId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });

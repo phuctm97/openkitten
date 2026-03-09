@@ -7,7 +7,6 @@ class SessionModel extends Model.Class<SessionModel>(`${pkg.name}/Session`)({
   id: Schema.String,
   chatId: Schema.Number,
   threadId: Schema.Number,
-  dmTopicId: Schema.Number,
   createdAt: Model.DateTimeInsert,
   updatedAt: Model.DateTimeUpdate,
 }) {}
@@ -25,10 +24,9 @@ const loader = SqliteMigrator.fromRecord({
       id TEXT PRIMARY KEY NOT NULL,
       chat_id INTEGER NOT NULL,
       thread_id INTEGER NOT NULL DEFAULT 0,
-      dm_topic_id INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      UNIQUE(chat_id, thread_id, dm_topic_id)
+      UNIQUE(chat_id, thread_id)
     )`;
   }),
   "0002_create_message": Effect.gen(function* () {
@@ -73,13 +71,13 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
               Result: SessionModel,
               execute: () => sql`SELECT * FROM session`,
             })(undefined).pipe(Effect.orDie),
-          findByChat: ({ chatId, threadId, dmTopicId }) =>
+          findByChat: ({ chatId, threadId }) =>
             SqlSchema.findOne({
               Request: Schema.String,
               Result: SessionModel,
               execute: () =>
-                sql`SELECT * FROM session WHERE chat_id = ${chatId} AND thread_id = ${threadId} AND dm_topic_id = ${dmTopicId}`,
-            })(`${chatId}:${threadId}:${dmTopicId}`).pipe(Effect.orDie),
+                sql`SELECT * FROM session WHERE chat_id = ${chatId} AND thread_id = ${threadId}`,
+            })(`${chatId}:${threadId}`).pipe(Effect.orDie),
         },
         message: {
           ...messageRepository,
@@ -100,7 +98,6 @@ export namespace Database {
   export interface SessionFindByChatOptions {
     readonly chatId: number;
     readonly threadId: number;
-    readonly dmTopicId: number;
   }
 
   export type SessionRepository = Effect.Effect.Success<
@@ -108,7 +105,7 @@ export namespace Database {
   > & {
     /** Returns all tracked sessions. */
     readonly findAll: () => Effect.Effect<ReadonlyArray<SessionModel>>;
-    /** Finds a session by its chat, thread, and DM topic IDs. */
+    /** Finds a session by its chat and thread IDs. */
     readonly findByChat: (
       options: SessionFindByChatOptions,
     ) => Effect.Effect<Option.Option<SessionModel>>;
