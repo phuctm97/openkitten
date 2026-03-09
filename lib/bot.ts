@@ -65,7 +65,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
               return;
             }
-            const { userId, chatId } = pending.value;
+            const { userId, chatId, threadId, dmTopicId } = pending.value;
             yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
             yield* Effect.gen(function* () {
               // Fetch the full message to get all parts (text, tool, etc.)
@@ -83,7 +83,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   grammyBot,
                   chatId,
                   formatError(msgResult.error),
-                  { ignoreErrors: false },
+                  { ignoreErrors: false, threadId, dmTopicId },
                 );
                 return;
               }
@@ -98,7 +98,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   grammyBot,
                   chatId,
                   formatMessage(replyText),
-                  { ignoreErrors: false },
+                  { ignoreErrors: false, threadId, dmTopicId },
                 );
                 yield* Effect.logTrace("Bot.service sent a reply");
               } else {
@@ -116,7 +116,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                     grammyBot,
                     chatId,
                     formatError(defect),
-                    { ignoreErrors: true },
+                    { ignoreErrors: true, threadId, dmTopicId },
                   );
                 }),
               ),
@@ -139,12 +139,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ).pipe(Effect.annotateLogs("sessionId", sessionID));
               return;
             }
-            const { userId, chatId } = pending.value;
+            const { userId, chatId, threadId, dmTopicId } = pending.value;
             yield* Ref.update(pendingRef, HashMap.remove(sessionID));
             yield* Effect.gen(function* () {
               yield* Effect.logWarning(error);
               yield* Bot.sendChunks(grammyBot, chatId, formatError(error), {
                 ignoreErrors: false,
+                threadId,
+                dmTopicId,
               });
             }).pipe(
               Effect.catchAllDefect((defect) =>
@@ -156,7 +158,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                     grammyBot,
                     chatId,
                     formatError(defect),
-                    { ignoreErrors: true },
+                    { ignoreErrors: true, threadId, dmTopicId },
                   );
                 }),
               ),
@@ -224,7 +226,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 grammyBot,
                 ctx.chat.id,
                 formatError(cause),
-                { ignoreErrors: true },
+                {
+                  ignoreErrors: true,
+                  threadId: ctx.message?.message_thread_id,
+                  dmTopicId: ctx.message?.direct_messages_topic?.topic_id,
+                },
               );
             }
           }).pipe(
@@ -236,6 +242,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         ),
       );
       grammyBot.on("message:text", (ctx) => {
+        const threadId = ctx.message?.message_thread_id;
+        const dmTopicId = ctx.message?.direct_messages_topic?.topic_id;
         return Runtime.runPromise(runtime)(
           Effect.gen(function* () {
             if (ctx.from?.id !== userId) {
@@ -287,6 +295,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ).pipe(Effect.annotateLogs("sessionId", sessionId));
               yield* Bot.sendChunks(grammyBot, ctx.chat.id, formatBusy(), {
                 ignoreErrors: false,
+                threadId,
+                dmTopicId,
               });
               return;
             }
@@ -299,6 +309,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             const pending: Bot.PendingPrompt = {
               userId: ctx.from?.id,
               chatId: ctx.chat.id,
+              threadId,
+              dmTopicId,
             };
             yield* Ref.update(pendingRef, HashMap.set(sessionId, pending));
 
@@ -355,17 +367,24 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     bot: GrammyBot,
     chatId: number,
     chunks: ReturnType<typeof formatMessage>,
-    { ignoreErrors }: Bot.SendChunksOptions,
+    { ignoreErrors, threadId, dmTopicId }: Bot.SendChunksOptions,
   ) {
+    const threadOpts = {
+      ...(threadId !== undefined && { message_thread_id: threadId }),
+      ...(dmTopicId !== undefined && { direct_messages_topic_id: dmTopicId }),
+    };
     return Effect.forEach(
       chunks,
       ({ text, markdown }) => {
         const sendEffect = Effect.promise(() =>
           markdown
             ? bot.api
-                .sendMessage(chatId, markdown, { parse_mode: "MarkdownV2" })
-                .catch(() => bot.api.sendMessage(chatId, text))
-            : bot.api.sendMessage(chatId, text),
+                .sendMessage(chatId, markdown, {
+                  parse_mode: "MarkdownV2",
+                  ...threadOpts,
+                })
+                .catch(() => bot.api.sendMessage(chatId, text, threadOpts))
+            : bot.api.sendMessage(chatId, text, threadOpts),
         );
         return ignoreErrors ? Effect.ignoreLogged(sendEffect) : sendEffect;
       },
@@ -378,8 +397,12 @@ export namespace Bot {
   export interface PendingPrompt {
     readonly userId: number | undefined;
     readonly chatId: number;
+    readonly threadId: number | undefined;
+    readonly dmTopicId: number | undefined;
   }
   export interface SendChunksOptions {
     ignoreErrors: boolean;
+    threadId?: number | undefined;
+    dmTopicId?: number | undefined;
   }
 }

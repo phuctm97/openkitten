@@ -19,7 +19,12 @@ import { opencodeLayer } from "~/test/opencode-layer";
 interface GrammyBotContext {
   from?: { id: number };
   chat?: { id: number };
-  message?: { message_id: number; text: string };
+  message?: {
+    message_id: number;
+    text: string;
+    message_thread_id?: number;
+    direct_messages_topic?: { topic_id: number };
+  };
 }
 
 type GrammyErrorHandler = (err: {
@@ -723,7 +728,7 @@ describe("handler", () => {
       );
       yield* Effect.sleep(0);
       expect(sendMessageMock).toHaveBeenCalledTimes(1);
-      expect(sendMessageMock).toHaveBeenCalledWith(123, "plain reply");
+      expect(sendMessageMock).toHaveBeenCalledWith(123, "plain reply", {});
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -748,8 +753,8 @@ describe("handler", () => {
       expect(sendMessageMock).toHaveBeenCalledTimes(2);
       const fallbackCall = sendMessageMock.mock.calls.at(1);
       assert.isDefined(fallbackCall);
-      // Fallback call: sendMessage(chatId, text) — no parse_mode
-      expect(fallbackCall[2]).toBeUndefined();
+      // Fallback call: sendMessage(chatId, text, {}) — no parse_mode
+      expect(fallbackCall[2]).toEqual({});
     }).pipe(Effect.provide(validLayer)),
   );
 
@@ -902,6 +907,130 @@ describe("handler", () => {
       );
       yield* Effect.sleep(0);
       expect(sendMessageMock).toHaveBeenCalledTimes(2);
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("replies in correct forum thread", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: {
+            message_id: 1,
+            text: "hello",
+            message_thread_id: 42,
+          },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
+        parse_mode: "MarkdownV2",
+        message_thread_id: 42,
+      });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("replies in correct DM topic", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: {
+            message_id: 1,
+            text: "hello",
+            direct_messages_topic: { topic_id: 7 },
+          },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
+        parse_mode: "MarkdownV2",
+        direct_messages_topic_id: 7,
+      });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("sends busy message to correct thread", () =>
+    Effect.gen(function* () {
+      // Make promptAsync NOT push an event so the pending entry stays
+      sessionPromptAsyncMock.mockResolvedValueOnce({ data: undefined });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      // First message: registers pending prompt in thread 42
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: {
+            message_id: 1,
+            text: "hello",
+            message_thread_id: 42,
+          },
+        }),
+      );
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      // Second message: session is busy, should reply in same thread
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: {
+            message_id: 2,
+            text: "hello again",
+            message_thread_id: 42,
+          },
+        }),
+      );
+      expect(formatBusyMock).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
+        parse_mode: "MarkdownV2",
+        message_thread_id: 42,
+      });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("plain text fallback preserves thread", () =>
+    Effect.gen(function* () {
+      sendMessageMock
+        .mockRejectedValueOnce(new Error("parse error"))
+        .mockResolvedValue(undefined);
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: {
+            message_id: 1,
+            text: "hello",
+            message_thread_id: 42,
+          },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
+      const fallbackCall = sendMessageMock.mock.calls.at(1);
+      assert.isDefined(fallbackCall);
+      expect(fallbackCall[2]).toEqual({ message_thread_id: 42 });
     }).pipe(Effect.provide(validLayer)),
   );
 });
