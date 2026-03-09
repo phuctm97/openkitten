@@ -222,7 +222,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             const cause = Runtime.isFiberFailure(error)
               ? Cause.squash(error[Runtime.FiberFailureCauseId])
               : error;
-            yield* Effect.logError(cause);
+            yield* Effect.logError(cause).pipe(
+              Effect.annotateLogs("debugHint", "Bot.service"),
+            );
             if (ctx.chat) {
               yield* Bot.sendChunks({
                 client,
@@ -234,7 +236,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               });
             }
           }).pipe(
-            Effect.annotateLogs("debugHint", "Bot.service"),
             Effect.annotateLogs("userId", ctx.from?.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
             Effect.annotateLogs("chatId", ctx.chat?.id),
@@ -264,59 +265,57 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               threadId,
               dmTopicId,
             });
-            const rejectBusy = Effect.gen(function* () {
-              yield* Effect.logDebug(
-                "Bot.service rejected a message while busy",
-              ).pipe(Effect.annotateLogs("sessionId", sessionId));
-              yield* Bot.sendChunks({
-                client,
-                chunks: formatBusy(),
-                ignoreErrors: false,
-                chatId: ctx.chat.id,
-                threadId,
-                dmTopicId,
-              });
-            });
-
-            // Check if session is busy via status API
-            const statusResult = yield* Effect.promise(() =>
-              opencode.client.session.status({}),
-            );
-            if (statusResult.error)
-              return yield* Effect.die(statusResult.error);
-            const sessionStatus = statusResult.data[sessionId];
-            if (sessionStatus !== undefined && sessionStatus.type !== "idle")
-              return yield* rejectBusy;
-            // Atomically check-and-set the local prompting guard to close the
-            // TOCTOU window between the status check and the promptAsync call.
-            const localBusy = yield* Ref.modify(promptingRef, (set) =>
-              HashSet.has(set, sessionId)
-                ? [true, set]
-                : [false, HashSet.add(set, sessionId)],
-            );
-            if (localBusy) return yield* rejectBusy;
-
             yield* Effect.gen(function* () {
-              yield* Effect.logTrace("Bot.service is prompting OpenCode").pipe(
-                Effect.annotateLogs("sessionId", sessionId),
+              const rejectBusy = Effect.gen(function* () {
+                yield* Effect.logDebug(
+                  "Bot.service rejected a message while busy",
+                );
+                yield* Bot.sendChunks({
+                  client,
+                  chunks: formatBusy(),
+                  ignoreErrors: false,
+                  chatId: ctx.chat.id,
+                  threadId,
+                  dmTopicId,
+                });
+              });
+
+              // Check if session is busy via status API
+              const statusResult = yield* Effect.promise(() =>
+                opencode.client.session.status({}),
               );
-              const result = yield* Effect.promise(() =>
-                opencode.client.session.promptAsync({
-                  sessionID: sessionId,
-                  parts: [{ type: "text", text: ctx.message.text }],
-                }),
+              if (statusResult.error)
+                return yield* Effect.die(statusResult.error);
+              const sessionStatus = statusResult.data[sessionId];
+              if (sessionStatus !== undefined && sessionStatus.type !== "idle")
+                return yield* rejectBusy;
+              // Atomically check-and-set the local prompting guard to close the
+              // TOCTOU window between the status check and the promptAsync call.
+              const localBusy = yield* Ref.modify(promptingRef, (set) =>
+                HashSet.has(set, sessionId)
+                  ? [true, set]
+                  : [false, HashSet.add(set, sessionId)],
               );
-              if (result.error) {
-                return yield* Effect.die(result.error);
-              }
-              yield* Effect.logTrace("Bot.service prompted OpenCode").pipe(
-                Effect.annotateLogs("sessionId", sessionId),
+              if (localBusy) return yield* rejectBusy;
+
+              yield* Effect.gen(function* () {
+                yield* Effect.logTrace("Bot.service is prompting OpenCode");
+                const result = yield* Effect.promise(() =>
+                  opencode.client.session.promptAsync({
+                    sessionID: sessionId,
+                    parts: [{ type: "text", text: ctx.message.text }],
+                  }),
+                );
+                if (result.error) {
+                  return yield* Effect.die(result.error);
+                }
+                yield* Effect.logTrace("Bot.service prompted OpenCode");
+              }).pipe(
+                Effect.ensuring(
+                  Ref.update(promptingRef, HashSet.remove(sessionId)),
+                ),
               );
-            }).pipe(
-              Effect.ensuring(
-                Ref.update(promptingRef, HashSet.remove(sessionId)),
-              ),
-            );
+            }).pipe(Effect.annotateLogs("sessionId", sessionId));
           }).pipe(
             Effect.annotateLogs("userId", ctx.from?.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
