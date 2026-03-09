@@ -7,9 +7,11 @@ import {
   Effect,
   Exit,
   type Fiber,
+  HashSet,
   Layer,
   Option,
   Redacted,
+  Ref,
   Runtime,
 } from "effect";
 import { Bot as GrammyBot } from "grammy";
@@ -39,6 +41,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       // grammY bot — created early so processEvent can use grammyBot.api.
       // Handlers and lifecycle are registered further below.
       const grammyBot = new GrammyBot(Redacted.value(redactedToken));
+
+      // Tracks sessions with in-flight promptAsync calls to prevent the
+      // TOCTOU race between checking session.status() and calling promptAsync.
+      const promptingRef = yield* Ref.make(HashSet.empty<string>());
 
       /** Handles a single SSE event: sends the reply or error to Telegram. */
       const processEvent = (event: Event) =>
@@ -257,14 +263,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               opencode,
               key,
             );
-            // Check if session is busy via status API
-            const statusResult = yield* Effect.promise(() =>
-              opencode.client.session.status({}),
-            );
-            if (statusResult.error)
-              return yield* Effect.die(statusResult.error);
-            const sessionStatus = statusResult.data[sessionId];
-            if (sessionStatus && sessionStatus.type !== "idle") {
+            const rejectBusy = Effect.gen(function* () {
               yield* Effect.logDebug(
                 "Bot.service rejected a message while busy",
               ).pipe(Effect.annotateLogs("sessionId", sessionId));
@@ -278,8 +277,24 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 },
                 formatBusy(),
               );
-              return;
-            }
+            });
+            // Check if session is busy via status API
+            const statusResult = yield* Effect.promise(() =>
+              opencode.client.session.status({}),
+            );
+            if (statusResult.error)
+              return yield* Effect.die(statusResult.error);
+            const sessionStatus = statusResult.data[sessionId];
+            if (sessionStatus !== undefined && sessionStatus.type !== "idle")
+              return yield* rejectBusy;
+            // Atomically check-and-set the local prompting guard to close the
+            // TOCTOU window between the status check and the promptAsync call.
+            const localBusy = yield* Ref.modify(promptingRef, (set) =>
+              HashSet.has(set, sessionId)
+                ? [true, set]
+                : [false, HashSet.add(set, sessionId)],
+            );
+            if (localBusy) return yield* rejectBusy;
 
             yield* Effect.logTrace("Bot.service is prompting OpenCode").pipe(
               Effect.annotateLogs("sessionId", sessionId),
@@ -289,6 +304,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 sessionID: sessionId,
                 parts: [{ type: "text", text: ctx.message.text }],
               }),
+            ).pipe(
+              Effect.ensuring(
+                Ref.update(promptingRef, HashSet.remove(sessionId)),
+              ),
             );
             if (result.error) {
               return yield* Effect.die(result.error);

@@ -931,6 +931,51 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
+  it.scopedLive(
+    "sends busy message when concurrent message races past status check",
+    () =>
+      Effect.gen(function* () {
+        // Both status checks return idle — simulates two messages arriving
+        // before the first promptAsync completes, testing the local guard.
+        sessionStatusMock
+          .mockResolvedValueOnce({ data: {} })
+          .mockResolvedValueOnce({ data: {} });
+        let resolveFirst!: () => void;
+        sessionPromptAsyncMock.mockImplementationOnce(
+          () =>
+            new Promise((resolve) => {
+              resolveFirst = () => resolve({ data: undefined });
+            }),
+        );
+        yield* Bot;
+        yield* Effect.sleep(0);
+        const call = onSpy.mock.lastCall;
+        assert.isDefined(call);
+        const handler = call[1];
+        // First message: starts promptAsync but doesn't resolve yet
+        const firstPromise = handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "first" },
+        });
+        yield* Effect.sleep(0);
+        // Second message: same session, status says idle but local guard blocks
+        yield* Effect.promise(() =>
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 2, text: "second" },
+          }),
+        );
+        yield* Effect.sleep(0);
+        expect(formatBusyMock).toHaveBeenCalledTimes(1);
+        expect(sessionPromptAsyncMock).toHaveBeenCalledTimes(1);
+        // Resolve the first promptAsync so cleanup runs
+        resolveFirst();
+        yield* Effect.promise(() => firstPromise);
+      }).pipe(Effect.provide(validLayer)),
+  );
+
   it.scopedLive("different threads are not blocked by each other", () =>
     Effect.gen(function* () {
       sessionCreateMock
