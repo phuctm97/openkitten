@@ -1,4 +1,4 @@
-import type { Event } from "@opencode-ai/sdk/v2";
+import type { AssistantMessage, Event } from "@opencode-ai/sdk/v2";
 import {
   Cause,
   Config,
@@ -46,89 +46,98 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       // TOCTOU race between checking session.status() and calling promptAsync.
       const promptingRef = yield* Ref.make(HashSet.empty<string>());
 
+      /** Claims and delivers a completed assistant message to Telegram. */
+      const processCompletedAssistantMessage = (
+        session: Database.Session,
+        message: AssistantMessage,
+      ) =>
+        Effect.gen(function* () {
+          // Claim the message ID to prevent duplicate processing
+          const claimed = yield* database.message.claim({
+            id: message.id,
+            sessionId: message.sessionID,
+            createdAt: message.time.created,
+          });
+          if (!claimed) return;
+          const sendOpts = {
+            client,
+            chatId: session.chatId,
+            threadId: session.threadId || undefined,
+            dmTopicId: session.dmTopicId || undefined,
+          };
+          yield* Effect.gen(function* () {
+            // Fetch the full message to get all parts (text, tool, etc.)
+            const msgResult = yield* Effect.promise(() =>
+              opencode.client.session.message({
+                sessionID: message.sessionID,
+                messageID: message.id,
+              }),
+            );
+            if (msgResult.error) {
+              yield* Effect.logError(msgResult.error).pipe(
+                Effect.annotateLogs("debugHint", "Bot.service"),
+              );
+              yield* Bot.sendChunks({
+                ...sendOpts,
+                chunks: yield* formatError(msgResult.error),
+                ignoreErrors: false,
+              });
+              return;
+            }
+            const replyText = msgResult.data.parts
+              .filter(isTextPart)
+              .map((p) => p.text)
+              .filter(Boolean)
+              .join("\n")
+              .trim();
+            if (replyText) {
+              yield* Bot.sendChunks({
+                ...sendOpts,
+                chunks: yield* formatMessage(replyText),
+                ignoreErrors: false,
+              });
+              yield* Effect.logTrace("Bot.service sent a reply");
+            } else {
+              yield* Effect.logDebug("Bot.service received a non-text message");
+            }
+          }).pipe(
+            Effect.catchAllDefect((defect) =>
+              Effect.gen(function* () {
+                yield* Effect.logError(defect).pipe(
+                  Effect.annotateLogs("debugHint", "Bot.service"),
+                );
+                yield* Bot.sendChunks({
+                  ...sendOpts,
+                  chunks: yield* formatError(defect),
+                  ignoreErrors: true,
+                });
+              }),
+            ),
+            Effect.annotateLogs("sessionId", message.sessionID),
+            Effect.annotateLogs("chatId", session.chatId),
+            Effect.annotateLogs("threadId", sendOpts.threadId),
+            Effect.annotateLogs("dmTopicId", sendOpts.dmTopicId),
+          );
+        });
+
       /** Handles a single SSE event: sends the reply or error to Telegram. */
       const processEvent = (event: Event) =>
         Effect.gen(function* () {
           if (event.type === "message.updated") {
             const { info } = event.properties;
-            // Only act on fully completed assistant messages
-            if (info.role !== "assistant" || info.time.completed === undefined)
-              return;
-            const session = yield* database.session.findById(info.sessionID);
-            if (Option.isNone(session)) {
-              yield* Effect.logDebug(
-                "Bot.service ignored a message.updated for an unknown session",
-              ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
-              return;
-            }
-            // Claim the message ID to prevent duplicate processing
-            const claimed = yield* database.message.claim({
-              id: info.id,
-              sessionId: info.sessionID,
-              createdAt: info.time.created,
-            });
-            if (!claimed) return;
-            const sendOpts = {
-              client,
-              chatId: session.value.chatId,
-              threadId: session.value.threadId || undefined,
-              dmTopicId: session.value.dmTopicId || undefined,
-            };
-            yield* Effect.gen(function* () {
-              // Fetch the full message to get all parts (text, tool, etc.)
-              const msgResult = yield* Effect.promise(() =>
-                opencode.client.session.message({
-                  sessionID: info.sessionID,
-                  messageID: info.id,
-                }),
-              );
-              if (msgResult.error) {
-                yield* Effect.logError(msgResult.error).pipe(
-                  Effect.annotateLogs("debugHint", "Bot.service"),
-                );
-                yield* Bot.sendChunks({
-                  ...sendOpts,
-                  chunks: yield* formatError(msgResult.error),
-                  ignoreErrors: false,
-                });
-                return;
-              }
-              const replyText = msgResult.data.parts
-                .filter(isTextPart)
-                .map((p) => p.text)
-                .filter(Boolean)
-                .join("\n")
-                .trim();
-              if (replyText) {
-                yield* Bot.sendChunks({
-                  ...sendOpts,
-                  chunks: yield* formatMessage(replyText),
-                  ignoreErrors: false,
-                });
-                yield* Effect.logTrace("Bot.service sent a reply");
-              } else {
+            if (
+              info.role === "assistant" &&
+              info.time.completed !== undefined
+            ) {
+              const session = yield* database.session.findById(info.sessionID);
+              if (Option.isNone(session)) {
                 yield* Effect.logDebug(
-                  "Bot.service received a non-text message",
-                );
+                  "Bot.service ignored a message for an unknown session",
+                ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
+              } else {
+                yield* processCompletedAssistantMessage(session.value, info);
               }
-            }).pipe(
-              Effect.catchAllDefect((defect) =>
-                Effect.gen(function* () {
-                  yield* Effect.logError(defect).pipe(
-                    Effect.annotateLogs("debugHint", "Bot.service"),
-                  );
-                  yield* Bot.sendChunks({
-                    ...sendOpts,
-                    chunks: yield* formatError(defect),
-                    ignoreErrors: true,
-                  });
-                }),
-              ),
-              Effect.annotateLogs("sessionId", info.sessionID),
-              Effect.annotateLogs("chatId", session.value.chatId),
-              Effect.annotateLogs("threadId", sendOpts.threadId),
-              Effect.annotateLogs("dmTopicId", sendOpts.dmTopicId),
-            );
+            }
           } else if (event.type === "session.error") {
             const { sessionID, error } = event.properties;
             if (!sessionID) {
@@ -192,6 +201,36 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Effect.sync(() => {
                 iter.return?.(undefined);
               }),
+          );
+          // Reconcile any messages that completed while disconnected.
+          // Fetches all messages per session and lets claim() skip duplicates.
+          yield* Effect.gen(function* () {
+            const sessions = yield* database.session.findAll();
+            for (const session of sessions) {
+              const result = yield* Effect.promise(() =>
+                opencode.client.session.messages({ sessionID: session.id }),
+              );
+              if (result.error) {
+                yield* Effect.logDebug(result.error).pipe(
+                  Effect.annotateLogs("debugHint", "Bot.service"),
+                  Effect.annotateLogs("sessionId", session.id),
+                );
+                continue;
+              }
+              for (const msg of result.data) {
+                if (
+                  msg.info.role === "assistant" &&
+                  msg.info.time.completed !== undefined
+                )
+                  yield* processCompletedAssistantMessage(session, msg.info);
+              }
+            }
+          }).pipe(
+            Effect.catchAllDefect((defect) =>
+              Effect.logWarning(defect).pipe(
+                Effect.annotateLogs("debugHint", "Bot.service"),
+              ),
+            ),
           );
           // Uses Effect.async (interruptible) instead of Stream.fromAsyncIterable
           // (which uses Effect.tryPromise internally and deadlocks on scope close).

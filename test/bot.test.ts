@@ -160,6 +160,10 @@ const sessionDeleteMock = vi.fn().mockResolvedValue({
   data: undefined,
 });
 
+const sessionMessagesMock = vi.fn().mockResolvedValue({
+  data: [],
+});
+
 // Exposed as a spy so tests can override with broken streams for reconnect tests
 const eventSubscribeMock = vi
   .fn()
@@ -172,6 +176,7 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
       delete: sessionDeleteMock,
       promptAsync: sessionPromptAsyncMock,
       message: sessionMessageMock,
+      messages: sessionMessagesMock,
       status: sessionStatusMock,
     },
     event: {
@@ -221,6 +226,7 @@ beforeEach(() => {
   msgCounter = 0;
   sendMessageMock.mockClear();
   sessionDeleteMock.mockClear();
+  sessionMessagesMock.mockClear();
   sessionStatusMock.mockClear();
 });
 
@@ -1428,6 +1434,131 @@ describe("handler", () => {
         message_thread_id: 42,
         direct_messages_topic_id: 7,
       });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("reconciles missed messages on reconnect", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      // Pre-insert a session so reconciliation finds it
+      yield* database.session.insert({
+        id: "session-reconcile",
+        chatId: 123,
+        threadId: 0,
+        dmTopicId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      // session.messages returns a user message and a completed assistant message
+      sessionMessagesMock.mockResolvedValueOnce({
+        data: [
+          {
+            info: {
+              id: "user-msg",
+              sessionID: "session-reconcile",
+              role: "user",
+              time: { created: 0 },
+            },
+            parts: [{ type: "text", text: "hello" }],
+          },
+          {
+            info: {
+              id: "missed-msg",
+              sessionID: "session-reconcile",
+              role: "assistant",
+              time: { created: 1, completed: 2 },
+            },
+            parts: [{ type: "text", text: "missed reply" }],
+          },
+        ],
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Reconciliation should have claimed and sent the missed message
+      expect(sessionMessagesMock).toHaveBeenCalledWith({
+        sessionID: "session-reconcile",
+      });
+      expect(sendMessageMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("reconciliation skips already claimed messages", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "session-claimed",
+        chatId: 123,
+        threadId: 0,
+        dmTopicId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      // Pre-claim the message
+      yield* database.message.claim({
+        id: "already-claimed",
+        sessionId: "session-claimed",
+        createdAt: 1,
+      });
+      sessionMessagesMock.mockResolvedValueOnce({
+        data: [
+          {
+            info: {
+              id: "already-claimed",
+              sessionID: "session-claimed",
+              role: "assistant",
+              time: { created: 1, completed: 2 },
+            },
+            parts: [{ type: "text", text: "old reply" }],
+          },
+        ],
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // session.message (singular, fetch parts) should NOT be called
+      expect(sessionMessageMock).not.toHaveBeenCalled();
+      // No Telegram message sent from reconciliation
+      expect(sendMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("reconciliation continues when session.messages errors", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "session-err",
+        chatId: 123,
+        threadId: 0,
+        dmTopicId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      sessionMessagesMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("not found"),
+      });
+      // Should not crash — reconciliation logs and continues
+      yield* Bot;
+      yield* Effect.sleep(0);
+      expect(sessionMessagesMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("reconciliation survives defect", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "session-defect",
+        chatId: 123,
+        threadId: 0,
+        dmTopicId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      sessionMessagesMock.mockRejectedValueOnce(new Error("network failure"));
+      // Should not crash — catchAllDefect logs and continues
+      yield* Bot;
+      yield* Effect.sleep(0);
+      expect(sessionMessagesMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 });

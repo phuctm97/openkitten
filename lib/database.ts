@@ -67,6 +67,12 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
       return Database.of({
         session: {
           ...sessionRepository,
+          findAll: () =>
+            SqlSchema.findAll({
+              Request: Schema.Undefined,
+              Result: SessionModel,
+              execute: () => sql`SELECT * FROM session`,
+            })(undefined).pipe(Effect.orDie),
           findByChat: ({ chatId, threadId, dmTopicId }) =>
             SqlSchema.findOne({
               Request: Schema.String,
@@ -89,6 +95,8 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
 }
 
 export namespace Database {
+  export type Session = SessionModel;
+
   export interface SessionFindByChatOptions {
     readonly chatId: number;
     readonly threadId: number;
@@ -98,11 +106,15 @@ export namespace Database {
   export type SessionRepository = Effect.Effect.Success<
     ReturnType<typeof Model.makeRepository<typeof SessionModel, "id">>
   > & {
+    /** Returns all tracked sessions. */
+    readonly findAll: () => Effect.Effect<ReadonlyArray<SessionModel>>;
     /** Finds a session by its chat, thread, and DM topic IDs. */
     readonly findByChat: (
       options: SessionFindByChatOptions,
     ) => Effect.Effect<Option.Option<SessionModel>>;
   };
+
+  export type Message = MessageModel;
 
   export interface MessageClaimOptions {
     readonly id: string;
