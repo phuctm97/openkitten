@@ -66,6 +66,12 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               return;
             }
             const { userId, chatId, threadId, dmTopicId } = pending.value;
+            const sendOpts = {
+              bot: grammyBot,
+              chatId,
+              threadId,
+              dmTopicId,
+            };
             yield* Ref.update(pendingRef, HashMap.remove(info.sessionID));
             yield* Effect.gen(function* () {
               // Fetch the full message to get all parts (text, tool, etc.)
@@ -80,10 +86,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   Effect.annotateLogs("debugHint", "Bot.service"),
                 );
                 yield* Bot.sendChunks(
-                  grammyBot,
-                  chatId,
+                  { ...sendOpts, ignoreErrors: false },
                   formatError(msgResult.error),
-                  { ignoreErrors: false, threadId, dmTopicId },
                 );
                 return;
               }
@@ -95,10 +99,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 .trim();
               if (replyText) {
                 yield* Bot.sendChunks(
-                  grammyBot,
-                  chatId,
+                  { ...sendOpts, ignoreErrors: false },
                   formatMessage(replyText),
-                  { ignoreErrors: false, threadId, dmTopicId },
                 );
                 yield* Effect.logTrace("Bot.service sent a reply");
               } else {
@@ -113,10 +115,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                     Effect.annotateLogs("debugHint", "Bot.service"),
                   );
                   yield* Bot.sendChunks(
-                    grammyBot,
-                    chatId,
+                    { ...sendOpts, ignoreErrors: true },
                     formatError(defect),
-                    { ignoreErrors: true, threadId, dmTopicId },
                   );
                 }),
               ),
@@ -140,14 +140,19 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               return;
             }
             const { userId, chatId, threadId, dmTopicId } = pending.value;
+            const sendOpts = {
+              bot: grammyBot,
+              chatId,
+              threadId,
+              dmTopicId,
+            };
             yield* Ref.update(pendingRef, HashMap.remove(sessionID));
             yield* Effect.gen(function* () {
               yield* Effect.logWarning(error);
-              yield* Bot.sendChunks(grammyBot, chatId, formatError(error), {
-                ignoreErrors: false,
-                threadId,
-                dmTopicId,
-              });
+              yield* Bot.sendChunks(
+                { ...sendOpts, ignoreErrors: false },
+                formatError(error),
+              );
             }).pipe(
               Effect.catchAllDefect((defect) =>
                 Effect.gen(function* () {
@@ -155,10 +160,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                     Effect.annotateLogs("debugHint", "Bot.service"),
                   );
                   yield* Bot.sendChunks(
-                    grammyBot,
-                    chatId,
+                    { ...sendOpts, ignoreErrors: true },
                     formatError(defect),
-                    { ignoreErrors: true, threadId, dmTopicId },
                   );
                 }),
               ),
@@ -223,14 +226,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             yield* Effect.logError(cause);
             if (ctx.chat) {
               yield* Bot.sendChunks(
-                grammyBot,
-                ctx.chat.id,
-                formatError(cause),
                 {
+                  bot: grammyBot,
                   ignoreErrors: true,
+                  chatId: ctx.chat.id,
                   threadId: ctx.message?.message_thread_id,
                   dmTopicId: ctx.message?.direct_messages_topic?.topic_id,
                 },
+                formatError(cause),
               );
             }
           }).pipe(
@@ -293,11 +296,16 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               yield* Effect.logDebug(
                 "Bot.service rejected a message while busy",
               ).pipe(Effect.annotateLogs("sessionId", sessionId));
-              yield* Bot.sendChunks(grammyBot, ctx.chat.id, formatBusy(), {
-                ignoreErrors: false,
-                threadId,
-                dmTopicId,
-              });
+              yield* Bot.sendChunks(
+                {
+                  bot: grammyBot,
+                  ignoreErrors: false,
+                  chatId: ctx.chat.id,
+                  threadId,
+                  dmTopicId,
+                },
+                formatBusy(),
+              );
               return;
             }
 
@@ -364,10 +372,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
 
   /** Sends chunks to Telegram, falling back to plain text if MarkdownV2 fails. */
   static sendChunks(
-    bot: GrammyBot,
-    chatId: number,
+    { bot, chatId, ignoreErrors, threadId, dmTopicId }: Bot.SendChunksOptions,
     chunks: ReturnType<typeof formatMessage>,
-    { ignoreErrors, threadId, dmTopicId }: Bot.SendChunksOptions,
   ) {
     const threadOpts = {
       ...(threadId !== undefined && { message_thread_id: threadId }),
@@ -401,8 +407,10 @@ export namespace Bot {
     readonly dmTopicId: number | undefined;
   }
   export interface SendChunksOptions {
+    bot: GrammyBot;
     ignoreErrors: boolean;
-    threadId?: number | undefined;
-    dmTopicId?: number | undefined;
+    chatId: number;
+    threadId: number | undefined;
+    dmTopicId: number | undefined;
   }
 }
