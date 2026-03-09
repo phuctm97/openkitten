@@ -214,49 +214,38 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           // Reconcile messages that completed while disconnected. Uses a
           // per-session watermark to skip already-processed messages and
           // reconciles sessions in parallel while keeping messages sequential.
-          yield* Effect.gen(function* () {
-            const watermarks = yield* Ref.get(reconciledRef);
-            const sessions = yield* database.session.findAll();
-            yield* Effect.forEach(
-              sessions,
-              (session) =>
-                Effect.gen(function* () {
-                  const watermark = HashMap.get(watermarks, session.id).pipe(
-                    Option.getOrElse(() => 0),
-                  );
-                  const result = yield* Effect.promise(() =>
-                    opencode.client.session.messages({
-                      sessionID: session.id,
-                    }),
-                  );
-                  if (result.error) return yield* Effect.die(result.error);
-                  for (const msg of result.data) {
-                    if (
-                      msg.info.role === "assistant" &&
-                      msg.info.time.completed !== undefined &&
-                      msg.info.time.created > watermark
-                    )
-                      yield* processCompletedAssistantMessage(
-                        session,
-                        msg.info,
-                      );
-                  }
-                }).pipe(
-                  Effect.catchAllDefect((defect) =>
-                    Effect.logWarning(defect).pipe(
-                      Effect.annotateLogs("debugHint", "Bot.service"),
-                      Effect.annotateLogs("sessionId", session.id),
-                    ),
+          const watermarks = yield* Ref.get(reconciledRef);
+          const sessions = yield* database.session.findAll();
+          yield* Effect.forEach(
+            sessions,
+            (session) =>
+              Effect.gen(function* () {
+                const watermark = HashMap.get(watermarks, session.id).pipe(
+                  Option.getOrElse(() => 0),
+                );
+                const result = yield* Effect.promise(() =>
+                  opencode.client.session.messages({
+                    sessionID: session.id,
+                  }),
+                );
+                if (result.error) return yield* Effect.die(result.error);
+                for (const msg of result.data) {
+                  if (
+                    msg.info.role === "assistant" &&
+                    msg.info.time.completed !== undefined &&
+                    msg.info.time.created > watermark
+                  )
+                    yield* processCompletedAssistantMessage(session, msg.info);
+                }
+              }).pipe(
+                Effect.catchAllDefect((defect) =>
+                  Effect.logWarning(defect).pipe(
+                    Effect.annotateLogs("debugHint", "Bot.service"),
+                    Effect.annotateLogs("sessionId", session.id),
                   ),
                 ),
-              { concurrency: "unbounded", discard: true },
-            );
-          }).pipe(
-            Effect.catchAllDefect((defect) =>
-              Effect.logWarning(defect).pipe(
-                Effect.annotateLogs("debugHint", "Bot.service"),
               ),
-            ),
+            { concurrency: "unbounded", discard: true },
           );
           // Uses Effect.async (interruptible) instead of Stream.fromAsyncIterable
           // (which uses Effect.tryPromise internally and deadlocks on scope close).
