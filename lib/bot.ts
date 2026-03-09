@@ -267,6 +267,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 formatBusy(),
               );
             });
+
             // Check if session is busy via status API
             const statusResult = yield* Effect.promise(() =>
               opencode.client.session.status({}),
@@ -311,6 +312,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ),
         );
       });
+
+      // Bot lifecycle — start, wait for ready, and register stop finalizer
       const ready = yield* Deferred.make<void>();
       const fiber = yield* Effect.acquireRelease(
         Effect.async<void>((resume) => {

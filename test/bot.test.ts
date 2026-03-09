@@ -124,9 +124,8 @@ const sessionCreateMock = vi.fn().mockResolvedValue({
   data: { id: "new-session-id" },
 });
 
-// Default mock: immediately pushes a completed assistant message event so the
-// event stream fiber processes the reply without delay. Individual tests
-// override this when they need different behavior (errors, empty parts, etc.).
+// Default mock: pushes a completed assistant message event so the event stream
+// fiber processes the reply without delay. Tests override for other behavior.
 const sessionPromptAsyncMock = vi
   .fn()
   .mockImplementation(async (args: { sessionID: string }) => {
@@ -561,9 +560,8 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  // Error tests use Effect.promise(async () => expect(...).rejects.toThrow())
-  // instead of it.scopedLive.fails because we need post-failure assertions
-  // (e.g. reply not called), which .fails doesn't support.
+  // Uses Effect.promise + rejects.toThrow instead of it.scopedLive.fails so
+  // we can assert post-failure state (e.g. reply not called).
   it.scopedLive("dies when session create returns error", () =>
     Effect.gen(function* () {
       sessionCreateMock.mockResolvedValueOnce({
