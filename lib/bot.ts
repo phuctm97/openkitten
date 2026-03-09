@@ -54,23 +54,18 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             // Only act on fully completed assistant messages
             if (info.role !== "assistant" || info.time.completed === undefined)
               return;
-            const session = yield* database.session.findBySessionId(
-              info.sessionID,
-            );
+            const session = yield* database.session.findById(info.sessionID);
             if (Option.isNone(session)) {
               yield* Effect.logDebug(
                 "Bot.service ignored a message.updated for an unknown session",
               ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
               return;
             }
-            const { chatId, threadId, dmTopicId } = Bot.parseSessionKey(
-              session.value.sessionKey,
-            );
             const sendOpts = {
               bot: grammyBot,
-              chatId,
-              threadId,
-              dmTopicId,
+              chatId: session.value.chatId,
+              threadId: session.value.threadId || undefined,
+              dmTopicId: session.value.dmTopicId || undefined,
             };
             yield* Effect.gen(function* () {
               // Fetch the full message to get all parts (text, tool, etc.)
@@ -120,7 +115,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 }),
               ),
               Effect.annotateLogs("sessionId", info.sessionID),
-              Effect.annotateLogs("chatId", chatId),
+              Effect.annotateLogs("chatId", session.value.chatId),
             );
           } else if (event.type === "session.error") {
             const { sessionID, error } = event.properties;
@@ -130,21 +125,18 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
               return;
             }
-            const session = yield* database.session.findBySessionId(sessionID);
+            const session = yield* database.session.findById(sessionID);
             if (Option.isNone(session)) {
               yield* Effect.logDebug(
                 "Bot.service ignored a session.error for an unknown session",
               ).pipe(Effect.annotateLogs("sessionId", sessionID));
               return;
             }
-            const { chatId, threadId, dmTopicId } = Bot.parseSessionKey(
-              session.value.sessionKey,
-            );
             const sendOpts = {
               bot: grammyBot,
-              chatId,
-              threadId,
-              dmTopicId,
+              chatId: session.value.chatId,
+              threadId: session.value.threadId || undefined,
+              dmTopicId: session.value.dmTopicId || undefined,
             };
             yield* Effect.gen(function* () {
               yield* Effect.logWarning(error);
@@ -165,7 +157,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 }),
               ),
               Effect.annotateLogs("sessionId", sessionID),
-              Effect.annotateLogs("chatId", chatId),
+              Effect.annotateLogs("chatId", session.value.chatId),
             );
           }
         });
@@ -253,15 +245,12 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
             }
             yield* Effect.logTrace("Bot.service received a message");
-            const key = Bot.getSessionKey({
-              chatId: ctx.chat.id,
-              threadId,
-              dmTopicId,
-            });
             const sessionId = yield* Bot.findOrCreateSession(
               database,
               opencode,
-              key,
+              ctx.chat.id,
+              threadId,
+              dmTopicId,
             );
             const rejectBusy = Effect.gen(function* () {
               yield* Effect.logDebug(
@@ -353,47 +342,30 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     }),
   );
 
-  /** Builds a session key from chat/thread/DM topic IDs. */
-  static getSessionKey({
-    chatId,
-    threadId,
-    dmTopicId,
-  }: Bot.SessionKeyOptions): string {
-    const parts = [`c:${chatId}`];
-    if (threadId !== undefined) parts.push(`t:${threadId}`);
-    if (dmTopicId !== undefined) parts.push(`d:${dmTopicId}`);
-    return parts.join("/");
-  }
-
-  /** Parses a session key back into its component IDs. */
-  static parseSessionKey(key: string): Bot.SessionKeyOptions {
-    let chatId = 0;
-    let threadId: number | undefined;
-    let dmTopicId: number | undefined;
-    for (const part of key.split("/")) {
-      if (part.startsWith("c:")) chatId = Number(part.slice(2));
-      else if (part.startsWith("t:")) threadId = Number(part.slice(2));
-      else if (part.startsWith("d:")) dmTopicId = Number(part.slice(2));
-    }
-    return { chatId, threadId, dmTopicId };
-  }
-
   /**
-   * Finds an existing session by key, or creates one. If a concurrent insert
-   * races and wins, catches the unique-constraint defect and re-lookups.
+   * Finds an existing session by chat IDs, or creates one. If a concurrent
+   * insert races and wins, catches the unique-constraint defect and re-lookups.
    */
   static findOrCreateSession(
     database: Context.Tag.Service<typeof Database>,
     opencode: Context.Tag.Service<typeof OpenCode>,
-    key: string,
+    chatId: number,
+    threadId: number | undefined,
+    dmTopicId: number | undefined,
   ) {
+    const dbThreadId = threadId ?? 0;
+    const dbDmTopicId = dmTopicId ?? 0;
     return Effect.gen(function* () {
-      const existing = yield* database.session.findById(key);
+      const existing = yield* database.session.findByChat({
+        chatId,
+        threadId: dbThreadId,
+        dmTopicId: dbDmTopicId,
+      });
       if (Option.isSome(existing)) {
         yield* Effect.logDebug("Bot.service reused an existing session").pipe(
-          Effect.annotateLogs("sessionId", existing.value.sessionId),
+          Effect.annotateLogs("sessionId", existing.value.id),
         );
-        return existing.value.sessionId;
+        return existing.value.id;
       }
       const result = yield* Effect.promise(() =>
         opencode.client.session.create({}),
@@ -402,8 +374,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       const sessionId = result.data.id;
       return yield* database.session
         .insert({
-          sessionKey: key,
-          sessionId,
+          id: sessionId,
+          chatId,
+          threadId: dbThreadId,
+          dmTopicId: dbDmTopicId,
           createdAt: undefined,
           updatedAt: undefined,
         })
@@ -416,7 +390,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           Effect.as(sessionId),
           Effect.catchAllDefect((defect) =>
             Effect.gen(function* () {
-              const raced = yield* database.session.findById(key);
+              const raced = yield* database.session.findByChat({
+                chatId,
+                threadId: dbThreadId,
+                dmTopicId: dbDmTopicId,
+              });
               if (Option.isNone(raced)) return yield* Effect.die(defect);
               // Clean up the orphaned OpenCode session from the losing race
               const deleteResult = yield* Effect.promise(() =>
@@ -426,8 +404,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 return yield* Effect.die(deleteResult.error);
               yield* Effect.logDebug(
                 "Bot.service resolved a concurrent session insert",
-              ).pipe(Effect.annotateLogs("sessionId", raced.value.sessionId));
-              return raced.value.sessionId;
+              ).pipe(Effect.annotateLogs("sessionId", raced.value.id));
+              return raced.value.id;
             }),
           ),
         );
@@ -464,11 +442,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
 }
 
 export namespace Bot {
-  export interface SessionKeyOptions {
-    chatId: number;
-    threadId: number | undefined;
-    dmTopicId: number | undefined;
-  }
   export interface SendChunksOptions {
     bot: GrammyBot;
     ignoreErrors: boolean;

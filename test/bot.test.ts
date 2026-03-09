@@ -328,8 +328,10 @@ describe("handler", () => {
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
-        sessionKey: "c:123",
-        sessionId: "existing-session-id",
+        id: "existing-session-id",
+        chatId: 123,
+        threadId: 0,
+        dmTopicId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });
@@ -364,22 +366,24 @@ describe("handler", () => {
         const database = yield* Database;
         // Pre-insert the "winner" session (the one that won the race)
         yield* database.session.insert({
-          sessionKey: "c:123",
-          sessionId: "winner-session-id",
+          id: "winner-session-id",
+          chatId: 123,
+          threadId: 0,
+          dmTopicId: 0,
           createdAt: undefined,
           updatedAt: undefined,
         });
-        // First findById returns None (simulates the race window where
+        // First findByChat returns None (simulates the race window where
         // neither handler has inserted yet), retry returns the winner's row.
-        const originalFindById = database.session.findById.bind(
+        const originalFindByChat = database.session.findByChat.bind(
           database.session,
         );
-        let findByIdCallCount = 0;
-        vi.spyOn(database.session, "findById").mockImplementation(
-          (...args: Parameters<typeof database.session.findById>) => {
-            findByIdCallCount++;
-            if (findByIdCallCount === 1) return Effect.succeed(Option.none());
-            return originalFindById(...args);
+        let findByChatCallCount = 0;
+        vi.spyOn(database.session, "findByChat").mockImplementation(
+          (...args: Parameters<typeof database.session.findByChat>) => {
+            findByChatCallCount++;
+            if (findByChatCallCount === 1) return Effect.succeed(Option.none());
+            return originalFindByChat(...args);
           },
         );
         // Insert defects as if the loser hit unique constraint
@@ -444,18 +448,22 @@ describe("handler", () => {
       const database = yield* Database;
       // Pre-insert the winner
       yield* database.session.insert({
-        sessionKey: "c:123",
-        sessionId: "winner-session-id",
+        id: "winner-session-id",
+        chatId: 123,
+        threadId: 0,
+        dmTopicId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });
-      const originalFindById = database.session.findById.bind(database.session);
-      let findByIdCallCount = 0;
-      vi.spyOn(database.session, "findById").mockImplementation(
-        (...args: Parameters<typeof database.session.findById>) => {
-          findByIdCallCount++;
-          if (findByIdCallCount === 1) return Effect.succeed(Option.none());
-          return originalFindById(...args);
+      const originalFindByChat = database.session.findByChat.bind(
+        database.session,
+      );
+      let findByChatCallCount = 0;
+      vi.spyOn(database.session, "findByChat").mockImplementation(
+        (...args: Parameters<typeof database.session.findByChat>) => {
+          findByChatCallCount++;
+          if (findByChatCallCount === 1) return Effect.succeed(Option.none());
+          return originalFindByChat(...args);
         },
       );
       vi.spyOn(database.session, "insert").mockImplementationOnce(() =>
@@ -1362,65 +1370,4 @@ describe("handler", () => {
       });
     }).pipe(Effect.provide(validLayer)),
   );
-});
-
-describe("getSessionKey", () => {
-  it("builds key from chatId only", () => {
-    expect(
-      Bot.getSessionKey({
-        chatId: 123,
-        threadId: undefined,
-        dmTopicId: undefined,
-      }),
-    ).toBe("c:123");
-  });
-
-  it("builds key with threadId", () => {
-    expect(
-      Bot.getSessionKey({ chatId: 123, threadId: 42, dmTopicId: undefined }),
-    ).toBe("c:123/t:42");
-  });
-
-  it("builds key with dmTopicId", () => {
-    expect(
-      Bot.getSessionKey({ chatId: 123, threadId: undefined, dmTopicId: 7 }),
-    ).toBe("c:123/d:7");
-  });
-
-  it("builds key with both", () => {
-    expect(Bot.getSessionKey({ chatId: 123, threadId: 42, dmTopicId: 7 })).toBe(
-      "c:123/t:42/d:7",
-    );
-  });
-});
-
-describe("parseSessionKey", () => {
-  it("is inverse of getSessionKey", () => {
-    const opts = { chatId: 123, threadId: 42, dmTopicId: 7 };
-    expect(Bot.parseSessionKey(Bot.getSessionKey(opts))).toEqual(opts);
-  });
-
-  it("handles chatId only", () => {
-    expect(Bot.parseSessionKey("c:456")).toEqual({
-      chatId: 456,
-      threadId: undefined,
-      dmTopicId: undefined,
-    });
-  });
-
-  it("handles dmTopicId without threadId", () => {
-    expect(Bot.parseSessionKey("c:123/d:7")).toEqual({
-      chatId: 123,
-      threadId: undefined,
-      dmTopicId: 7,
-    });
-  });
-
-  it("ignores unknown prefixes", () => {
-    expect(Bot.parseSessionKey("c:123/x:99/t:42")).toEqual({
-      chatId: 123,
-      threadId: 42,
-      dmTopicId: undefined,
-    });
-  });
 });

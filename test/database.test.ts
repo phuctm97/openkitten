@@ -7,46 +7,59 @@ it.scopedLive("insert and find session", () =>
   Effect.gen(function* () {
     const database = yield* Database;
     const inserted = yield* database.session.insert({
-      sessionKey: "c:123/t:42",
-      sessionId: "session-1",
+      id: "session-1",
+      chatId: 123,
+      threadId: 42,
+      dmTopicId: 0,
       createdAt: undefined,
       updatedAt: undefined,
     });
-    expect(inserted.sessionKey).toBe("c:123/t:42");
-    expect(inserted.sessionId).toBe("session-1");
+    expect(inserted.id).toBe("session-1");
+    expect(inserted.chatId).toBe(123);
+    expect(inserted.threadId).toBe(42);
+    expect(inserted.dmTopicId).toBe(0);
     expect(inserted.createdAt).toBeDefined();
     expect(inserted.updatedAt).toBeDefined();
-    const found = yield* database.session.findById("c:123/t:42");
+    const found = yield* database.session.findById("session-1");
     expect(Option.isSome(found)).toBe(true);
-    expect(Option.getOrThrow(found).sessionId).toBe("session-1");
-    const notFound = yield* database.session.findById("c:999");
+    expect(Option.getOrThrow(found).chatId).toBe(123);
+    const notFound = yield* database.session.findById("nonexistent");
     expect(Option.isNone(notFound)).toBe(true);
   }).pipe(Effect.provide(defaultLayer)),
 );
 
-it.scopedLive("findBySessionId returns matching session", () =>
+it.scopedLive("findByChat returns matching session", () =>
   Effect.gen(function* () {
     const database = yield* Database;
     yield* database.session.insert({
-      sessionKey: "c:456/t:10",
-      sessionId: "target-session",
+      id: "target-session",
+      chatId: 456,
+      threadId: 10,
+      dmTopicId: 0,
       createdAt: undefined,
       updatedAt: undefined,
     });
-    const found = yield* database.session.findBySessionId("target-session");
+    const found = yield* database.session.findByChat({
+      chatId: 456,
+      threadId: 10,
+      dmTopicId: 0,
+    });
     expect(Option.isSome(found)).toBe(true);
     const value = Option.getOrThrow(found);
-    expect(value.sessionKey).toBe("c:456/t:10");
-    expect(value.sessionId).toBe("target-session");
+    expect(value.id).toBe("target-session");
+    expect(value.chatId).toBe(456);
+    expect(value.threadId).toBe(10);
   }).pipe(Effect.provide(defaultLayer)),
 );
 
-it.scopedLive("findBySessionId returns none for unknown", () =>
+it.scopedLive("findByChat returns none for unknown", () =>
   Effect.gen(function* () {
     const database = yield* Database;
-    const notFound = yield* database.session.findBySessionId(
-      "nonexistent-session",
-    );
+    const notFound = yield* database.session.findByChat({
+      chatId: 999,
+      threadId: 0,
+      dmTopicId: 0,
+    });
     expect(Option.isNone(notFound)).toBe(true);
   }).pipe(Effect.provide(defaultLayer)),
 );
