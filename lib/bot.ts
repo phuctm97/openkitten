@@ -16,6 +16,7 @@ import {
 } from "effect";
 import { Bot as GrammyBot } from "grammy";
 import { Database } from "~/lib/database";
+import { formatBusy } from "~/lib/format-busy";
 import { formatError } from "~/lib/format-error";
 import { formatMessage } from "~/lib/format-message";
 import { isTextPart } from "~/lib/is-text-part";
@@ -278,6 +279,18 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 });
               }
             }
+            // Reject if the session already has a pending prompt
+            const existing = HashMap.get(yield* Ref.get(pendingRef), sessionId);
+            if (Option.isSome(existing)) {
+              yield* Effect.logDebug(
+                "Bot.service rejected a message while busy",
+              ).pipe(Effect.annotateLogs("sessionId", sessionId));
+              yield* Bot.sendChunks(grammyBot, ctx.chat.id, formatBusy(), {
+                ignoreErrors: false,
+              });
+              return;
+            }
+
             yield* Effect.logTrace("Bot.service is prompting OpenCode").pipe(
               Effect.annotateLogs("sessionId", sessionId),
             );

@@ -164,13 +164,22 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
   }),
 }));
 
-const { formatErrorMock, formatMessageMock } = vi.hoisted(() => ({
-  formatErrorMock: vi
-    .fn()
-    .mockReturnValue([{ text: "raw error", markdown: "formatted error" }]),
-  formatMessageMock: vi
-    .fn()
-    .mockReturnValue([{ text: "AI response", markdown: "AI response" }]),
+const { formatBusyMock, formatErrorMock, formatMessageMock } = vi.hoisted(
+  () => ({
+    formatBusyMock: vi
+      .fn()
+      .mockReturnValue([{ text: "busy", markdown: "busy" }]),
+    formatErrorMock: vi
+      .fn()
+      .mockReturnValue([{ text: "raw error", markdown: "formatted error" }]),
+    formatMessageMock: vi
+      .fn()
+      .mockReturnValue([{ text: "AI response", markdown: "AI response" }]),
+  }),
+);
+
+vi.mock("~/lib/format-busy", () => ({
+  formatBusy: formatBusyMock,
 }));
 
 vi.mock("~/lib/format-error", () => ({
@@ -660,6 +669,40 @@ describe("handler", () => {
         }),
       );
       expect(sendMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("sends busy message when session has pending prompt", () =>
+    Effect.gen(function* () {
+      // Make promptAsync NOT push an event so the pending entry stays
+      sessionPromptAsyncMock.mockResolvedValueOnce({ data: undefined });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      // First message: registers pending prompt
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionPromptAsyncMock).toHaveBeenCalledTimes(1);
+      sendMessageMock.mockClear();
+      // Second message: session is busy
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 2, text: "hello again" },
+        }),
+      );
+      expect(formatBusyMock).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalledTimes(1);
+      expect(sessionPromptAsyncMock).toHaveBeenCalledTimes(1);
     }).pipe(Effect.provide(validLayer)),
   );
 
