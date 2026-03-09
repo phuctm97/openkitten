@@ -73,7 +73,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             );
             if (msgResult.error) {
               yield* Effect.logError(msgResult.error).pipe(
-                Effect.annotateLogs("debugHint", "Bot.service"),
+                Effect.annotateLogs("debugHint", "Bot.fetchMessage"),
               );
               yield* Bot.sendChunks({
                 ...sendOpts,
@@ -102,7 +102,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             Effect.catchAllDefect((defect) =>
               Effect.gen(function* () {
                 yield* Effect.logError(defect).pipe(
-                  Effect.annotateLogs("debugHint", "Bot.service"),
+                  Effect.annotateLogs("debugHint", "Bot.deliverMessage"),
                 );
                 yield* Bot.sendChunks({
                   ...sendOpts,
@@ -167,7 +167,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Effect.catchAllDefect((defect) =>
                 Effect.gen(function* () {
                   yield* Effect.logError(defect).pipe(
-                    Effect.annotateLogs("debugHint", "Bot.service"),
+                    Effect.annotateLogs("debugHint", "Bot.deliverError"),
                   );
                   yield* Bot.sendChunks({
                     ...sendOpts,
@@ -252,7 +252,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               }).pipe(
                 Effect.catchAllDefect((defect) =>
                   Effect.logWarning(defect).pipe(
-                    Effect.annotateLogs("debugHint", "Bot.service"),
+                    Effect.annotateLogs("debugHint", "Bot.reconcileMessages"),
                   ),
                 ),
                 Effect.annotateLogs("sessionId", session.id),
@@ -314,7 +314,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ? Cause.squash(error[Runtime.FiberFailureCauseId])
               : error;
             yield* Effect.logError(cause).pipe(
-              Effect.annotateLogs("debugHint", "Bot.service"),
+              Effect.annotateLogs("debugHint", "Bot.handleErrors"),
             );
             if (ctx.chat) {
               yield* Bot.sendChunks({
@@ -530,7 +530,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Effect.catchAllDefect((defect) =>
                 Effect.gen(function* () {
                   yield* Effect.logDebug(defect).pipe(
-                    Effect.annotateLogs("debugHint", "Bot.service"),
+                    Effect.annotateLogs("debugHint", "Bot.sendChunks"),
                   );
                   yield* Effect.logDebug(
                     "Bot.service failed to deliver a MarkdownV2 message",
