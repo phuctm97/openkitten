@@ -32,6 +32,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     Bot,
     Effect.gen(function* () {
       yield* Effect.logDebug("Bot.service is starting");
+      const botScope = yield* Effect.scope;
       const redactedToken = yield* Config.redacted("TELEGRAM_BOT_TOKEN");
       const userId = yield* Config.integer("TELEGRAM_USER_ID");
       const runtime = yield* Effect.runtime<Database>();
@@ -276,7 +277,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 iter.return?.(undefined);
               });
             }).pipe(
-              Effect.tap((event) => Effect.forkScoped(processEvent(event))),
+              Effect.tap((event) =>
+                Effect.forkIn(processEvent(event), botScope),
+              ),
             ),
           );
         }),
