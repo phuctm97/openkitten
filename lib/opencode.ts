@@ -94,7 +94,7 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
       const client = createOpencodeClient({
         baseUrl: `http://127.0.0.1:${portAwaited}`,
         headers: {
-          Authorization: `Basic ${btoa(`${username}:${password}`)}`,
+          authorization: `Basic ${btoa(`${username}:${password}`)}`,
         },
       });
       yield* Effect.logInfo("OpenCode.service is ready");
