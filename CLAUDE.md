@@ -14,7 +14,7 @@ Always consult effect-solutions before writing Effect code.
 
 1. `effect-solutions list` — see available guides
 2. `effect-solutions show <topic>...` — get patterns (supports multiple topics)
-3. `.reference/effect/` — real implementations for API exploration
+3. `.vendor/effect/` — real implementations for API exploration
 
 Never guess at Effect patterns — check the guide first.
 
