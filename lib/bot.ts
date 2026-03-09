@@ -23,7 +23,7 @@ import pkg from "~/package.json" with { type: "json" };
 
 export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
   Bot,
-  { readonly fiber: Fiber.RuntimeFiber<void> }
+  { readonly fiber: Fiber.RuntimeFiber<void>; readonly client: GrammyBot }
 >() {
   /** Manages the grammY bot lifecycle and SSE event stream. */
   static readonly layer = Layer.scoped(
@@ -348,7 +348,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       );
       yield* Deferred.await(ready);
       yield* Effect.logInfo("Bot.service is ready");
-      return Bot.of({ fiber });
+      return Bot.of({ fiber, client: grammyBot });
     }),
   );
 
