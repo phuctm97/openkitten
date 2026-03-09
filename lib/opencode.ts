@@ -75,7 +75,7 @@ export class OpenCode extends Context.Tag(`${pkg.name}/OpenCode`)<
       );
 
       const portAwaited = yield* Deferred.await(portDeferred);
-      yield* Effect.logDebug("OpenCode.service parsed port").pipe(
+      yield* Effect.logDebug("OpenCode.service is listening").pipe(
         Effect.annotateLogs("port", portAwaited),
       );
 
