@@ -198,25 +198,50 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               }),
           );
           yield* Ref.set(reconnectAttempt, 0);
-          // Reconcile messages that completed while disconnected. Sessions
-          // run in parallel; claim() deduplicates already-processed messages.
+          // Reconcile messages that completed while disconnected. Fetches
+          // the newest messages per session, expanding the window until an
+          // already-claimed message is found, then processes unclaimed ones
+          // in order. Sessions run in parallel.
           const sessions = yield* database.session.findAll();
           yield* Effect.forEach(
             sessions,
             (session) =>
               Effect.gen(function* () {
-                const result = yield* Effect.promise(() =>
-                  opencode.client.session.messages({
-                    sessionID: session.id,
-                  }),
-                );
-                if (result.error) return yield* Effect.die(result.error);
-                for (const msg of result.data) {
-                  if (
-                    msg.info.role === "assistant" &&
-                    msg.info.time.completed !== undefined
-                  )
-                    yield* processCompletedAssistantMessage(session, msg.info);
+                const initialLimit = 10;
+                let limit = initialLimit;
+                let messages: Array<AssistantMessage> = [];
+                let foundOverlap = false;
+                while (!foundOverlap) {
+                  const result = yield* Effect.promise(() =>
+                    opencode.client.session.messages({
+                      sessionID: session.id,
+                      limit,
+                    }),
+                  );
+                  if (result.error) return yield* Effect.die(result.error);
+                  messages = [];
+                  for (const msg of result.data) {
+                    if (
+                      msg.info.role === "assistant" &&
+                      msg.info.time.completed !== undefined
+                    )
+                      messages.push(msg.info);
+                  }
+                  const oldest = messages[0];
+                  if (oldest === undefined) break;
+                  // Check if the oldest message in this batch is already claimed
+                  const existing = yield* database.message.findById(oldest.id);
+                  if (Option.isSome(existing)) {
+                    foundOverlap = true;
+                  } else if (result.data.length < limit) {
+                    // Reached the beginning of history
+                    break;
+                  } else {
+                    limit *= 2;
+                  }
+                }
+                for (const msg of messages) {
+                  yield* processCompletedAssistantMessage(session, msg);
                 }
               }).pipe(
                 Effect.catchAllDefect((defect) =>

@@ -1440,7 +1440,8 @@ describe("handler", () => {
         createdAt: undefined,
         updatedAt: undefined,
       });
-      // session.messages returns a user message and a completed assistant message
+      // session.messages returns fewer than the limit (2 < 10), so the
+      // loop breaks after one fetch without needing an overlap check.
       sessionMessagesMock.mockResolvedValueOnce({
         data: [
           {
@@ -1465,9 +1466,9 @@ describe("handler", () => {
       });
       yield* Bot;
       yield* Effect.sleep(0);
-      // Reconciliation should have claimed and sent the missed message
       expect(sessionMessagesMock).toHaveBeenCalledWith({
         sessionID: "session-reconcile",
+        limit: 10,
       });
       expect(sendMessageMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
@@ -1483,7 +1484,7 @@ describe("handler", () => {
         createdAt: undefined,
         updatedAt: undefined,
       });
-      // Pre-claim the message
+      // Pre-claim the message so it's found in the overlap check
       yield* database.message.claim({
         id: "already-claimed",
         sessionId: "session-claimed",
@@ -1509,6 +1510,67 @@ describe("handler", () => {
       // No Telegram message sent from reconciliation
       expect(sendMessageMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive(
+    "reconciliation expands limit when all messages are unclaimed",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "session-expand",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+        // Pre-claim msg-0 so the second fetch finds overlap
+        yield* database.message.claim({
+          id: "msg-0",
+          sessionId: "session-expand",
+          createdAt: 0,
+        });
+        // First fetch: returns exactly limit=10 messages, all unclaimed
+        // assistant messages → no overlap, doubles limit to 20
+        const tenMessages = Array.from({ length: 10 }, (_, i) => ({
+          info: {
+            id: `msg-${i + 1}`,
+            sessionID: "session-expand",
+            role: "assistant",
+            time: { created: i + 1, completed: i + 2 },
+          },
+          parts: [{ type: "text", text: `reply ${i + 1}` }],
+        }));
+        sessionMessagesMock.mockResolvedValueOnce({ data: tenMessages });
+        // Second fetch with limit=20: includes msg-0 (claimed) as oldest
+        const twentyMessages = [
+          {
+            info: {
+              id: "msg-0",
+              sessionID: "session-expand",
+              role: "assistant",
+              time: { created: 0, completed: 1 },
+            },
+            parts: [{ type: "text", text: "reply 0" }],
+          },
+          ...tenMessages,
+        ];
+        sessionMessagesMock.mockResolvedValueOnce({ data: twentyMessages });
+        yield* Bot;
+        yield* Effect.sleep(0);
+        // Should have fetched twice: limit=10, then limit=20
+        expect(sessionMessagesMock).toHaveBeenCalledTimes(2);
+        expect(sessionMessagesMock).toHaveBeenNthCalledWith(1, {
+          sessionID: "session-expand",
+          limit: 10,
+        });
+        expect(sessionMessagesMock).toHaveBeenNthCalledWith(2, {
+          sessionID: "session-expand",
+          limit: 20,
+        });
+        // Should have sent the 10 unclaimed messages (msg-0 is already claimed)
+        expect(sendMessageMock).toHaveBeenCalledTimes(10);
+      }).pipe(Effect.provide(validLayer)),
   );
 
   it.scopedLive("reconciliation continues when session.messages errors", () =>
