@@ -5,6 +5,6 @@ export const botLayer = Layer.effect(
   Bot,
   Effect.gen(function* () {
     const fiber = yield* Effect.fork(Effect.never);
-    return { fiber };
+    return Bot.of({ fiber });
   }),
 );

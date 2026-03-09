@@ -6,6 +6,6 @@ export const opencodeLayer = Layer.effect(
   OpenCode,
   Effect.gen(function* () {
     const fiber = yield* Effect.fork(Effect.never);
-    return { fiber, client: createOpencodeClient() };
+    return OpenCode.of({ fiber, client: createOpencodeClient() });
   }),
 );

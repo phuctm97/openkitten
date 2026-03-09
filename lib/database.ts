@@ -45,7 +45,7 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
         idColumn: "sessionKey",
       });
       yield* Effect.logDebug("Database.service is connected");
-      return {
+      return Database.of({
         session: {
           ...sessionRepository,
           findBySessionId: (sessionId: string) =>
@@ -56,7 +56,7 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
                 sql`SELECT * FROM session WHERE session_id = ${sid}`,
             })(sessionId).pipe(Effect.orDie),
         },
-      };
+      });
     }),
   );
 }

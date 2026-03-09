@@ -260,45 +260,48 @@ const serverLayer = Bot.layer.pipe(
   Layer.provideMerge(databaseLayer),
 );
 
-const scriptsLayer = Layer.succeed(Scripts, {
-  up: async () => {
-    intro("😼 OpenKitten");
-    await updateProjectDir();
-    switch (process.platform) {
-      case "darwin":
-        await installDarwin();
-        break;
-      case "linux":
-        await installLinux();
-        break;
-      default:
-        throw new UnsupportedPlatformError();
-    }
-    outro("Meow! Your kitten is up and running. 😻");
-  },
-  down: async () => {
-    intro("😼 OpenKitten");
-    const shouldContinue = await confirm({
-      message: "Are you sure you want to uninstall OpenKitten?",
-    });
-    if (isCancel(shouldContinue) || !shouldContinue) {
-      cancel("Phew! Your kitten lives another day. 😻");
-      return;
-    }
-    switch (process.platform) {
-      case "darwin":
-        await uninstallDarwin();
-        break;
-      case "linux":
-        await uninstallLinux();
-        break;
-      default:
-        throw new UnsupportedPlatformError();
-    }
-    note(`To reinstall:\n  bun up`, "Changed your mind?");
-    outro("Your kitten has left the chat. 😿");
-  },
-});
+const scriptsLayer = Layer.succeed(
+  Scripts,
+  Scripts.of({
+    up: async () => {
+      intro("😼 OpenKitten");
+      await updateProjectDir();
+      switch (process.platform) {
+        case "darwin":
+          await installDarwin();
+          break;
+        case "linux":
+          await installLinux();
+          break;
+        default:
+          throw new UnsupportedPlatformError();
+      }
+      outro("Meow! Your kitten is up and running. 😻");
+    },
+    down: async () => {
+      intro("😼 OpenKitten");
+      const shouldContinue = await confirm({
+        message: "Are you sure you want to uninstall OpenKitten?",
+      });
+      if (isCancel(shouldContinue) || !shouldContinue) {
+        cancel("Phew! Your kitten lives another day. 😻");
+        return;
+      }
+      switch (process.platform) {
+        case "darwin":
+          await uninstallDarwin();
+          break;
+        case "linux":
+          await uninstallLinux();
+          break;
+        default:
+          throw new UnsupportedPlatformError();
+      }
+      note(`To reinstall:\n  bun up`, "Changed your mind?");
+      outro("Your kitten has left the chat. 😿");
+    },
+  }),
+);
 
 cli({ argv: Bun.argv, serverLayer, scriptsLayer }).pipe(
   Effect.provide(BunContext.layer),
