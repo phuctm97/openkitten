@@ -18,7 +18,7 @@ import { Bot as GrammyBot } from "grammy";
 import { Database } from "~/lib/database";
 import { formatBusy } from "~/lib/format-busy";
 import { formatError } from "~/lib/format-error";
-import { formatMessage } from "~/lib/format-message";
+import { formatMessage, type MessageChunk } from "~/lib/format-message";
 import { isTextPart } from "~/lib/is-text-part";
 import { OpenCode } from "~/lib/opencode";
 import pkg from "~/package.json" with { type: "json" };
@@ -81,7 +81,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 );
                 yield* Bot.sendChunks({
                   ...sendOpts,
-                  chunks: formatError(msgResult.error),
+                  chunks: yield* formatError(msgResult.error),
                   ignoreErrors: false,
                 });
                 return;
@@ -95,7 +95,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               if (replyText) {
                 yield* Bot.sendChunks({
                   ...sendOpts,
-                  chunks: formatMessage(replyText),
+                  chunks: yield* formatMessage(replyText),
                   ignoreErrors: false,
                 });
                 yield* Effect.logTrace("Bot.service sent a reply");
@@ -112,7 +112,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   );
                   yield* Bot.sendChunks({
                     ...sendOpts,
-                    chunks: formatError(defect),
+                    chunks: yield* formatError(defect),
                     ignoreErrors: true,
                   });
                 }),
@@ -147,7 +147,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               yield* Effect.logWarning(error);
               yield* Bot.sendChunks({
                 ...sendOpts,
-                chunks: formatError(error),
+                chunks: yield* formatError(error),
                 ignoreErrors: false,
               });
             }).pipe(
@@ -158,7 +158,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   );
                   yield* Bot.sendChunks({
                     ...sendOpts,
-                    chunks: formatError(defect),
+                    chunks: yield* formatError(defect),
                     ignoreErrors: true,
                   });
                 }),
@@ -228,7 +228,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             if (ctx.chat) {
               yield* Bot.sendChunks({
                 client,
-                chunks: formatError(cause),
+                chunks: yield* formatError(cause),
                 ignoreErrors: true,
                 chatId: ctx.chat.id,
                 threadId: ctx.message?.message_thread_id,
@@ -272,7 +272,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 );
                 yield* Bot.sendChunks({
                   client,
-                  chunks: formatBusy(),
+                  chunks: yield* formatBusy(),
                   ignoreErrors: false,
                   chatId: ctx.chat.id,
                   threadId,
@@ -490,7 +490,7 @@ export namespace Bot {
 
   export interface SendChunksOptions {
     readonly client: GrammyBot;
-    readonly chunks: ReturnType<typeof formatMessage>;
+    readonly chunks: MessageChunk[];
     readonly ignoreErrors: boolean;
     readonly chatId: number;
     readonly threadId: number | undefined;

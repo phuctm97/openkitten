@@ -1,8 +1,9 @@
+import { Effect } from "effect";
 import { convert } from "telegram-markdown-v2";
 
-interface MessageChunk {
+export interface MessageChunk {
   text: string;
-  markdown?: string;
+  markdown?: string | undefined;
 }
 
 const telegramMaxLength = 4096;
@@ -142,53 +143,65 @@ function restoreCodeBlockLangs(text: string, langs: string[]): string {
   });
 }
 
-function tryConvert(chunk: string): MessageChunk[] {
-  try {
+/** Converts a single chunk, logging and falling back to plain text on error. */
+function convertSingleChunk(chunk: string) {
+  return Effect.try(() => {
     const langs = extractCodeBlockLangs(chunk);
     const markdown = restoreCodeBlockLangs(convert(chunk), langs);
-    if (markdown.length <= telegramMaxLength) {
-      return [{ text: chunk, markdown }];
-    }
+    return { text: chunk, markdown };
+  }).pipe(
+    Effect.catchAll((error) =>
+      Effect.logDebug(error).pipe(
+        Effect.annotateLogs("debugHint", "formatMessage"),
+        Effect.as({ text: chunk, markdown: undefined }),
+      ),
+    ),
+  );
+}
+
+function tryConvert(chunk: string) {
+  return Effect.gen(function* () {
+    const result = yield* convertSingleChunk(chunk);
+    // Convert failed — already logged, fall back to plain text
+    if (result.markdown === undefined) return [result];
+    // Fits within Telegram limit
+    if (result.markdown.length <= telegramMaxLength) return [result];
 
     // MarkdownV2 escaping expanded beyond the limit — re-split proportionally
-    const ratio = telegramMaxLength / markdown.length;
+    const ratio = telegramMaxLength / result.markdown.length;
     const smallerLimit = Math.floor(chunk.length * ratio * 0.9);
     const subChunks = splitMessage(chunk, smallerLimit);
     const results: MessageChunk[] = [];
-
     for (const sub of subChunks) {
-      try {
-        const subLangs = extractCodeBlockLangs(sub);
-        const subMarkdown = restoreCodeBlockLangs(convert(sub), subLangs);
-        if (subMarkdown.length <= telegramMaxLength) {
-          results.push({ text: sub, markdown: subMarkdown });
-        } else {
-          results.push({ text: sub });
-        }
-      } catch {
+      const subResult = yield* convertSingleChunk(sub);
+      if (
+        subResult.markdown !== undefined &&
+        subResult.markdown.length <= telegramMaxLength
+      ) {
+        results.push(subResult);
+      } else {
         results.push({ text: sub });
+      }
+    }
+    return results;
+  });
+}
+
+export function formatMessage(text: string) {
+  return Effect.gen(function* () {
+    const sections = text.split(hrPattern);
+    const results: MessageChunk[] = [];
+
+    for (const section of sections) {
+      const trimmed = section.trim();
+      if (!trimmed) continue;
+
+      const chunks = splitMessage(trimmed, telegramSplitLength);
+      for (const chunk of chunks) {
+        results.push(...(yield* tryConvert(chunk)));
       }
     }
 
     return results;
-  } catch {
-    return [{ text: chunk }];
-  }
-}
-
-export function formatMessage(text: string): MessageChunk[] {
-  const sections = text.split(hrPattern);
-  const results: MessageChunk[] = [];
-
-  for (const section of sections) {
-    const trimmed = section.trim();
-    if (!trimmed) continue;
-
-    const chunks = splitMessage(trimmed, telegramSplitLength);
-    for (const chunk of chunks) {
-      results.push(...tryConvert(chunk));
-    }
-  }
-
-  return results;
+  });
 }

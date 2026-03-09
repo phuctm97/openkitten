@@ -179,17 +179,24 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
 }));
 
 const { formatBusyMock, formatErrorMock, formatMessageMock } = vi.hoisted(
-  () => ({
-    formatBusyMock: vi
-      .fn()
-      .mockReturnValue([{ text: "busy", markdown: "busy" }]),
-    formatErrorMock: vi
-      .fn()
-      .mockReturnValue([{ text: "raw error", markdown: "formatted error" }]),
-    formatMessageMock: vi
-      .fn()
-      .mockReturnValue([{ text: "AI response", markdown: "AI response" }]),
-  }),
+  () => {
+    const { Effect } = require("effect");
+    return {
+      formatBusyMock: vi
+        .fn()
+        .mockReturnValue(Effect.succeed([{ text: "busy", markdown: "busy" }])),
+      formatErrorMock: vi
+        .fn()
+        .mockReturnValue(
+          Effect.succeed([{ text: "raw error", markdown: "formatted error" }]),
+        ),
+      formatMessageMock: vi
+        .fn()
+        .mockReturnValue(
+          Effect.succeed([{ text: "AI response", markdown: "AI response" }]),
+        ),
+    };
+  },
 );
 
 vi.mock("~/lib/format-busy", () => ({
@@ -1038,7 +1045,9 @@ describe("handler", () => {
 
   it.scopedLive("sends plain text reply for unformatted chunk", () =>
     Effect.gen(function* () {
-      formatMessageMock.mockReturnValueOnce([{ text: "plain reply" }]);
+      formatMessageMock.mockReturnValueOnce(
+        Effect.succeed([{ text: "plain reply" }]),
+      );
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
