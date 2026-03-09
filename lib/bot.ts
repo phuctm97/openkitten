@@ -251,6 +251,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ),
             { concurrency: "unbounded", discard: true },
           );
+          yield* Ref.set(reconnectAttempt, 0);
           // Uses Effect.async (interruptible) instead of Stream.fromAsyncIterable
           // (which uses Effect.tryPromise internally and deadlocks on scope close).
           // The cleanup callback calls iter.return() to unblock a pending next().
@@ -266,10 +267,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               return Effect.sync(() => {
                 iter.return?.(undefined);
               });
-            }).pipe(
-              Effect.tap(() => Ref.set(reconnectAttempt, 0)),
-              Effect.flatMap(processEvent),
-            ),
+            }).pipe(Effect.flatMap(processEvent)),
           );
         }),
       );
