@@ -59,6 +59,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       ) =>
         Effect.gen(function* () {
           if (HashMap.has(yield* Ref.get(typingFibers), sessionId)) return;
+          yield* Effect.logDebug("Bot.service started typing indicator");
           const fiber = yield* Effect.forever(
             Effect.gen(function* () {
               yield* Effect.promise(() =>
@@ -88,7 +89,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             yield* Ref.getAndUpdate(typingFibers, HashMap.remove(sessionId)),
             sessionId,
           );
-          if (Option.isSome(fiber)) yield* Fiber.interrupt(fiber.value);
+          if (Option.isNone(fiber)) return;
+          yield* Fiber.interrupt(fiber.value);
+          yield* Effect.logDebug("Bot.service stopped typing indicator");
         }).pipe(Effect.annotateLogs("sessionId", sessionId));
 
       // --- Event processing ---
