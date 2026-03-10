@@ -33,7 +33,7 @@ const loader = SqliteMigrator.fromRecord({
     const sql = yield* SqlClient.SqlClient;
     yield* sql`CREATE TABLE message (
       id TEXT PRIMARY KEY NOT NULL,
-      session_id TEXT NOT NULL REFERENCES session(id),
+      session_id TEXT NOT NULL REFERENCES session(id) ON DELETE CASCADE,
       created_at INTEGER NOT NULL
     )`;
   }),
@@ -49,8 +49,9 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
   static readonly layer = Layer.effect(
     Database,
     Effect.gen(function* () {
-      yield* SqliteMigrator.run({ loader });
       const sql = yield* SqlClient.SqlClient;
+      yield* sql`PRAGMA foreign_keys = ON`;
+      yield* SqliteMigrator.run({ loader });
       const sessionRepository = yield* Model.makeRepository(SessionModel, {
         spanPrefix: "Session",
         tableName: "session",

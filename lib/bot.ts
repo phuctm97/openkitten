@@ -18,6 +18,7 @@ import {
 import { Bot as GrammyBot } from "grammy";
 import { Database } from "~/lib/database";
 import { formatBusy } from "~/lib/format-busy";
+import { formatDelete } from "~/lib/format-delete";
 import { formatError } from "~/lib/format-error";
 import { formatMessage, type MessageChunk } from "~/lib/format-message";
 import { formatStart } from "~/lib/format-start";
@@ -497,6 +498,73 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           if (result.error) return yield* Effect.die(result.error);
           // Stop message is sent when session.error with MessageAbortedError arrives
         }),
+      );
+
+      client.command("delete", (ctx) =>
+        Runtime.runPromise(runtime)(
+          Effect.gen(function* () {
+            if (ctx.from?.id !== userId) {
+              return yield* Effect.logWarning(
+                "Bot.service ignored a command from an unauthorized user",
+              );
+            }
+            yield* Effect.logDebug("Bot.service received /delete command");
+            const chatId = ctx.chat.id;
+            const threadId = ctx.message?.message_thread_id;
+            const existing = yield* database.session.findByChat({
+              chatId,
+              threadId: threadId || 0,
+            });
+            if (Option.isSome(existing)) {
+              const sessionId = existing.value.id;
+              // Abort if busy
+              const statusResult = yield* Effect.promise(() =>
+                opencode.client.session.status({}),
+              );
+              if (statusResult.error)
+                return yield* Effect.die(statusResult.error);
+              const sessionStatus = statusResult.data[sessionId];
+              const remoteBusy =
+                sessionStatus !== undefined && sessionStatus.type !== "idle";
+              const localBusy = HashSet.has(
+                yield* Ref.get(promptingRef),
+                sessionId,
+              );
+              if (remoteBusy || localBusy) {
+                const abortResult = yield* Effect.promise(() =>
+                  opencode.client.session.abort({ sessionID: sessionId }),
+                );
+                if (abortResult.error)
+                  return yield* Effect.die(abortResult.error);
+              }
+              // Clean up in-memory state
+              yield* stopTyping(sessionId);
+              yield* Ref.update(promptingRef, HashSet.remove(sessionId));
+              // Delete remote session (messages cascade locally)
+              const deleteResult = yield* Effect.promise(() =>
+                opencode.client.session.delete({ sessionID: sessionId }),
+              );
+              if (deleteResult.error)
+                return yield* Effect.die(deleteResult.error);
+              yield* database.session.delete(sessionId);
+              yield* Effect.logInfo("Bot.service deleted session").pipe(
+                Effect.annotateLogs("sessionId", sessionId),
+              );
+            }
+            yield* Bot.sendChunks({
+              client,
+              chunks: yield* formatDelete(),
+              ignoreErrors: false,
+              chatId,
+              threadId,
+            });
+          }).pipe(
+            Effect.annotateLogs("userId", ctx.from?.id),
+            Effect.annotateLogs("messageId", ctx.message?.message_id),
+            Effect.annotateLogs("chatId", ctx.chat.id),
+            Effect.annotateLogs("threadId", ctx.message?.message_thread_id),
+          ),
+        ),
       );
 
       client.on("message:text", (ctx) =>
