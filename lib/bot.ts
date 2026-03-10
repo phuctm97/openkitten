@@ -65,9 +65,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             Effect.gen(function* () {
               yield* Effect.promise(() =>
                 client.api.sendChatAction(chatId, "typing", {
-                  ...(threadId !== undefined && {
-                    message_thread_id: threadId,
-                  }),
+                  ...(threadId && { message_thread_id: threadId }),
                 }),
               ).pipe(
                 Effect.annotateLogs("debugHint", "Bot.sendTyping"),
@@ -551,11 +549,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     chatId,
     threadId,
   }: Bot.FindOrCreateSessionOptions) {
-    const dbThreadId = threadId ?? 0;
     return Effect.gen(function* () {
       const existing = yield* database.session.findByChat({
         chatId,
-        threadId: dbThreadId,
+        threadId: threadId || 0,
       });
       if (Option.isSome(existing)) {
         yield* Effect.logTrace("Bot.service reused an existing session").pipe(
@@ -572,7 +569,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         .insert({
           id: sessionId,
           chatId,
-          threadId: dbThreadId,
+          threadId: threadId || 0,
           createdAt: undefined,
           updatedAt: undefined,
         })
@@ -594,7 +591,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 return yield* Effect.die(deleteResult.error);
               const raced = yield* database.session.findByChat({
                 chatId,
-                threadId: dbThreadId,
+                threadId: threadId || 0,
               });
               if (Option.isNone(raced)) return yield* Effect.die(defect);
               yield* Effect.logDebug(
@@ -615,8 +612,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
     chatId,
     threadId,
   }: Bot.SendChunksOptions) {
-    const threadOpts = {
-      ...(threadId !== undefined && { message_thread_id: threadId }),
+    const sendOpts = {
+      ...(threadId && { message_thread_id: threadId }),
     };
     return Effect.forEach(
       chunks,
@@ -625,7 +622,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ? Effect.promise(() =>
               client.api.sendMessage(chatId, markdown, {
                 parse_mode: "MarkdownV2",
-                ...threadOpts,
+                ...sendOpts,
               }),
             ).pipe(
               Effect.catchAllDefect((defect) =>
@@ -640,13 +637,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                     Effect.annotateLogs("text", text),
                   );
                   yield* Effect.promise(() =>
-                    client.api.sendMessage(chatId, text, threadOpts),
+                    client.api.sendMessage(chatId, text, sendOpts),
                   );
                 }),
               ),
             )
           : Effect.promise(() =>
-              client.api.sendMessage(chatId, text, threadOpts),
+              client.api.sendMessage(chatId, text, sendOpts),
             );
         return ignoreErrors ? Effect.ignoreLogged(sendEffect) : sendEffect;
       },
