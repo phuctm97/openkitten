@@ -1,3 +1,4 @@
+import type { PermissionRequest } from "@opencode-ai/sdk/v2";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { formatPermissionMessage } from "~/lib/format-permission-message";
@@ -5,13 +6,28 @@ import { formatPermissionPending } from "~/lib/format-permission-pending";
 import { formatPermissionPrompt } from "~/lib/format-permission-prompt";
 import { formatPermissionReplied } from "~/lib/format-permission-replied";
 
+function makeRequest(
+  overrides: Partial<PermissionRequest> &
+    Pick<PermissionRequest, "permission" | "patterns">,
+): PermissionRequest {
+  return {
+    id: "perm-1",
+    sessionID: "session-1",
+    metadata: {},
+    always: [],
+    ...overrides,
+  };
+}
+
 describe("formatPermissionMessage", () => {
   it("formats bash with code block", () => {
     const chunks = Effect.runSync(
-      formatPermissionMessage({
-        permission: "bash",
-        patterns: ["git status --porcelain", "npm test"],
-      }),
+      formatPermissionMessage(
+        makeRequest({
+          permission: "bash",
+          patterns: ["git status --porcelain", "npm test"],
+        }),
+      ),
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("The agent needs permission.");
@@ -23,10 +39,12 @@ describe("formatPermissionMessage", () => {
 
   it("formats bash without patterns", () => {
     const chunks = Effect.runSync(
-      formatPermissionMessage({
-        permission: "bash",
-        patterns: [],
-      }),
+      formatPermissionMessage(
+        makeRequest({
+          permission: "bash",
+          patterns: [],
+        }),
+      ),
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Run command");
@@ -35,10 +53,12 @@ describe("formatPermissionMessage", () => {
 
   it("formats known permission with inline code", () => {
     const chunks = Effect.runSync(
-      formatPermissionMessage({
-        permission: "read",
-        patterns: ["src/main.ts"],
-      }),
+      formatPermissionMessage(
+        makeRequest({
+          permission: "read",
+          patterns: ["src/main.ts"],
+        }),
+      ),
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("The agent needs permission.");
@@ -48,10 +68,12 @@ describe("formatPermissionMessage", () => {
 
   it("formats known permission without patterns", () => {
     const chunks = Effect.runSync(
-      formatPermissionMessage({
-        permission: "doom_loop",
-        patterns: [],
-      }),
+      formatPermissionMessage(
+        makeRequest({
+          permission: "doom_loop",
+          patterns: [],
+        }),
+      ),
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Continue after repeated failures");
@@ -59,10 +81,12 @@ describe("formatPermissionMessage", () => {
 
   it("formats unknown permission with name and patterns", () => {
     const chunks = Effect.runSync(
-      formatPermissionMessage({
-        permission: "custom_tool",
-        patterns: ["pattern1"],
-      }),
+      formatPermissionMessage(
+        makeRequest({
+          permission: "custom_tool",
+          patterns: ["pattern1"],
+        }),
+      ),
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Use tool");
@@ -72,10 +96,12 @@ describe("formatPermissionMessage", () => {
 
   it("formats unknown permission without patterns", () => {
     const chunks = Effect.runSync(
-      formatPermissionMessage({
-        permission: "custom_tool",
-        patterns: [],
-      }),
+      formatPermissionMessage(
+        makeRequest({
+          permission: "custom_tool",
+          patterns: [],
+        }),
+      ),
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Use tool");
@@ -84,10 +110,12 @@ describe("formatPermissionMessage", () => {
 
   it("formats multiple patterns as separate inline codes", () => {
     const chunks = Effect.runSync(
-      formatPermissionMessage({
-        permission: "external_directory",
-        patterns: ["/Users/foo/projects/*", "/Users/foo/.config/*"],
-      }),
+      formatPermissionMessage(
+        makeRequest({
+          permission: "external_directory",
+          patterns: ["/Users/foo/projects/*", "/Users/foo/.config/*"],
+        }),
+      ),
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Access external directory");

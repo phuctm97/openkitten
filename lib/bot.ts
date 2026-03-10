@@ -305,7 +305,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           // Message 1: sticky permission content
           yield* Bot.sendChunks({
             client,
-            chunks: yield* formatPermissionMessage(pp),
+            chunks: yield* formatPermissionMessage(pp.request),
             ignoreErrors: false,
             chatId: pp.chatId,
             threadId: pp.threadId,
@@ -328,7 +328,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             }),
           );
         }).pipe(
-          Effect.annotateLogs("sessionId", pp.sessionId),
+          Effect.annotateLogs("sessionId", pp.request.sessionID),
           Effect.annotateLogs("chatId", pp.chatId),
           Effect.annotateLogs("threadId", pp.threadId),
         );
@@ -345,12 +345,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ).pipe(Effect.map((n) => `p${n.toString(36)}`));
           const pp: Bot.PendingPermission = {
             localId,
-            requestId: request.id,
-            sessionId: request.sessionID,
+            request,
             chatId: session.chatId,
             threadId: session.threadId || undefined,
-            permission: request.permission,
-            patterns: request.patterns,
             interactionMessageId: 0,
           };
           yield* Ref.update(pendingPermissions, HashMap.set(localId, pp));
@@ -364,7 +361,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       const findPendingPermissionByRequestId = (requestId: string) =>
         Ref.get(pendingPermissions).pipe(
           Effect.map((map) =>
-            HashMap.findFirst(map, (pp) => pp.requestId === requestId).pipe(
+            HashMap.findFirst(map, (pp) => pp.request.id === requestId).pipe(
               Option.map(([, pp]) => pp),
             ),
           ),
@@ -779,7 +776,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 const currentMap = yield* Ref.get(pendingPermissions);
                 const pendingIds = new Set(pendingData.map((p) => p.id));
                 for (const [localId, pp] of HashMap.entries(currentMap)) {
-                  if (!pendingIds.has(pp.requestId)) {
+                  if (!pendingIds.has(pp.request.id)) {
                     yield* Ref.update(
                       pendingPermissions,
                       HashMap.remove(localId),
@@ -1046,11 +1043,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             // Reject any pending permissions for this session
             const pendingPerms = yield* Ref.get(pendingPermissions);
             for (const [localId, pp] of HashMap.entries(pendingPerms)) {
-              if (pp.sessionId === sessionId) {
+              if (pp.request.sessionID === sessionId) {
                 yield* Effect.promise(() =>
                   Promise.all([
                     opencode.client.permission.reply({
-                      requestID: pp.requestId,
+                      requestID: pp.request.id,
                       reply: "reject",
                     }),
                     client.api.editMessageText(
@@ -1117,7 +1114,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               yield* Effect.promise(() =>
                 Promise.all([
                   opencode.client.permission.reply({
-                    requestID: pp.requestId,
+                    requestID: pp.request.id,
                     reply,
                   }),
                   client.api.editMessageText(
@@ -1525,12 +1522,9 @@ export namespace Bot {
 
   export interface PendingPermission {
     readonly localId: string;
-    readonly requestId: string;
-    readonly sessionId: string;
+    readonly request: PermissionRequest;
     readonly chatId: number;
     readonly threadId: number | undefined;
-    readonly permission: string;
-    readonly patterns: ReadonlyArray<string>;
     readonly interactionMessageId: number;
   }
 }

@@ -1,3 +1,4 @@
+import type { PermissionRequest } from "@opencode-ai/sdk/v2";
 import { formatMessage } from "~/lib/format-message";
 
 const permissionTypes: Record<
@@ -18,10 +19,7 @@ const permissionTypes: Record<
   doom_loop: { emoji: "🔄", title: "Continue after repeated failures" },
 };
 
-export function formatPermissionMessage(request: {
-  readonly permission: string;
-  readonly patterns: ReadonlyArray<string>;
-}) {
+export function formatPermissionMessage(request: PermissionRequest) {
   const known = permissionTypes[request.permission];
   const { emoji, title } = known ?? { emoji: "🔧", title: "Use tool" };
   const lines: string[] = [
