@@ -101,7 +101,7 @@ describe("formatPermissionPending", () => {
     const chunks = Effect.runSync(formatPermissionPending());
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("A permission request needs your response.");
-    expect(text).toContain("Allow or deny the pending permission");
+    expect(text).toContain("Respond to the pending permission request");
   });
 });
 
