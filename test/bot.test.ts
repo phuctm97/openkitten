@@ -800,10 +800,13 @@ describe("handler", () => {
 
   it.scopedLive("dies when session status returns error", () =>
     Effect.gen(function* () {
-      sessionStatusMock.mockResolvedValueOnce({
-        data: undefined,
-        error: new Error("status failed"),
-      });
+      // First call is consumed by typing reconciliation on startup
+      sessionStatusMock
+        .mockResolvedValueOnce({ data: {} })
+        .mockResolvedValueOnce({
+          data: undefined,
+          error: new Error("status failed"),
+        });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
@@ -1159,9 +1162,11 @@ describe("handler", () => {
 
   it.scopedLive("sends busy message when session status is busy", () =>
     Effect.gen(function* () {
-      sessionStatusMock.mockResolvedValueOnce({
-        data: { "new-session-id": { type: "busy" } },
-      });
+      sessionStatusMock
+        .mockResolvedValueOnce({ data: {} }) // reconciliation
+        .mockResolvedValueOnce({
+          data: { "new-session-id": { type: "busy" } },
+        });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
@@ -1183,16 +1188,18 @@ describe("handler", () => {
 
   it.scopedLive("handles retry status as busy", () =>
     Effect.gen(function* () {
-      sessionStatusMock.mockResolvedValueOnce({
-        data: {
-          "new-session-id": {
-            type: "retry",
-            attempt: 1,
-            message: "rate limited",
-            next: 5000,
+      sessionStatusMock
+        .mockResolvedValueOnce({ data: {} }) // reconciliation
+        .mockResolvedValueOnce({
+          data: {
+            "new-session-id": {
+              type: "retry",
+              attempt: 1,
+              message: "rate limited",
+              next: 5000,
+            },
           },
-        },
-      });
+        });
       yield* Bot;
       yield* Effect.sleep(0);
       const call = onSpy.mock.lastCall;
@@ -1605,8 +1612,9 @@ describe("handler", () => {
 
   it.scopedLive("sends busy message to correct thread", () =>
     Effect.gen(function* () {
-      // First call: status returns idle, second call: status returns busy
+      // Reconciliation, first handler call (idle), second handler call (busy)
       sessionStatusMock
+        .mockResolvedValueOnce({ data: {} }) // reconciliation
         .mockResolvedValueOnce({ data: {} })
         .mockResolvedValueOnce({
           data: { "new-session-id": { type: "busy" } },
@@ -2560,6 +2568,122 @@ describe("typing indicator", () => {
       yield* Effect.sleep(0);
       expect(sendChatActionMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("reconciles typing for busy sessions on reconnect", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "typing-recon",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      sessionStatusMock.mockResolvedValueOnce({
+        data: { "typing-recon": { type: "busy" } },
+      });
+      sendChatActionMock.mockClear();
+      yield* provideBotLazily;
+      expect(sendChatActionMock).toHaveBeenCalledWith(123, "typing", {});
+    }).pipe(Effect.provide(validBaseLayer)),
+  );
+
+  it.scopedLive("does not start typing for idle sessions on reconnect", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "typing-idle-recon",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      sessionStatusMock.mockResolvedValueOnce({
+        data: { "typing-idle-recon": { type: "idle" } },
+      });
+      sendChatActionMock.mockClear();
+      yield* provideBotLazily;
+      expect(sendChatActionMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validBaseLayer)),
+  );
+
+  it.scoped("stops stale typing on reconnect when session becomes idle", () => {
+    // First reconciliation: session is busy → typing starts
+    sessionStatusMock.mockResolvedValueOnce({
+      data: { "typing-stale": { type: "busy" } },
+    });
+
+    // First stream errors immediately to trigger reconnect
+    const broken: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]: () => ({
+        async next(): Promise<IteratorResult<unknown>> {
+          throw new Error("SSE connection lost");
+        },
+        async return() {
+          return { done: true as const, value: undefined };
+        },
+      }),
+    };
+    eventSubscribeMock.mockImplementationOnce(async () => ({
+      stream: broken,
+    }));
+
+    // Second reconciliation: session is now idle → typing should stop
+    sessionStatusMock.mockResolvedValueOnce({
+      data: { "typing-stale": { type: "idle" } },
+    });
+
+    const seedLayer = Layer.effectDiscard(
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "typing-stale",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+      }),
+    );
+    const layerWithSeed = Bot.layer.pipe(
+      Layer.provideMerge(seedLayer),
+      Layer.provideMerge(validBaseLayer),
+    );
+
+    return Effect.gen(function* () {
+      yield* Bot;
+      // First reconciliation starts typing
+      yield* waitForReconciliation;
+      expect(sendChatActionMock).toHaveBeenCalled();
+      sendChatActionMock.mockClear();
+      // Advance past the 1s reconnect delay
+      yield* TestClock.adjust("1 second");
+      yield* waitForReconciliation;
+      // After second reconciliation, typing should be stopped
+      yield* Effect.sleep(0);
+      expect(sendChatActionMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(layerWithSeed));
+  });
+
+  it.scopedLive("reconciliation continues when session.status errors", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "typing-err",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      sessionStatusMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("status failed"),
+      });
+      yield* provideBotLazily;
+      // Should not crash — typing reconciliation logs and continues
+      expect(sessionStatusMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validBaseLayer)),
   );
 });
 

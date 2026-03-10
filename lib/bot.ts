@@ -200,7 +200,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             selected: emptySelection,
           };
           yield* Ref.update(pendingQuestions, HashMap.set(localId, pq));
-          yield* stopTyping(request.sessionID);
           yield* sendCurrentQuestion(pq);
         }).pipe(
           Effect.annotateLogs("requestId", request.id),
@@ -530,10 +529,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 iter.return?.(undefined);
               }),
           );
-          // Reconcile messages that completed while disconnected. Fetches
-          // the newest messages per session, expanding the window until an
-          // already-claimed message is found, then processes unclaimed ones
-          // in order. Sessions run in parallel.
+          // Reconcile messages — deliver assistant messages that completed
+          // while disconnected. Expands the fetch window per session until
+          // an already-delivered message is found. Sessions run in parallel.
           const sessions = yield* database.session.findAll();
           yield* Effect.forEach(
             sessions,
@@ -586,39 +584,78 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ),
             { concurrency: "unbounded", discard: true },
           );
-          // Reconcile pending questions from OpenCode
-          yield* Effect.gen(function* () {
-            const pendingResult = yield* Effect.promise(() =>
-              opencode.client.question.list({}),
-            );
-            if (pendingResult.error) {
-              return yield* Effect.die(pendingResult.error);
-            }
-            invariant(pendingResult.data, "question.list data");
-            const pendingData = pendingResult.data;
-            // Clear stale entries whose requestId is no longer pending
-            const currentMap = yield* Ref.get(pendingQuestions);
-            const pendingIds = new Set(pendingData.map((q) => q.id));
-            for (const [localId, pq] of HashMap.entries(currentMap)) {
-              if (!pendingIds.has(pq.requestId)) {
-                yield* Ref.update(pendingQuestions, HashMap.remove(localId));
-              }
-            }
-            // Re-send questions that belong to tracked sessions
-            for (const qr of pendingData) {
-              const existing = yield* findPendingByRequestId(qr.id);
-              if (Option.isSome(existing)) continue;
-              const session = yield* database.session.findById(qr.sessionID);
-              if (Option.isSome(session)) {
-                yield* processQuestionAsked(qr, session.value);
-              }
-            }
-          }).pipe(
-            Effect.catchAllDefect((defect) =>
-              Effect.logWarning(defect).pipe(
-                Effect.annotateLogs("debugHint", "Bot.reconcileQuestions"),
+          // Reconcile questions and typing indicators concurrently.
+          yield* Effect.all(
+            [
+              // Reconcile questions — clear stale entries and re-send
+              // pending questions that arrived while disconnected.
+              Effect.gen(function* () {
+                const pendingResult = yield* Effect.promise(() =>
+                  opencode.client.question.list({}),
+                );
+                if (pendingResult.error) {
+                  return yield* Effect.die(pendingResult.error);
+                }
+                invariant(pendingResult.data, "question.list data");
+                const pendingData = pendingResult.data;
+                // Clear stale entries whose requestId is no longer pending
+                const currentMap = yield* Ref.get(pendingQuestions);
+                const pendingIds = new Set(pendingData.map((q) => q.id));
+                for (const [localId, pq] of HashMap.entries(currentMap)) {
+                  if (!pendingIds.has(pq.requestId)) {
+                    yield* Ref.update(
+                      pendingQuestions,
+                      HashMap.remove(localId),
+                    );
+                  }
+                }
+                // Re-send questions that belong to tracked sessions
+                for (const qr of pendingData) {
+                  const existing = yield* findPendingByRequestId(qr.id);
+                  if (Option.isSome(existing)) continue;
+                  const session = yield* database.session.findById(
+                    qr.sessionID,
+                  );
+                  if (Option.isSome(session)) {
+                    yield* processQuestionAsked(qr, session.value);
+                  }
+                }
+              }).pipe(
+                Effect.catchAllDefect((defect) =>
+                  Effect.logWarning(defect).pipe(
+                    Effect.annotateLogs("debugHint", "Bot.reconcileQuestions"),
+                  ),
+                ),
               ),
-            ),
+              // Reconcile typing indicators — start typing for busy/retry
+              // sessions and stop typing for idle/unknown ones.
+              Effect.gen(function* () {
+                const statusResult = yield* Effect.promise(() =>
+                  opencode.client.session.status({}),
+                );
+                if (statusResult.error)
+                  return yield* Effect.die(statusResult.error);
+                for (const session of sessions) {
+                  const status = statusResult.data[session.id];
+                  if (status?.type === "busy" || status?.type === "retry") {
+                    yield* startTyping(
+                      session.id,
+                      session.chatId,
+                      session.threadId || undefined,
+                    );
+                  } else {
+                    yield* stopTyping(session.id);
+                  }
+                }
+              }).pipe(
+                Effect.catchAllDefect((defect) =>
+                  Effect.logWarning(defect).pipe(
+                    Effect.annotateLogs("debugHint", "Bot.reconcileTyping"),
+                  ),
+                ),
+              ),
+            ],
+            { concurrency: "unbounded", discard: true },
           );
           yield* Ref.set(reconnectAttempt, 0);
           yield* Effect.logDebug("Bot.stream is connected");
