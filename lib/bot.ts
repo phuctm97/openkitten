@@ -62,7 +62,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       ) =>
         Effect.gen(function* () {
           if (HashMap.has(yield* Ref.get(typingFibers), sessionId)) return;
-          yield* Effect.logDebug("Bot.service started typing indicator");
+          yield* Effect.logDebug("Bot.service started the typing indicator");
           const fiber = yield* Effect.forever(
             Effect.gen(function* () {
               yield* Effect.promise(() =>
@@ -92,7 +92,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           );
           if (Option.isNone(fiber)) return;
           yield* Fiber.interrupt(fiber.value);
-          yield* Effect.logDebug("Bot.service stopped typing indicator");
+          yield* Effect.logDebug("Bot.service stopped the typing indicator");
         }).pipe(Effect.annotateLogs("sessionId", sessionId));
 
       // --- Event processing ---
@@ -144,9 +144,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 chunks: yield* formatMessage(replyText),
                 ignoreErrors: false,
               });
-              yield* Effect.logDebug("Bot.service delivered a reply");
+              yield* Effect.logDebug("Bot.service delivered the reply");
             } else {
-              yield* Effect.logDebug("Bot.service received a non-text message");
+              yield* Effect.logDebug("Bot.service skipped a non-text message");
             }
           }).pipe(
             Effect.catchAllDefect((defect) =>
@@ -180,7 +180,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               const session = yield* database.session.findById(info.sessionID);
               if (Option.isNone(session)) {
                 yield* Effect.logDebug(
-                  "Bot.service ignored a message for an unknown session",
+                  "Bot.service ignored a message from an unknown session",
                 ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
               } else {
                 yield* processCompletedAssistantMessage(session.value, info);
@@ -204,14 +204,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             const { sessionID, error } = event.properties;
             if (!sessionID) {
               yield* Effect.logWarning(
-                "Bot.service ignored a session.error without sessionID",
+                "Bot.service ignored a session.error without a sessionID",
               );
               return;
             }
             const session = yield* database.session.findById(sessionID);
             if (Option.isNone(session)) {
               yield* Effect.logDebug(
-                "Bot.service ignored a session.error for an unknown session",
+                "Bot.service ignored a session.error from an unknown session",
               ).pipe(Effect.annotateLogs("sessionId", sessionID));
               return;
             }
@@ -377,7 +377,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               }
               const delay = Math.min(1000 * 2 ** attempt, 30_000);
               yield* Effect.logWarning(
-                "Bot.stream disconnected, reconnecting",
+                "Bot.stream disconnected; reconnecting",
               ).pipe(Effect.annotateLogs("delay", `${delay}ms`));
               yield* Effect.sleep(delay);
             }),
@@ -547,7 +547,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               if (deleteResult.error)
                 return yield* Effect.die(deleteResult.error);
               yield* database.session.delete(sessionId);
-              yield* Effect.logInfo("Bot.service deleted session").pipe(
+              yield* Effect.logInfo("Bot.service deleted the session").pipe(
                 Effect.annotateLogs("sessionId", sessionId),
               );
             }
@@ -585,7 +585,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             yield* Effect.gen(function* () {
               const rejectBusy = Effect.gen(function* () {
                 yield* Effect.logDebug(
-                  "Bot.service rejected a message while busy",
+                  "Bot.service rejected a message while the session is busy",
                 );
                 yield* Bot.sendChunks({
                   client,
@@ -730,7 +730,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               });
               if (Option.isNone(raced)) return yield* Effect.die(defect);
               yield* Effect.logDebug(
-                "Bot.service resolved a concurrent session insert",
+                "Bot.service resolved a concurrent session race",
               ).pipe(Effect.annotateLogs("sessionId", raced.value.id));
               return { sessionId: raced.value.id, isNew: false } as const;
             }),
@@ -766,7 +766,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                     Effect.annotateLogs("debugHint", "Bot.sendChunks"),
                   );
                   yield* Effect.logDebug(
-                    "Bot.service failed to deliver a MarkdownV2 message",
+                    "Bot.service failed to send a MarkdownV2 message, falling back to plain text",
                   ).pipe(
                     Effect.annotateLogs("markdown", markdown),
                     Effect.annotateLogs("text", text),
