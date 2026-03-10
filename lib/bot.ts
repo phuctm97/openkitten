@@ -1,4 +1,9 @@
-import type { AssistantMessage, Event } from "@opencode-ai/sdk/v2";
+import type {
+  AssistantMessage,
+  Event,
+  QuestionInfo,
+  QuestionRequest,
+} from "@opencode-ai/sdk/v2";
 import {
   Cause,
   Config,
@@ -15,12 +20,18 @@ import {
   Ref,
   Runtime,
 } from "effect";
-import { Bot as GrammyBot } from "grammy";
+import { Bot as GrammyBot, InlineKeyboard } from "grammy";
+import invariant from "tiny-invariant";
 import { Database } from "~/lib/database";
 import { formatBusy } from "~/lib/format-busy";
 import { formatCompact } from "~/lib/format-compact";
 import { formatError } from "~/lib/format-error";
 import { formatMessage, type MessageChunk } from "~/lib/format-message";
+import { formatQuestionMessage } from "~/lib/format-question-message";
+import { formatQuestionPending } from "~/lib/format-question-pending";
+import { formatQuestionPrompt } from "~/lib/format-question-prompt";
+import { formatQuestionRejected } from "~/lib/format-question-rejected";
+import { formatQuestionReplied } from "~/lib/format-question-replied";
 import { formatReset } from "~/lib/format-reset";
 import { formatStart } from "~/lib/format-start";
 import { formatStop } from "~/lib/format-stop";
@@ -54,6 +65,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       const typingFibers = yield* Ref.make(
         HashMap.empty<string, Fiber.RuntimeFiber<never>>(),
       );
+
+      // Pending question state — maps local short IDs to question requests.
+      const pendingQuestions = yield* Ref.make(
+        HashMap.empty<string, Bot.PendingQuestion>(),
+      );
+      const questionCounter = yield* Ref.make(0);
+      const emptySelection: string[] = [];
 
       /** Starts sending "typing" chat actions every 4 s. Idempotent per session. */
       const startTyping = (
@@ -95,6 +113,166 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           yield* Fiber.interrupt(fiber.value);
           yield* Effect.logDebug("Bot.service stopped the typing indicator");
         }).pipe(Effect.annotateLogs("sessionId", sessionId));
+
+      // --- Question helpers ---
+
+      /** Builds an InlineKeyboard for a question's options. */
+      const buildQuestionKeyboard = (
+        localId: string,
+        question: QuestionInfo,
+        selected: ReadonlyArray<string>,
+      ) => {
+        const kb = new InlineKeyboard();
+        for (const [i, opt] of question.options.entries()) {
+          const isSelected = selected.includes(opt.label);
+          const label = isSelected ? `✓ ${opt.label}` : opt.label;
+          // Telegram limits button text reasonably but callback_data to 64 bytes
+          kb.text(label, `q:${localId}:${i}`);
+          // Two buttons per row for readability
+          if (i % 2 === 1) kb.row();
+        }
+        if (question.options.length % 2 === 1) kb.row();
+        if (question.multiple) kb.text("Confirm", `qc:${localId}`).row();
+        kb.text("Dismiss", `qr:${localId}`);
+        return kb;
+      };
+
+      /** Sends the current question in a pending request to Telegram. */
+      const sendCurrentQuestion = (pq: Bot.PendingQuestion) =>
+        Effect.gen(function* () {
+          const question = pq.questions[pq.currentIndex];
+          invariant(question, "question");
+          const sendOpts = {
+            ...(pq.threadId && { message_thread_id: pq.threadId }),
+          };
+          // Message 1: sticky question content
+          yield* Bot.sendChunks({
+            client,
+            chunks: yield* formatQuestionMessage(question),
+            ignoreErrors: false,
+            chatId: pq.chatId,
+            threadId: pq.threadId,
+          });
+          // Message 2: interaction prompt with keyboard
+          const promptText = formatQuestionPrompt(question);
+          const kb = buildQuestionKeyboard(pq.localId, question, []);
+          const sent = yield* Effect.promise(() =>
+            client.api.sendMessage(pq.chatId, promptText, {
+              parse_mode: "MarkdownV2",
+              reply_markup: kb,
+              ...sendOpts,
+            }),
+          );
+          yield* Ref.update(
+            pendingQuestions,
+            HashMap.set(pq.localId, {
+              ...pq,
+              interactionMessageId: sent.message_id,
+              selected: emptySelection,
+            }),
+          );
+        }).pipe(
+          Effect.annotateLogs("sessionId", pq.sessionId),
+          Effect.annotateLogs("chatId", pq.chatId),
+          Effect.annotateLogs("threadId", pq.threadId),
+        );
+
+      /** Processes a question.asked event or reconciled pending question. */
+      const processQuestionAsked = (
+        request: QuestionRequest,
+        session: Database.Session,
+      ) =>
+        Effect.gen(function* () {
+          const localId = yield* Ref.getAndUpdate(
+            questionCounter,
+            (n) => n + 1,
+          ).pipe(Effect.map((n) => n.toString(36)));
+          const pq: Bot.PendingQuestion = {
+            localId,
+            requestId: request.id,
+            sessionId: request.sessionID,
+            chatId: session.chatId,
+            threadId: session.threadId || undefined,
+            questions: request.questions,
+            currentIndex: 0,
+            answers: [],
+            interactionMessageId: 0,
+            selected: emptySelection,
+          };
+          yield* Ref.update(pendingQuestions, HashMap.set(localId, pq));
+          yield* stopTyping(request.sessionID);
+          yield* sendCurrentQuestion(pq);
+        }).pipe(
+          Effect.annotateLogs("requestId", request.id),
+          Effect.annotateLogs("sessionId", request.sessionID),
+        );
+
+      /** Records an answer for the current question and advances or submits. */
+      const advanceOrSubmit = (localId: string, answer: string[]) =>
+        Effect.gen(function* () {
+          const maybePq = HashMap.get(
+            yield* Ref.get(pendingQuestions),
+            localId,
+          );
+          invariant(Option.isSome(maybePq), "pendingQuestion");
+          const pq = maybePq.value;
+          const newAnswers = [...pq.answers, answer];
+          const nextIndex = pq.currentIndex + 1;
+          // Edit the interaction message to show the answer
+          yield* Effect.promise(() =>
+            client.api.editMessageText(
+              pq.chatId,
+              pq.interactionMessageId,
+              formatQuestionReplied(answer),
+            ),
+          ).pipe(Effect.ignoreLogged);
+          if (nextIndex < pq.questions.length) {
+            // More questions — advance
+            const updated: Bot.PendingQuestion = {
+              ...pq,
+              currentIndex: nextIndex,
+              answers: newAnswers,
+              selected: emptySelection,
+            };
+            yield* Ref.update(pendingQuestions, HashMap.set(localId, updated));
+            yield* sendCurrentQuestion(updated);
+          } else {
+            // All answered — submit
+            yield* Ref.update(pendingQuestions, HashMap.remove(localId));
+            yield* Effect.promise(() =>
+              opencode.client.question.reply({
+                requestID: pq.requestId,
+                answers: newAnswers,
+              }),
+            ).pipe(
+              Effect.tap(Effect.logDebug("Bot.service answered the question")),
+            );
+          }
+        }).pipe(Effect.annotateLogs("localId", localId));
+
+      /** Finds a pending question by requestId. */
+      const findPendingByRequestId = (requestId: string) =>
+        Ref.get(pendingQuestions).pipe(
+          Effect.map((map) =>
+            HashMap.findFirst(map, (pq) => pq.requestId === requestId).pipe(
+              Option.map(([, pq]) => pq),
+            ),
+          ),
+        );
+
+      /** Finds a pending question by chatId and threadId. */
+      const findPendingByChat = (
+        chatId: number,
+        threadId: number | undefined,
+      ) =>
+        Ref.get(pendingQuestions).pipe(
+          Effect.map((map) =>
+            HashMap.findFirst(
+              map,
+              (pq) => pq.chatId === chatId && pq.threadId === threadId,
+            ).pipe(Option.map(([, pq]) => pq)),
+          ),
+        );
 
       // --- Event processing ---
 
@@ -282,6 +460,49 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 ),
               );
             }
+          } else if (event.type === "question.asked") {
+            const request = event.properties;
+            const session = yield* database.session.findById(request.sessionID);
+            if (Option.isNone(session)) {
+              yield* Effect.logDebug(
+                "Bot.service ignored a question.asked from an unknown session",
+              ).pipe(Effect.annotateLogs("sessionId", request.sessionID));
+            } else {
+              yield* processQuestionAsked(request, session.value);
+            }
+          } else if (event.type === "question.replied") {
+            const { requestID, answers } = event.properties;
+            const pq = yield* findPendingByRequestId(requestID);
+            if (Option.isSome(pq)) {
+              yield* Ref.update(
+                pendingQuestions,
+                HashMap.remove(pq.value.localId),
+              );
+              const allAnswers = answers.flat();
+              yield* Effect.promise(() =>
+                client.api.editMessageText(
+                  pq.value.chatId,
+                  pq.value.interactionMessageId,
+                  formatQuestionReplied(allAnswers),
+                ),
+              ).pipe(Effect.ignoreLogged);
+            }
+          } else if (event.type === "question.rejected") {
+            const { requestID } = event.properties;
+            const pq = yield* findPendingByRequestId(requestID);
+            if (Option.isSome(pq)) {
+              yield* Ref.update(
+                pendingQuestions,
+                HashMap.remove(pq.value.localId),
+              );
+              yield* Effect.promise(() =>
+                client.api.editMessageText(
+                  pq.value.chatId,
+                  pq.value.interactionMessageId,
+                  formatQuestionRejected(),
+                ),
+              ).pipe(Effect.ignoreLogged);
+            }
           }
         }).pipe(
           Effect.catchAllDefect((defect) =>
@@ -364,6 +585,40 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 Effect.annotateLogs("threadId", session.threadId || undefined),
               ),
             { concurrency: "unbounded", discard: true },
+          );
+          // Reconcile pending questions from OpenCode
+          yield* Effect.gen(function* () {
+            const pendingResult = yield* Effect.promise(() =>
+              opencode.client.question.list({}),
+            );
+            if (pendingResult.error) {
+              return yield* Effect.die(pendingResult.error);
+            }
+            invariant(pendingResult.data, "question.list data");
+            const pendingData = pendingResult.data;
+            // Clear stale entries whose requestId is no longer pending
+            const currentMap = yield* Ref.get(pendingQuestions);
+            const pendingIds = new Set(pendingData.map((q) => q.id));
+            for (const [localId, pq] of HashMap.entries(currentMap)) {
+              if (!pendingIds.has(pq.requestId)) {
+                yield* Ref.update(pendingQuestions, HashMap.remove(localId));
+              }
+            }
+            // Re-send questions that belong to tracked sessions
+            for (const qr of pendingData) {
+              const existing = yield* findPendingByRequestId(qr.id);
+              if (Option.isSome(existing)) continue;
+              const session = yield* database.session.findById(qr.sessionID);
+              if (Option.isSome(session)) {
+                yield* processQuestionAsked(qr, session.value);
+              }
+            }
+          }).pipe(
+            Effect.catchAllDefect((defect) =>
+              Effect.logWarning(defect).pipe(
+                Effect.annotateLogs("debugHint", "Bot.reconcileQuestions"),
+              ),
+            ),
           );
           yield* Ref.set(reconnectAttempt, 0);
           yield* Effect.logDebug("Bot.stream is connected");
@@ -550,6 +805,18 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             if (abortResult.error) return yield* Effect.die(abortResult.error);
             yield* stopTyping(sessionId);
             yield* Ref.update(promptingRef, HashSet.remove(sessionId));
+            // Reject any pending questions for this session
+            const pending = yield* Ref.get(pendingQuestions);
+            for (const [localId, pq] of HashMap.entries(pending)) {
+              if (pq.sessionId === sessionId) {
+                yield* Effect.promise(() =>
+                  opencode.client.question.reject({
+                    requestID: pq.requestId,
+                  }),
+                ).pipe(Effect.ignoreLogged);
+                yield* Ref.update(pendingQuestions, HashMap.remove(localId));
+              }
+            }
             yield* database.session.delete(sessionId);
             yield* Effect.logInfo("Bot.service reset the session");
           }).pipe(Effect.annotateLogs("sessionId", sessionId));
@@ -563,6 +830,97 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         }),
       );
 
+      // --- Callback query handler for inline keyboard buttons ---
+      client.on("callback_query:data", (ctx) =>
+        Runtime.runPromise(runtime)(
+          Effect.gen(function* () {
+            if (ctx.from?.id !== userId) return;
+            const data = ctx.callbackQuery.data;
+            const parts = data.split(":");
+            const prefix = parts[0];
+            const localId = parts[1];
+            if (!prefix || !localId) return;
+            const maybePq = HashMap.get(
+              yield* Ref.get(pendingQuestions),
+              localId,
+            );
+            if (Option.isNone(maybePq)) {
+              yield* Effect.promise(() =>
+                ctx.answerCallbackQuery({ text: "Question expired." }),
+              ).pipe(Effect.ignoreLogged);
+              return;
+            }
+            const pq = maybePq.value;
+            const question = pq.questions[pq.currentIndex];
+            invariant(question, "question");
+            if (prefix === "q") {
+              const optionIndex = Number(parts[2]);
+              const option = question.options[optionIndex];
+              invariant(option, "option");
+              if (question.multiple) {
+                // Toggle selection
+                const newSelected = pq.selected.includes(option.label)
+                  ? pq.selected.filter((s) => s !== option.label)
+                  : [...pq.selected, option.label];
+                const updated: Bot.PendingQuestion = {
+                  ...pq,
+                  selected: newSelected,
+                };
+                yield* Ref.update(
+                  pendingQuestions,
+                  HashMap.set(localId, updated),
+                );
+                // Rebuild keyboard with checkmarks
+                const kb = buildQuestionKeyboard(
+                  localId,
+                  question,
+                  newSelected,
+                );
+                yield* Effect.promise(() =>
+                  ctx.editMessageReplyMarkup({ reply_markup: kb }),
+                ).pipe(Effect.ignoreLogged);
+              } else {
+                // Single-select — answer immediately
+                yield* advanceOrSubmit(localId, [option.label]);
+              }
+            } else if (prefix === "qc") {
+              if (pq.selected.length === 0) {
+                yield* Effect.promise(() =>
+                  ctx.answerCallbackQuery({
+                    text: "Select at least one option.",
+                  }),
+                ).pipe(Effect.ignoreLogged);
+                return;
+              }
+              yield* advanceOrSubmit(localId, pq.selected);
+            } else {
+              invariant(prefix === "qr", `unknown callback prefix: ${prefix}`);
+              yield* Ref.update(pendingQuestions, HashMap.remove(localId));
+              yield* Effect.promise(() =>
+                opencode.client.question.reject({ requestID: pq.requestId }),
+              ).pipe(
+                Effect.tap(
+                  Effect.logDebug("Bot.service rejected the question"),
+                ),
+              );
+              yield* Effect.promise(() =>
+                client.api.editMessageText(
+                  pq.chatId,
+                  pq.interactionMessageId,
+                  formatQuestionRejected(),
+                ),
+              ).pipe(Effect.ignoreLogged);
+            }
+            yield* Effect.promise(() => ctx.answerCallbackQuery()).pipe(
+              Effect.ignoreLogged,
+            );
+          }).pipe(
+            Effect.annotateLogs("userId", ctx.from?.id),
+            Effect.annotateLogs("chatId", ctx.chat?.id),
+          ),
+        ),
+      );
+
       client.on("message:text", (ctx) =>
         Runtime.runPromise(runtime)(
           Effect.gen(function* () {
@@ -572,6 +930,33 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
             }
             yield* Effect.logDebug("Bot.service received a message");
+            // Check if there's a pending question for this chat
+            const pendingQ = yield* findPendingByChat(
+              ctx.chat.id,
+              ctx.message?.message_thread_id,
+            );
+            if (Option.isSome(pendingQ)) {
+              const pq = pendingQ.value;
+              const question = pq.questions[pq.currentIndex];
+              invariant(question, "question");
+              if (question.custom === false) {
+                // Cannot type custom answers — notify user
+                yield* Bot.sendChunks({
+                  client,
+                  chunks: yield* formatQuestionPending(),
+                  ignoreErrors: false,
+                  chatId: ctx.chat.id,
+                  threadId: ctx.message?.message_thread_id,
+                });
+                return;
+              }
+              // Use the text as a custom answer, including any selected options
+              yield* advanceOrSubmit(pq.localId, [
+                ...pq.selected,
+                ctx.message.text,
+              ]);
+              return;
+            }
             const { sessionId } = yield* Bot.findOrCreateSession({
               database,
               opencode,
@@ -805,5 +1190,18 @@ export namespace Bot {
     readonly ignoreErrors: boolean;
     readonly chatId: number;
     readonly threadId: number | undefined;
+  }
+
+  export interface PendingQuestion {
+    readonly localId: string;
+    readonly requestId: string;
+    readonly sessionId: string;
+    readonly chatId: number;
+    readonly threadId: number | undefined;
+    readonly questions: ReadonlyArray<QuestionInfo>;
+    readonly currentIndex: number;
+    readonly answers: ReadonlyArray<string[]>;
+    readonly interactionMessageId: number;
+    readonly selected: string[];
   }
 }

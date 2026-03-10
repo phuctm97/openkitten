@@ -24,6 +24,12 @@ interface GrammyBotContext {
     text: string;
     message_thread_id?: number;
   };
+  callbackQuery?: {
+    data: string;
+    message?: { message_id: number };
+  };
+  answerCallbackQuery?: ReturnType<typeof vi.fn>;
+  editMessageReplyMarkup?: ReturnType<typeof vi.fn>;
 }
 
 type GrammyErrorHandler = (err: {
@@ -41,19 +47,26 @@ interface GrammyStartOptions {
 // Hoisted so vi.mock() can reference them at module scope.
 const {
   GrammyBot,
+  InlineKeyboard,
   sendMessageMock,
   sendChatActionMock,
+  editMessageTextMock,
+  editMessageReplyMarkupMock,
   eventRef,
   createEventController,
 } = vi.hoisted(() => {
-  const sendMessageMock = vi.fn().mockResolvedValue(undefined);
+  const sendMessageMock = vi.fn().mockResolvedValue({ message_id: 1 });
   const sendChatActionMock = vi.fn().mockResolvedValue(undefined);
+  const editMessageTextMock = vi.fn().mockResolvedValue(undefined);
+  const editMessageReplyMarkupMock = vi.fn().mockResolvedValue(undefined);
 
   class GrammyBot {
     api = {
       sendMessage: sendMessageMock,
       sendChatAction: sendChatActionMock,
       setMyCommands: vi.fn().mockResolvedValue(undefined),
+      editMessageText: editMessageTextMock,
+      editMessageReplyMarkup: editMessageReplyMarkupMock,
     };
     private resolve?: () => void;
 
@@ -121,16 +134,25 @@ const {
 
   const eventRef = { current: createEventController() };
 
+  // Import the real InlineKeyboard — it's just a data container, no need to mock.
+  const { InlineKeyboard } = require("grammy");
+
   return {
     GrammyBot,
+    InlineKeyboard,
     sendMessageMock,
     sendChatActionMock,
+    editMessageTextMock,
+    editMessageReplyMarkupMock,
     eventRef,
     createEventController,
   };
 });
 
-vi.mock("grammy", () => ({ Bot: GrammyBot }));
+vi.mock("grammy", () => ({
+  Bot: GrammyBot,
+  InlineKeyboard: InlineKeyboard,
+}));
 
 const startSpy = vi.spyOn(GrammyBot.prototype, "start");
 const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
@@ -186,6 +208,18 @@ const sessionSummarizeMock = vi.fn().mockResolvedValue({
   data: true,
 });
 
+const questionListMock = vi.fn().mockResolvedValue({
+  data: [],
+});
+
+const questionReplyMock = vi.fn().mockResolvedValue({
+  data: undefined,
+});
+
+const questionRejectMock = vi.fn().mockResolvedValue({
+  data: undefined,
+});
+
 const sessionMessagesMock = vi.fn().mockResolvedValue({
   data: [],
 });
@@ -210,6 +244,11 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
     event: {
       subscribe: eventSubscribeMock,
     },
+    question: {
+      list: questionListMock,
+      reply: questionReplyMock,
+      reject: questionRejectMock,
+    },
   }),
 }));
 
@@ -218,6 +257,9 @@ const {
   formatCompactMock,
   formatErrorMock,
   formatMessageMock,
+  formatQuestionMessageMock,
+  formatQuestionPendingMock,
+  formatQuestionPromptMock,
   formatResetMock,
   formatStartMock,
   formatStopMock,
@@ -247,6 +289,21 @@ const {
       .mockReturnValue(
         Effect.succeed([{ text: "AI response", markdown: "AI response" }]),
       ),
+    formatQuestionMessageMock: vi
+      .fn()
+      .mockReturnValue(
+        Effect.succeed([{ text: "question msg", markdown: "question msg" }]),
+      ),
+    formatQuestionPendingMock: vi
+      .fn()
+      .mockReturnValue(
+        Effect.succeed([
+          { text: "pending question", markdown: "pending question" },
+        ]),
+      ),
+    formatQuestionPromptMock: vi
+      .fn()
+      .mockReturnValue("Choose an option or type your answer."),
     formatStartMock: vi
       .fn()
       .mockReturnValue(
@@ -284,6 +341,18 @@ vi.mock("~/lib/format-start", () => ({
   formatStart: formatStartMock,
 }));
 
+vi.mock("~/lib/format-question-message", () => ({
+  formatQuestionMessage: formatQuestionMessageMock,
+}));
+
+vi.mock("~/lib/format-question-pending", () => ({
+  formatQuestionPending: formatQuestionPendingMock,
+}));
+
+vi.mock("~/lib/format-question-prompt", () => ({
+  formatQuestionPrompt: formatQuestionPromptMock,
+}));
+
 vi.mock("~/lib/format-stop", () => ({
   formatStop: formatStopMock,
 }));
@@ -294,13 +363,18 @@ vi.mock("~/lib/format-stop", () => ({
 beforeEach(() => {
   eventRef.current = createEventController();
   msgCounter = 0;
-  sendMessageMock.mockClear();
+  sendMessageMock.mockClear().mockResolvedValue({ message_id: 1 });
   sendChatActionMock.mockClear();
   sessionAbortMock.mockClear();
   sessionDeleteMock.mockClear();
   sessionMessagesMock.mockClear();
   sessionStatusMock.mockClear();
   sessionSummarizeMock.mockClear();
+  editMessageTextMock.mockClear();
+  editMessageReplyMarkupMock.mockClear();
+  questionListMock.mockClear();
+  questionReplyMock.mockClear();
+  questionRejectMock.mockClear();
 });
 
 /** Yields the event loop until the reconciliation fiber has called session.messages. */
@@ -2485,6 +2559,851 @@ describe("typing indicator", () => {
       });
       yield* Effect.sleep(0);
       expect(sendChatActionMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+// --- Question helpers ---
+
+const sampleQuestion = {
+  id: "qreq-1",
+  sessionID: "q-session",
+  questions: [
+    {
+      question: "What would you like to do?",
+      header: "Action",
+      options: [
+        { label: "Yes", description: "Approve the change" },
+        { label: "No", description: "Reject the change" },
+      ],
+    },
+  ],
+};
+
+function getCallbackQueryHandler() {
+  const call = onSpy.mock.calls.find((c) => c[0] === "callback_query:data");
+  assert.isDefined(call);
+  return call[1];
+}
+
+function getMessageHandler() {
+  const call = onSpy.mock.calls.find((c) => c[0] === "message:text");
+  assert.isDefined(call);
+  return call[1];
+}
+
+function makeCallbackCtx(data: string) {
+  const answerCallbackQuery = vi.fn().mockResolvedValue(undefined);
+  const editMessageReplyMarkup = vi.fn().mockResolvedValue(undefined);
+  return {
+    from: { id: 123 },
+    chat: { id: 123 },
+    callbackQuery: { data, message: { message_id: 10 } },
+    answerCallbackQuery,
+    editMessageReplyMarkup,
+  };
+}
+
+describe("question.asked event", () => {
+  it.scopedLive("sends question and interaction messages", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "question.asked",
+        properties: sampleQuestion,
+      });
+      yield* Effect.sleep(0);
+      // Should send 2 messages: question content + interaction with keyboard
+      expect(formatQuestionMessageMock).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
+      // Second message has reply_markup
+      const interactionCall = sendMessageMock.mock.calls.at(1);
+      assert.isDefined(interactionCall);
+      expect(interactionCall[2]).toHaveProperty("reply_markup");
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("handles odd option count and non-zero threadId", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 42,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "question.asked",
+        properties: {
+          ...sampleQuestion,
+          questions: [
+            {
+              question: "Pick one",
+              header: "Choice",
+              options: [{ label: "Only", description: "Single option" }],
+            },
+          ],
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
+      // Second message should include message_thread_id
+      const interactionCall = sendMessageMock.mock.calls.at(1);
+      assert.isDefined(interactionCall);
+      expect(interactionCall[2]).toHaveProperty("message_thread_id", 42);
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("ignores question.asked from unknown session", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "question.asked",
+        properties: sampleQuestion,
+      });
+      yield* Effect.sleep(0);
+      expect(formatQuestionMessageMock).not.toHaveBeenCalled();
+      expect(sendMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+describe("question callback", () => {
+  it.scopedLive("single-select answers immediately", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      // Trigger question
+      eventRef.current.push({
+        type: "question.asked",
+        properties: sampleQuestion,
+      });
+      yield* Effect.sleep(0);
+      // Click "Yes" (option index 0, localId "0")
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("q:0:0");
+      yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
+      expect(questionReplyMock).toHaveBeenCalledWith({
+        requestID: "qreq-1",
+        answers: [["Yes"]],
+      });
+      expect(editMessageTextMock).toHaveBeenCalled();
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("reject dismisses the question", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "question.asked",
+        properties: sampleQuestion,
+      });
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("qr:0");
+      yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
+      expect(questionRejectMock).toHaveBeenCalledWith({
+        requestID: "qreq-1",
+      });
+      expect(editMessageTextMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("expired callback returns toast", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("q:99:0");
+      yield* Effect.promise(() => cbHandler(ctx));
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+        text: "Question expired.",
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("ignores callback from unauthorized user", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("q:0:0");
+      ctx.from = { id: 999 }; // not the authorized user (123)
+      yield* Effect.promise(() => cbHandler(ctx));
+      // Should silently return without answering the callback
+      expect(ctx.answerCallbackQuery).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("ignores malformed callback data", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("baddata");
+      yield* Effect.promise(() => cbHandler(ctx));
+      // Should silently return without answering the callback
+      expect(ctx.answerCallbackQuery).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("multi-select toggles and confirms", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Push a multi-select question
+      eventRef.current.push({
+        type: "question.asked",
+        properties: {
+          ...sampleQuestion,
+          questions: [
+            {
+              ...sampleQuestion.questions[0],
+              multiple: true,
+            },
+          ],
+        },
+      });
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      // Toggle "Yes"
+      const ctx1 = makeCallbackCtx("q:0:0");
+      yield* Effect.promise(() => cbHandler(ctx1));
+      yield* Effect.sleep(0);
+      expect(ctx1.editMessageReplyMarkup).toHaveBeenCalled();
+      // Confirm
+      const ctx2 = makeCallbackCtx("qc:0");
+      yield* Effect.promise(() => cbHandler(ctx2));
+      yield* Effect.sleep(0);
+      expect(questionReplyMock).toHaveBeenCalledWith({
+        requestID: "qreq-1",
+        answers: [["Yes"]],
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("multi-select deselects toggled option", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "question.asked",
+        properties: {
+          ...sampleQuestion,
+          questions: [
+            {
+              ...sampleQuestion.questions[0],
+              multiple: true,
+            },
+          ],
+        },
+      });
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      // Select "Yes"
+      const ctx1 = makeCallbackCtx("q:0:0");
+      yield* Effect.promise(() => cbHandler(ctx1));
+      yield* Effect.sleep(0);
+      // Deselect "Yes"
+      const ctx2 = makeCallbackCtx("q:0:0");
+      yield* Effect.promise(() => cbHandler(ctx2));
+      yield* Effect.sleep(0);
+      // Confirm — should fail because nothing selected
+      const ctx3 = makeCallbackCtx("qc:0");
+      yield* Effect.promise(() => cbHandler(ctx3));
+      expect(ctx3.answerCallbackQuery).toHaveBeenCalledWith({
+        text: "Select at least one option.",
+      });
+      expect(questionReplyMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("multi-select confirm with nothing selected shows error", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "question.asked",
+        properties: {
+          ...sampleQuestion,
+          questions: [
+            {
+              ...sampleQuestion.questions[0],
+              multiple: true,
+            },
+          ],
+        },
+      });
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("qc:0");
+      yield* Effect.promise(() => cbHandler(ctx));
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+        text: "Select at least one option.",
+      });
+      expect(questionReplyMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+describe("multi-question flow", () => {
+  it.scopedLive("shows questions sequentially and submits all answers", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Push a request with 2 questions
+      eventRef.current.push({
+        type: "question.asked",
+        properties: {
+          id: "qreq-multi",
+          sessionID: "q-session",
+          questions: [
+            {
+              question: "First question",
+              header: "Q1",
+              options: [
+                { label: "A", description: "Option A" },
+                { label: "B", description: "Option B" },
+              ],
+            },
+            {
+              question: "Second question",
+              header: "Q2",
+              options: [
+                { label: "X", description: "Option X" },
+                { label: "Y", description: "Option Y" },
+              ],
+            },
+          ],
+        },
+      });
+      yield* Effect.sleep(0);
+      // Answer first question
+      const cbHandler = getCallbackQueryHandler();
+      formatQuestionMessageMock.mockClear();
+      const ctx1 = makeCallbackCtx("q:0:0");
+      yield* Effect.promise(() => cbHandler(ctx1));
+      yield* Effect.sleep(0);
+      // Should not have submitted yet — still need second answer
+      expect(questionReplyMock).not.toHaveBeenCalled();
+      // Second question should have been sent
+      expect(formatQuestionMessageMock).toHaveBeenCalled();
+      // Answer second question
+      const ctx2 = makeCallbackCtx("q:0:1");
+      yield* Effect.promise(() => cbHandler(ctx2));
+      yield* Effect.sleep(0);
+      // Now should have submitted both answers
+      expect(questionReplyMock).toHaveBeenCalledWith({
+        requestID: "qreq-multi",
+        answers: [["A"], ["Y"]],
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+describe("question text answer", () => {
+  it.scopedLive("custom text answers the question", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "question.asked",
+        properties: sampleQuestion,
+      });
+      yield* Effect.sleep(0);
+      // Send text message as custom answer
+      const handler = getMessageHandler();
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 2, text: "my custom answer" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(questionReplyMock).toHaveBeenCalledWith({
+        requestID: "qreq-1",
+        answers: [["my custom answer"]],
+      });
+      // Should NOT have prompted OpenCode
+      expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("custom text with multi-select includes selected options", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Push a multi-select question with custom enabled (default)
+      eventRef.current.push({
+        type: "question.asked",
+        properties: {
+          ...sampleQuestion,
+          questions: [{ ...sampleQuestion.questions[0], multiple: true }],
+        },
+      });
+      yield* Effect.sleep(0);
+      // Select "Yes" option first
+      const cbHandler = getCallbackQueryHandler();
+      const selectCtx = makeCallbackCtx("q:0:0");
+      yield* Effect.promise(() => cbHandler(selectCtx));
+      yield* Effect.sleep(0);
+      // Now send custom text — should include both selected option and text
+      const msgHandler = getMessageHandler();
+      yield* Effect.promise(() =>
+        msgHandler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 3, text: "extra input" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(questionReplyMock).toHaveBeenCalledWith({
+        requestID: "qreq-1",
+        answers: [["Yes", "extra input"]],
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("custom:false sends pending notification instead", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "question.asked",
+        properties: {
+          ...sampleQuestion,
+          questions: [
+            {
+              ...sampleQuestion.questions[0],
+              custom: false,
+            },
+          ],
+        },
+      });
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      const handler = getMessageHandler();
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 2, text: "my text" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(formatQuestionPendingMock).toHaveBeenCalled();
+      expect(questionReplyMock).not.toHaveBeenCalled();
+      expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+describe("question event cleanup", () => {
+  it.scopedLive("question.replied cleans up pending state", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "question.asked",
+        properties: sampleQuestion,
+      });
+      yield* Effect.sleep(0);
+      editMessageTextMock.mockClear();
+      eventRef.current.push({
+        type: "question.replied",
+        properties: {
+          sessionID: "q-session",
+          requestID: "qreq-1",
+          answers: [["Yes"]],
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(editMessageTextMock).toHaveBeenCalled();
+      // Callback on expired question should show toast
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("q:0:0");
+      yield* Effect.promise(() => cbHandler(ctx));
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+        text: "Question expired.",
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("question.rejected cleans up pending state", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "question.asked",
+        properties: sampleQuestion,
+      });
+      yield* Effect.sleep(0);
+      editMessageTextMock.mockClear();
+      eventRef.current.push({
+        type: "question.rejected",
+        properties: {
+          sessionID: "q-session",
+          requestID: "qreq-1",
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(editMessageTextMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("question.replied ignores unknown requestId", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      editMessageTextMock.mockClear();
+      eventRef.current.push({
+        type: "question.replied",
+        properties: {
+          sessionID: "unknown",
+          requestID: "unknown-req",
+          answers: [["x"]],
+        },
+      });
+      yield* Effect.sleep(0);
+      // No pending question to edit
+      expect(editMessageTextMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("question.rejected ignores unknown requestId", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      editMessageTextMock.mockClear();
+      eventRef.current.push({
+        type: "question.rejected",
+        properties: {
+          sessionID: "unknown",
+          requestID: "unknown-req",
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(editMessageTextMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("reconciles pending questions on reconnect", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      // question.list returns a pending question on reconnect
+      questionListMock.mockResolvedValueOnce({
+        data: [sampleQuestion],
+      });
+      yield* provideBotLazily;
+      // Should have sent the question messages
+      expect(formatQuestionMessageMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validBaseLayer)),
+  );
+
+  it.scoped("clears stale pending questions on reconnect", () => {
+    // First reconciliation seeds a pending question via question.list
+    questionListMock.mockResolvedValueOnce({
+      data: [sampleQuestion],
+    });
+
+    // First stream errors immediately to trigger reconnect
+    const broken: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]: () => ({
+        async next(): Promise<IteratorResult<unknown>> {
+          throw new Error("SSE connection lost");
+        },
+        async return() {
+          return { done: true as const, value: undefined };
+        },
+      }),
+    };
+    eventSubscribeMock.mockImplementationOnce(async () => ({
+      stream: broken,
+    }));
+
+    // Seed DB via a layer that runs before Bot.layer
+    const seedLayer = Layer.effectDiscard(
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "q-session",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+      }),
+    );
+    const layerWithSeed = Bot.layer.pipe(
+      Layer.provideMerge(seedLayer),
+      Layer.provideMerge(validBaseLayer),
+    );
+
+    return Effect.gen(function* () {
+      yield* Bot;
+      // Advance past the 1s reconnect delay
+      yield* TestClock.adjust("1 second");
+
+      // Second reconciliation used default question.list (empty data: []).
+      // The stale pending question should be cleaned up.
+      // Verify by sending a callback for it — should get "expired" toast.
+      const handler = getCallbackQueryHandler();
+      // Verify the question was added during first reconciliation
+      expect(formatQuestionMessageMock).toHaveBeenCalled();
+      const ctx = makeCallbackCtx("q:0:0");
+      yield* Effect.promise(() => handler(ctx));
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ text: expect.stringContaining("expired") }),
+      );
+    }).pipe(Effect.provide(layerWithSeed));
+  });
+
+  it.scoped("keeps valid pending questions on reconnect", () => {
+    // Both reconciliations return the same question
+    questionListMock
+      .mockResolvedValueOnce({ data: [sampleQuestion] })
+      .mockResolvedValueOnce({ data: [sampleQuestion] });
+
+    const broken: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]: () => ({
+        async next(): Promise<IteratorResult<unknown>> {
+          throw new Error("SSE connection lost");
+        },
+        async return() {
+          return { done: true as const, value: undefined };
+        },
+      }),
+    };
+    eventSubscribeMock.mockImplementationOnce(async () => ({
+      stream: broken,
+    }));
+
+    const seedLayer = Layer.effectDiscard(
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "q-session",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+      }),
+    );
+    const layerWithSeed = Bot.layer.pipe(
+      Layer.provideMerge(seedLayer),
+      Layer.provideMerge(validBaseLayer),
+    );
+
+    return Effect.gen(function* () {
+      yield* Bot;
+      yield* TestClock.adjust("1 second");
+
+      // Question should still be active (not cleaned up).
+      // Callback should NOT get "expired" toast.
+      const handler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("q:0:0");
+      yield* Effect.promise(() => handler(ctx));
+      // answerCallbackQuery is called at the end of the handler (not the expired path)
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+      expect(ctx.answerCallbackQuery).not.toHaveBeenCalledWith(
+        expect.objectContaining({ text: expect.stringContaining("expired") }),
+      );
+    }).pipe(Effect.provide(layerWithSeed));
+  });
+
+  it.scopedLive("reconciliation skips questions for unknown sessions", () =>
+    Effect.gen(function* () {
+      // question.list returns a question for a session not in our DB
+      questionListMock.mockResolvedValueOnce({
+        data: [{ ...sampleQuestion, sessionID: "nonexistent" }],
+      });
+      yield* provideBotLazily;
+      // Should NOT have sent question messages (session not found)
+      expect(formatQuestionMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validBaseLayer)),
+  );
+
+  it.scopedLive("reconciliation continues when question.list errors", () =>
+    Effect.gen(function* () {
+      questionListMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("question list failed"),
+      });
+      yield* provideBotLazily;
+      // Should not crash — question reconciliation logs and continues
+      expect(questionListMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validBaseLayer)),
+  );
+
+  it.scopedLive("/reset rejects only matching session's questions", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "q-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* database.session.insert({
+        id: "other-session",
+        chatId: 123,
+        threadId: 42,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Add questions for both sessions
+      eventRef.current.push({
+        type: "question.asked",
+        properties: sampleQuestion,
+      });
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "question.asked",
+        properties: {
+          id: "qreq-other",
+          sessionID: "other-session",
+          questions: sampleQuestion.questions,
+        },
+      });
+      yield* Effect.sleep(0);
+      // Reset only q-session (chatId=123, threadId=0)
+      const handler = getCommandHandler("reset");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/reset" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      // Only q-session's question should be rejected
+      expect(questionRejectMock).toHaveBeenCalledWith({
+        requestID: "qreq-1",
+      });
+      expect(questionRejectMock).not.toHaveBeenCalledWith({
+        requestID: "qreq-other",
+      });
     }).pipe(Effect.provide(validFullLayer)),
   );
 });
