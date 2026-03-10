@@ -9,7 +9,7 @@ test("produces message with delete emoji and tip", () => {
   expect(chunks.length).toBeGreaterThan(0);
   const text = chunks.map((c) => c.text).join("\n");
   expect(text).toContain("🗑️");
-  expect(text).toContain("Session deleted");
+  expect(text).toContain("The session was deleted");
   expect(text).toContain("Send a new message");
   const chunk = chunks.at(0);
   assert.isDefined(chunk);
