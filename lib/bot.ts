@@ -20,6 +20,7 @@ import { Database } from "~/lib/database";
 import { formatBusy } from "~/lib/format-busy";
 import { formatError } from "~/lib/format-error";
 import { formatMessage, type MessageChunk } from "~/lib/format-message";
+import { formatStart } from "~/lib/format-start";
 import { isTextPart } from "~/lib/is-text-part";
 import { OpenCode } from "~/lib/opencode";
 import pkg from "~/package.json" with { type: "json" };
@@ -401,6 +402,45 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ),
         ),
       );
+      client.command("start", (ctx) => {
+        const threadId = ctx.message?.message_thread_id;
+        return Runtime.runPromise(runtime)(
+          Effect.gen(function* () {
+            if (ctx.from?.id !== userId) {
+              return yield* Effect.logWarning(
+                "Bot.service ignored a command from an unauthorized user",
+              );
+            }
+            yield* Effect.logDebug("Bot.service received /start command");
+            const dbThreadId = threadId ?? 0;
+            const existing = yield* database.session.findByChat({
+              chatId: ctx.chat.id,
+              threadId: dbThreadId,
+            });
+            const isNew = Option.isNone(existing);
+            const sessionId = isNew
+              ? yield* Bot.findOrCreateSession({
+                  database,
+                  opencode,
+                  chatId: ctx.chat.id,
+                  threadId,
+                })
+              : existing.value.id;
+            yield* Bot.sendChunks({
+              client,
+              chunks: yield* formatStart(sessionId, isNew),
+              ignoreErrors: false,
+              chatId: ctx.chat.id,
+              threadId,
+            });
+          }).pipe(
+            Effect.annotateLogs("userId", ctx.from?.id),
+            Effect.annotateLogs("messageId", ctx.message?.message_id),
+            Effect.annotateLogs("chatId", ctx.chat.id),
+            Effect.annotateLogs("threadId", threadId),
+          ),
+        );
+      });
       client.on("message:text", (ctx) => {
         const threadId = ctx.message?.message_thread_id;
         return Runtime.runPromise(runtime)(

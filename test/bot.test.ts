@@ -66,6 +66,8 @@ const {
 
     catch(_handler: GrammyErrorHandler) {}
 
+    command(_command: string, _callback: GrammyEventHandler) {}
+
     on(_event: string, _callback: GrammyEventHandler) {}
   }
 
@@ -128,6 +130,7 @@ vi.mock("grammy", () => ({ Bot: GrammyBot }));
 
 const startSpy = vi.spyOn(GrammyBot.prototype, "start");
 const stopSpy = vi.spyOn(GrammyBot.prototype, "stop");
+const commandSpy = vi.spyOn(GrammyBot.prototype, "command");
 const onSpy = vi.spyOn(GrammyBot.prototype, "on");
 const catchSpy = vi.spyOn(GrammyBot.prototype, "catch");
 
@@ -196,8 +199,8 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
   }),
 }));
 
-const { formatBusyMock, formatErrorMock, formatMessageMock } = vi.hoisted(
-  () => {
+const { formatBusyMock, formatErrorMock, formatMessageMock, formatStartMock } =
+  vi.hoisted(() => {
     const { Effect } = require("effect");
     return {
       formatBusyMock: vi
@@ -213,9 +216,13 @@ const { formatBusyMock, formatErrorMock, formatMessageMock } = vi.hoisted(
         .mockReturnValue(
           Effect.succeed([{ text: "AI response", markdown: "AI response" }]),
         ),
+      formatStartMock: vi
+        .fn()
+        .mockReturnValue(
+          Effect.succeed([{ text: "start msg", markdown: "start msg" }]),
+        ),
     };
-  },
-);
+  });
 
 vi.mock("~/lib/format-busy", () => ({
   formatBusy: formatBusyMock,
@@ -227,6 +234,10 @@ vi.mock("~/lib/format-error", () => ({
 
 vi.mock("~/lib/format-message", () => ({
   formatMessage: formatMessageMock,
+}));
+
+vi.mock("~/lib/format-start", () => ({
+  formatStart: formatStartMock,
 }));
 
 // --- Test setup ---
@@ -1677,6 +1688,98 @@ describe("handler", () => {
       // No crash, no side effects
       expect(sendMessageMock).not.toHaveBeenCalled();
       expect(sendChatActionMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+});
+
+describe("/start command", () => {
+  it.scopedLive("registers command handler before start", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      expect(commandSpy).toHaveBeenCalledWith("start", expect.any(Function));
+      const cmdOrder = commandSpy.mock.invocationCallOrder.at(0);
+      const startOrder = startSpy.mock.invocationCallOrder.at(0);
+      assert.isDefined(cmdOrder);
+      assert.isDefined(startOrder);
+      expect(cmdOrder).toBeLessThan(startOrder);
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("sends start message for new session", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = commandSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/start" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionCreateMock).toHaveBeenCalledWith({});
+      expect(formatStartMock).toHaveBeenCalledWith("new-session-id", true);
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
+        parse_mode: "MarkdownV2",
+      });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("sends start message for existing session", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "existing-session-id",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = commandSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/start" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionCreateMock).not.toHaveBeenCalled();
+      expect(formatStartMock).toHaveBeenCalledWith(
+        "existing-session-id",
+        false,
+      );
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
+        parse_mode: "MarkdownV2",
+      });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("ignores /start from unauthorized user", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = commandSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 999 },
+          chat: { id: 999 },
+          message: { message_id: 1, text: "/start" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionCreateMock).not.toHaveBeenCalled();
+      expect(sendMessageMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 });
