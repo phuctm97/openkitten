@@ -668,8 +668,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         client.api.setMyCommands([
           { command: "start", description: "Say hi to your kitten 😺" },
           { command: "stop", description: "Shush the kitten mid-thought 🤫" },
+          { command: "compact", description: "Groom the messy fur 🧶" },
           { command: "reset", description: "Fresh start, clean paws 🐾" },
-          { command: "compact", description: "Tidy up the conversation 🧹" },
         ]),
       );
       yield* Effect.logInfo("Bot.service is ready");
