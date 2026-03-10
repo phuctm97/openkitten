@@ -906,19 +906,22 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               invariant(prefix === "qr", `unknown callback prefix: ${prefix}`);
               yield* Ref.update(pendingQuestions, HashMap.remove(localId));
               yield* Effect.promise(() =>
-                opencode.client.question.reject({ requestID: pq.requestId }),
+                Promise.all([
+                  opencode.client.question.reject({
+                    requestID: pq.requestId,
+                  }),
+                  client.api.editMessageText(
+                    pq.chatId,
+                    pq.interactionMessageId,
+                    formatQuestionRejected(),
+                  ),
+                ]),
               ).pipe(
                 Effect.tap(
                   Effect.logDebug("Bot.service rejected the question"),
                 ),
+                Effect.ignoreLogged,
               );
-              yield* Effect.promise(() =>
-                client.api.editMessageText(
-                  pq.chatId,
-                  pq.interactionMessageId,
-                  formatQuestionRejected(),
-                ),
-              ).pipe(Effect.ignoreLogged);
             }
             yield* Effect.promise(() => ctx.answerCallbackQuery()).pipe(
               Effect.ignoreLogged,
