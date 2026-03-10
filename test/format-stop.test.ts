@@ -9,7 +9,7 @@ test("produces message with stop emoji and tip", () => {
   expect(chunks.length).toBeGreaterThan(0);
   const text = chunks.map((c) => c.text).join("\n");
   expect(text).toContain("🛑");
-  expect(text).toContain("The agent has stopped");
+  expect(text).toContain("The agent was stopped");
   expect(text).toContain("Send a new message");
   const chunk = chunks.at(0);
   assert.isDefined(chunk);

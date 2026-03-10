@@ -182,6 +182,10 @@ const sessionAbortMock = vi.fn().mockResolvedValue({
   data: true,
 });
 
+const sessionSummarizeMock = vi.fn().mockResolvedValue({
+  data: true,
+});
+
 const sessionMessagesMock = vi.fn().mockResolvedValue({
   data: [],
 });
@@ -201,6 +205,7 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
       message: sessionMessageMock,
       messages: sessionMessagesMock,
       status: sessionStatusMock,
+      summarize: sessionSummarizeMock,
     },
     event: {
       subscribe: eventSubscribeMock,
@@ -210,6 +215,7 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
 
 const {
   formatBusyMock,
+  formatCompactMock,
   formatErrorMock,
   formatMessageMock,
   formatResetMock,
@@ -221,6 +227,11 @@ const {
     formatBusyMock: vi
       .fn()
       .mockReturnValue(Effect.succeed([{ text: "busy", markdown: "busy" }])),
+    formatCompactMock: vi
+      .fn()
+      .mockReturnValue(
+        Effect.succeed([{ text: "compact msg", markdown: "compact msg" }]),
+      ),
     formatResetMock: vi
       .fn()
       .mockReturnValue(
@@ -251,6 +262,10 @@ const {
 
 vi.mock("~/lib/format-busy", () => ({
   formatBusy: formatBusyMock,
+}));
+
+vi.mock("~/lib/format-compact", () => ({
+  formatCompact: formatCompactMock,
 }));
 
 vi.mock("~/lib/format-reset", () => ({
@@ -285,6 +300,7 @@ beforeEach(() => {
   sessionDeleteMock.mockClear();
   sessionMessagesMock.mockClear();
   sessionStatusMock.mockClear();
+  sessionSummarizeMock.mockClear();
 });
 
 /** Yields the event loop until the reconciliation fiber has called session.messages. */
@@ -1903,59 +1919,61 @@ describe("/start command", () => {
 });
 
 describe("/stop command", () => {
-  it.scopedLive(
-    "sends stop message without aborting when session is idle",
-    () =>
-      Effect.gen(function* () {
-        yield* Bot;
-        yield* Effect.sleep(0);
-        const handler = getCommandHandler("stop");
-        yield* Effect.promise(() =>
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "/stop" },
-          }),
-        );
-        yield* Effect.sleep(0);
-        expect(sessionAbortMock).not.toHaveBeenCalled();
-        expect(formatStopMock).toHaveBeenCalledWith();
-        expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
-          parse_mode: "MarkdownV2",
-        });
-      }).pipe(Effect.provide(validFullLayer)),
+  it.scopedLive("calls abort on the session", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "stop-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("stop");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/stop" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionAbortMock).toHaveBeenCalledWith({
+        sessionID: "stop-session",
+      });
+      // Stop message is sent by the session.error event handler.
+      expect(formatStopMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
-  it.scopedLive(
-    "calls session.abort without sending stop message when busy",
-    () =>
-      Effect.gen(function* () {
-        sessionStatusMock.mockResolvedValueOnce({
-          data: { "new-session-id": { type: "busy" } },
-        });
-        yield* Bot;
-        yield* Effect.sleep(0);
-        const handler = getCommandHandler("stop");
-        yield* Effect.promise(() =>
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "/stop" },
-          }),
-        );
-        yield* Effect.sleep(0);
-        expect(sessionAbortMock).toHaveBeenCalledWith({
-          sessionID: "new-session-id",
-        });
-        expect(formatStopMock).not.toHaveBeenCalled();
-        expect(sendMessageMock).not.toHaveBeenCalled();
-      }).pipe(Effect.provide(validFullLayer)),
+  it.scopedLive("no-ops when no session exists", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("stop");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/stop" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionAbortMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("dies when session.abort returns error", () =>
     Effect.gen(function* () {
-      sessionStatusMock.mockResolvedValueOnce({
-        data: { "new-session-id": { type: "busy" } },
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "stop-abort-error",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
       });
       sessionAbortMock.mockResolvedValueOnce({
         error: "abort failed",
@@ -1972,28 +1990,6 @@ describe("/stop command", () => {
           }),
         ).rejects.toThrow("abort failed");
       });
-      expect(formatStopMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validFullLayer)),
-  );
-
-  it.scopedLive("dies when session.status returns error in /stop", () =>
-    Effect.gen(function* () {
-      sessionStatusMock.mockResolvedValueOnce({
-        error: "status failed",
-      });
-      yield* Bot;
-      yield* Effect.sleep(0);
-      const handler = getCommandHandler("stop");
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "/stop" },
-          }),
-        ).rejects.toThrow("status failed");
-      });
-      expect(sessionAbortMock).not.toHaveBeenCalled();
       expect(formatStopMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
@@ -2032,7 +2028,7 @@ describe("/reset command", () => {
         }),
       );
       yield* Effect.sleep(0);
-      expect(sessionStatusMock).not.toHaveBeenCalled();
+      expect(sessionAbortMock).not.toHaveBeenCalled();
       expect(sessionDeleteMock).not.toHaveBeenCalled();
       expect(formatResetMock).toHaveBeenCalled();
       expect(sendMessageMock).toHaveBeenCalledWith(456, expect.any(String), {
@@ -2041,51 +2037,15 @@ describe("/reset command", () => {
     }).pipe(Effect.provide(validFullLayer)),
   );
 
-  it.scopedLive("resets idle session and sends reset message", () =>
+  it.scopedLive("aborts, cleans up, and sends reset message", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
-        id: "reset-idle-session",
+        id: "reset-session",
         chatId: 123,
         threadId: 0,
         createdAt: undefined,
         updatedAt: undefined,
-      });
-      yield* Bot;
-      yield* Effect.sleep(0);
-      const handler = getCommandHandler("reset");
-      yield* Effect.promise(() =>
-        handler({
-          from: { id: 123 },
-          chat: { id: 123 },
-          message: { message_id: 1, text: "/reset" },
-        }),
-      );
-      yield* Effect.sleep(0);
-      expect(sessionAbortMock).not.toHaveBeenCalled();
-      expect(sessionDeleteMock).not.toHaveBeenCalled();
-      expect(formatResetMock).toHaveBeenCalled();
-      // Session should be deleted from DB
-      const session = yield* database.session.findByChat({
-        chatId: 123,
-        threadId: 0,
-      });
-      expect(Option.isNone(session)).toBe(true);
-    }).pipe(Effect.provide(validFullLayer)),
-  );
-
-  it.scopedLive("aborts busy session before resetting", () =>
-    Effect.gen(function* () {
-      const database = yield* Database;
-      yield* database.session.insert({
-        id: "reset-busy-session",
-        chatId: 123,
-        threadId: 0,
-        createdAt: undefined,
-        updatedAt: undefined,
-      });
-      sessionStatusMock.mockResolvedValueOnce({
-        data: { "reset-busy-session": { type: "busy" } },
       });
       yield* Bot;
       yield* Effect.sleep(0);
@@ -2099,41 +2059,16 @@ describe("/reset command", () => {
       );
       yield* Effect.sleep(0);
       expect(sessionAbortMock).toHaveBeenCalledWith({
-        sessionID: "reset-busy-session",
+        sessionID: "reset-session",
       });
       expect(sessionDeleteMock).not.toHaveBeenCalled();
       expect(formatResetMock).toHaveBeenCalled();
-    }).pipe(Effect.provide(validFullLayer)),
-  );
-
-  it.scopedLive("dies when session.status returns error in /reset", () =>
-    Effect.gen(function* () {
-      const database = yield* Database;
-      yield* database.session.insert({
-        id: "reset-status-error",
+      // Session should be deleted from DB
+      const session = yield* database.session.findByChat({
         chatId: 123,
         threadId: 0,
-        createdAt: undefined,
-        updatedAt: undefined,
       });
-      sessionStatusMock.mockResolvedValueOnce({
-        error: "status failed",
-      });
-      yield* Bot;
-      yield* Effect.sleep(0);
-      const handler = getCommandHandler("reset");
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "/reset" },
-          }),
-        ).rejects.toThrow("status failed");
-      });
-      expect(sessionAbortMock).not.toHaveBeenCalled();
-      expect(sessionDeleteMock).not.toHaveBeenCalled();
-      expect(formatResetMock).not.toHaveBeenCalled();
+      expect(Option.isNone(session)).toBe(true);
     }).pipe(Effect.provide(validFullLayer)),
   );
 
@@ -2146,9 +2081,6 @@ describe("/reset command", () => {
         threadId: 0,
         createdAt: undefined,
         updatedAt: undefined,
-      });
-      sessionStatusMock.mockResolvedValueOnce({
-        data: { "reset-abort-error": { type: "busy" } },
       });
       sessionAbortMock.mockResolvedValueOnce({
         error: "abort failed",
@@ -2217,6 +2149,159 @@ describe("/reset command", () => {
       // Message should be cascade-deleted
       const message = yield* database.message.findById("msg-to-cascade");
       expect(Option.isNone(message)).toBe(true);
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+describe("/compact command", () => {
+  it.scopedLive("calls summarize on the session", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "compact-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("compact");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/compact" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionSummarizeMock).toHaveBeenCalledWith({
+        sessionID: "compact-session",
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("no-ops when no session exists", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("compact");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/compact" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionSummarizeMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("dies when summarize returns error", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "compact-error-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      sessionSummarizeMock.mockResolvedValueOnce({
+        error: "summarize failed",
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("compact");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/compact" },
+        }),
+      ).pipe(Effect.exit);
+      expect(sessionSummarizeMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("ignores /compact from unauthorized user", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("compact");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 999 },
+          chat: { id: 456 },
+          message: { message_id: 1, text: "/compact" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionSummarizeMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+describe("session.compacted event", () => {
+  it.scopedLive("sends compact message on session.compacted event", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "compacted-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      // Trigger compacted event via promptAsync so it flows through the
+      // already-connected event stream (same pattern as session.error tests).
+      sessionPromptAsyncMock.mockImplementationOnce(
+        async (args: { sessionID: string }) => {
+          eventRef.current.push({
+            type: "session.compacted",
+            properties: {
+              sessionID: args.sessionID,
+            },
+          });
+          return { data: undefined };
+        },
+      );
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const call = onSpy.mock.lastCall;
+      assert.isDefined(call);
+      const handler = call[1];
+      sendMessageMock.mockClear();
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(formatCompactMock).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
+        parse_mode: "MarkdownV2",
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("ignores session.compacted from unknown session", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "session.compacted",
+        properties: {
+          sessionID: "unknown-compacted-session",
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(formatCompactMock).not.toHaveBeenCalled();
+      expect(sendMessageMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 });

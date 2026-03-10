@@ -18,6 +18,7 @@ import {
 import { Bot as GrammyBot } from "grammy";
 import { Database } from "~/lib/database";
 import { formatBusy } from "~/lib/format-busy";
+import { formatCompact } from "~/lib/format-compact";
 import { formatError } from "~/lib/format-error";
 import { formatMessage, type MessageChunk } from "~/lib/format-message";
 import { formatReset } from "~/lib/format-reset";
@@ -258,6 +259,29 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Effect.annotateLogs("chatId", session.value.chatId),
               Effect.annotateLogs("threadId", sendOpts.threadId),
             );
+          } else if (event.type === "session.compacted") {
+            const { sessionID } = event.properties;
+            const session = yield* database.session.findById(sessionID);
+            if (Option.isNone(session)) {
+              yield* Effect.logDebug(
+                "Bot.service ignored a session.compacted from an unknown session",
+              ).pipe(Effect.annotateLogs("sessionId", sessionID));
+            } else {
+              yield* Bot.sendChunks({
+                client,
+                chunks: yield* formatCompact(),
+                ignoreErrors: false,
+                chatId: session.value.chatId,
+                threadId: session.value.threadId || undefined,
+              }).pipe(
+                Effect.annotateLogs("sessionId", sessionID),
+                Effect.annotateLogs("chatId", session.value.chatId),
+                Effect.annotateLogs(
+                  "threadId",
+                  session.value.threadId || undefined,
+                ),
+              );
+            }
           }
         }).pipe(
           Effect.catchAllDefect((defect) =>
@@ -467,48 +491,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         }),
       );
 
-      registerCommand("stop", ({ chatId, threadId }) =>
-        Effect.gen(function* () {
-          const { sessionId } = yield* Bot.findOrCreateSession({
-            database,
-            opencode,
-            chatId,
-            threadId,
-          });
-          yield* Effect.gen(function* () {
-            // Check remote status
-            const statusResult = yield* Effect.promise(() =>
-              opencode.client.session.status({}),
-            );
-            if (statusResult.error)
-              return yield* Effect.die(statusResult.error);
-            const sessionStatus = statusResult.data[sessionId];
-            const remoteBusy =
-              sessionStatus !== undefined && sessionStatus.type !== "idle";
-            // Check local prompting guard
-            const localBusy = HashSet.has(
-              yield* Ref.get(promptingRef),
-              sessionId,
-            );
-            if (!remoteBusy && !localBusy) {
-              yield* Bot.sendChunks({
-                client,
-                chunks: yield* formatStop(),
-                ignoreErrors: false,
-                chatId,
-                threadId,
-              });
-              return;
-            }
-            const result = yield* Effect.promise(() =>
-              opencode.client.session.abort({ sessionID: sessionId }),
-            );
-            if (result.error) return yield* Effect.die(result.error);
-            // Stop message is sent when session.error with MessageAbortedError arrives
-          }).pipe(Effect.annotateLogs("sessionId", sessionId));
-        }),
-      );
-
+      // Reset tears down the current session (if any) and notifies the user.
+      // 1. Abort any in-flight generation
+      // 2. Stop typing indicator and clear prompting guard
+      // 3. Delete the session from the local DB
+      // 4. Send the reset message (always, even without a prior session)
       registerCommand("reset", ({ chatId, threadId }) =>
         Effect.gen(function* () {
           const existing = yield* database.session.findByChat({
@@ -518,27 +505,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           if (Option.isSome(existing)) {
             const sessionId = existing.value.id;
             yield* Effect.gen(function* () {
-              // Abort if busy
-              const statusResult = yield* Effect.promise(() =>
-                opencode.client.session.status({}),
+              const abortResult = yield* Effect.promise(() =>
+                opencode.client.session.abort({ sessionID: sessionId }),
               );
-              if (statusResult.error)
-                return yield* Effect.die(statusResult.error);
-              const sessionStatus = statusResult.data[sessionId];
-              const remoteBusy =
-                sessionStatus !== undefined && sessionStatus.type !== "idle";
-              const localBusy = HashSet.has(
-                yield* Ref.get(promptingRef),
-                sessionId,
-              );
-              if (remoteBusy || localBusy) {
-                const abortResult = yield* Effect.promise(() =>
-                  opencode.client.session.abort({ sessionID: sessionId }),
-                );
-                if (abortResult.error)
-                  return yield* Effect.die(abortResult.error);
-              }
-              // Clean up in-memory state
+              if (abortResult.error)
+                return yield* Effect.die(abortResult.error);
               yield* stopTyping(sessionId);
               yield* Ref.update(promptingRef, HashSet.remove(sessionId));
               yield* database.session.delete(sessionId);
@@ -552,6 +523,44 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             chatId,
             threadId,
           });
+        }),
+      );
+
+      // Aborts in-flight generation. No-ops without an active session.
+      // Notification is sent by the session.error event handler.
+      registerCommand("stop", ({ chatId, threadId }) =>
+        Effect.gen(function* () {
+          const existing = yield* database.session.findByChat({
+            chatId,
+            threadId: threadId || 0,
+          });
+          if (Option.isNone(existing)) return;
+          const sessionId = existing.value.id;
+          yield* Effect.gen(function* () {
+            const result = yield* Effect.promise(() =>
+              opencode.client.session.abort({ sessionID: sessionId }),
+            );
+            if (result.error) return yield* Effect.die(result.error);
+          }).pipe(Effect.annotateLogs("sessionId", sessionId));
+        }),
+      );
+
+      // Summarizes the conversation to free up context. No-ops without an active session.
+      // Notification is sent by the session.compacted event handler.
+      registerCommand("compact", ({ chatId, threadId }) =>
+        Effect.gen(function* () {
+          const existing = yield* database.session.findByChat({
+            chatId,
+            threadId: threadId || 0,
+          });
+          if (Option.isNone(existing)) return;
+          const sessionId = existing.value.id;
+          yield* Effect.gen(function* () {
+            const result = yield* Effect.promise(() =>
+              opencode.client.session.summarize({ sessionID: sessionId }),
+            );
+            if (result.error) return yield* Effect.die(result.error);
+          }).pipe(Effect.annotateLogs("sessionId", sessionId));
         }),
       );
 
@@ -661,6 +670,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           { command: "start", description: "Say hi to your kitten 😺" },
           { command: "stop", description: "Shush the kitten mid-thought 🤫" },
           { command: "reset", description: "Fresh start, clean paws 🐾" },
+          { command: "compact", description: "Tidy up the conversation 🧹" },
         ]),
       );
       yield* Effect.logInfo("Bot.service is ready");
