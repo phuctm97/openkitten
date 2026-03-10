@@ -55,13 +55,16 @@ function isInCodeBlock(
   return null;
 }
 
+// Split candidates ordered from most to least desirable break point.
+// Offset shifts the split position past the matched delimiter (e.g. after
+// sentence-ending punctuation so the period stays with its sentence).
 const splitPriorities: ReadonlyArray<{ pattern: RegExp; offset: number }> = [
-  { pattern: /\n(?=#{1,6} |---|___|\*\*\*)/g, offset: 0 },
-  { pattern: /\n\n/g, offset: 0 },
-  { pattern: /\n(?=[-*] |\d+\. )/g, offset: 0 },
-  { pattern: /\n/g, offset: 0 },
-  { pattern: /[.!?] /g, offset: 1 },
-  { pattern: / /g, offset: 0 },
+  { pattern: /\n(?=#{1,6} |---|___|\*\*\*)/g, offset: 0 }, // before headings/HRs
+  { pattern: /\n\n/g, offset: 0 }, // paragraph breaks
+  { pattern: /\n(?=[-*] |\d+\. )/g, offset: 0 }, // before list items
+  { pattern: /\n/g, offset: 0 }, // any newline
+  { pattern: /[.!?] /g, offset: 1 }, // sentence boundaries
+  { pattern: / /g, offset: 0 }, // word boundaries
 ];
 
 function splitMessage(text: string, maxLength: number): string[] {
@@ -159,6 +162,7 @@ function convertSingleChunk(chunk: string) {
   );
 }
 
+/** Converts a chunk to MarkdownV2, re-splitting if escaping blows the limit. */
 function tryConvert(chunk: string) {
   return Effect.gen(function* () {
     const result = yield* convertSingleChunk(chunk);
@@ -187,6 +191,7 @@ function tryConvert(chunk: string) {
   });
 }
 
+/** Splits text on HRs, chunks to Telegram's limit, and converts to MarkdownV2. */
 export function formatMessage(text: string) {
   return Effect.gen(function* () {
     const sections = text.split(hrPattern);

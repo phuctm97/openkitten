@@ -61,7 +61,7 @@ export class Database extends Context.Tag(`${pkg.name}/Database`)<
         tableName: "message",
         idColumn: "id",
       });
-      yield* Effect.logDebug("Database.service is ready");
+      yield* Effect.logInfo("Database.service is ready");
       return Database.of({
         session: {
           ...sessionRepository,

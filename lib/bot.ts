@@ -47,6 +47,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       // TOCTOU race between checking session.status() and calling promptAsync.
       const promptingRef = yield* Ref.make(HashSet.empty<string>());
 
+      // --- Event processing ---
+
       /** Claims and delivers a completed assistant message to Telegram. */
       const processCompletedAssistantMessage = (
         session: Database.Session,
@@ -94,7 +96,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 chunks: yield* formatMessage(replyText),
                 ignoreErrors: false,
               });
-              yield* Effect.logTrace("Bot.service sent a reply");
+              yield* Effect.logDebug("Bot.service delivered a reply");
             } else {
               yield* Effect.logDebug("Bot.service received a non-text message");
             }
@@ -157,7 +159,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               threadId: session.value.threadId || undefined,
             };
             yield* Effect.gen(function* () {
-              yield* Effect.logWarning(error);
+              yield* Effect.logWarning(error).pipe(
+                Effect.annotateLogs("debugHint", "Bot.opencodeSessionError"),
+              );
               yield* Bot.sendChunks({
                 ...sendOpts,
                 chunks: yield* formatError(error),
@@ -188,6 +192,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             ),
           ),
         );
+
+      // --- SSE stream with reconnect ---
 
       // Each iteration subscribes to the SSE stream, consumes events, and
       // cleans up the iterator via acquireRelease. On disconnect or error,
@@ -306,7 +312,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         ),
       ).pipe(Effect.forkScoped);
 
-      // grammY bot — error handler, message handler, and lifecycle
+      // --- grammY handlers ---
+
       client.catch(({ error, ctx }) =>
         Runtime.runPromise(runtime)(
           Effect.gen(function* () {
@@ -314,7 +321,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ? Cause.squash(error[Runtime.FiberFailureCauseId])
               : error;
             yield* Effect.logError(cause).pipe(
-              Effect.annotateLogs("debugHint", "Bot.handleErrors"),
+              Effect.annotateLogs("debugHint", "Bot.grammyHandlerError"),
             );
             if (ctx.chat) {
               yield* Bot.sendChunks({
@@ -342,7 +349,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 "Bot.service ignored a message from an unauthorized user",
               );
             }
-            yield* Effect.logTrace("Bot.service received a message");
+            yield* Effect.logDebug("Bot.service received a message");
             const sessionId = yield* Bot.findOrCreateSession({
               database,
               opencode,
@@ -407,7 +414,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         );
       });
 
-      // Bot lifecycle — start, wait for ready, and register stop finalizer
+      // --- Lifecycle ---
+
       const ready = yield* Deferred.make<void>();
       const fiber = yield* Effect.acquireRelease(
         Effect.async<void>((resume) => {
