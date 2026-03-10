@@ -401,72 +401,75 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ),
         ),
       );
-      client.command("start", (ctx) => {
-        const threadId = ctx.message?.message_thread_id;
-        return Runtime.runPromise(runtime)(
-          Effect.gen(function* () {
-            if (ctx.from?.id !== userId) {
-              return yield* Effect.logWarning(
-                "Bot.service ignored a command from an unauthorized user",
-              );
-            }
-            yield* Effect.logDebug("Bot.service received /start command");
-            const { sessionId, isNew } = yield* Bot.findOrCreateSession({
-              database,
-              opencode,
-              chatId: ctx.chat.id,
-              threadId,
-            });
-            yield* Bot.sendChunks({
+      const registerCommand = (
+        name: string,
+        handler: (opts: {
+          chatId: number;
+          threadId: number | undefined;
+          sessionId: string;
+          isNew: boolean;
+        }) => Effect.Effect<void>,
+      ) =>
+        client.command(name, (ctx) => {
+          const threadId = ctx.message?.message_thread_id;
+          return Runtime.runPromise(runtime)(
+            Effect.gen(function* () {
+              if (ctx.from?.id !== userId) {
+                return yield* Effect.logWarning(
+                  "Bot.service ignored a command from an unauthorized user",
+                );
+              }
+              yield* Effect.logDebug(`Bot.service received /${name} command`);
+              const { sessionId, isNew } = yield* Bot.findOrCreateSession({
+                database,
+                opencode,
+                chatId: ctx.chat.id,
+                threadId,
+              });
+              yield* handler({
+                chatId: ctx.chat.id,
+                threadId,
+                sessionId,
+                isNew,
+              });
+            }).pipe(
+              Effect.annotateLogs("userId", ctx.from?.id),
+              Effect.annotateLogs("messageId", ctx.message?.message_id),
+              Effect.annotateLogs("chatId", ctx.chat.id),
+              Effect.annotateLogs("threadId", threadId),
+            ),
+          );
+        });
+
+      registerCommand("start", ({ chatId, threadId, sessionId, isNew }) =>
+        formatStart(sessionId, isNew).pipe(
+          Effect.andThen((chunks) =>
+            Bot.sendChunks({
               client,
-              chunks: yield* formatStart(sessionId, isNew),
+              chunks,
               ignoreErrors: false,
-              chatId: ctx.chat.id,
+              chatId,
               threadId,
-            });
-          }).pipe(
-            Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("messageId", ctx.message?.message_id),
-            Effect.annotateLogs("chatId", ctx.chat.id),
-            Effect.annotateLogs("threadId", threadId),
+            }),
           ),
-        );
-      });
-      client.command("stop", (ctx) => {
-        const threadId = ctx.message?.message_thread_id;
-        return Runtime.runPromise(runtime)(
-          Effect.gen(function* () {
-            if (ctx.from?.id !== userId) {
-              return yield* Effect.logWarning(
-                "Bot.service ignored a command from an unauthorized user",
-              );
-            }
-            yield* Effect.logDebug("Bot.service received /stop command");
-            const { sessionId } = yield* Bot.findOrCreateSession({
-              database,
-              opencode,
-              chatId: ctx.chat.id,
-              threadId,
-            });
-            const result = yield* Effect.promise(() =>
-              opencode.client.session.abort({ sessionID: sessionId }),
-            );
-            if (result.error) return yield* Effect.die(result.error);
-            yield* Bot.sendChunks({
-              client,
-              chunks: yield* formatStop(sessionId),
-              ignoreErrors: false,
-              chatId: ctx.chat.id,
-              threadId,
-            });
-          }).pipe(
-            Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("messageId", ctx.message?.message_id),
-            Effect.annotateLogs("chatId", ctx.chat.id),
-            Effect.annotateLogs("threadId", threadId),
-          ),
-        );
-      });
+        ),
+      );
+
+      registerCommand("stop", ({ chatId, threadId, sessionId }) =>
+        Effect.gen(function* () {
+          const result = yield* Effect.promise(() =>
+            opencode.client.session.abort({ sessionID: sessionId }),
+          );
+          if (result.error) return yield* Effect.die(result.error);
+          yield* Bot.sendChunks({
+            client,
+            chunks: yield* formatStop(sessionId),
+            ignoreErrors: false,
+            chatId,
+            threadId,
+          });
+        }),
+      );
       client.on("message:text", (ctx) => {
         const threadId = ctx.message?.message_thread_id;
         return Runtime.runPromise(runtime)(
