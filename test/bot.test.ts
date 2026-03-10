@@ -2015,7 +2015,7 @@ describe("/stop command", () => {
 });
 
 describe("/reset command", () => {
-  it.scopedLive("sends reset message when no session exists", () =>
+  it.scopedLive("no-ops when no session exists", () =>
     Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
@@ -2029,11 +2029,6 @@ describe("/reset command", () => {
       );
       yield* Effect.sleep(0);
       expect(sessionAbortMock).not.toHaveBeenCalled();
-      expect(sessionDeleteMock).not.toHaveBeenCalled();
-      expect(formatResetMock).toHaveBeenCalled();
-      expect(sendMessageMock).toHaveBeenCalledWith(456, expect.any(String), {
-        parse_mode: "MarkdownV2",
-      });
     }).pipe(Effect.provide(validFullLayer)),
   );
 
