@@ -412,20 +412,12 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
             }
             yield* Effect.logDebug("Bot.service received /start command");
-            const dbThreadId = threadId ?? 0;
-            const existing = yield* database.session.findByChat({
+            const { sessionId, isNew } = yield* Bot.findOrCreateSession({
+              database,
+              opencode,
               chatId: ctx.chat.id,
-              threadId: dbThreadId,
+              threadId,
             });
-            const isNew = Option.isNone(existing);
-            const sessionId = isNew
-              ? yield* Bot.findOrCreateSession({
-                  database,
-                  opencode,
-                  chatId: ctx.chat.id,
-                  threadId,
-                })
-              : existing.value.id;
             yield* Bot.sendChunks({
               client,
               chunks: yield* formatStart(sessionId, isNew),
@@ -451,7 +443,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               );
             }
             yield* Effect.logDebug("Bot.service received a message");
-            const sessionId = yield* Bot.findOrCreateSession({
+            const { sessionId } = yield* Bot.findOrCreateSession({
               database,
               opencode,
               chatId: ctx.chat.id,
@@ -569,7 +561,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         yield* Effect.logTrace("Bot.service reused an existing session").pipe(
           Effect.annotateLogs("sessionId", existing.value.id),
         );
-        return existing.value.id;
+        return { sessionId: existing.value.id, isNew: false } as const;
       }
       const result = yield* Effect.promise(() =>
         opencode.client.session.create({}),
@@ -590,7 +582,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Effect.annotateLogs("sessionId", sessionId),
             ),
           ),
-          Effect.as(sessionId),
+          Effect.as({ sessionId, isNew: true } as const),
           Effect.catchAllDefect((defect) =>
             Effect.gen(function* () {
               // Clean up the orphaned OpenCode session from the losing race
@@ -608,7 +600,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               yield* Effect.logDebug(
                 "Bot.service resolved a concurrent session insert",
               ).pipe(Effect.annotateLogs("sessionId", raced.value.id));
-              return raced.value.id;
+              return { sessionId: raced.value.id, isNew: false } as const;
             }),
           ),
         );
