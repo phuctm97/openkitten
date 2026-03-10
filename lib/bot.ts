@@ -163,6 +163,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             ),
           );
         }).pipe(
+          Effect.annotateLogs("messageId", message.id),
           Effect.annotateLogs("sessionId", message.sessionID),
           Effect.annotateLogs("chatId", session.chatId),
           Effect.annotateLogs("threadId", session.threadId || undefined),
@@ -335,6 +336,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   ),
                 ),
                 Effect.annotateLogs("sessionId", session.id),
+                Effect.annotateLogs("chatId", session.chatId),
+                Effect.annotateLogs("threadId", session.threadId || undefined),
               ),
             { concurrency: "unbounded", discard: true },
           );
@@ -378,7 +381,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               const delay = Math.min(1000 * 2 ** attempt, 30_000);
               yield* Effect.logWarning(
                 "Bot.stream disconnected; reconnecting",
-              ).pipe(Effect.annotateLogs("delay", `${delay}ms`));
+              ).pipe(
+                Effect.annotateLogs("attempt", attempt),
+                Effect.annotateLogs("delay", `${delay}ms`),
+              );
               yield* Effect.sleep(delay);
             }),
           ),
@@ -457,7 +463,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             ignoreErrors: false,
             chatId,
             threadId,
-          });
+          }).pipe(Effect.annotateLogs("sessionId", sessionId));
         }),
       );
 
@@ -469,34 +475,37 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             chatId,
             threadId,
           });
-          // Check remote status
-          const statusResult = yield* Effect.promise(() =>
-            opencode.client.session.status({}),
-          );
-          if (statusResult.error) return yield* Effect.die(statusResult.error);
-          const sessionStatus = statusResult.data[sessionId];
-          const remoteBusy =
-            sessionStatus !== undefined && sessionStatus.type !== "idle";
-          // Check local prompting guard
-          const localBusy = HashSet.has(
-            yield* Ref.get(promptingRef),
-            sessionId,
-          );
-          if (!remoteBusy && !localBusy) {
-            yield* Bot.sendChunks({
-              client,
-              chunks: yield* formatStop(),
-              ignoreErrors: false,
-              chatId,
-              threadId,
-            });
-            return;
-          }
-          const result = yield* Effect.promise(() =>
-            opencode.client.session.abort({ sessionID: sessionId }),
-          );
-          if (result.error) return yield* Effect.die(result.error);
-          // Stop message is sent when session.error with MessageAbortedError arrives
+          yield* Effect.gen(function* () {
+            // Check remote status
+            const statusResult = yield* Effect.promise(() =>
+              opencode.client.session.status({}),
+            );
+            if (statusResult.error)
+              return yield* Effect.die(statusResult.error);
+            const sessionStatus = statusResult.data[sessionId];
+            const remoteBusy =
+              sessionStatus !== undefined && sessionStatus.type !== "idle";
+            // Check local prompting guard
+            const localBusy = HashSet.has(
+              yield* Ref.get(promptingRef),
+              sessionId,
+            );
+            if (!remoteBusy && !localBusy) {
+              yield* Bot.sendChunks({
+                client,
+                chunks: yield* formatStop(),
+                ignoreErrors: false,
+                chatId,
+                threadId,
+              });
+              return;
+            }
+            const result = yield* Effect.promise(() =>
+              opencode.client.session.abort({ sessionID: sessionId }),
+            );
+            if (result.error) return yield* Effect.die(result.error);
+            // Stop message is sent when session.error with MessageAbortedError arrives
+          }).pipe(Effect.annotateLogs("sessionId", sessionId));
         }),
       );
 
@@ -508,33 +517,33 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           });
           if (Option.isSome(existing)) {
             const sessionId = existing.value.id;
-            // Abort if busy
-            const statusResult = yield* Effect.promise(() =>
-              opencode.client.session.status({}),
-            );
-            if (statusResult.error)
-              return yield* Effect.die(statusResult.error);
-            const sessionStatus = statusResult.data[sessionId];
-            const remoteBusy =
-              sessionStatus !== undefined && sessionStatus.type !== "idle";
-            const localBusy = HashSet.has(
-              yield* Ref.get(promptingRef),
-              sessionId,
-            );
-            if (remoteBusy || localBusy) {
-              const abortResult = yield* Effect.promise(() =>
-                opencode.client.session.abort({ sessionID: sessionId }),
+            yield* Effect.gen(function* () {
+              // Abort if busy
+              const statusResult = yield* Effect.promise(() =>
+                opencode.client.session.status({}),
               );
-              if (abortResult.error)
-                return yield* Effect.die(abortResult.error);
-            }
-            // Clean up in-memory state
-            yield* stopTyping(sessionId);
-            yield* Ref.update(promptingRef, HashSet.remove(sessionId));
-            yield* database.session.delete(sessionId);
-            yield* Effect.logInfo("Bot.service reset the session").pipe(
-              Effect.annotateLogs("sessionId", sessionId),
-            );
+              if (statusResult.error)
+                return yield* Effect.die(statusResult.error);
+              const sessionStatus = statusResult.data[sessionId];
+              const remoteBusy =
+                sessionStatus !== undefined && sessionStatus.type !== "idle";
+              const localBusy = HashSet.has(
+                yield* Ref.get(promptingRef),
+                sessionId,
+              );
+              if (remoteBusy || localBusy) {
+                const abortResult = yield* Effect.promise(() =>
+                  opencode.client.session.abort({ sessionID: sessionId }),
+                );
+                if (abortResult.error)
+                  return yield* Effect.die(abortResult.error);
+              }
+              // Clean up in-memory state
+              yield* stopTyping(sessionId);
+              yield* Ref.update(promptingRef, HashSet.remove(sessionId));
+              yield* database.session.delete(sessionId);
+              yield* Effect.logInfo("Bot.service reset the session");
+            }).pipe(Effect.annotateLogs("sessionId", sessionId));
           }
           yield* Bot.sendChunks({
             client,
