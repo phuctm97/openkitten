@@ -810,9 +810,16 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             for (const [localId, pq] of HashMap.entries(pending)) {
               if (pq.sessionId === sessionId) {
                 yield* Effect.promise(() =>
-                  opencode.client.question.reject({
-                    requestID: pq.requestId,
-                  }),
+                  Promise.all([
+                    opencode.client.question.reject({
+                      requestID: pq.requestId,
+                    }),
+                    client.api.editMessageText(
+                      pq.chatId,
+                      pq.interactionMessageId,
+                      formatQuestionRejected(),
+                    ),
+                  ]),
                 ).pipe(Effect.ignoreLogged);
                 yield* Ref.update(pendingQuestions, HashMap.remove(localId));
               }
@@ -846,7 +853,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             );
             if (Option.isNone(maybePq)) {
               yield* Effect.promise(() =>
-                ctx.answerCallbackQuery({ text: "Question expired." }),
+                ctx.answerCallbackQuery({
+                  text: "The question has expired.",
+                }),
               ).pipe(Effect.ignoreLogged);
               return;
             }

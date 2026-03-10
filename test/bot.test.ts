@@ -2754,7 +2754,7 @@ describe("question callback", () => {
       const ctx = makeCallbackCtx("q:99:0");
       yield* Effect.promise(() => cbHandler(ctx));
       expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
-        text: "Question expired.",
+        text: "The question has expired.",
       });
     }).pipe(Effect.provide(validFullLayer)),
   );
@@ -3126,7 +3126,7 @@ describe("question event cleanup", () => {
       const ctx = makeCallbackCtx("q:0:0");
       yield* Effect.promise(() => cbHandler(ctx));
       expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
-        text: "Question expired.",
+        text: "The question has expired.",
       });
     }).pipe(Effect.provide(validFullLayer)),
   );
@@ -3270,7 +3270,9 @@ describe("question event cleanup", () => {
       const ctx = makeCallbackCtx("q:0:0");
       yield* Effect.promise(() => handler(ctx));
       expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.stringContaining("expired") }),
+        expect.objectContaining({
+          text: expect.stringContaining("expired"),
+        }),
       );
     }).pipe(Effect.provide(layerWithSeed));
   });
@@ -3324,7 +3326,9 @@ describe("question event cleanup", () => {
       // answerCallbackQuery is called at the end of the handler (not the expired path)
       expect(ctx.answerCallbackQuery).toHaveBeenCalled();
       expect(ctx.answerCallbackQuery).not.toHaveBeenCalledWith(
-        expect.objectContaining({ text: expect.stringContaining("expired") }),
+        expect.objectContaining({
+          text: expect.stringContaining("expired"),
+        }),
       );
     }).pipe(Effect.provide(layerWithSeed));
   });
@@ -3404,6 +3408,8 @@ describe("question event cleanup", () => {
       expect(questionRejectMock).not.toHaveBeenCalledWith({
         requestID: "qreq-other",
       });
+      // Interaction message should be edited to show dismissed text
+      expect(editMessageTextMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 });
