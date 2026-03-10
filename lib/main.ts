@@ -284,7 +284,7 @@ const scriptsLayer = Layer.succeed(
         message: "Are you sure you want to uninstall OpenKitten?",
       });
       if (isCancel(shouldContinue) || !shouldContinue) {
-        cancel("Phew! Your kitten lives another day. 😻");
+        cancel("Phew! Your kitten lives another day. 😸");
         return;
       }
       switch (process.platform) {
