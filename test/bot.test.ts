@@ -50,7 +50,11 @@ const {
   const sendChatActionMock = vi.fn().mockResolvedValue(undefined);
 
   class GrammyBot {
-    api = { sendMessage: sendMessageMock, sendChatAction: sendChatActionMock };
+    api = {
+      sendMessage: sendMessageMock,
+      sendChatAction: sendChatActionMock,
+      setMyCommands: vi.fn().mockResolvedValue(undefined),
+    };
     private resolve?: () => void;
 
     async start(options?: GrammyStartOptions) {
@@ -283,6 +287,19 @@ beforeEach(() => {
   sessionStatusMock.mockClear();
 });
 
+/** Yields the event loop until the reconciliation fiber has called session.messages. */
+const waitForReconciliation = Effect.gen(function* () {
+  for (let i = 0; i < 100; i++) {
+    if (sessionMessagesMock.mock.calls.length > 0) return;
+    yield* Effect.promise(() => new Promise((r) => setTimeout(r, 1)));
+  }
+});
+
+const validConfig = {
+  TELEGRAM_BOT_TOKEN: "test:fake-token",
+  TELEGRAM_USER_ID: 123,
+};
+
 function makeLayer(config: Record<string, unknown>) {
   return Bot.layer.pipe(
     Layer.provideMerge(
@@ -293,10 +310,25 @@ function makeLayer(config: Record<string, unknown>) {
   );
 }
 
-const validLayer = makeLayer({
-  TELEGRAM_BOT_TOKEN: "test:fake-token",
-  TELEGRAM_USER_ID: 123,
-});
+/** Base layer without Bot — lets tests insert DB data before Bot construction. */
+const validBaseLayer = Layer.mergeAll(
+  Layer.setConfigProvider(ConfigProvider.fromJson(validConfig)),
+  opencodeLayer,
+  defaultLayer,
+);
+
+/**
+ * Provides Bot.layer lazily within the current scope. Use this in tests that
+ * seed the database before reconciliation runs (provide `validBaseLayer`
+ * instead of `validFullLayer` to avoid eager Bot construction).
+ */
+const provideBotLazily = Effect.gen(function* () {
+  yield* Bot;
+  yield* waitForReconciliation;
+}).pipe(Effect.provide(Bot.layer));
+
+/** Full layer with Bot eagerly constructed — use for non-reconciliation tests. */
+const validFullLayer = makeLayer(validConfig);
 
 describe("layer", () => {
   it.live("calls start on acquire and stop on release", () =>
@@ -307,7 +339,7 @@ describe("layer", () => {
           yield* Effect.sleep(0);
           expect(startSpy).toHaveBeenCalledTimes(1);
           expect(stopSpy).not.toHaveBeenCalled();
-        }).pipe(Effect.provide(validLayer)),
+        }).pipe(Effect.provide(validFullLayer)),
       );
       expect(stopSpy).toHaveBeenCalledTimes(1);
     }),
@@ -327,7 +359,7 @@ describe("layer", () => {
         Effect.gen(function* () {
           yield* Bot;
           yield* Effect.sleep(0);
-        }).pipe(Effect.provide(validLayer)),
+        }).pipe(Effect.provide(validFullLayer)),
       );
     }),
   );
@@ -337,7 +369,7 @@ describe("layer", () => {
     return Effect.gen(function* () {
       const { fiber } = yield* Bot;
       yield* fiber;
-    }).pipe(Effect.provide(validLayer));
+    }).pipe(Effect.provide(validFullLayer));
   });
 
   it.scopedLive.fails("fails without TELEGRAM_BOT_TOKEN", () =>
@@ -362,7 +394,7 @@ describe("handler", () => {
       assert.isDefined(onOrder);
       assert.isDefined(startOrder);
       expect(onOrder).toBeLessThan(startOrder);
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("creates session and replies for authorized user", () =>
@@ -389,7 +421,7 @@ describe("handler", () => {
       expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("reuses existing session", () =>
@@ -423,7 +455,7 @@ describe("handler", () => {
       expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive(
@@ -482,7 +514,7 @@ describe("handler", () => {
           sessionID: "winner-session-id",
           parts: [{ type: "text", text: "hello" }],
         });
-      }).pipe(Effect.provide(validLayer)),
+      }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("dies when insert defects and no winner found", () =>
@@ -506,7 +538,7 @@ describe("handler", () => {
         ).rejects.toThrow("disk I/O error");
       });
       expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("dies when orphaned session delete fails", () =>
@@ -555,7 +587,7 @@ describe("handler", () => {
         ).rejects.toThrow("delete failed");
       });
       expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("creates separate sessions for different threads", () =>
@@ -623,7 +655,7 @@ describe("handler", () => {
       expect(sessionPromptAsyncMock).toHaveBeenCalledWith(
         expect.objectContaining({ sessionID: "session-b" }),
       );
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   // Uses Effect.promise + rejects.toThrow instead of it.scopedLive.fails so
@@ -649,7 +681,7 @@ describe("handler", () => {
         ).rejects.toThrow();
       });
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("dies when session prompt returns error", () =>
@@ -673,7 +705,7 @@ describe("handler", () => {
         ).rejects.toThrow();
       });
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("dies when session status returns error", () =>
@@ -697,7 +729,7 @@ describe("handler", () => {
         ).rejects.toThrow();
       });
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("sends error to Telegram on session.error event", () =>
@@ -729,7 +761,7 @@ describe("handler", () => {
       yield* Effect.sleep(0);
       expect(formatErrorMock).toHaveBeenCalled();
       expect(sendMessageMock).toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("sends error to user when session.error send fails", () =>
@@ -767,7 +799,7 @@ describe("handler", () => {
       // First two calls failed (session.error send), third call succeeded
       // (catchAllDefect sent the Telegram error to user)
       expect(sendMessageMock).toHaveBeenCalledTimes(3);
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive(
@@ -805,7 +837,7 @@ describe("handler", () => {
         expect(formatErrorMock).not.toHaveBeenCalled();
         expect(formatStopMock).toHaveBeenCalled();
         expect(sendMessageMock).toHaveBeenCalled();
-      }).pipe(Effect.provide(validLayer)),
+      }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("ignores events for unknown sessions", () =>
@@ -867,7 +899,7 @@ describe("handler", () => {
       yield* Effect.sleep(0);
       // The unknown session events were logged and skipped
       expect(sendMessageMock).toHaveBeenCalledTimes(1);
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("ignores incomplete assistant messages", () =>
@@ -916,7 +948,7 @@ describe("handler", () => {
       // session.message should only be called once (for the completed message)
       expect(sessionMessageMock).toHaveBeenCalledTimes(1);
       expect(sendMessageMock).toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("deduplicates completed messages with same id", () =>
@@ -965,7 +997,7 @@ describe("handler", () => {
       // session.message should only be called once despite two identical events
       expect(sessionMessageMock).toHaveBeenCalledTimes(1);
       expect(sendMessageMock).toHaveBeenCalledTimes(1);
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("sends error when session.message returns error", () =>
@@ -989,7 +1021,7 @@ describe("handler", () => {
       yield* Effect.sleep(0);
       expect(formatErrorMock).toHaveBeenCalled();
       expect(sendMessageMock).toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("does not send when response has no text parts", () =>
@@ -1014,7 +1046,7 @@ describe("handler", () => {
       );
       yield* Effect.sleep(0);
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("ignores messages from unauthorized user", () =>
@@ -1032,7 +1064,7 @@ describe("handler", () => {
         }),
       );
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("sends busy message when session status is busy", () =>
@@ -1056,7 +1088,7 @@ describe("handler", () => {
       expect(formatBusyMock).toHaveBeenCalled();
       expect(sendMessageMock).toHaveBeenCalledTimes(1);
       expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("handles retry status as busy", () =>
@@ -1087,7 +1119,7 @@ describe("handler", () => {
       expect(formatBusyMock).toHaveBeenCalled();
       expect(sendMessageMock).toHaveBeenCalledTimes(1);
       expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive(
@@ -1132,7 +1164,7 @@ describe("handler", () => {
         // Resolve the first promptAsync so cleanup runs
         resolveFirst();
         yield* Effect.promise(() => firstPromise);
-      }).pipe(Effect.provide(validLayer)),
+      }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("different threads are not blocked by each other", () =>
@@ -1186,7 +1218,7 @@ describe("handler", () => {
       expect(sessionCreateMock).toHaveBeenCalledTimes(2);
       expect(sessionPromptAsyncMock).toHaveBeenCalledTimes(2);
       expect(formatBusyMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("sends plain text reply for unformatted chunk", () =>
@@ -1209,7 +1241,7 @@ describe("handler", () => {
       yield* Effect.sleep(0);
       expect(sendMessageMock).toHaveBeenCalledTimes(1);
       expect(sendMessageMock).toHaveBeenCalledWith(123, "plain reply", {});
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("falls back to plain text reply when MarkdownV2 fails", () =>
@@ -1235,7 +1267,7 @@ describe("handler", () => {
       assert.isDefined(fallbackCall);
       // Fallback call: sendMessage(chatId, text, {}) — no parse_mode
       expect(fallbackCall[2]).toEqual({});
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("sends formatted error on catch", () =>
@@ -1257,7 +1289,7 @@ describe("handler", () => {
       expect(firstCall[0]).toBe(123);
       expect(firstCall[1]).toContain("error");
       expect(firstCall[2]).toEqual({ parse_mode: "MarkdownV2" });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("skips reply when catch ctx has no chat", () =>
@@ -1274,7 +1306,7 @@ describe("handler", () => {
         }),
       );
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("unwraps FiberFailure before formatting", () =>
@@ -1296,7 +1328,7 @@ describe("handler", () => {
       expect(formatErrorMock).toHaveBeenCalledWith(
         expect.objectContaining({ message: "wrapped error" }),
       );
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   // Verifies that when the SSE stream errors, the bot reconnects and
@@ -1338,7 +1370,7 @@ describe("handler", () => {
       );
       yield* Effect.yieldNow();
       expect(sendMessageMock).toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer));
+    }).pipe(Effect.provide(validFullLayer));
   });
 
   it.scoped("crashes after max reconnect attempts", () => {
@@ -1361,7 +1393,7 @@ describe("handler", () => {
       Effect.ensuring(
         Effect.sync(() => eventSubscribeMock.mockImplementation(defaultImpl)),
       ),
-      Effect.provide(validLayer),
+      Effect.provide(validFullLayer),
     );
   });
 
@@ -1412,7 +1444,7 @@ describe("handler", () => {
       );
       yield* Effect.sleep(0);
       expect(sendMessageMock).toHaveBeenCalledTimes(2);
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive(
@@ -1452,7 +1484,7 @@ describe("handler", () => {
         );
         yield* Effect.sleep(0);
         expect(sendMessageMock).toHaveBeenCalled();
-      }).pipe(Effect.provide(validLayer)),
+      }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("replies in correct forum thread", () =>
@@ -1478,7 +1510,7 @@ describe("handler", () => {
         parse_mode: "MarkdownV2",
         message_thread_id: 42,
       });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("sends busy message to correct thread", () =>
@@ -1527,7 +1559,7 @@ describe("handler", () => {
         parse_mode: "MarkdownV2",
         message_thread_id: 42,
       });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("plain text fallback preserves thread", () =>
@@ -1558,7 +1590,7 @@ describe("handler", () => {
       expect(fallbackCall[2]).toEqual({
         message_thread_id: 42,
       });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("reconciles missed messages on reconnect", () =>
@@ -1596,14 +1628,13 @@ describe("handler", () => {
           },
         ],
       });
-      yield* Bot;
-      yield* Effect.sleep(0);
+      yield* provideBotLazily;
       expect(sessionMessagesMock).toHaveBeenCalledWith({
         sessionID: "session-reconcile",
         limit: 10,
       });
       expect(sendMessageMock).toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validBaseLayer)),
   );
 
   it.scopedLive("reconciliation skips already claimed messages", () =>
@@ -1635,13 +1666,35 @@ describe("handler", () => {
           },
         ],
       });
-      yield* Bot;
-      yield* Effect.sleep(0);
+      yield* provideBotLazily;
       // session.message (singular, fetch parts) should NOT be called
       expect(sessionMessageMock).not.toHaveBeenCalled();
       // No Telegram message sent from reconciliation
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validBaseLayer)),
+  );
+
+  it.scopedLive(
+    "reconciliation skips sessions with no assistant messages",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "session-empty",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+        // Default mock returns { data: [] } — no messages at all
+        yield* provideBotLazily;
+        expect(sessionMessagesMock).toHaveBeenCalledWith({
+          sessionID: "session-empty",
+          limit: 10,
+        });
+        // No messages to deliver
+        expect(sendMessageMock).not.toHaveBeenCalled();
+      }).pipe(Effect.provide(validBaseLayer)),
   );
 
   it.scopedLive(
@@ -1688,8 +1741,7 @@ describe("handler", () => {
           ...tenMessages,
         ];
         sessionMessagesMock.mockResolvedValueOnce({ data: twentyMessages });
-        yield* Bot;
-        yield* Effect.sleep(0);
+        yield* provideBotLazily;
         // Should have fetched twice: limit=10, then limit=20
         expect(sessionMessagesMock).toHaveBeenCalledTimes(2);
         expect(sessionMessagesMock).toHaveBeenNthCalledWith(1, {
@@ -1702,7 +1754,7 @@ describe("handler", () => {
         });
         // Should have sent the 10 unclaimed messages (msg-0 is already claimed)
         expect(sendMessageMock).toHaveBeenCalledTimes(10);
-      }).pipe(Effect.provide(validLayer)),
+      }).pipe(Effect.provide(validBaseLayer)),
   );
 
   it.scopedLive("reconciliation continues when session.messages errors", () =>
@@ -1720,10 +1772,9 @@ describe("handler", () => {
         error: new Error("not found"),
       });
       // Should not crash — reconciliation logs and continues
-      yield* Bot;
-      yield* Effect.sleep(0);
+      yield* provideBotLazily;
       expect(sessionMessagesMock).toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validBaseLayer)),
   );
 
   it.scopedLive("reconciliation survives defect", () =>
@@ -1738,10 +1789,9 @@ describe("handler", () => {
       });
       sessionMessagesMock.mockRejectedValueOnce(new Error("network failure"));
       // Should not crash — catchAllDefect logs and continues
-      yield* Bot;
-      yield* Effect.sleep(0);
+      yield* provideBotLazily;
       expect(sessionMessagesMock).toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validBaseLayer)),
   );
 
   it.scopedLive("ignores unrecognized event types", () =>
@@ -1756,7 +1806,7 @@ describe("handler", () => {
       // No crash, no side effects
       expect(sendMessageMock).not.toHaveBeenCalled();
       expect(sendChatActionMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 });
 
@@ -1777,7 +1827,7 @@ describe("/start command", () => {
       assert.isDefined(cmdOrder);
       assert.isDefined(startOrder);
       expect(cmdOrder).toBeLessThan(startOrder);
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("sends start message for new session", () =>
@@ -1798,7 +1848,7 @@ describe("/start command", () => {
       expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("sends start message for existing session", () =>
@@ -1830,7 +1880,7 @@ describe("/start command", () => {
       expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("ignores /start from unauthorized user", () =>
@@ -1848,7 +1898,7 @@ describe("/start command", () => {
       yield* Effect.sleep(0);
       expect(sessionCreateMock).not.toHaveBeenCalled();
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 });
 
@@ -1873,7 +1923,7 @@ describe("/stop command", () => {
         expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
           parse_mode: "MarkdownV2",
         });
-      }).pipe(Effect.provide(validLayer)),
+      }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive(
@@ -1899,7 +1949,7 @@ describe("/stop command", () => {
         });
         expect(formatStopMock).not.toHaveBeenCalled();
         expect(sendMessageMock).not.toHaveBeenCalled();
-      }).pipe(Effect.provide(validLayer)),
+      }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("dies when session.abort returns error", () =>
@@ -1923,7 +1973,7 @@ describe("/stop command", () => {
         ).rejects.toThrow("abort failed");
       });
       expect(formatStopMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("dies when session.status returns error in /stop", () =>
@@ -1945,7 +1995,7 @@ describe("/stop command", () => {
       });
       expect(sessionAbortMock).not.toHaveBeenCalled();
       expect(formatStopMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("ignores /stop from unauthorized user", () =>
@@ -1964,7 +2014,7 @@ describe("/stop command", () => {
       expect(sessionCreateMock).not.toHaveBeenCalled();
       expect(sessionAbortMock).not.toHaveBeenCalled();
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 });
 
@@ -1988,7 +2038,7 @@ describe("/reset command", () => {
       expect(sendMessageMock).toHaveBeenCalledWith(456, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("resets idle session and sends reset message", () =>
@@ -2021,7 +2071,7 @@ describe("/reset command", () => {
         threadId: 0,
       });
       expect(Option.isNone(session)).toBe(true);
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("aborts busy session before resetting", () =>
@@ -2053,7 +2103,7 @@ describe("/reset command", () => {
       });
       expect(sessionDeleteMock).not.toHaveBeenCalled();
       expect(formatResetMock).toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("dies when session.status returns error in /reset", () =>
@@ -2084,7 +2134,7 @@ describe("/reset command", () => {
       expect(sessionAbortMock).not.toHaveBeenCalled();
       expect(sessionDeleteMock).not.toHaveBeenCalled();
       expect(formatResetMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("dies when session.abort returns error in /reset", () =>
@@ -2117,7 +2167,7 @@ describe("/reset command", () => {
       });
       expect(sessionDeleteMock).not.toHaveBeenCalled();
       expect(formatResetMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("ignores /reset from unauthorized user", () =>
@@ -2135,7 +2185,7 @@ describe("/reset command", () => {
       yield* Effect.sleep(0);
       expect(sessionDeleteMock).not.toHaveBeenCalled();
       expect(sendMessageMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("cascades message deletion when session is reset", () =>
@@ -2167,7 +2217,7 @@ describe("/reset command", () => {
       // Message should be cascade-deleted
       const message = yield* database.message.findById("msg-to-cascade");
       expect(Option.isNone(message)).toBe(true);
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 });
 
@@ -2193,7 +2243,7 @@ describe("typing indicator", () => {
       });
       yield* Effect.sleep(0);
       expect(sendChatActionMock).toHaveBeenCalledWith(123, "typing", {});
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("stops typing on session.status idle", () =>
@@ -2228,7 +2278,7 @@ describe("typing indicator", () => {
       yield* Effect.sleep(0);
       yield* Effect.sleep(0);
       expect(sendChatActionMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("ignores session.status for unknown sessions", () =>
@@ -2244,7 +2294,7 @@ describe("typing indicator", () => {
       });
       yield* Effect.sleep(0);
       expect(sendChatActionMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("starts typing on session.status retry event", () =>
@@ -2268,7 +2318,7 @@ describe("typing indicator", () => {
       });
       yield* Effect.sleep(0);
       expect(sendChatActionMock).toHaveBeenCalledWith(123, "typing", {});
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive(
@@ -2305,7 +2355,7 @@ describe("typing indicator", () => {
         yield* Effect.sleep(0);
         // Should still be 1 — no additional fiber forked
         expect(sendChatActionMock).toHaveBeenCalledTimes(1);
-      }).pipe(Effect.provide(validLayer)),
+      }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("passes thread ID to sendChatAction", () =>
@@ -2331,7 +2381,7 @@ describe("typing indicator", () => {
       expect(sendChatActionMock).toHaveBeenCalledWith(123, "typing", {
         message_thread_id: 42,
       });
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 
   it.scopedLive("ignores session.status with non-busy/retry status", () =>
@@ -2355,6 +2405,6 @@ describe("typing indicator", () => {
       });
       yield* Effect.sleep(0);
       expect(sendChatActionMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
+    }).pipe(Effect.provide(validFullLayer)),
   );
 });

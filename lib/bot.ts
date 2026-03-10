@@ -656,6 +656,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           }),
       );
       yield* Deferred.await(ready);
+      yield* Effect.promise(() =>
+        client.api.setMyCommands([
+          { command: "start", description: "Say hi to your kitten 😺" },
+          { command: "stop", description: "Shush the kitten mid-thought 🤫" },
+          { command: "reset", description: "Fresh start, clean paws 🐾" },
+        ]),
+      );
       yield* Effect.logInfo("Bot.service is ready");
       return Bot.of({ fiber, client });
     }),
