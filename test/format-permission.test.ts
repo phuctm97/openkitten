@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
 import { formatPermissionMessage } from "~/lib/format-permission-message";
+import { formatPermissionPending } from "~/lib/format-permission-pending";
 import { formatPermissionPrompt } from "~/lib/format-permission-prompt";
 import { formatPermissionReplied } from "~/lib/format-permission-replied";
 
@@ -95,20 +96,29 @@ describe("formatPermissionMessage", () => {
   });
 });
 
+describe("formatPermissionPending", () => {
+  it("formats pending permission notification", () => {
+    const chunks = Effect.runSync(formatPermissionPending());
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("A permission request needs your response.");
+    expect(text).toContain("Allow or deny the pending permission");
+  });
+});
+
 describe("formatPermissionPrompt", () => {
   it("returns italic prompt text", () => {
     const text = formatPermissionPrompt();
-    expect(text).toBe("_Allow this action?_");
+    expect(text).toBe("_How would you like to proceed?_");
   });
 });
 
 describe("formatPermissionReplied", () => {
   it("formats 'once' reply", () => {
-    expect(formatPermissionReplied("once")).toBe("✓ Allowed (once)");
+    expect(formatPermissionReplied("once")).toBe("✓ Allowed (Once)");
   });
 
   it("formats 'always' reply", () => {
-    expect(formatPermissionReplied("always")).toBe("✓ Allowed (always)");
+    expect(formatPermissionReplied("always")).toBe("✓ Allowed (Always)");
   });
 
   it("formats 'reject' reply", () => {

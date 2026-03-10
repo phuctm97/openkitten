@@ -1,3 +1,3 @@
 export function formatPermissionPrompt() {
-  return "_Allow this action?_";
+  return "_How would you like to proceed?_";
 }

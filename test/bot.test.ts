@@ -270,6 +270,7 @@ const {
   formatErrorMock,
   formatMessageMock,
   formatPermissionMessageMock,
+  formatPermissionPendingMock,
   formatPermissionPromptMock,
   formatPermissionRepliedMock,
   formatQuestionMessageMock,
@@ -311,8 +312,17 @@ const {
           { text: "permission msg", markdown: "permission msg" },
         ]),
       ),
-    formatPermissionPromptMock: vi.fn().mockReturnValue("_Allow this action?_"),
-    formatPermissionRepliedMock: vi.fn().mockReturnValue("✓ Allowed once"),
+    formatPermissionPendingMock: vi
+      .fn()
+      .mockReturnValue(
+        Effect.succeed([
+          { text: "pending permission", markdown: "pending permission" },
+        ]),
+      ),
+    formatPermissionPromptMock: vi
+      .fn()
+      .mockReturnValue("_How would you like to proceed?_"),
+    formatPermissionRepliedMock: vi.fn().mockReturnValue("✓ Allowed (Once)"),
     formatQuestionMessageMock: vi
       .fn()
       .mockReturnValue(
@@ -363,6 +373,10 @@ vi.mock("~/lib/format-message", () => ({
 
 vi.mock("~/lib/format-permission-message", () => ({
   formatPermissionMessage: formatPermissionMessageMock,
+}));
+
+vi.mock("~/lib/format-permission-pending", () => ({
+  formatPermissionPending: formatPermissionPendingMock,
 }));
 
 vi.mock("~/lib/format-permission-prompt", () => ({
@@ -4118,7 +4132,7 @@ describe("permission event cleanup", () => {
           }),
         );
         yield* Effect.sleep(0);
-        expect(formatMessageMock).toHaveBeenCalled();
+        expect(formatPermissionPendingMock).toHaveBeenCalled();
         expect(sendMessageMock).toHaveBeenCalled();
         // Should NOT have prompted OpenCode
         expect(sessionPromptAsyncMock).not.toHaveBeenCalled();

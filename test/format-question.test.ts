@@ -107,7 +107,7 @@ test("formatQuestionPending includes tip", () => {
   const chunks = Effect.runSync(formatQuestionPending());
   const text = chunks.map((c) => c.text).join("\n");
   expect(text).toContain("❓");
-  expect(text).toContain("Answer the question above");
+  expect(text).toContain("Answer the pending question");
   const chunk = chunks.at(0);
   assert.isDefined(chunk);
   assert.isDefined(chunk.markdown);

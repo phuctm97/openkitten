@@ -29,6 +29,7 @@ import { formatCompact } from "~/lib/format-compact";
 import { formatError } from "~/lib/format-error";
 import { formatMessage, type MessageChunk } from "~/lib/format-message";
 import { formatPermissionMessage } from "~/lib/format-permission-message";
+import { formatPermissionPending } from "~/lib/format-permission-pending";
 import { formatPermissionPrompt } from "~/lib/format-permission-prompt";
 import { formatPermissionReplied } from "~/lib/format-permission-replied";
 import { formatQuestionMessage } from "~/lib/format-question-message";
@@ -288,8 +289,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       /** Builds an InlineKeyboard for a permission request. */
       const buildPermissionKeyboard = (localId: string) => {
         const kb = new InlineKeyboard();
-        kb.text("Allow Once", `p:${localId}:once`);
-        kb.text("Always Allow", `p:${localId}:always`);
+        kb.text("Allow (Once)", `p:${localId}:once`);
+        kb.text("Allow (Always)", `p:${localId}:always`);
         kb.row();
         kb.text("Deny", `pr:${localId}`);
         return kb;
@@ -1267,9 +1268,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             if (Option.isSome(pendingP)) {
               yield* Bot.sendChunks({
                 client,
-                chunks: yield* formatMessage(
-                  "> 🔒 A permission request needs your response.\n\n```Tip\nRespond using the buttons above before sending a new message.\n```",
-                ),
+                chunks: yield* formatPermissionPending(),
                 ignoreErrors: false,
                 chatId: ctx.chat.id,
                 threadId: ctx.message?.message_thread_id,
