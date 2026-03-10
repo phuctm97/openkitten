@@ -14,7 +14,7 @@ test("new session produces 'New session created' with session ID", () => {
   const chunk = chunks.at(0);
   assert.isDefined(chunk);
   assert.isDefined(chunk.markdown);
-  expect(chunk.markdown).toContain("```Session\n");
+  expect(chunk.markdown).toContain("```ID\n");
 });
 
 test("existing session produces 'Existing session resumed' with session ID", () => {
@@ -27,5 +27,5 @@ test("existing session produces 'Existing session resumed' with session ID", () 
   const chunk = chunks.at(0);
   assert.isDefined(chunk);
   assert.isDefined(chunk.markdown);
-  expect(chunk.markdown).toContain("```Session\n");
+  expect(chunk.markdown).toContain("```ID\n");
 });

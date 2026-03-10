@@ -463,7 +463,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           if (result.error) return yield* Effect.die(result.error);
           yield* Bot.sendChunks({
             client,
-            chunks: yield* formatStop(sessionId),
+            chunks: yield* formatStop(),
             ignoreErrors: false,
             chatId,
             threadId,

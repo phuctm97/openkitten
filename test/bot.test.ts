@@ -1822,7 +1822,7 @@ describe("/stop command", () => {
       expect(sessionAbortMock).toHaveBeenCalledWith({
         sessionID: "new-session-id",
       });
-      expect(formatStopMock).toHaveBeenCalledWith("new-session-id");
+      expect(formatStopMock).toHaveBeenCalledWith();
       expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
