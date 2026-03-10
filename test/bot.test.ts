@@ -39,78 +39,90 @@ interface GrammyStartOptions {
 
 // --- Mocks ---
 // Hoisted so vi.mock() can reference them at module scope.
-const { GrammyBot, sendMessageMock, eventRef, createEventController } =
-  vi.hoisted(() => {
-    const sendMessageMock = vi.fn().mockResolvedValue(undefined);
+const {
+  GrammyBot,
+  sendMessageMock,
+  sendChatActionMock,
+  eventRef,
+  createEventController,
+} = vi.hoisted(() => {
+  const sendMessageMock = vi.fn().mockResolvedValue(undefined);
+  const sendChatActionMock = vi.fn().mockResolvedValue(undefined);
 
-    class GrammyBot {
-      api = { sendMessage: sendMessageMock };
-      private resolve?: () => void;
+  class GrammyBot {
+    api = { sendMessage: sendMessageMock, sendChatAction: sendChatActionMock };
+    private resolve?: () => void;
 
-      async start(options?: GrammyStartOptions) {
-        options?.onStart?.();
-        return new Promise<void>((resolve) => {
-          this.resolve = resolve;
-        });
-      }
-
-      async stop() {
-        this.resolve?.();
-      }
-
-      catch(_handler: GrammyErrorHandler) {}
-
-      on(_event: string, _callback: GrammyEventHandler) {}
+    async start(options?: GrammyStartOptions) {
+      options?.onStart?.();
+      return new Promise<void>((resolve) => {
+        this.resolve = resolve;
+      });
     }
 
-    // Controllable async iterator that simulates OpenCode's SSE event stream.
-    // Uses a plain AsyncIterator (not async generator) so that return() can
-    // synchronously resolve a pending next() — async generators queue return()
-    // while executing, which causes deadlocks on scope teardown.
-    function createEventController() {
-      let nextResolve: ((value: IteratorResult<unknown>) => void) | undefined;
-      const queued: unknown[] = [];
-
-      function push(event: unknown) {
-        if (nextResolve) {
-          const r = nextResolve;
-          nextResolve = undefined;
-          r({ done: false, value: event });
-        } else {
-          queued.push(event);
-        }
-      }
-
-      function stream(): AsyncIterable<unknown> {
-        const iterator: AsyncIterator<unknown> = {
-          async next() {
-            const event = queued.shift();
-            if (event !== undefined) {
-              return { done: false as const, value: event };
-            }
-            return new Promise((r) => {
-              nextResolve = r;
-            });
-          },
-          async return() {
-            if (nextResolve) {
-              const r = nextResolve;
-              nextResolve = undefined;
-              r({ done: true, value: undefined });
-            }
-            return { done: true as const, value: undefined };
-          },
-        };
-        return { [Symbol.asyncIterator]: () => iterator };
-      }
-
-      return { push, stream };
+    async stop() {
+      this.resolve?.();
     }
 
-    const eventRef = { current: createEventController() };
+    catch(_handler: GrammyErrorHandler) {}
 
-    return { GrammyBot, sendMessageMock, eventRef, createEventController };
-  });
+    on(_event: string, _callback: GrammyEventHandler) {}
+  }
+
+  // Controllable async iterator that simulates OpenCode's SSE event stream.
+  // Uses a plain AsyncIterator (not async generator) so that return() can
+  // synchronously resolve a pending next() — async generators queue return()
+  // while executing, which causes deadlocks on scope teardown.
+  function createEventController() {
+    let nextResolve: ((value: IteratorResult<unknown>) => void) | undefined;
+    const queued: unknown[] = [];
+
+    function push(event: unknown) {
+      if (nextResolve) {
+        const r = nextResolve;
+        nextResolve = undefined;
+        r({ done: false, value: event });
+      } else {
+        queued.push(event);
+      }
+    }
+
+    function stream(): AsyncIterable<unknown> {
+      const iterator: AsyncIterator<unknown> = {
+        async next() {
+          const event = queued.shift();
+          if (event !== undefined) {
+            return { done: false as const, value: event };
+          }
+          return new Promise((r) => {
+            nextResolve = r;
+          });
+        },
+        async return() {
+          if (nextResolve) {
+            const r = nextResolve;
+            nextResolve = undefined;
+            r({ done: true, value: undefined });
+          }
+          return { done: true as const, value: undefined };
+        },
+      };
+      return { [Symbol.asyncIterator]: () => iterator };
+    }
+
+    return { push, stream };
+  }
+
+  const eventRef = { current: createEventController() };
+
+  return {
+    GrammyBot,
+    sendMessageMock,
+    sendChatActionMock,
+    eventRef,
+    createEventController,
+  };
+});
 
 vi.mock("grammy", () => ({ Bot: GrammyBot }));
 
@@ -224,6 +236,7 @@ beforeEach(() => {
   eventRef.current = createEventController();
   msgCounter = 0;
   sendMessageMock.mockClear();
+  sendChatActionMock.mockClear();
   sessionDeleteMock.mockClear();
   sessionMessagesMock.mockClear();
   sessionStatusMock.mockClear();
@@ -1649,6 +1662,209 @@ describe("handler", () => {
       yield* Bot;
       yield* Effect.sleep(0);
       expect(sessionMessagesMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("ignores unrecognized event types", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "unknown.event",
+        properties: {},
+      });
+      yield* Effect.sleep(0);
+      // No crash, no side effects
+      expect(sendMessageMock).not.toHaveBeenCalled();
+      expect(sendChatActionMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+});
+
+describe("typing indicator", () => {
+  it.scopedLive("starts typing on session.status busy event", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "typing-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "session.status",
+        properties: {
+          sessionID: "typing-session",
+          status: { type: "busy" },
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(sendChatActionMock).toHaveBeenCalledWith(123, "typing", {});
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("stops typing on session.status idle", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "typing-idle-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "session.status",
+        properties: {
+          sessionID: "typing-idle-session",
+          status: { type: "busy" },
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(sendChatActionMock).toHaveBeenCalled();
+      sendChatActionMock.mockClear();
+      eventRef.current.push({
+        type: "session.status",
+        properties: {
+          sessionID: "typing-idle-session",
+          status: { type: "idle" },
+        },
+      });
+      yield* Effect.sleep(0);
+      yield* Effect.sleep(0);
+      expect(sendChatActionMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("ignores session.status for unknown sessions", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "session.status",
+        properties: {
+          sessionID: "unknown-typing-session",
+          status: { type: "busy" },
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(sendChatActionMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("starts typing on session.status retry event", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "typing-retry-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "session.status",
+        properties: {
+          sessionID: "typing-retry-session",
+          status: { type: "retry" },
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(sendChatActionMock).toHaveBeenCalledWith(123, "typing", {});
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive(
+    "is idempotent — second busy event does not fork another fiber",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "typing-idempotent",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+        yield* Bot;
+        yield* Effect.sleep(0);
+        eventRef.current.push({
+          type: "session.status",
+          properties: {
+            sessionID: "typing-idempotent",
+            status: { type: "busy" },
+          },
+        });
+        yield* Effect.sleep(0);
+        expect(sendChatActionMock).toHaveBeenCalledTimes(1);
+        // Push a second busy event for the same session
+        eventRef.current.push({
+          type: "session.status",
+          properties: {
+            sessionID: "typing-idempotent",
+            status: { type: "busy" },
+          },
+        });
+        yield* Effect.sleep(0);
+        // Should still be 1 — no additional fiber forked
+        expect(sendChatActionMock).toHaveBeenCalledTimes(1);
+      }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("passes thread ID to sendChatAction", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "typing-thread-session",
+        chatId: 123,
+        threadId: 42,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "session.status",
+        properties: {
+          sessionID: "typing-thread-session",
+          status: { type: "busy" },
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(sendChatActionMock).toHaveBeenCalledWith(123, "typing", {
+        message_thread_id: 42,
+      });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("ignores session.status with non-busy/retry status", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "typing-idle-status",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "session.status",
+        properties: {
+          sessionID: "typing-idle-status",
+          status: { type: "idle" },
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(sendChatActionMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 });

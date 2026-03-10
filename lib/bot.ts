@@ -6,7 +6,8 @@ import {
   Deferred,
   Effect,
   Exit,
-  type Fiber,
+  Fiber,
+  HashMap,
   HashSet,
   Layer,
   Option,
@@ -46,6 +47,49 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       // Tracks sessions with in-flight promptAsync calls to prevent the
       // TOCTOU race between checking session.status() and calling promptAsync.
       const promptingRef = yield* Ref.make(HashSet.empty<string>());
+      const typingFibers = yield* Ref.make(
+        HashMap.empty<string, Fiber.RuntimeFiber<never>>(),
+      );
+
+      /** Starts sending "typing" chat actions every 4 s. Idempotent per session. */
+      const startTyping = (
+        sessionId: string,
+        chatId: number,
+        threadId: number | undefined,
+      ) =>
+        Effect.gen(function* () {
+          if (HashMap.has(yield* Ref.get(typingFibers), sessionId)) return;
+          const fiber = yield* Effect.forever(
+            Effect.gen(function* () {
+              yield* Effect.promise(() =>
+                client.api.sendChatAction(chatId, "typing", {
+                  ...(threadId !== undefined && {
+                    message_thread_id: threadId,
+                  }),
+                }),
+              ).pipe(
+                Effect.annotateLogs("debugHint", "Bot.sendTyping"),
+                Effect.ignoreLogged,
+              );
+              yield* Effect.sleep(4_000);
+            }),
+          ).pipe(Effect.forkIn(botScope));
+          yield* Ref.update(typingFibers, HashMap.set(sessionId, fiber));
+        }).pipe(
+          Effect.annotateLogs("sessionId", sessionId),
+          Effect.annotateLogs("chatId", chatId),
+          Effect.annotateLogs("threadId", threadId),
+        );
+
+      /** Stops the typing indicator for a session. No-op if not found. */
+      const stopTyping = (sessionId: string) =>
+        Effect.gen(function* () {
+          const fiber = HashMap.get(
+            yield* Ref.getAndUpdate(typingFibers, HashMap.remove(sessionId)),
+            sessionId,
+          );
+          if (Option.isSome(fiber)) yield* Fiber.interrupt(fiber.value);
+        }).pipe(Effect.annotateLogs("sessionId", sessionId));
 
       // --- Event processing ---
 
@@ -137,6 +181,20 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               } else {
                 yield* processCompletedAssistantMessage(session.value, info);
               }
+            }
+          } else if (event.type === "session.status") {
+            const { sessionID, status } = event.properties;
+            if (status.type === "busy" || status.type === "retry") {
+              const session = yield* database.session.findById(sessionID);
+              if (Option.isSome(session)) {
+                yield* startTyping(
+                  sessionID,
+                  session.value.chatId,
+                  session.value.threadId || undefined,
+                );
+              }
+            } else {
+              yield* stopTyping(sessionID);
             }
           } else if (event.type === "session.error") {
             const { sessionID, error } = event.properties;
