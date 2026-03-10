@@ -419,8 +419,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         handler: (opts: {
           chatId: number;
           threadId: number | undefined;
-          sessionId: string;
-          isNew: boolean;
         }) => Effect.Effect<void>,
       ) =>
         client.command(name, (ctx) =>
@@ -432,17 +430,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 );
               }
               yield* Effect.logDebug(`Bot.service received /${name} command`);
-              const { sessionId, isNew } = yield* Bot.findOrCreateSession({
-                database,
-                opencode,
-                chatId: ctx.chat.id,
-                threadId: ctx.message?.message_thread_id,
-              });
               yield* handler({
                 chatId: ctx.chat.id,
                 threadId: ctx.message?.message_thread_id,
-                sessionId,
-                isNew,
               });
             }).pipe(
               Effect.annotateLogs("userId", ctx.from?.id),
@@ -453,22 +443,32 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ),
         );
 
-      registerCommand("start", ({ chatId, threadId, sessionId, isNew }) =>
-        formatStart(sessionId, isNew).pipe(
-          Effect.andThen((chunks) =>
-            Bot.sendChunks({
-              client,
-              chunks,
-              ignoreErrors: false,
-              chatId,
-              threadId,
-            }),
-          ),
-        ),
+      registerCommand("start", ({ chatId, threadId }) =>
+        Effect.gen(function* () {
+          const { sessionId, isNew } = yield* Bot.findOrCreateSession({
+            database,
+            opencode,
+            chatId,
+            threadId,
+          });
+          yield* Bot.sendChunks({
+            client,
+            chunks: yield* formatStart(sessionId, isNew),
+            ignoreErrors: false,
+            chatId,
+            threadId,
+          });
+        }),
       );
 
-      registerCommand("stop", ({ chatId, threadId, sessionId }) =>
+      registerCommand("stop", ({ chatId, threadId }) =>
         Effect.gen(function* () {
+          const { sessionId } = yield* Bot.findOrCreateSession({
+            database,
+            opencode,
+            chatId,
+            threadId,
+          });
           // Check remote status
           const statusResult = yield* Effect.promise(() =>
             opencode.client.session.status({}),
@@ -500,65 +500,50 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         }),
       );
 
-      client.command("reset", (ctx) =>
-        Runtime.runPromise(runtime)(
-          Effect.gen(function* () {
-            if (ctx.from?.id !== userId) {
-              return yield* Effect.logWarning(
-                "Bot.service ignored a command from an unauthorized user",
+      registerCommand("reset", ({ chatId, threadId }) =>
+        Effect.gen(function* () {
+          const existing = yield* database.session.findByChat({
+            chatId,
+            threadId: threadId || 0,
+          });
+          if (Option.isSome(existing)) {
+            const sessionId = existing.value.id;
+            // Abort if busy
+            const statusResult = yield* Effect.promise(() =>
+              opencode.client.session.status({}),
+            );
+            if (statusResult.error)
+              return yield* Effect.die(statusResult.error);
+            const sessionStatus = statusResult.data[sessionId];
+            const remoteBusy =
+              sessionStatus !== undefined && sessionStatus.type !== "idle";
+            const localBusy = HashSet.has(
+              yield* Ref.get(promptingRef),
+              sessionId,
+            );
+            if (remoteBusy || localBusy) {
+              const abortResult = yield* Effect.promise(() =>
+                opencode.client.session.abort({ sessionID: sessionId }),
               );
+              if (abortResult.error)
+                return yield* Effect.die(abortResult.error);
             }
-            yield* Effect.logDebug("Bot.service received /reset command");
-            const chatId = ctx.chat.id;
-            const threadId = ctx.message?.message_thread_id;
-            const existing = yield* database.session.findByChat({
-              chatId,
-              threadId: threadId || 0,
-            });
-            if (Option.isSome(existing)) {
-              const sessionId = existing.value.id;
-              // Abort if busy
-              const statusResult = yield* Effect.promise(() =>
-                opencode.client.session.status({}),
-              );
-              if (statusResult.error)
-                return yield* Effect.die(statusResult.error);
-              const sessionStatus = statusResult.data[sessionId];
-              const remoteBusy =
-                sessionStatus !== undefined && sessionStatus.type !== "idle";
-              const localBusy = HashSet.has(
-                yield* Ref.get(promptingRef),
-                sessionId,
-              );
-              if (remoteBusy || localBusy) {
-                const abortResult = yield* Effect.promise(() =>
-                  opencode.client.session.abort({ sessionID: sessionId }),
-                );
-                if (abortResult.error)
-                  return yield* Effect.die(abortResult.error);
-              }
-              // Clean up in-memory state
-              yield* stopTyping(sessionId);
-              yield* Ref.update(promptingRef, HashSet.remove(sessionId));
-              yield* database.session.delete(sessionId);
-              yield* Effect.logInfo("Bot.service reset the session").pipe(
-                Effect.annotateLogs("sessionId", sessionId),
-              );
-            }
-            yield* Bot.sendChunks({
-              client,
-              chunks: yield* formatReset(),
-              ignoreErrors: false,
-              chatId,
-              threadId,
-            });
-          }).pipe(
-            Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("messageId", ctx.message?.message_id),
-            Effect.annotateLogs("chatId", ctx.chat.id),
-            Effect.annotateLogs("threadId", ctx.message?.message_thread_id),
-          ),
-        ),
+            // Clean up in-memory state
+            yield* stopTyping(sessionId);
+            yield* Ref.update(promptingRef, HashSet.remove(sessionId));
+            yield* database.session.delete(sessionId);
+            yield* Effect.logInfo("Bot.service reset the session").pipe(
+              Effect.annotateLogs("sessionId", sessionId),
+            );
+          }
+          yield* Bot.sendChunks({
+            client,
+            chunks: yield* formatReset(),
+            ignoreErrors: false,
+            chatId,
+            threadId,
+          });
+        }),
       );
 
       client.on("message:text", (ctx) =>
