@@ -760,6 +760,44 @@ describe("handler", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
+  it.scopedLive(
+    "sends stop message on session.error with MessageAbortedError",
+    () =>
+      Effect.gen(function* () {
+        sessionPromptAsyncMock.mockImplementationOnce(
+          async (args: { sessionID: string }) => {
+            eventRef.current.push({
+              type: "session.error",
+              properties: {
+                sessionID: args.sessionID,
+                error: {
+                  name: "MessageAbortedError",
+                  data: { message: "aborted" },
+                },
+              },
+            });
+            return { data: undefined };
+          },
+        );
+        yield* Bot;
+        yield* Effect.sleep(0);
+        const call = onSpy.mock.lastCall;
+        assert.isDefined(call);
+        const handler = call[1];
+        yield* Effect.promise(() =>
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+          }),
+        );
+        yield* Effect.sleep(0);
+        expect(formatErrorMock).not.toHaveBeenCalled();
+        expect(formatStopMock).toHaveBeenCalled();
+        expect(sendMessageMock).toHaveBeenCalled();
+      }).pipe(Effect.provide(validLayer)),
+  );
+
   it.scopedLive("ignores events for unknown sessions", () =>
     Effect.gen(function* () {
       sessionPromptAsyncMock.mockImplementationOnce(
@@ -1805,32 +1843,60 @@ describe("/start command", () => {
 });
 
 describe("/stop command", () => {
-  it.scopedLive("calls session.abort and sends formatted stop message", () =>
-    Effect.gen(function* () {
-      yield* Bot;
-      yield* Effect.sleep(0);
-      const handler = getCommandHandler("stop");
-      yield* Effect.promise(() =>
-        handler({
-          from: { id: 123 },
-          chat: { id: 123 },
-          message: { message_id: 1, text: "/stop" },
-        }),
-      );
-      yield* Effect.sleep(0);
-      expect(sessionCreateMock).toHaveBeenCalledWith({});
-      expect(sessionAbortMock).toHaveBeenCalledWith({
-        sessionID: "new-session-id",
-      });
-      expect(formatStopMock).toHaveBeenCalledWith();
-      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
-        parse_mode: "MarkdownV2",
-      });
-    }).pipe(Effect.provide(validLayer)),
+  it.scopedLive(
+    "sends stop message without aborting when session is idle",
+    () =>
+      Effect.gen(function* () {
+        yield* Bot;
+        yield* Effect.sleep(0);
+        const handler = getCommandHandler("stop");
+        yield* Effect.promise(() =>
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "/stop" },
+          }),
+        );
+        yield* Effect.sleep(0);
+        expect(sessionAbortMock).not.toHaveBeenCalled();
+        expect(formatStopMock).toHaveBeenCalledWith();
+        expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
+          parse_mode: "MarkdownV2",
+        });
+      }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive(
+    "calls session.abort without sending stop message when busy",
+    () =>
+      Effect.gen(function* () {
+        sessionStatusMock.mockResolvedValueOnce({
+          data: { "new-session-id": { type: "busy" } },
+        });
+        yield* Bot;
+        yield* Effect.sleep(0);
+        const handler = getCommandHandler("stop");
+        yield* Effect.promise(() =>
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "/stop" },
+          }),
+        );
+        yield* Effect.sleep(0);
+        expect(sessionAbortMock).toHaveBeenCalledWith({
+          sessionID: "new-session-id",
+        });
+        expect(formatStopMock).not.toHaveBeenCalled();
+        expect(sendMessageMock).not.toHaveBeenCalled();
+      }).pipe(Effect.provide(validLayer)),
   );
 
   it.scopedLive("dies when session.abort returns error", () =>
     Effect.gen(function* () {
+      sessionStatusMock.mockResolvedValueOnce({
+        data: { "new-session-id": { type: "busy" } },
+      });
       sessionAbortMock.mockResolvedValueOnce({
         error: "abort failed",
       });
@@ -1846,6 +1912,28 @@ describe("/stop command", () => {
           }),
         ).rejects.toThrow("abort failed");
       });
+      expect(formatStopMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("dies when session.status returns error in /stop", () =>
+    Effect.gen(function* () {
+      sessionStatusMock.mockResolvedValueOnce({
+        error: "status failed",
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("stop");
+      yield* Effect.promise(async () => {
+        await expect(
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "/stop" },
+          }),
+        ).rejects.toThrow("status failed");
+      });
+      expect(sessionAbortMock).not.toHaveBeenCalled();
       expect(formatStopMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
