@@ -220,6 +220,14 @@ const questionRejectMock = vi.fn().mockResolvedValue({
   data: undefined,
 });
 
+const permissionListMock = vi.fn().mockResolvedValue({
+  data: [],
+});
+
+const permissionReplyMock = vi.fn().mockResolvedValue({
+  data: undefined,
+});
+
 const sessionMessagesMock = vi.fn().mockResolvedValue({
   data: [],
 });
@@ -249,6 +257,10 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
       reply: questionReplyMock,
       reject: questionRejectMock,
     },
+    permission: {
+      list: permissionListMock,
+      reply: permissionReplyMock,
+    },
   }),
 }));
 
@@ -257,6 +269,9 @@ const {
   formatCompactMock,
   formatErrorMock,
   formatMessageMock,
+  formatPermissionMessageMock,
+  formatPermissionPromptMock,
+  formatPermissionRepliedMock,
   formatQuestionMessageMock,
   formatQuestionPendingMock,
   formatQuestionPromptMock,
@@ -289,6 +304,15 @@ const {
       .mockReturnValue(
         Effect.succeed([{ text: "AI response", markdown: "AI response" }]),
       ),
+    formatPermissionMessageMock: vi
+      .fn()
+      .mockReturnValue(
+        Effect.succeed([
+          { text: "permission msg", markdown: "permission msg" },
+        ]),
+      ),
+    formatPermissionPromptMock: vi.fn().mockReturnValue("_Allow this action?_"),
+    formatPermissionRepliedMock: vi.fn().mockReturnValue("✓ Allowed once"),
     formatQuestionMessageMock: vi
       .fn()
       .mockReturnValue(
@@ -337,6 +361,18 @@ vi.mock("~/lib/format-message", () => ({
   formatMessage: formatMessageMock,
 }));
 
+vi.mock("~/lib/format-permission-message", () => ({
+  formatPermissionMessage: formatPermissionMessageMock,
+}));
+
+vi.mock("~/lib/format-permission-prompt", () => ({
+  formatPermissionPrompt: formatPermissionPromptMock,
+}));
+
+vi.mock("~/lib/format-permission-replied", () => ({
+  formatPermissionReplied: formatPermissionRepliedMock,
+}));
+
 vi.mock("~/lib/format-start", () => ({
   formatStart: formatStartMock,
 }));
@@ -375,6 +411,8 @@ beforeEach(() => {
   questionListMock.mockClear();
   questionReplyMock.mockClear();
   questionRejectMock.mockClear();
+  permissionListMock.mockClear();
+  permissionReplyMock.mockClear();
 });
 
 /** Yields the event loop until the reconciliation fiber has called session.messages. */
@@ -3535,5 +3573,555 @@ describe("question event cleanup", () => {
       // Interaction message should be edited to show dismissed text
       expect(editMessageTextMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+// --- Permission helpers ---
+
+const samplePermission = {
+  id: "preq-1",
+  sessionID: "p-session",
+  permission: "bash",
+  patterns: ["rm -rf /tmp/*"],
+  metadata: {},
+  always: [],
+};
+
+describe("permission.asked event", () => {
+  it.scopedLive("sends permission and interaction messages", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      // Should send 2 messages: permission content + interaction with keyboard
+      expect(formatPermissionMessageMock).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
+      // Second message has reply_markup
+      const interactionCall = sendMessageMock.mock.calls.at(1);
+      assert.isDefined(interactionCall);
+      expect(interactionCall[2]).toHaveProperty("reply_markup");
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("ignores permission.asked from unknown session", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      expect(formatPermissionMessageMock).not.toHaveBeenCalled();
+      expect(sendMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+describe("permission callback", () => {
+  it.scopedLive("allow once calls permission.reply with 'once'", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("p:p0:once");
+      yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
+      expect(permissionReplyMock).toHaveBeenCalledWith({
+        requestID: "preq-1",
+        reply: "once",
+      });
+      expect(editMessageTextMock).toHaveBeenCalled();
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("always allow calls permission.reply with 'always'", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("p:p0:always");
+      yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
+      expect(permissionReplyMock).toHaveBeenCalledWith({
+        requestID: "preq-1",
+        reply: "always",
+      });
+      expect(editMessageTextMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("deny calls permission.reply with 'reject'", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("pr:p0");
+      yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
+      expect(permissionReplyMock).toHaveBeenCalledWith({
+        requestID: "preq-1",
+        reply: "reject",
+      });
+      expect(editMessageTextMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("expired permission callback returns toast", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("p:p99:once");
+      yield* Effect.promise(() => cbHandler(ctx));
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+        text: "The permission request has expired.",
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("ignores malformed permission reply value", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("p:p0:garbage");
+      yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
+      // Should dismiss the button spinner but not call permission.reply
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+      expect(permissionReplyMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+});
+
+describe("permission event cleanup", () => {
+  it.scopedLive("permission.replied cleans up pending state", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      editMessageTextMock.mockClear();
+      eventRef.current.push({
+        type: "permission.replied",
+        properties: {
+          sessionID: "p-session",
+          requestID: "preq-1",
+          reply: "once",
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(editMessageTextMock).toHaveBeenCalled();
+      // Callback on expired permission should show toast
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("p:p0:once");
+      yield* Effect.promise(() => cbHandler(ctx));
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
+        text: "The permission request has expired.",
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("permission.replied ignores unknown requestId", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      editMessageTextMock.mockClear();
+      eventRef.current.push({
+        type: "permission.replied",
+        properties: {
+          sessionID: "unknown",
+          requestID: "unknown-req",
+          reply: "once",
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(editMessageTextMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("reconciles pending permissions on reconnect", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      permissionListMock.mockResolvedValueOnce({
+        data: [samplePermission],
+      });
+      yield* provideBotLazily;
+      expect(formatPermissionMessageMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validBaseLayer)),
+  );
+
+  it.scopedLive("/reset rejects pending permissions", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("reset");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/reset" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(permissionReplyMock).toHaveBeenCalledWith({
+        requestID: "preq-1",
+        reply: "reject",
+      });
+      expect(editMessageTextMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("handles non-zero threadId for permissions", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 42,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
+      // Second message should include message_thread_id
+      const interactionCall = sendMessageMock.mock.calls.at(1);
+      assert.isDefined(interactionCall);
+      expect(interactionCall[2]).toHaveProperty("message_thread_id", 42);
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scoped("keeps valid pending permissions on reconnect", () => {
+    // Both reconciliations return the same permission
+    permissionListMock
+      .mockResolvedValueOnce({ data: [samplePermission] })
+      .mockResolvedValueOnce({ data: [samplePermission] });
+
+    const broken: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]: () => ({
+        async next(): Promise<IteratorResult<unknown>> {
+          throw new Error("SSE connection lost");
+        },
+        async return() {
+          return { done: true as const, value: undefined };
+        },
+      }),
+    };
+    eventSubscribeMock.mockImplementationOnce(async () => ({
+      stream: broken,
+    }));
+
+    const seedLayer = Layer.effectDiscard(
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "p-session",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+      }),
+    );
+    const layerWithSeed = Bot.layer.pipe(
+      Layer.provideMerge(seedLayer),
+      Layer.provideMerge(validBaseLayer),
+    );
+
+    return Effect.gen(function* () {
+      yield* Bot;
+      yield* TestClock.adjust("1 second");
+
+      // Permission should still be active (not cleaned up).
+      const handler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("p:p0:once");
+      yield* Effect.promise(() => handler(ctx));
+      // answerCallbackQuery is called at the end (not the expired path)
+      expect(ctx.answerCallbackQuery).toHaveBeenCalled();
+      expect(ctx.answerCallbackQuery).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("expired"),
+        }),
+      );
+    }).pipe(Effect.provide(layerWithSeed));
+  });
+
+  it.scopedLive("reconciliation skips permissions for unknown sessions", () =>
+    Effect.gen(function* () {
+      permissionListMock.mockResolvedValueOnce({
+        data: [{ ...samplePermission, sessionID: "nonexistent" }],
+      });
+      yield* provideBotLazily;
+      expect(formatPermissionMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validBaseLayer)),
+  );
+
+  it.scopedLive("/reset rejects only matching session's permissions", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* database.session.insert({
+        id: "other-session",
+        chatId: 123,
+        threadId: 42,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Add permissions for both sessions
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-other",
+          sessionID: "other-session",
+        },
+      });
+      yield* Effect.sleep(0);
+      // Reset only p-session (chatId=123, threadId=0)
+      const handler = getCommandHandler("reset");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/reset" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(permissionReplyMock).toHaveBeenCalledWith({
+        requestID: "preq-1",
+        reply: "reject",
+      });
+      expect(permissionReplyMock).not.toHaveBeenCalledWith({
+        requestID: "preq-other",
+        reply: "reject",
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scoped("clears stale pending permissions on reconnect", () => {
+    // First reconciliation seeds a pending permission via permission.list
+    permissionListMock.mockResolvedValueOnce({
+      data: [samplePermission],
+    });
+
+    // First stream errors immediately to trigger reconnect
+    const broken: AsyncIterable<unknown> = {
+      [Symbol.asyncIterator]: () => ({
+        async next(): Promise<IteratorResult<unknown>> {
+          throw new Error("SSE connection lost");
+        },
+        async return() {
+          return { done: true as const, value: undefined };
+        },
+      }),
+    };
+    eventSubscribeMock.mockImplementationOnce(async () => ({
+      stream: broken,
+    }));
+
+    const seedLayer = Layer.effectDiscard(
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "p-session",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+      }),
+    );
+    const layerWithSeed = Bot.layer.pipe(
+      Layer.provideMerge(seedLayer),
+      Layer.provideMerge(validBaseLayer),
+    );
+
+    return Effect.gen(function* () {
+      yield* Bot;
+      // Advance past the 1s reconnect delay
+      yield* TestClock.adjust("1 second");
+
+      // Second reconciliation used default permission.list (empty data: []).
+      // The stale pending permission should be cleaned up.
+      // Verify by sending a callback for it — should get "expired" toast.
+      const handler = getCallbackQueryHandler();
+      expect(formatPermissionMessageMock).toHaveBeenCalled();
+      const ctx = makeCallbackCtx("p:p0:once");
+      yield* Effect.promise(() => handler(ctx));
+      expect(ctx.answerCallbackQuery).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("expired"),
+        }),
+      );
+    }).pipe(Effect.provide(layerWithSeed));
+  });
+
+  it.scopedLive("reconciliation continues when permission.list errors", () =>
+    Effect.gen(function* () {
+      permissionListMock.mockResolvedValueOnce({
+        data: undefined,
+        error: new Error("permission list failed"),
+      });
+      yield* provideBotLazily;
+      expect(permissionListMock).toHaveBeenCalled();
+    }).pipe(Effect.provide(validBaseLayer)),
+  );
+
+  it.scopedLive(
+    "text message while permission is pending sends notification",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "p-session",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+        yield* Bot;
+        yield* Effect.sleep(0);
+        eventRef.current.push({
+          type: "permission.asked",
+          properties: samplePermission,
+        });
+        yield* Effect.sleep(0);
+        sendMessageMock.mockClear();
+        const handler = getMessageHandler();
+        yield* Effect.promise(() =>
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 2, text: "hello" },
+          }),
+        );
+        yield* Effect.sleep(0);
+        expect(formatMessageMock).toHaveBeenCalled();
+        expect(sendMessageMock).toHaveBeenCalled();
+        // Should NOT have prompted OpenCode
+        expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
+      }).pipe(Effect.provide(validFullLayer)),
   );
 });

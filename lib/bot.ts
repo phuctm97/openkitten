@@ -1,6 +1,7 @@
 import type {
   AssistantMessage,
   Event,
+  PermissionRequest,
   QuestionInfo,
   QuestionRequest,
 } from "@opencode-ai/sdk/v2";
@@ -27,6 +28,9 @@ import { formatBusy } from "~/lib/format-busy";
 import { formatCompact } from "~/lib/format-compact";
 import { formatError } from "~/lib/format-error";
 import { formatMessage, type MessageChunk } from "~/lib/format-message";
+import { formatPermissionMessage } from "~/lib/format-permission-message";
+import { formatPermissionPrompt } from "~/lib/format-permission-prompt";
+import { formatPermissionReplied } from "~/lib/format-permission-replied";
 import { formatQuestionMessage } from "~/lib/format-question-message";
 import { formatQuestionPending } from "~/lib/format-question-pending";
 import { formatQuestionPrompt } from "~/lib/format-question-prompt";
@@ -72,6 +76,12 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       );
       const questionCounter = yield* Ref.make(0);
       const emptySelection: string[] = [];
+
+      // Pending permission state — maps local short IDs to permission requests.
+      const pendingPermissions = yield* Ref.make(
+        HashMap.empty<string, Bot.PendingPermission>(),
+      );
+      const permissionCounter = yield* Ref.make(0);
 
       /** Starts sending "typing" chat actions every 4 s. Idempotent per session. */
       const startTyping = (
@@ -270,6 +280,106 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               map,
               (pq) => pq.chatId === chatId && pq.threadId === threadId,
             ).pipe(Option.map(([, pq]) => pq)),
+          ),
+        );
+
+      // --- Permission helpers ---
+
+      /** Builds an InlineKeyboard for a permission request. */
+      const buildPermissionKeyboard = (localId: string) => {
+        const kb = new InlineKeyboard();
+        kb.text("Allow Once", `p:${localId}:once`);
+        kb.text("Always Allow", `p:${localId}:always`);
+        kb.row();
+        kb.text("Deny", `pr:${localId}`);
+        return kb;
+      };
+
+      /** Sends a permission request to Telegram. */
+      const sendPermission = (pp: Bot.PendingPermission) =>
+        Effect.gen(function* () {
+          const sendOpts = {
+            ...(pp.threadId && { message_thread_id: pp.threadId }),
+          };
+          // Message 1: sticky permission content
+          yield* Bot.sendChunks({
+            client,
+            chunks: yield* formatPermissionMessage(pp),
+            ignoreErrors: false,
+            chatId: pp.chatId,
+            threadId: pp.threadId,
+          });
+          // Message 2: interaction prompt with keyboard
+          const promptText = formatPermissionPrompt();
+          const kb = buildPermissionKeyboard(pp.localId);
+          const sent = yield* Effect.promise(() =>
+            client.api.sendMessage(pp.chatId, promptText, {
+              parse_mode: "MarkdownV2",
+              reply_markup: kb,
+              ...sendOpts,
+            }),
+          );
+          yield* Ref.update(
+            pendingPermissions,
+            HashMap.set(pp.localId, {
+              ...pp,
+              interactionMessageId: sent.message_id,
+            }),
+          );
+        }).pipe(
+          Effect.annotateLogs("sessionId", pp.sessionId),
+          Effect.annotateLogs("chatId", pp.chatId),
+          Effect.annotateLogs("threadId", pp.threadId),
+        );
+
+      /** Processes a permission.asked event or reconciled pending permission. */
+      const processPermissionAsked = (
+        request: PermissionRequest,
+        session: Database.Session,
+      ) =>
+        Effect.gen(function* () {
+          const localId = yield* Ref.getAndUpdate(
+            permissionCounter,
+            (n) => n + 1,
+          ).pipe(Effect.map((n) => `p${n.toString(36)}`));
+          const pp: Bot.PendingPermission = {
+            localId,
+            requestId: request.id,
+            sessionId: request.sessionID,
+            chatId: session.chatId,
+            threadId: session.threadId || undefined,
+            permission: request.permission,
+            patterns: request.patterns,
+            interactionMessageId: 0,
+          };
+          yield* Ref.update(pendingPermissions, HashMap.set(localId, pp));
+          yield* sendPermission(pp);
+        }).pipe(
+          Effect.annotateLogs("requestId", request.id),
+          Effect.annotateLogs("sessionId", request.sessionID),
+        );
+
+      /** Finds a pending permission by requestId. */
+      const findPendingPermissionByRequestId = (requestId: string) =>
+        Ref.get(pendingPermissions).pipe(
+          Effect.map((map) =>
+            HashMap.findFirst(map, (pp) => pp.requestId === requestId).pipe(
+              Option.map(([, pp]) => pp),
+            ),
+          ),
+        );
+
+      /** Finds a pending permission by chatId and threadId. */
+      const findPendingPermissionByChat = (
+        chatId: number,
+        threadId: number | undefined,
+      ) =>
+        Ref.get(pendingPermissions).pipe(
+          Effect.map((map) =>
+            HashMap.findFirst(
+              map,
+              (pp) => pp.chatId === chatId && pp.threadId === threadId,
+            ).pipe(Option.map(([, pp]) => pp)),
           ),
         );
 
@@ -502,6 +612,32 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 ),
               ).pipe(Effect.ignoreLogged);
             }
+          } else if (event.type === "permission.asked") {
+            const request = event.properties;
+            const session = yield* database.session.findById(request.sessionID);
+            if (Option.isNone(session)) {
+              yield* Effect.logDebug(
+                "Bot.service ignored a permission.asked from an unknown session",
+              ).pipe(Effect.annotateLogs("sessionId", request.sessionID));
+            } else {
+              yield* processPermissionAsked(request, session.value);
+            }
+          } else if (event.type === "permission.replied") {
+            const { requestID, reply } = event.properties;
+            const pp = yield* findPendingPermissionByRequestId(requestID);
+            if (Option.isSome(pp)) {
+              yield* Ref.update(
+                pendingPermissions,
+                HashMap.remove(pp.value.localId),
+              );
+              yield* Effect.promise(() =>
+                client.api.editMessageText(
+                  pp.value.chatId,
+                  pp.value.interactionMessageId,
+                  formatPermissionReplied(reply),
+                ),
+              ).pipe(Effect.ignoreLogged);
+            }
           }
         }).pipe(
           Effect.catchAllDefect((defect) =>
@@ -624,6 +760,51 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 Effect.catchAllDefect((defect) =>
                   Effect.logWarning(defect).pipe(
                     Effect.annotateLogs("debugHint", "Bot.reconcileQuestions"),
+                  ),
+                ),
+              ),
+              // Reconcile permissions — clear stale entries and re-send
+              // pending permissions that arrived while disconnected.
+              Effect.gen(function* () {
+                const pendingResult = yield* Effect.promise(() =>
+                  opencode.client.permission.list({}),
+                );
+                if (pendingResult.error) {
+                  return yield* Effect.die(pendingResult.error);
+                }
+                invariant(pendingResult.data, "permission.list data");
+                const pendingData = pendingResult.data;
+                // Clear stale entries whose requestId is no longer pending
+                const currentMap = yield* Ref.get(pendingPermissions);
+                const pendingIds = new Set(pendingData.map((p) => p.id));
+                for (const [localId, pp] of HashMap.entries(currentMap)) {
+                  if (!pendingIds.has(pp.requestId)) {
+                    yield* Ref.update(
+                      pendingPermissions,
+                      HashMap.remove(localId),
+                    );
+                  }
+                }
+                // Re-send permissions that belong to tracked sessions
+                for (const pr of pendingData) {
+                  const existing = yield* findPendingPermissionByRequestId(
+                    pr.id,
+                  );
+                  if (Option.isSome(existing)) continue;
+                  const session = yield* database.session.findById(
+                    pr.sessionID,
+                  );
+                  if (Option.isSome(session)) {
+                    yield* processPermissionAsked(pr, session.value);
+                  }
+                }
+              }).pipe(
+                Effect.catchAllDefect((defect) =>
+                  Effect.logWarning(defect).pipe(
+                    Effect.annotateLogs(
+                      "debugHint",
+                      "Bot.reconcilePermissions",
+                    ),
                   ),
                 ),
               ),
@@ -861,6 +1042,26 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 yield* Ref.update(pendingQuestions, HashMap.remove(localId));
               }
             }
+            // Reject any pending permissions for this session
+            const pendingPerms = yield* Ref.get(pendingPermissions);
+            for (const [localId, pp] of HashMap.entries(pendingPerms)) {
+              if (pp.sessionId === sessionId) {
+                yield* Effect.promise(() =>
+                  Promise.all([
+                    opencode.client.permission.reply({
+                      requestID: pp.requestId,
+                      reply: "reject",
+                    }),
+                    client.api.editMessageText(
+                      pp.chatId,
+                      pp.interactionMessageId,
+                      formatPermissionReplied("reject"),
+                    ),
+                  ]),
+                ).pipe(Effect.ignoreLogged);
+                yield* Ref.update(pendingPermissions, HashMap.remove(localId));
+              }
+            }
             yield* database.session.delete(sessionId);
             yield* Effect.logInfo("Bot.service reset the session");
           }).pipe(Effect.annotateLogs("sessionId", sessionId));
@@ -884,6 +1085,58 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             const prefix = parts[0];
             const localId = parts[1];
             if (!prefix || !localId) return;
+            // Permission callbacks: p:{localId}:{reply} or pr:{localId}
+            if (prefix === "p" || prefix === "pr") {
+              const maybePp = HashMap.get(
+                yield* Ref.get(pendingPermissions),
+                localId,
+              );
+              if (Option.isNone(maybePp)) {
+                yield* Effect.promise(() =>
+                  ctx.answerCallbackQuery({
+                    text: "The permission request has expired.",
+                  }),
+                ).pipe(Effect.ignoreLogged);
+                return;
+              }
+              const pp = maybePp.value;
+              const replyValue = prefix === "pr" ? "reject" : parts[2];
+              if (
+                replyValue !== "once" &&
+                replyValue !== "always" &&
+                replyValue !== "reject"
+              ) {
+                yield* Effect.promise(() => ctx.answerCallbackQuery()).pipe(
+                  Effect.ignoreLogged,
+                );
+                return;
+              }
+              const reply = replyValue;
+              yield* Ref.update(pendingPermissions, HashMap.remove(localId));
+              yield* Effect.promise(() =>
+                Promise.all([
+                  opencode.client.permission.reply({
+                    requestID: pp.requestId,
+                    reply,
+                  }),
+                  client.api.editMessageText(
+                    pp.chatId,
+                    pp.interactionMessageId,
+                    formatPermissionReplied(reply),
+                  ),
+                ]),
+              ).pipe(
+                Effect.tap(
+                  Effect.logDebug("Bot.service replied to the permission"),
+                ),
+                Effect.ignoreLogged,
+              );
+              yield* Effect.promise(() => ctx.answerCallbackQuery()).pipe(
+                Effect.ignoreLogged,
+              );
+              return;
+            }
+            // Question callbacks: q:{localId}:{index}, qc:{localId}, qr:{localId}
             const maybePq = HashMap.get(
               yield* Ref.get(pendingQuestions),
               localId,
@@ -1004,6 +1257,23 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 ...pq.selected,
                 ctx.message.text,
               ]);
+              return;
+            }
+            // Check if there's a pending permission for this chat
+            const pendingP = yield* findPendingPermissionByChat(
+              ctx.chat.id,
+              ctx.message?.message_thread_id,
+            );
+            if (Option.isSome(pendingP)) {
+              yield* Bot.sendChunks({
+                client,
+                chunks: yield* formatMessage(
+                  "> 🔒 A permission request needs your response.\n\n```Tip\nRespond using the buttons above before sending a new message.\n```",
+                ),
+                ignoreErrors: false,
+                chatId: ctx.chat.id,
+                threadId: ctx.message?.message_thread_id,
+              });
               return;
             }
             const { sessionId } = yield* Bot.findOrCreateSession({
@@ -1252,5 +1522,16 @@ export namespace Bot {
     readonly answers: ReadonlyArray<string[]>;
     readonly interactionMessageId: number;
     readonly selected: string[];
+  }
+
+  export interface PendingPermission {
+    readonly localId: string;
+    readonly requestId: string;
+    readonly sessionId: string;
+    readonly chatId: number;
+    readonly threadId: number | undefined;
+    readonly permission: string;
+    readonly patterns: ReadonlyArray<string>;
+    readonly interactionMessageId: number;
   }
 }
