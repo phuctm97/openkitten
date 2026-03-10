@@ -401,6 +401,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ),
         ),
       );
+
       const registerCommand = (
         name: string,
         handler: (opts: {
@@ -410,9 +411,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           isNew: boolean;
         }) => Effect.Effect<void>,
       ) =>
-        client.command(name, (ctx) => {
-          const threadId = ctx.message?.message_thread_id;
-          return Runtime.runPromise(runtime)(
+        client.command(name, (ctx) =>
+          Runtime.runPromise(runtime)(
             Effect.gen(function* () {
               if (ctx.from?.id !== userId) {
                 return yield* Effect.logWarning(
@@ -424,11 +424,11 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 database,
                 opencode,
                 chatId: ctx.chat.id,
-                threadId,
+                threadId: ctx.message?.message_thread_id,
               });
               yield* handler({
                 chatId: ctx.chat.id,
-                threadId,
+                threadId: ctx.message?.message_thread_id,
                 sessionId,
                 isNew,
               });
@@ -436,10 +436,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Effect.annotateLogs("userId", ctx.from?.id),
               Effect.annotateLogs("messageId", ctx.message?.message_id),
               Effect.annotateLogs("chatId", ctx.chat.id),
-              Effect.annotateLogs("threadId", threadId),
+              Effect.annotateLogs("threadId", ctx.message?.message_thread_id),
             ),
-          );
-        });
+          ),
+        );
 
       registerCommand("start", ({ chatId, threadId, sessionId, isNew }) =>
         formatStart(sessionId, isNew).pipe(
@@ -470,9 +470,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           });
         }),
       );
-      client.on("message:text", (ctx) => {
-        const threadId = ctx.message?.message_thread_id;
-        return Runtime.runPromise(runtime)(
+
+      client.on("message:text", (ctx) =>
+        Runtime.runPromise(runtime)(
           Effect.gen(function* () {
             if (ctx.from?.id !== userId) {
               return yield* Effect.logWarning(
@@ -484,7 +484,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               database,
               opencode,
               chatId: ctx.chat.id,
-              threadId,
+              threadId: ctx.message?.message_thread_id,
             });
             yield* Effect.gen(function* () {
               const rejectBusy = Effect.gen(function* () {
@@ -496,7 +496,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   chunks: yield* formatBusy(),
                   ignoreErrors: false,
                   chatId: ctx.chat.id,
-                  threadId,
+                  threadId: ctx.message?.message_thread_id,
                 });
               });
 
@@ -539,10 +539,10 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             Effect.annotateLogs("userId", ctx.from?.id),
             Effect.annotateLogs("messageId", ctx.message?.message_id),
             Effect.annotateLogs("chatId", ctx.chat.id),
-            Effect.annotateLogs("threadId", threadId),
+            Effect.annotateLogs("threadId", ctx.message?.message_thread_id),
           ),
-        );
-      });
+        ),
+      );
 
       // --- Lifecycle ---
 
