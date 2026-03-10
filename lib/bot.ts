@@ -21,6 +21,7 @@ import { formatBusy } from "~/lib/format-busy";
 import { formatError } from "~/lib/format-error";
 import { formatMessage, type MessageChunk } from "~/lib/format-message";
 import { formatStart } from "~/lib/format-start";
+import { formatStop } from "~/lib/format-stop";
 import { isTextPart } from "~/lib/is-text-part";
 import { OpenCode } from "~/lib/opencode";
 import pkg from "~/package.json" with { type: "json" };
@@ -419,6 +420,41 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             yield* Bot.sendChunks({
               client,
               chunks: yield* formatStart(sessionId, isNew),
+              ignoreErrors: false,
+              chatId: ctx.chat.id,
+              threadId,
+            });
+          }).pipe(
+            Effect.annotateLogs("userId", ctx.from?.id),
+            Effect.annotateLogs("messageId", ctx.message?.message_id),
+            Effect.annotateLogs("chatId", ctx.chat.id),
+            Effect.annotateLogs("threadId", threadId),
+          ),
+        );
+      });
+      client.command("stop", (ctx) => {
+        const threadId = ctx.message?.message_thread_id;
+        return Runtime.runPromise(runtime)(
+          Effect.gen(function* () {
+            if (ctx.from?.id !== userId) {
+              return yield* Effect.logWarning(
+                "Bot.service ignored a command from an unauthorized user",
+              );
+            }
+            yield* Effect.logDebug("Bot.service received /stop command");
+            const { sessionId } = yield* Bot.findOrCreateSession({
+              database,
+              opencode,
+              chatId: ctx.chat.id,
+              threadId,
+            });
+            const result = yield* Effect.promise(() =>
+              opencode.client.session.abort({ sessionID: sessionId }),
+            );
+            if (result.error) return yield* Effect.die(result.error);
+            yield* Bot.sendChunks({
+              client,
+              chunks: yield* formatStop(sessionId),
               ignoreErrors: false,
               chatId: ctx.chat.id,
               threadId,

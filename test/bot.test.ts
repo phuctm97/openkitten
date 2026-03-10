@@ -174,6 +174,10 @@ const sessionDeleteMock = vi.fn().mockResolvedValue({
   data: undefined,
 });
 
+const sessionAbortMock = vi.fn().mockResolvedValue({
+  data: true,
+});
+
 const sessionMessagesMock = vi.fn().mockResolvedValue({
   data: [],
 });
@@ -186,6 +190,7 @@ const eventSubscribeMock = vi
 vi.mock("@opencode-ai/sdk/v2/client", () => ({
   createOpencodeClient: () => ({
     session: {
+      abort: sessionAbortMock,
       create: sessionCreateMock,
       delete: sessionDeleteMock,
       promptAsync: sessionPromptAsyncMock,
@@ -199,30 +204,40 @@ vi.mock("@opencode-ai/sdk/v2/client", () => ({
   }),
 }));
 
-const { formatBusyMock, formatErrorMock, formatMessageMock, formatStartMock } =
-  vi.hoisted(() => {
-    const { Effect } = require("effect");
-    return {
-      formatBusyMock: vi
-        .fn()
-        .mockReturnValue(Effect.succeed([{ text: "busy", markdown: "busy" }])),
-      formatErrorMock: vi
-        .fn()
-        .mockReturnValue(
-          Effect.succeed([{ text: "raw error", markdown: "formatted error" }]),
-        ),
-      formatMessageMock: vi
-        .fn()
-        .mockReturnValue(
-          Effect.succeed([{ text: "AI response", markdown: "AI response" }]),
-        ),
-      formatStartMock: vi
-        .fn()
-        .mockReturnValue(
-          Effect.succeed([{ text: "start msg", markdown: "start msg" }]),
-        ),
-    };
-  });
+const {
+  formatBusyMock,
+  formatErrorMock,
+  formatMessageMock,
+  formatStartMock,
+  formatStopMock,
+} = vi.hoisted(() => {
+  const { Effect } = require("effect");
+  return {
+    formatBusyMock: vi
+      .fn()
+      .mockReturnValue(Effect.succeed([{ text: "busy", markdown: "busy" }])),
+    formatErrorMock: vi
+      .fn()
+      .mockReturnValue(
+        Effect.succeed([{ text: "raw error", markdown: "formatted error" }]),
+      ),
+    formatMessageMock: vi
+      .fn()
+      .mockReturnValue(
+        Effect.succeed([{ text: "AI response", markdown: "AI response" }]),
+      ),
+    formatStartMock: vi
+      .fn()
+      .mockReturnValue(
+        Effect.succeed([{ text: "start msg", markdown: "start msg" }]),
+      ),
+    formatStopMock: vi
+      .fn()
+      .mockReturnValue(
+        Effect.succeed([{ text: "stop msg", markdown: "stop msg" }]),
+      ),
+  };
+});
 
 vi.mock("~/lib/format-busy", () => ({
   formatBusy: formatBusyMock,
@@ -240,6 +255,10 @@ vi.mock("~/lib/format-start", () => ({
   formatStart: formatStartMock,
 }));
 
+vi.mock("~/lib/format-stop", () => ({
+  formatStop: formatStopMock,
+}));
+
 // --- Test setup ---
 
 // Each test gets a fresh event stream and sendMessage mock so state doesn't leak
@@ -248,6 +267,7 @@ beforeEach(() => {
   msgCounter = 0;
   sendMessageMock.mockClear();
   sendChatActionMock.mockClear();
+  sessionAbortMock.mockClear();
   sessionDeleteMock.mockClear();
   sessionMessagesMock.mockClear();
   sessionStatusMock.mockClear();
@@ -1692,6 +1712,12 @@ describe("handler", () => {
   );
 });
 
+function getCommandHandler(name: string) {
+  const call = commandSpy.mock.calls.find((c) => c[0] === name);
+  assert.isDefined(call);
+  return call[1];
+}
+
 describe("/start command", () => {
   it.scopedLive("registers command handler before start", () =>
     Effect.gen(function* () {
@@ -1710,9 +1736,7 @@ describe("/start command", () => {
     Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
-      const call = commandSpy.mock.lastCall;
-      assert.isDefined(call);
-      const handler = call[1];
+      const handler = getCommandHandler("start");
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
@@ -1741,9 +1765,7 @@ describe("/start command", () => {
       });
       yield* Bot;
       yield* Effect.sleep(0);
-      const call = commandSpy.mock.lastCall;
-      assert.isDefined(call);
-      const handler = call[1];
+      const handler = getCommandHandler("start");
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
@@ -1767,9 +1789,7 @@ describe("/start command", () => {
     Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
-      const call = commandSpy.mock.lastCall;
-      assert.isDefined(call);
-      const handler = call[1];
+      const handler = getCommandHandler("start");
       yield* Effect.promise(() =>
         handler({
           from: { id: 999 },
@@ -1779,6 +1799,72 @@ describe("/start command", () => {
       );
       yield* Effect.sleep(0);
       expect(sessionCreateMock).not.toHaveBeenCalled();
+      expect(sendMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+});
+
+describe("/stop command", () => {
+  it.scopedLive("calls session.abort and sends formatted stop message", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("stop");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/stop" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionCreateMock).toHaveBeenCalledWith({});
+      expect(sessionAbortMock).toHaveBeenCalledWith({
+        sessionID: "new-session-id",
+      });
+      expect(formatStopMock).toHaveBeenCalledWith("new-session-id");
+      expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
+        parse_mode: "MarkdownV2",
+      });
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("dies when session.abort returns error", () =>
+    Effect.gen(function* () {
+      sessionAbortMock.mockResolvedValueOnce({
+        error: "abort failed",
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("stop");
+      yield* Effect.promise(async () => {
+        await expect(
+          handler({
+            from: { id: 123 },
+            chat: { id: 123 },
+            message: { message_id: 1, text: "/stop" },
+          }),
+        ).rejects.toThrow("abort failed");
+      });
+      expect(formatStopMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validLayer)),
+  );
+
+  it.scopedLive("ignores /stop from unauthorized user", () =>
+    Effect.gen(function* () {
+      yield* Bot;
+      yield* Effect.sleep(0);
+      const handler = getCommandHandler("stop");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 999 },
+          chat: { id: 999 },
+          message: { message_id: 1, text: "/stop" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(sessionCreateMock).not.toHaveBeenCalled();
+      expect(sessionAbortMock).not.toHaveBeenCalled();
       expect(sendMessageMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
