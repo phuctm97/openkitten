@@ -18,9 +18,9 @@ import {
 import { Bot as GrammyBot } from "grammy";
 import { Database } from "~/lib/database";
 import { formatBusy } from "~/lib/format-busy";
-import { formatDelete } from "~/lib/format-delete";
 import { formatError } from "~/lib/format-error";
 import { formatMessage, type MessageChunk } from "~/lib/format-message";
+import { formatReset } from "~/lib/format-reset";
 import { formatStart } from "~/lib/format-start";
 import { formatStop } from "~/lib/format-stop";
 import { isTextPart } from "~/lib/is-text-part";
@@ -500,7 +500,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         }),
       );
 
-      client.command("delete", (ctx) =>
+      client.command("reset", (ctx) =>
         Runtime.runPromise(runtime)(
           Effect.gen(function* () {
             if (ctx.from?.id !== userId) {
@@ -508,7 +508,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 "Bot.service ignored a command from an unauthorized user",
               );
             }
-            yield* Effect.logDebug("Bot.service received /delete command");
+            yield* Effect.logDebug("Bot.service received /reset command");
             const chatId = ctx.chat.id;
             const threadId = ctx.message?.message_thread_id;
             const existing = yield* database.session.findByChat({
@@ -540,20 +540,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               // Clean up in-memory state
               yield* stopTyping(sessionId);
               yield* Ref.update(promptingRef, HashSet.remove(sessionId));
-              // Delete remote session (messages cascade locally)
-              const deleteResult = yield* Effect.promise(() =>
-                opencode.client.session.delete({ sessionID: sessionId }),
-              );
-              if (deleteResult.error)
-                return yield* Effect.die(deleteResult.error);
               yield* database.session.delete(sessionId);
-              yield* Effect.logInfo("Bot.service deleted the session").pipe(
+              yield* Effect.logInfo("Bot.service reset the session").pipe(
                 Effect.annotateLogs("sessionId", sessionId),
               );
             }
             yield* Bot.sendChunks({
               client,
-              chunks: yield* formatDelete(),
+              chunks: yield* formatReset(),
               ignoreErrors: false,
               chatId,
               threadId,

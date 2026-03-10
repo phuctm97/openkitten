@@ -208,7 +208,7 @@ const {
   formatBusyMock,
   formatErrorMock,
   formatMessageMock,
-  formatDeleteMock,
+  formatResetMock,
   formatStartMock,
   formatStopMock,
 } = vi.hoisted(() => {
@@ -217,10 +217,10 @@ const {
     formatBusyMock: vi
       .fn()
       .mockReturnValue(Effect.succeed([{ text: "busy", markdown: "busy" }])),
-    formatDeleteMock: vi
+    formatResetMock: vi
       .fn()
       .mockReturnValue(
-        Effect.succeed([{ text: "delete msg", markdown: "delete msg" }]),
+        Effect.succeed([{ text: "reset msg", markdown: "reset msg" }]),
       ),
     formatErrorMock: vi
       .fn()
@@ -249,8 +249,8 @@ vi.mock("~/lib/format-busy", () => ({
   formatBusy: formatBusyMock,
 }));
 
-vi.mock("~/lib/format-delete", () => ({
-  formatDelete: formatDeleteMock,
+vi.mock("~/lib/format-reset", () => ({
+  formatReset: formatResetMock,
 }));
 
 vi.mock("~/lib/format-error", () => ({
@@ -1968,34 +1968,34 @@ describe("/stop command", () => {
   );
 });
 
-describe("/delete command", () => {
-  it.scopedLive("sends delete message when no session exists", () =>
+describe("/reset command", () => {
+  it.scopedLive("sends reset message when no session exists", () =>
     Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
-      const handler = getCommandHandler("delete");
+      const handler = getCommandHandler("reset");
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 456 },
-          message: { message_id: 1, text: "/delete" },
+          message: { message_id: 1, text: "/reset" },
         }),
       );
       yield* Effect.sleep(0);
       expect(sessionStatusMock).not.toHaveBeenCalled();
       expect(sessionDeleteMock).not.toHaveBeenCalled();
-      expect(formatDeleteMock).toHaveBeenCalled();
+      expect(formatResetMock).toHaveBeenCalled();
       expect(sendMessageMock).toHaveBeenCalledWith(456, expect.any(String), {
         parse_mode: "MarkdownV2",
       });
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("deletes idle session and sends delete message", () =>
+  it.scopedLive("resets idle session and sends reset message", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
-        id: "delete-idle-session",
+        id: "reset-idle-session",
         chatId: 123,
         threadId: 0,
         createdAt: undefined,
@@ -2003,20 +2003,18 @@ describe("/delete command", () => {
       });
       yield* Bot;
       yield* Effect.sleep(0);
-      const handler = getCommandHandler("delete");
+      const handler = getCommandHandler("reset");
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { message_id: 1, text: "/delete" },
+          message: { message_id: 1, text: "/reset" },
         }),
       );
       yield* Effect.sleep(0);
       expect(sessionAbortMock).not.toHaveBeenCalled();
-      expect(sessionDeleteMock).toHaveBeenCalledWith({
-        sessionID: "delete-idle-session",
-      });
-      expect(formatDeleteMock).toHaveBeenCalled();
+      expect(sessionDeleteMock).not.toHaveBeenCalled();
+      expect(formatResetMock).toHaveBeenCalled();
       // Session should be deleted from DB
       const session = yield* database.session.findByChat({
         chatId: 123,
@@ -2026,45 +2024,43 @@ describe("/delete command", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("aborts busy session before deleting", () =>
+  it.scopedLive("aborts busy session before resetting", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
-        id: "delete-busy-session",
+        id: "reset-busy-session",
         chatId: 123,
         threadId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });
       sessionStatusMock.mockResolvedValueOnce({
-        data: { "delete-busy-session": { type: "busy" } },
+        data: { "reset-busy-session": { type: "busy" } },
       });
       yield* Bot;
       yield* Effect.sleep(0);
-      const handler = getCommandHandler("delete");
+      const handler = getCommandHandler("reset");
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { message_id: 1, text: "/delete" },
+          message: { message_id: 1, text: "/reset" },
         }),
       );
       yield* Effect.sleep(0);
       expect(sessionAbortMock).toHaveBeenCalledWith({
-        sessionID: "delete-busy-session",
+        sessionID: "reset-busy-session",
       });
-      expect(sessionDeleteMock).toHaveBeenCalledWith({
-        sessionID: "delete-busy-session",
-      });
-      expect(formatDeleteMock).toHaveBeenCalled();
+      expect(sessionDeleteMock).not.toHaveBeenCalled();
+      expect(formatResetMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("dies when session.status returns error in /delete", () =>
+  it.scopedLive("dies when session.status returns error in /reset", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
-        id: "delete-status-error",
+        id: "reset-status-error",
         chatId: 123,
         threadId: 0,
         createdAt: undefined,
@@ -2075,94 +2071,65 @@ describe("/delete command", () => {
       });
       yield* Bot;
       yield* Effect.sleep(0);
-      const handler = getCommandHandler("delete");
+      const handler = getCommandHandler("reset");
       yield* Effect.promise(async () => {
         await expect(
           handler({
             from: { id: 123 },
             chat: { id: 123 },
-            message: { message_id: 1, text: "/delete" },
+            message: { message_id: 1, text: "/reset" },
           }),
         ).rejects.toThrow("status failed");
       });
       expect(sessionAbortMock).not.toHaveBeenCalled();
       expect(sessionDeleteMock).not.toHaveBeenCalled();
-      expect(formatDeleteMock).not.toHaveBeenCalled();
+      expect(formatResetMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("dies when session.abort returns error in /delete", () =>
+  it.scopedLive("dies when session.abort returns error in /reset", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
-        id: "delete-abort-error",
+        id: "reset-abort-error",
         chatId: 123,
         threadId: 0,
         createdAt: undefined,
         updatedAt: undefined,
       });
       sessionStatusMock.mockResolvedValueOnce({
-        data: { "delete-abort-error": { type: "busy" } },
+        data: { "reset-abort-error": { type: "busy" } },
       });
       sessionAbortMock.mockResolvedValueOnce({
         error: "abort failed",
       });
       yield* Bot;
       yield* Effect.sleep(0);
-      const handler = getCommandHandler("delete");
+      const handler = getCommandHandler("reset");
       yield* Effect.promise(async () => {
         await expect(
           handler({
             from: { id: 123 },
             chat: { id: 123 },
-            message: { message_id: 1, text: "/delete" },
+            message: { message_id: 1, text: "/reset" },
           }),
         ).rejects.toThrow("abort failed");
       });
       expect(sessionDeleteMock).not.toHaveBeenCalled();
-      expect(formatDeleteMock).not.toHaveBeenCalled();
+      expect(formatResetMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("dies when session.delete returns error", () =>
-    Effect.gen(function* () {
-      const database = yield* Database;
-      yield* database.session.insert({
-        id: "delete-error-session",
-        chatId: 123,
-        threadId: 0,
-        createdAt: undefined,
-        updatedAt: undefined,
-      });
-      sessionDeleteMock.mockResolvedValueOnce({
-        error: "delete failed",
-      });
-      yield* Bot;
-      yield* Effect.sleep(0);
-      const handler = getCommandHandler("delete");
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "/delete" },
-          }),
-        ).rejects.toThrow("delete failed");
-      });
-      expect(formatDeleteMock).not.toHaveBeenCalled();
-    }).pipe(Effect.provide(validLayer)),
-  );
-
-  it.scopedLive("ignores /delete from unauthorized user", () =>
+  it.scopedLive("ignores /reset from unauthorized user", () =>
     Effect.gen(function* () {
       yield* Bot;
       yield* Effect.sleep(0);
-      const handler = getCommandHandler("delete");
+      const handler = getCommandHandler("reset");
       yield* Effect.promise(() =>
         handler({
           from: { id: 999 },
           chat: { id: 999 },
-          message: { message_id: 1, text: "/delete" },
+          message: { message_id: 1, text: "/reset" },
         }),
       );
       yield* Effect.sleep(0);
@@ -2171,11 +2138,11 @@ describe("/delete command", () => {
     }).pipe(Effect.provide(validLayer)),
   );
 
-  it.scopedLive("cascades message deletion when session is deleted", () =>
+  it.scopedLive("cascades message deletion when session is reset", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
-        id: "delete-cascade-session",
+        id: "reset-cascade-session",
         chatId: 123,
         threadId: 0,
         createdAt: undefined,
@@ -2183,17 +2150,17 @@ describe("/delete command", () => {
       });
       yield* database.message.insert({
         id: "msg-to-cascade",
-        sessionId: "delete-cascade-session",
+        sessionId: "reset-cascade-session",
         createdAt: 1,
       });
       yield* Bot;
       yield* Effect.sleep(0);
-      const handler = getCommandHandler("delete");
+      const handler = getCommandHandler("reset");
       yield* Effect.promise(() =>
         handler({
           from: { id: 123 },
           chat: { id: 123 },
-          message: { message_id: 1, text: "/delete" },
+          message: { message_id: 1, text: "/reset" },
         }),
       );
       yield* Effect.sleep(0);
