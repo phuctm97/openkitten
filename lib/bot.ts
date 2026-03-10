@@ -492,39 +492,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         }),
       );
 
-      // Tears down the current session. No-ops without an active session.
-      // 1. Abort any in-flight generation
-      // 2. Stop typing indicator and clear prompting guard
-      // 3. Delete the session from the local DB
-      // 4. Send the reset message
-      registerCommand("reset", ({ chatId, threadId }) =>
-        Effect.gen(function* () {
-          const existing = yield* database.session.findByChat({
-            chatId,
-            threadId: threadId || 0,
-          });
-          if (Option.isNone(existing)) return;
-          const sessionId = existing.value.id;
-          yield* Effect.gen(function* () {
-            const abortResult = yield* Effect.promise(() =>
-              opencode.client.session.abort({ sessionID: sessionId }),
-            );
-            if (abortResult.error) return yield* Effect.die(abortResult.error);
-            yield* stopTyping(sessionId);
-            yield* Ref.update(promptingRef, HashSet.remove(sessionId));
-            yield* database.session.delete(sessionId);
-            yield* Effect.logInfo("Bot.service reset the session");
-          }).pipe(Effect.annotateLogs("sessionId", sessionId));
-          yield* Bot.sendChunks({
-            client,
-            chunks: yield* formatReset(),
-            ignoreErrors: false,
-            chatId,
-            threadId,
-          });
-        }),
-      );
-
       // Aborts in-flight generation. No-ops without an active session.
       // Notification is sent by the session.error event handler.
       registerCommand("stop", ({ chatId, threadId }) =>
@@ -560,6 +527,39 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             );
             if (result.error) return yield* Effect.die(result.error);
           }).pipe(Effect.annotateLogs("sessionId", sessionId));
+        }),
+      );
+
+      // Tears down the current session. No-ops without an active session.
+      // 1. Abort any in-flight generation
+      // 2. Stop typing indicator and clear prompting guard
+      // 3. Delete the session from the local DB
+      // 4. Send the reset message
+      registerCommand("reset", ({ chatId, threadId }) =>
+        Effect.gen(function* () {
+          const existing = yield* database.session.findByChat({
+            chatId,
+            threadId: threadId || 0,
+          });
+          if (Option.isNone(existing)) return;
+          const sessionId = existing.value.id;
+          yield* Effect.gen(function* () {
+            const abortResult = yield* Effect.promise(() =>
+              opencode.client.session.abort({ sessionID: sessionId }),
+            );
+            if (abortResult.error) return yield* Effect.die(abortResult.error);
+            yield* stopTyping(sessionId);
+            yield* Ref.update(promptingRef, HashSet.remove(sessionId));
+            yield* database.session.delete(sessionId);
+            yield* Effect.logInfo("Bot.service reset the session");
+          }).pipe(Effect.annotateLogs("sessionId", sessionId));
+          yield* Bot.sendChunks({
+            client,
+            chunks: yield* formatReset(),
+            ignoreErrors: false,
+            chatId,
+            threadId,
+          });
         }),
       );
 
