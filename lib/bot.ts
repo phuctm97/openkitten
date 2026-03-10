@@ -473,6 +473,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           ),
         );
 
+      // Finds or creates a session and greets the user.
       registerCommand("start", ({ chatId, threadId }) =>
         Effect.gen(function* () {
           const { sessionId, isNew } = yield* Bot.findOrCreateSession({
