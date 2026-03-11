@@ -625,8 +625,8 @@ describe("formatPermissionMessage", () => {
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Edit file");
-    expect(text).toContain("Modify the contents of a file.");
+    expect(text).toContain("Edit files");
+    expect(text).toContain("Modify the contents of one or more files.");
     expect(text).toContain("```diff");
     expect(text).toContain("-old");
     expect(text).toContain("+new");
@@ -714,7 +714,7 @@ describe("formatPermissionMessage", () => {
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Edit file");
+    expect(text).toContain("Edit files");
     expect(text).not.toContain("```diff");
     expect(text).toContain("```file");
     expect(text).toContain("/Users/foo/project/src/main.ts");
@@ -730,7 +730,7 @@ describe("formatPermissionMessage", () => {
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Edit file");
+    expect(text).toContain("Edit files");
     expect(text).not.toContain("```diff");
     expect(text).toContain("```pattern");
     expect(text).toContain("src/main.ts");
@@ -746,7 +746,7 @@ describe("formatPermissionMessage", () => {
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Edit file");
+    expect(text).toContain("Edit files");
     expect(text).not.toContain("```diff");
     expect(text).not.toContain("```pattern");
   });

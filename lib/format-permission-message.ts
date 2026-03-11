@@ -34,8 +34,8 @@ const permissionTypes: Record<
   },
   edit: {
     emoji: "✏️",
-    title: "Edit file",
-    description: "Modify the contents of a file.",
+    title: "Edit files",
+    description: "Modify the contents of one or more files.",
   },
   glob: {
     emoji: "🗃",
