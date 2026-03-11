@@ -106,10 +106,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 client.api.sendChatAction(chatId, "typing", {
                   ...(threadId && { message_thread_id: threadId }),
                 }),
-              ).pipe(
-                Effect.annotateLogs("debugHint", "Bot.sendTyping"),
-                Effect.ignoreLogged,
-              );
+              ).pipe(Effect.ignoreLogged);
               yield* Effect.sleep(4_000);
             }),
           ).pipe(Effect.forkIn(botScope));
