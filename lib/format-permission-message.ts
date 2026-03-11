@@ -72,6 +72,16 @@ const permissionTypes: Record<
     title: "Code search",
     description: "Search the web for code examples.",
   },
+  external_directory: {
+    emoji: "💾",
+    title: "Access external directory",
+    description: "Access a path outside the project.",
+  },
+  doom_loop: {
+    emoji: "🔄",
+    title: "Continue after repeated calls",
+    description: "The same tool was called repeatedly with identical input.",
+  },
   skill: {
     emoji: "⚡",
     title: "Run skill",
@@ -91,16 +101,6 @@ const permissionTypes: Record<
     emoji: "🔗",
     title: "Query LSP",
     description: "Query the language server for code intelligence.",
-  },
-  external_directory: {
-    emoji: "💾",
-    title: "Access external directory",
-    description: "Access a path outside the project.",
-  },
-  doom_loop: {
-    emoji: "🔄",
-    title: "Continue after repeated calls",
-    description: "The same tool was called repeatedly with identical input.",
   },
 };
 
@@ -362,29 +362,6 @@ function formatCodesearch(lines: string[], request: PermissionRequest) {
   }
 }
 
-function formatSkill(lines: string[], request: PermissionRequest) {
-  if (request.patterns.length > 0) {
-    lines.push("```skill");
-    for (const p of request.patterns) {
-      lines.push(p);
-    }
-    lines.push("```");
-  }
-}
-
-function formatPatterns(lines: string[], request: PermissionRequest) {
-  const hasPatterns =
-    request.patterns.length > 0 &&
-    !(request.patterns.length === 1 && request.patterns[0] === "*");
-  if (hasPatterns) {
-    lines.push("```pattern");
-    for (const p of request.patterns) {
-      lines.push(p);
-    }
-    lines.push("```");
-  }
-}
-
 function formatExternalDirectory(lines: string[], request: PermissionRequest) {
   const filepath = stringMeta(request.metadata, "filepath");
   if (filepath) {
@@ -430,11 +407,34 @@ function formatDoomLoop(lines: string[], request: PermissionRequest) {
   }
 }
 
-function formatDefault(lines: string[], request: PermissionRequest) {
+function formatSkill(lines: string[], request: PermissionRequest) {
+  if (request.patterns.length > 0) {
+    lines.push("```skill");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
+    lines.push("```");
+  }
+}
+
+function formatDefaultPattern(lines: string[], request: PermissionRequest) {
+  const hasPatterns =
+    request.patterns.length > 0 &&
+    !(request.patterns.length === 1 && request.patterns[0] === "*");
+  if (hasPatterns) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
+    lines.push("```");
+  }
+}
+
+function formatDefaultTool(lines: string[], request: PermissionRequest) {
   lines.push("```tool");
   lines.push(request.permission);
   lines.push("```");
-  formatPatterns(lines, request);
+  formatDefaultPattern(lines, request);
   if (Object.keys(request.metadata).length > 0) {
     lines.push("```json");
     lines.push(JSON.stringify(request.metadata, null, 2));
@@ -476,20 +476,20 @@ export function formatPermissionMessage(request: PermissionRequest) {
     formatWebsearch(lines, request);
   } else if (request.permission === "codesearch") {
     formatCodesearch(lines, request);
-  } else if (request.permission === "skill") {
-    formatSkill(lines, request);
-  } else if (request.permission === "todowrite") {
-    formatPatterns(lines, request);
-  } else if (request.permission === "todoread") {
-    formatPatterns(lines, request);
-  } else if (request.permission === "lsp") {
-    formatPatterns(lines, request);
   } else if (request.permission === "external_directory") {
     formatExternalDirectory(lines, request);
   } else if (request.permission === "doom_loop") {
     formatDoomLoop(lines, request);
+  } else if (request.permission === "skill") {
+    formatSkill(lines, request);
+  } else if (request.permission === "todowrite") {
+    formatDefaultPattern(lines, request);
+  } else if (request.permission === "todoread") {
+    formatDefaultPattern(lines, request);
+  } else if (request.permission === "lsp") {
+    formatDefaultPattern(lines, request);
   } else {
-    formatDefault(lines, request);
+    formatDefaultTool(lines, request);
   }
 
   return formatMessage(lines.join("\n"));
