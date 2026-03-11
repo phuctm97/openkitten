@@ -244,20 +244,31 @@ function formatTask(lines: string[], request: PermissionRequest) {
     lines.push(description);
     lines.push("```");
   }
-  const subagentType =
-    stringMeta(request.metadata, "subagent_type") ?? request.patterns[0];
+  const subagentType = stringMeta(request.metadata, "subagent_type");
   if (subagentType) {
     lines.push("```agent");
     lines.push(subagentType);
+    lines.push("```");
+  } else if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
     lines.push("```");
   }
 }
 
 function formatWebfetch(lines: string[], request: PermissionRequest) {
-  const url = stringMeta(request.metadata, "url") ?? request.patterns[0];
+  const url = stringMeta(request.metadata, "url");
   if (url) {
     lines.push("```url");
     lines.push(url);
+    lines.push("```");
+  } else if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
     lines.push("```");
   }
   const format = stringMeta(request.metadata, "format");

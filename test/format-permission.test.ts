@@ -404,7 +404,8 @@ describe("formatPermissionMessage", () => {
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Launch agent");
     expect(text).not.toContain("```description");
-    expect(text).toContain("```agent");
+    expect(text).not.toContain("```agent");
+    expect(text).toContain("```pattern");
     expect(text).toContain("general");
   });
 
@@ -489,7 +490,8 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Fetch URL");
-    expect(text).toContain("```url");
+    expect(text).not.toContain("```url");
+    expect(text).toContain("```pattern");
     expect(text).toContain("https://example.com");
     expect(text).not.toContain("```format");
     expect(text).not.toContain("```timeout");
