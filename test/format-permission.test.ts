@@ -175,9 +175,27 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Use tool");
-    expect(text).not.toContain("Execute a shell command");
+    expect(text).toContain("The agent wants to use an unrecognized tool.");
+    expect(text).toContain("```tool");
     expect(text).toContain("custom_tool");
+    expect(text).toContain("```pattern");
     expect(text).toContain("pattern1");
+  });
+
+  it("formats unknown permission with metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "custom_tool",
+          patterns: ["pattern1"],
+          metadata: { foo: "bar", count: 42 },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("```json");
+    expect(text).toContain('"foo": "bar"');
+    expect(text).toContain('"count": 42');
   });
 
   it("formats unknown permission without patterns", () => {
@@ -191,7 +209,9 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Use tool");
+    expect(text).toContain("```tool");
     expect(text).toContain("custom_tool");
+    expect(text).not.toContain("```pattern");
   });
 
   it("formats glob with pattern and path from metadata", () => {
