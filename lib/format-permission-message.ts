@@ -1,6 +1,19 @@
 import type { PermissionRequest } from "@opencode-ai/sdk/v2";
 import { formatMessage } from "~/lib/format-message";
 
+/** Mirrors the per-file metadata shape from opencode's apply_patch tool. */
+interface EditFile {
+  readonly filePath: string;
+  readonly relativePath: string;
+  readonly type: "add" | "update" | "delete" | "move";
+  readonly diff: string;
+  readonly before: string;
+  readonly after: string;
+  readonly additions: number;
+  readonly deletions: number;
+  readonly movePath: string | undefined;
+}
+
 const permissionTypes: Record<
   string,
   {
@@ -96,6 +109,14 @@ function jsonMeta(
   return typeof value === "string" ? value : JSON.stringify(value, null, 2);
 }
 
+function arrayMeta(
+  metadata: Record<string, unknown>,
+  key: string,
+): unknown[] | undefined {
+  const value = metadata[key];
+  return Array.isArray(value) && value.length > 0 ? value : undefined;
+}
+
 function formatBash(lines: string[], request: PermissionRequest) {
   if (request.patterns.length > 0) {
     lines.push("```bash");
@@ -124,16 +145,23 @@ function formatEdit(lines: string[], request: PermissionRequest) {
     lines.push("```");
     return;
   }
-  const files = jsonMeta(request.metadata, "files");
+  const files = arrayMeta(request.metadata, "files") as EditFile[] | undefined;
   if (files) {
-    lines.push("```pattern");
-    lines.push(files);
+    lines.push(files.length === 1 ? "```file" : "```files");
+    for (const file of files) {
+      const prefix = file.type.padEnd(6);
+      if (file.type === "move") {
+        lines.push(`${prefix} ${file.filePath} → ${file.movePath}`);
+      } else {
+        lines.push(`${prefix} ${file.filePath}`);
+      }
+    }
     lines.push("```");
     return;
   }
   const filepath = stringMeta(request.metadata, "filepath");
   if (filepath) {
-    lines.push("```pattern");
+    lines.push("```file");
     lines.push(filepath);
     lines.push("```");
     return;
@@ -196,10 +224,16 @@ function formatGrep(lines: string[], request: PermissionRequest) {
 }
 
 function formatList(lines: string[], request: PermissionRequest) {
-  const dir = stringMeta(request.metadata, "path") ?? request.patterns[0];
+  const dir = stringMeta(request.metadata, "path");
   if (dir) {
     lines.push("```path");
     lines.push(dir);
+    lines.push("```");
+  } else if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
     lines.push("```");
   }
 }

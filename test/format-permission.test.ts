@@ -369,7 +369,7 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("List directory");
-    expect(text).toContain("```path");
+    expect(text).toContain("```pattern");
     expect(text).toContain("/Users/foo/src");
   });
 
@@ -632,7 +632,7 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("+new");
   });
 
-  it("formats edit without diff, falls back to files", () => {
+  it("formats edit without diff, falls back to single file with type", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
         makeRequest({
@@ -640,17 +640,67 @@ describe("formatPermissionMessage", () => {
           patterns: ["src/main.ts"],
           metadata: {
             files: [
-              { relativePath: "src/main.ts", type: "edit", additions: 5 },
+              {
+                filePath: "/project/src/main.ts",
+                relativePath: "src/main.ts",
+                type: "update",
+                additions: 5,
+              },
             ],
           },
         }),
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Edit file");
     expect(text).not.toContain("```diff");
-    expect(text).toContain("```pattern");
-    expect(text).toContain("src/main.ts");
+    expect(text).toContain("```file");
+    expect(text).toContain("update /project/src/main.ts");
+  });
+
+  it("formats edit without diff, falls back to multiple files with types", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "edit",
+          patterns: ["src/main.ts", "src/util.ts"],
+          metadata: {
+            files: [
+              {
+                filePath: "/project/src/main.ts",
+                relativePath: "src/main.ts",
+                type: "update",
+                additions: 5,
+              },
+              {
+                filePath: "/project/src/util.ts",
+                relativePath: "src/util.ts",
+                type: "add",
+                additions: 10,
+              },
+              {
+                filePath: "/project/src/old.ts",
+                relativePath: "src/old.ts",
+                type: "delete",
+                deletions: 3,
+              },
+              {
+                filePath: "/project/src/old.ts",
+                relativePath: "src/new.ts",
+                type: "move",
+                movePath: "/project/src/new.ts",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).not.toContain("```diff");
+    expect(text).toContain("```files");
+    expect(text).toContain("update /project/src/main.ts");
+    expect(text).toContain("add    /project/src/util.ts");
+    expect(text).toContain("delete /project/src/old.ts");
+    expect(text).toContain("move   /project/src/old.ts → /project/src/new.ts");
   });
 
   it("formats edit without diff or files, falls back to filepath", () => {
@@ -666,7 +716,7 @@ describe("formatPermissionMessage", () => {
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Edit file");
     expect(text).not.toContain("```diff");
-    expect(text).toContain("```pattern");
+    expect(text).toContain("```file");
     expect(text).toContain("/Users/foo/project/src/main.ts");
   });
 
