@@ -126,9 +126,103 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("custom_tool");
   });
 
+  it("formats glob with pattern and path from metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "glob",
+          patterns: ["**/*.ts"],
+          metadata: { pattern: "**/*.ts", path: "/Users/foo/project/src" },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Find files");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("**/*.ts");
+    expect(text).toContain("```path");
+    expect(text).toContain("/Users/foo/project/src");
+  });
+
+  it("formats glob without metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "glob", patterns: ["**/*.ts"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Find files");
+    expect(text).not.toContain("```pattern");
+    expect(text).not.toContain("```path");
+  });
+
+  it("formats glob without path", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "glob",
+          patterns: ["**/*.ts"],
+          metadata: { pattern: "**/*.ts" },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("```pattern");
+    expect(text).not.toContain("```path");
+  });
+
+  it("formats grep with pattern, path, and include from metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "grep",
+          patterns: ["TODO"],
+          metadata: {
+            pattern: "TODO",
+            path: "/Users/foo/project",
+            include: "*.ts",
+          },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Find contents");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("TODO");
+    expect(text).toContain("```path");
+    expect(text).toContain("/Users/foo/project");
+    expect(text).toContain("```include");
+    expect(text).toContain("*.ts");
+  });
+
+  it("formats grep without metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "grep", patterns: ["TODO"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Find contents");
+    expect(text).not.toContain("```pattern");
+  });
+
+  it("formats grep without path and include", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "grep",
+          patterns: ["TODO"],
+          metadata: { pattern: "TODO" },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("```pattern");
+    expect(text).not.toContain("```path");
+    expect(text).not.toContain("```include");
+  });
+
   it.each([
-    ["glob", "Glob files", "Search for files matching a pattern."],
-    ["grep", "Search files", "Search file contents for a pattern."],
     ["list", "List directory", "List the contents of a directory."],
     ["task", "Launch agent", "Spawn a sub-agent to handle a task."],
     ["webfetch", "Fetch URL", "Fetch content from a URL."],

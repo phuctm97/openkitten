@@ -25,13 +25,13 @@ const permissionTypes: Record<
     description: "Modify the contents of a file.",
   },
   glob: {
-    emoji: "🔍",
-    title: "Glob files",
+    emoji: "🗂",
+    title: "Find files",
     description: "Search for files matching a pattern.",
   },
   grep: {
-    emoji: "🔍",
-    title: "Search files",
+    emoji: "🔎",
+    title: "Find contents",
     description: "Search file contents for a pattern.",
   },
   list: {
@@ -112,6 +112,42 @@ function formatExternalDirectory(lines: string[], request: PermissionRequest) {
   }
 }
 
+function formatGlob(lines: string[], request: PermissionRequest) {
+  const pattern = stringMeta(request.metadata, "pattern");
+  if (pattern) {
+    lines.push("```pattern");
+    lines.push(pattern);
+    lines.push("```");
+  }
+  const dir = stringMeta(request.metadata, "path");
+  if (dir) {
+    lines.push("```path");
+    lines.push(dir);
+    lines.push("```");
+  }
+}
+
+function formatGrep(lines: string[], request: PermissionRequest) {
+  const pattern = stringMeta(request.metadata, "pattern");
+  if (pattern) {
+    lines.push("```pattern");
+    lines.push(pattern);
+    lines.push("```");
+  }
+  const dir = stringMeta(request.metadata, "path");
+  if (dir) {
+    lines.push("```path");
+    lines.push(dir);
+    lines.push("```");
+  }
+  const include = stringMeta(request.metadata, "include");
+  if (include) {
+    lines.push("```include");
+    lines.push(include);
+    lines.push("```");
+  }
+}
+
 function formatRead(lines: string[], request: PermissionRequest) {
   if (request.patterns.length > 0) {
     lines.push("```path");
@@ -157,6 +193,10 @@ export function formatPermissionMessage(request: PermissionRequest) {
     formatRead(lines, request);
   } else if (request.permission === "edit") {
     formatEdit(lines, request);
+  } else if (request.permission === "glob") {
+    formatGlob(lines, request);
+  } else if (request.permission === "grep") {
+    formatGrep(lines, request);
   } else if (request.permission === "external_directory") {
     formatExternalDirectory(lines, request);
   } else {
