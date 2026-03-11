@@ -90,13 +90,6 @@ function formatBash(lines: string[], request: PermissionRequest) {
 }
 
 function formatEdit(lines: string[], request: PermissionRequest) {
-  if (request.patterns.length > 0) {
-    lines.push("```path");
-    for (const pattern of request.patterns) {
-      lines.push(pattern);
-    }
-    lines.push("```");
-  }
   const diff = stringMeta(request.metadata, "diff");
   if (diff) {
     lines.push("```diff");
