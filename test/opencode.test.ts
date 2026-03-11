@@ -33,7 +33,14 @@ vi.mock("@anthropic-ai/sandbox-runtime", () => ({
 
 // Uses a Proxy to provide only the Process properties OpenCode actually reads,
 // avoiding the need to construct a full Process object.
-function mockLayer(stdout?: string, exitCode?: number) {
+interface MockLayerOptions {
+  stdout?: string;
+  exit?: number;
+  config?: Record<string, string>;
+}
+
+function mockLayer(options: MockLayerOptions = {}) {
+  const { stdout, exit, config = {} } = options;
   const proc = new Proxy({} as CommandExecutor.Process, {
     get: (_, prop) => {
       if (prop === CommandExecutor.ProcessTypeId)
@@ -43,9 +50,7 @@ function mockLayer(stdout?: string, exitCode?: number) {
           ? Stream.make(textEncoder.encode(stdout))
           : Stream.empty;
       if (prop === "exitCode")
-        return typeof exitCode === "number"
-          ? Effect.succeed(exitCode)
-          : Effect.never;
+        return typeof exit === "number" ? Effect.succeed(exit) : Effect.never;
       if (prop === "kill") return () => Effect.void;
     },
   });
@@ -54,6 +59,9 @@ function mockLayer(stdout?: string, exitCode?: number) {
     Layer.provideMerge(databaseLayer),
     Layer.provideMerge(consoleLayer),
     Layer.provideMerge(loggerLayer),
+    Layer.provideMerge(
+      Layer.setConfigProvider(ConfigProvider.fromJson(config)),
+    ),
     Layer.provideMerge(
       Layer.succeed(
         CommandExecutor.CommandExecutor,
@@ -74,7 +82,11 @@ it.scopedLive("creates client with parsed port", () => {
       baseUrl: `http://127.0.0.1:${port}`,
       headers: { authorization: expect.stringMatching(/^Basic /) },
     });
-  }).pipe(Effect.provide(mockLayer(`starting...\nlistening on :${port}\n`)));
+  }).pipe(
+    Effect.provide(
+      mockLayer({ stdout: `starting...\nlistening on :${port}\n` }),
+    ),
+  );
 });
 
 it.scopedLive.fails("dies when stdout closes without announcing port", () =>
@@ -82,7 +94,7 @@ it.scopedLive.fails("dies when stdout closes without announcing port", () =>
 );
 
 it.scopedLive.fails("dies when stdout has listening but no port", () =>
-  Layer.launch(mockLayer("listening without port\n")),
+  Layer.launch(mockLayer({ stdout: "listening without port\n" })),
 );
 
 // --- Process exit ---
@@ -91,14 +103,18 @@ it.scopedLive("completes when process exits with code 0", () =>
   Effect.gen(function* () {
     const opencode = yield* OpenCode;
     yield* opencode.fiber;
-  }).pipe(Effect.provide(mockLayer("listening on :4567\n", 0))),
+  }).pipe(
+    Effect.provide(mockLayer({ stdout: "listening on :4567\n", exit: 0 })),
+  ),
 );
 
 it.scopedLive.fails("dies when process exits with non-zero code", () =>
   Effect.gen(function* () {
     const opencode = yield* OpenCode;
     yield* opencode.fiber;
-  }).pipe(Effect.provide(mockLayer("listening on :4567\n", 1))),
+  }).pipe(
+    Effect.provide(mockLayer({ stdout: "listening on :4567\n", exit: 1 })),
+  ),
 );
 
 // --- Sandbox ---
@@ -108,7 +124,7 @@ it.scopedLive("skips sandbox when platform is unsupported", () =>
     yield* OpenCode;
     expect(SandboxManagerMock.isSupportedPlatform).toHaveBeenCalled();
     expect(SandboxManagerMock.initialize).not.toHaveBeenCalled();
-  }).pipe(Effect.provide(mockLayer("listening on :4567\n"))),
+  }).pipe(Effect.provide(mockLayer({ stdout: "listening on :4567\n" }))),
 );
 
 it.scopedLive("skips sandbox when dependencies have errors", () => {
@@ -120,7 +136,7 @@ it.scopedLive("skips sandbox when dependencies have errors", () => {
     yield* OpenCode;
     expect(SandboxManagerMock.checkDependencies).toHaveBeenCalled();
     expect(SandboxManagerMock.initialize).not.toHaveBeenCalled();
-  }).pipe(Effect.provide(mockLayer("listening on :4567\n")));
+  }).pipe(Effect.provide(mockLayer({ stdout: "listening on :4567\n" })));
 });
 
 // Uses it.live (not scopedLive) + manual Effect.scoped to assert that
@@ -131,7 +147,7 @@ it.live("initializes and resets sandbox when available", () => {
     Effect.gen(function* () {
       yield* OpenCode;
       expect(SandboxManagerMock.initialize).toHaveBeenCalled();
-    }).pipe(Effect.provide(mockLayer("listening on :4567\n"))),
+    }).pipe(Effect.provide(mockLayer({ stdout: "listening on :4567\n" }))),
   ).pipe(Effect.tap(() => expect(SandboxManagerMock.reset).toHaveBeenCalled()));
 });
 
@@ -140,7 +156,7 @@ it.scopedLive("wraps command with sandbox when sandbox is available", () => {
   return Effect.gen(function* () {
     yield* OpenCode;
     expect(SandboxManagerMock.wrapWithSandbox).toHaveBeenCalled();
-  }).pipe(Effect.provide(mockLayer("listening on :4567\n")));
+  }).pipe(Effect.provide(mockLayer({ stdout: "listening on :4567\n" })));
 });
 
 for (const value of ["1", "true", "TRUE"]) {
@@ -150,9 +166,11 @@ for (const value of ["1", "true", "TRUE"]) {
       expect(SandboxManagerMock.isSupportedPlatform).not.toHaveBeenCalled();
       expect(SandboxManagerMock.initialize).not.toHaveBeenCalled();
     }).pipe(
-      Effect.provide(mockLayer("listening on :4567\n")),
-      Effect.withConfigProvider(
-        ConfigProvider.fromJson({ DANGEROUSLY_DISABLE_SANDBOX: value }),
+      Effect.provide(
+        mockLayer({
+          stdout: "listening on :4567\n",
+          config: { DANGEROUSLY_DISABLE_SANDBOX: value },
+        }),
       ),
     ),
   );
