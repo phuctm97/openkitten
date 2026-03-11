@@ -62,7 +62,7 @@ const permissionTypes: Record<
   external_directory: {
     emoji: "💾",
     title: "Access external directory",
-    description: "Access a directory outside the project.",
+    description: "Access a path outside the project.",
   },
   doom_loop: {
     emoji: "🔄",
@@ -107,16 +107,12 @@ function formatEdit(lines: string[], request: PermissionRequest) {
 }
 
 function formatExternalDirectory(lines: string[], request: PermissionRequest) {
-  const dir =
-    stringMeta(request.metadata, "parentDir") ??
-    stringMeta(request.metadata, "filepath");
-  if (dir) {
-    lines.push(`\`${dir}\``);
-  }
-  for (const pattern of request.patterns) {
-    if (pattern !== dir) {
-      lines.push(`\`${pattern}\``);
+  if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const pattern of request.patterns) {
+      lines.push(pattern);
     }
+    lines.push("```");
   }
 }
 

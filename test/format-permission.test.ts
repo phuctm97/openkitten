@@ -483,7 +483,7 @@ describe("formatPermissionMessage", () => {
     expect(text).not.toContain("```limit");
   });
 
-  it("formats multiple patterns as separate inline codes", () => {
+  it("formats multiple patterns in code block", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
         makeRequest({
@@ -494,6 +494,7 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Access external directory");
+    expect(text).toContain("```pattern");
     expect(text).toContain("/Users/foo/projects/*");
     expect(text).toContain("/Users/foo/.config/*");
   });
@@ -548,27 +549,24 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Access external directory");
-    expect(text).toContain("Access a directory outside the project.");
-    expect(text).toContain("/Users/foo/projects");
+    expect(text).toContain("Access a path outside the project.");
+    expect(text).toContain("```pattern");
     expect(text).toContain("/Users/foo/projects/*");
   });
 
-  it("formats external_directory without duplicate when pattern matches dir", () => {
+  it("formats external_directory without metadata", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
         makeRequest({
           permission: "external_directory",
-          patterns: ["/Users/foo/projects"],
-          metadata: {
-            parentDir: "/Users/foo/projects",
-          },
+          patterns: ["/Users/foo/projects/*"],
         }),
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    // Should show the dir once, not duplicated
-    const matches = text.match(/\/Users\/foo\/projects/g);
-    expect(matches).toHaveLength(1);
+    expect(text).toContain("Access external directory");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("/Users/foo/projects/*");
   });
 });
 
