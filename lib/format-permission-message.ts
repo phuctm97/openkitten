@@ -79,6 +79,14 @@ function stringMeta(
   return typeof value === "string" && value ? value : undefined;
 }
 
+function numberMeta(
+  metadata: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = metadata[key];
+  return typeof value === "number" ? value : undefined;
+}
+
 function formatBash(lines: string[], request: PermissionRequest) {
   if (request.patterns.length > 0) {
     lines.push("```bash");
@@ -164,6 +172,27 @@ function formatTask(lines: string[], request: PermissionRequest) {
   }
 }
 
+function formatWebfetch(lines: string[], request: PermissionRequest) {
+  const url = stringMeta(request.metadata, "url") ?? request.patterns[0];
+  if (url) {
+    lines.push("```url");
+    lines.push(url);
+    lines.push("```");
+  }
+  const format = stringMeta(request.metadata, "format");
+  if (format) {
+    lines.push("```format");
+    lines.push(format);
+    lines.push("```");
+  }
+  const timeout = numberMeta(request.metadata, "timeout");
+  if (timeout) {
+    lines.push("```timeout");
+    lines.push(`${timeout}s`);
+    lines.push("```");
+  }
+}
+
 function formatList(lines: string[], request: PermissionRequest) {
   const dir = stringMeta(request.metadata, "path") ?? request.patterns[0];
   if (dir) {
@@ -224,6 +253,8 @@ export function formatPermissionMessage(request: PermissionRequest) {
     formatGrep(lines, request);
   } else if (request.permission === "task") {
     formatTask(lines, request);
+  } else if (request.permission === "webfetch") {
+    formatWebfetch(lines, request);
   } else if (request.permission === "list") {
     formatList(lines, request);
   } else if (request.permission === "external_directory") {

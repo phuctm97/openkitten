@@ -296,8 +296,49 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("general");
   });
 
+  it("formats webfetch with url, format, and timeout from metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "webfetch",
+          patterns: ["https://example.com"],
+          metadata: {
+            url: "https://example.com",
+            format: "markdown",
+            timeout: 30,
+          },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Fetch URL");
+    expect(text).toContain("Fetch content from a URL.");
+    expect(text).toContain("```url");
+    expect(text).toContain("https://example.com");
+    expect(text).toContain("```format");
+    expect(text).toContain("markdown");
+    expect(text).toContain("```timeout");
+    expect(text).toContain("30s");
+  });
+
+  it("formats webfetch without metadata, falls back url to pattern", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "webfetch",
+          patterns: ["https://example.com"],
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Fetch URL");
+    expect(text).toContain("```url");
+    expect(text).toContain("https://example.com");
+    expect(text).not.toContain("```format");
+    expect(text).not.toContain("```timeout");
+  });
+
   it.each([
-    ["webfetch", "Fetch URL", "Fetch content from a URL."],
     ["websearch", "Web search", "Search the web for information."],
     ["codesearch", "Code search", "Search the web for code examples."],
   ])("formats %s with title and description", (permission, title, description) => {
