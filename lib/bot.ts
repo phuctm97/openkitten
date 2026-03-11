@@ -111,11 +111,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             }),
           ).pipe(Effect.forkIn(botScope));
           yield* Ref.update(typingFibers, HashMap.set(sessionId, fiber));
-        }).pipe(
-          Effect.annotateLogs("sessionId", sessionId),
-          Effect.annotateLogs("chatId", chatId),
-          Effect.annotateLogs("threadId", threadId),
-        );
+        });
 
       /** Stops the typing indicator for a session. No-op if not found. */
       const stopTyping = (sessionId: string) =>
@@ -127,7 +123,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           if (Option.isNone(fiber)) return;
           yield* Fiber.interrupt(fiber.value);
           yield* Effect.logDebug("Bot.service stopped the typing indicator");
-        }).pipe(Effect.annotateLogs("sessionId", sessionId));
+        });
 
       // --- Question helpers ---
 
@@ -186,11 +182,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               selected: emptySelection,
             }),
           );
-        }).pipe(
-          Effect.annotateLogs("sessionId", pq.sessionId),
-          Effect.annotateLogs("chatId", pq.chatId),
-          Effect.annotateLogs("threadId", pq.threadId),
-        );
+        });
 
       /** Processes a question.asked event or reconciled pending question. */
       const processQuestionAsked = (
@@ -216,10 +208,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           };
           yield* Ref.update(pendingQuestions, HashMap.set(localId, pq));
           yield* sendCurrentQuestion(pq);
-        }).pipe(
-          Effect.annotateLogs("requestId", request.id),
-          Effect.annotateLogs("sessionId", request.sessionID),
-        );
+        });
 
       /** Records an answer for the current question and advances or submits. */
       const advanceOrSubmit = (localId: string, answer: string[]) =>
@@ -262,7 +251,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               Effect.tap(Effect.logDebug("Bot.service answered the question")),
             );
           }
-        }).pipe(Effect.annotateLogs("localId", localId));
+        });
 
       /** Finds a pending question by requestId. */
       const findPendingByRequestId = (requestId: string) =>
@@ -331,11 +320,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               interactionMessageId: sent.message_id,
             }),
           );
-        }).pipe(
-          Effect.annotateLogs("sessionId", pp.request.sessionID),
-          Effect.annotateLogs("chatId", pp.chatId),
-          Effect.annotateLogs("threadId", pp.threadId),
-        );
+        });
 
       /** Processes a permission.asked event — sends immediately or queues. */
       const processPermissionAsked = (
@@ -361,10 +346,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           } else {
             yield* sendNewPermission(request, chatId, threadId);
           }
-        }).pipe(
-          Effect.annotateLogs("requestId", request.id),
-          Effect.annotateLogs("sessionId", request.sessionID),
-        );
+        });
 
       /** Finds a pending permission by requestId. */
       const findPendingPermissionByRequestId = (requestId: string) =>
@@ -525,12 +507,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               }),
             ),
           );
-        }).pipe(
-          Effect.annotateLogs("messageId", message.id),
-          Effect.annotateLogs("sessionId", message.sessionID),
-          Effect.annotateLogs("chatId", session.chatId),
-          Effect.annotateLogs("threadId", session.threadId || undefined),
-        );
+        });
 
       /** Dispatches a single SSE event to the appropriate handler. */
       const processEvent = (event: Event) =>
@@ -545,7 +522,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               if (Option.isNone(session)) {
                 yield* Effect.logDebug(
                   "Bot.service ignored a message from an unknown session",
-                ).pipe(Effect.annotateLogs("sessionId", info.sessionID));
+                );
               } else {
                 yield* processCompletedAssistantMessage(session.value, info);
               }
@@ -576,7 +553,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             if (Option.isNone(session)) {
               yield* Effect.logDebug(
                 "Bot.service ignored a session.error from an unknown session",
-              ).pipe(Effect.annotateLogs("sessionId", sessionID));
+              );
               return;
             }
             const sendOpts = {
@@ -617,9 +594,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   });
                 }),
               ),
-              Effect.annotateLogs("sessionId", sessionID),
-              Effect.annotateLogs("chatId", session.value.chatId),
-              Effect.annotateLogs("threadId", sendOpts.threadId),
             );
           } else if (event.type === "session.compacted") {
             const { sessionID } = event.properties;
@@ -627,7 +601,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             if (Option.isNone(session)) {
               yield* Effect.logDebug(
                 "Bot.service ignored a session.compacted from an unknown session",
-              ).pipe(Effect.annotateLogs("sessionId", sessionID));
+              );
             } else {
               yield* Bot.sendChunks({
                 client,
@@ -635,14 +609,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 ignoreErrors: false,
                 chatId: session.value.chatId,
                 threadId: session.value.threadId || undefined,
-              }).pipe(
-                Effect.annotateLogs("sessionId", sessionID),
-                Effect.annotateLogs("chatId", session.value.chatId),
-                Effect.annotateLogs(
-                  "threadId",
-                  session.value.threadId || undefined,
-                ),
-              );
+              });
             }
           } else if (event.type === "question.asked") {
             const request = event.properties;
@@ -650,7 +617,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             if (Option.isNone(session)) {
               yield* Effect.logDebug(
                 "Bot.service ignored a question.asked from an unknown session",
-              ).pipe(Effect.annotateLogs("sessionId", request.sessionID));
+              );
             } else {
               yield* processQuestionAsked(request, session.value);
             }
@@ -693,7 +660,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             if (Option.isNone(session)) {
               yield* Effect.logDebug(
                 "Bot.service ignored a permission.asked from an unknown session",
-              ).pipe(Effect.annotateLogs("sessionId", request.sessionID));
+              );
             } else {
               yield* processPermissionAsked(request, session.value);
             }
@@ -792,9 +759,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                     Effect.annotateLogs("debugHint", "Bot.reconcileMessages"),
                   ),
                 ),
-                Effect.annotateLogs("sessionId", session.id),
-                Effect.annotateLogs("chatId", session.chatId),
-                Effect.annotateLogs("threadId", session.threadId || undefined),
               ),
             { concurrency: "unbounded", discard: true },
           );
@@ -995,10 +959,6 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 }
               }),
             ),
-            Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("messageId", ctx.msg?.message_id),
-            Effect.annotateLogs("chatId", ctx.chat?.id),
-            Effect.annotateLogs("threadId", ctx.msg?.message_thread_id),
             Effect.forkIn(botScope),
             Effect.asVoid,
           ),
@@ -1023,12 +983,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 threadId: ctx.msg?.message_thread_id,
               });
             }
-          }).pipe(
-            Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("messageId", ctx.msg?.message_id),
-            Effect.annotateLogs("chatId", ctx.chat?.id),
-            Effect.annotateLogs("threadId", ctx.msg?.message_thread_id),
-          ),
+          }),
         ),
       );
 
@@ -1072,7 +1027,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             ignoreErrors: false,
             chatId,
             threadId,
-          }).pipe(Effect.annotateLogs("sessionId", sessionId));
+          });
         }),
       );
 
@@ -1091,7 +1046,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               opencode.client.session.abort({ sessionID: sessionId }),
             );
             if (result.error) return yield* Effect.die(result.error);
-          }).pipe(Effect.annotateLogs("sessionId", sessionId));
+          });
         }),
       );
 
@@ -1110,7 +1065,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               opencode.client.session.summarize({ sessionID: sessionId }),
             );
             if (result.error) return yield* Effect.die(result.error);
-          }).pipe(Effect.annotateLogs("sessionId", sessionId));
+          });
         }),
       );
 
@@ -1210,7 +1165,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             }
             yield* database.session.delete(sessionId);
             yield* Effect.logInfo("Bot.service reset the session");
-          }).pipe(Effect.annotateLogs("sessionId", sessionId));
+          });
           yield* Bot.sendChunks({
             client,
             chunks: yield* formatReset(),
@@ -1474,7 +1429,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   Ref.update(promptingRef, HashSet.remove(sessionId)),
                 ),
               );
-            }).pipe(Effect.annotateLogs("sessionId", sessionId));
+            });
           }),
         ),
       );
@@ -1537,9 +1492,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         threadId: threadId || 0,
       });
       if (Option.isSome(existing)) {
-        yield* Effect.logTrace("Bot.service reused an existing session").pipe(
-          Effect.annotateLogs("sessionId", existing.value.id),
-        );
+        yield* Effect.logTrace("Bot.service reused an existing session");
         return { sessionId: existing.value.id, isNew: false } as const;
       }
       const result = yield* Effect.promise(() =>
@@ -1556,11 +1509,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           updatedAt: undefined,
         })
         .pipe(
-          Effect.tap(
-            Effect.logInfo("Bot.service created a new session").pipe(
-              Effect.annotateLogs("sessionId", sessionId),
-            ),
-          ),
+          Effect.tap(Effect.logInfo("Bot.service created a new session")),
           Effect.as({ sessionId, isNew: true } as const),
           Effect.catchAllDefect((defect) =>
             Effect.gen(function* () {
@@ -1578,7 +1527,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               if (Option.isNone(raced)) return yield* Effect.die(defect);
               yield* Effect.logDebug(
                 "Bot.service resolved a concurrent session race",
-              ).pipe(Effect.annotateLogs("sessionId", raced.value.id));
+              );
               return { sessionId: raced.value.id, isNew: false } as const;
             }),
           ),
