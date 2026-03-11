@@ -14,5 +14,5 @@ test("produces message with compact emoji and tip", () => {
   const chunk = chunks.at(0);
   assert.isDefined(chunk);
   assert.isDefined(chunk.markdown);
-  expect(chunk.markdown).toContain("```Info\n");
+  expect(chunk.markdown).toContain("```info\n");
 });

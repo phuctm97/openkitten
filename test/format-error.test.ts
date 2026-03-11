@@ -16,7 +16,7 @@ test("formats Error with stack trace and Trace label", () => {
   const chunk = chunks.at(0);
   assert.isDefined(chunk);
   assert.isDefined(chunk.markdown);
-  expect(chunk.markdown).toContain("```Trace\n");
+  expect(chunk.markdown).toContain("```trace\n");
 });
 
 test("formats non-Error value", () => {

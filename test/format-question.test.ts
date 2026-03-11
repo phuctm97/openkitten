@@ -111,5 +111,5 @@ test("formatQuestionPending includes tip", () => {
   const chunk = chunks.at(0);
   assert.isDefined(chunk);
   assert.isDefined(chunk.markdown);
-  expect(chunk.markdown).toContain("```Tip\n");
+  expect(chunk.markdown).toContain("```tip\n");
 });
