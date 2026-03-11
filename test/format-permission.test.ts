@@ -645,6 +645,66 @@ describe("formatPermissionMessage", () => {
     expect(text).not.toContain("```limit");
   });
 
+  it("formats skill with pattern", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "skill", patterns: ["deploy"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Run skill");
+    expect(text).toContain("Execute a registered skill.");
+    expect(text).toContain("```skill");
+    expect(text).toContain("deploy");
+  });
+
+  it("formats skill without patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "skill", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Run skill");
+    expect(text).not.toContain("```skill");
+  });
+
+  it("formats todowrite", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "todowrite", patterns: ["*"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Update todos");
+    expect(text).toContain("Update the todo list.");
+    expect(text).not.toContain("```pattern");
+  });
+
+  it("formats todoread", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "todoread", patterns: ["*"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Read todos");
+    expect(text).toContain("Read the todo list.");
+    expect(text).not.toContain("```pattern");
+  });
+
+  it("formats lsp", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "lsp", patterns: ["*"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Query LSP");
+    expect(text).toContain("Query the language server for code intelligence.");
+    expect(text).not.toContain("```pattern");
+  });
+
   it("formats multiple patterns in code block", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(

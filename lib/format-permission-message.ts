@@ -72,6 +72,26 @@ const permissionTypes: Record<
     title: "Code search",
     description: "Search the web for code examples.",
   },
+  skill: {
+    emoji: "⚡",
+    title: "Run skill",
+    description: "Execute a registered skill.",
+  },
+  todowrite: {
+    emoji: "📝",
+    title: "Update todos",
+    description: "Update the todo list.",
+  },
+  todoread: {
+    emoji: "📋",
+    title: "Read todos",
+    description: "Read the todo list.",
+  },
+  lsp: {
+    emoji: "🔗",
+    title: "Query LSP",
+    description: "Query the language server for code intelligence.",
+  },
   external_directory: {
     emoji: "💾",
     title: "Access external directory",
@@ -342,6 +362,29 @@ function formatCodesearch(lines: string[], request: PermissionRequest) {
   }
 }
 
+function formatSkill(lines: string[], request: PermissionRequest) {
+  if (request.patterns.length > 0) {
+    lines.push("```skill");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
+    lines.push("```");
+  }
+}
+
+function formatPatterns(lines: string[], request: PermissionRequest) {
+  const hasPatterns =
+    request.patterns.length > 0 &&
+    !(request.patterns.length === 1 && request.patterns[0] === "*");
+  if (hasPatterns) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
+    lines.push("```");
+  }
+}
+
 function formatExternalDirectory(lines: string[], request: PermissionRequest) {
   const filepath = stringMeta(request.metadata, "filepath");
   if (filepath) {
@@ -391,16 +434,7 @@ function formatDefault(lines: string[], request: PermissionRequest) {
   lines.push("```tool");
   lines.push(request.permission);
   lines.push("```");
-  const hasPatterns =
-    request.patterns.length > 0 &&
-    !(request.patterns.length === 1 && request.patterns[0] === "*");
-  if (hasPatterns) {
-    lines.push("```pattern");
-    for (const pattern of request.patterns) {
-      lines.push(pattern);
-    }
-    lines.push("```");
-  }
+  formatPatterns(lines, request);
   if (Object.keys(request.metadata).length > 0) {
     lines.push("```json");
     lines.push(JSON.stringify(request.metadata, null, 2));
@@ -442,6 +476,14 @@ export function formatPermissionMessage(request: PermissionRequest) {
     formatWebsearch(lines, request);
   } else if (request.permission === "codesearch") {
     formatCodesearch(lines, request);
+  } else if (request.permission === "skill") {
+    formatSkill(lines, request);
+  } else if (request.permission === "todowrite") {
+    formatPatterns(lines, request);
+  } else if (request.permission === "todoread") {
+    formatPatterns(lines, request);
+  } else if (request.permission === "lsp") {
+    formatPatterns(lines, request);
   } else if (request.permission === "external_directory") {
     formatExternalDirectory(lines, request);
   } else if (request.permission === "doom_loop") {
