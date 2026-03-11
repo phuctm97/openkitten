@@ -296,6 +296,51 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("general");
   });
 
+  it("formats task without metadata or patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "task", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Launch agent");
+    expect(text).not.toContain("```description");
+    expect(text).not.toContain("```agent");
+  });
+
+  it("formats websearch without metadata or patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "websearch", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Web search");
+    expect(text).not.toContain("```query");
+  });
+
+  it("formats codesearch without metadata or patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "codesearch", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Code search");
+    expect(text).not.toContain("```query");
+  });
+
+  it("formats webfetch without metadata or patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "webfetch", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Fetch URL");
+    expect(text).not.toContain("```url");
+  });
+
   it("formats webfetch with url, format, and timeout from metadata", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
@@ -338,19 +383,104 @@ describe("formatPermissionMessage", () => {
     expect(text).not.toContain("```timeout");
   });
 
-  it.each([
-    ["websearch", "Web search", "Search the web for information."],
-    ["codesearch", "Code search", "Search the web for code examples."],
-  ])("formats %s with title and description", (permission, title, description) => {
+  it("formats websearch with all metadata", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
-        makeRequest({ permission, patterns: ["test-pattern"] }),
+        makeRequest({
+          permission: "websearch",
+          patterns: ["effect typescript"],
+          metadata: {
+            query: "effect typescript",
+            type: "deep",
+            numResults: 10,
+            livecrawl: "preferred",
+            contextMaxCharacters: 5000,
+          },
+        }),
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain(title);
-    expect(text).toContain(description);
-    expect(text).toContain("test-pattern");
+    expect(text).toContain("Web search");
+    expect(text).toContain("Search the web for information.");
+    expect(text).toContain("```query");
+    expect(text).toContain("effect typescript");
+    expect(text).toContain("```mode");
+    expect(text).toContain("deep, live results preferred");
+    expect(text).toContain("```limit");
+    expect(text).toContain("up to 10 results / 5000 characters");
+  });
+
+  it("formats websearch without metadata, falls back query to pattern", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "websearch",
+          patterns: ["effect typescript"],
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Web search");
+    expect(text).toContain("```query");
+    expect(text).toContain("effect typescript");
+    expect(text).not.toContain("```mode");
+    expect(text).not.toContain("```limit");
+  });
+
+  it("formats websearch with fallback livecrawl", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "websearch",
+          patterns: ["effect typescript"],
+          metadata: {
+            query: "effect typescript",
+            livecrawl: "fallback",
+          },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("```mode");
+    expect(text).toContain("live results if needed");
+  });
+
+  it("formats codesearch with query and tokens from metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "codesearch",
+          patterns: ["effect typescript"],
+          metadata: {
+            query: "effect typescript",
+            tokensNum: 10000,
+          },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Code search");
+    expect(text).toContain("Search the web for code examples.");
+    expect(text).toContain("```query");
+    expect(text).toContain("effect typescript");
+    expect(text).toContain("```limit");
+    expect(text).toContain("up to 10000 tokens");
+  });
+
+  it("formats codesearch without metadata, falls back query to pattern", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "codesearch",
+          patterns: ["effect typescript"],
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Code search");
+    expect(text).toContain("```query");
+    expect(text).toContain("effect typescript");
+    expect(text).not.toContain("```limit");
   });
 
   it("formats multiple patterns as separate inline codes", () => {

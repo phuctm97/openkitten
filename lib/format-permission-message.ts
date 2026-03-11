@@ -172,6 +172,51 @@ function formatTask(lines: string[], request: PermissionRequest) {
   }
 }
 
+function formatWebsearch(lines: string[], request: PermissionRequest) {
+  const query = stringMeta(request.metadata, "query") ?? request.patterns[0];
+  if (query) {
+    lines.push("```query");
+    lines.push(query);
+    lines.push("```");
+  }
+  const type = stringMeta(request.metadata, "type");
+  const livecrawl = stringMeta(request.metadata, "livecrawl");
+  const modeParts: string[] = [];
+  if (type) modeParts.push(type);
+  if (livecrawl === "preferred") modeParts.push("live results preferred");
+  else if (livecrawl === "fallback") modeParts.push("live results if needed");
+  if (modeParts.length > 0) {
+    lines.push("```mode");
+    lines.push(modeParts.join(", "));
+    lines.push("```");
+  }
+  const numResults = numberMeta(request.metadata, "numResults");
+  const maxChars = numberMeta(request.metadata, "contextMaxCharacters");
+  const limits: string[] = [];
+  if (numResults) limits.push(`${numResults} results`);
+  if (maxChars) limits.push(`${maxChars} characters`);
+  if (limits.length > 0) {
+    lines.push("```limit");
+    lines.push(`up to ${limits.join(" / ")}`);
+    lines.push("```");
+  }
+}
+
+function formatCodesearch(lines: string[], request: PermissionRequest) {
+  const query = stringMeta(request.metadata, "query") ?? request.patterns[0];
+  if (query) {
+    lines.push("```query");
+    lines.push(query);
+    lines.push("```");
+  }
+  const tokensNum = numberMeta(request.metadata, "tokensNum");
+  if (tokensNum) {
+    lines.push("```limit");
+    lines.push(`up to ${tokensNum} tokens`);
+    lines.push("```");
+  }
+}
+
 function formatWebfetch(lines: string[], request: PermissionRequest) {
   const url = stringMeta(request.metadata, "url") ?? request.patterns[0];
   if (url) {
@@ -253,6 +298,10 @@ export function formatPermissionMessage(request: PermissionRequest) {
     formatGrep(lines, request);
   } else if (request.permission === "task") {
     formatTask(lines, request);
+  } else if (request.permission === "websearch") {
+    formatWebsearch(lines, request);
+  } else if (request.permission === "codesearch") {
+    formatCodesearch(lines, request);
   } else if (request.permission === "webfetch") {
     formatWebfetch(lines, request);
   } else if (request.permission === "list") {
