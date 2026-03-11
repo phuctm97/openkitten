@@ -268,11 +268,11 @@ describe("formatPermissionPrompt", () => {
 
 describe("formatPermissionReplied", () => {
   it("formats 'once' reply", () => {
-    expect(formatPermissionReplied("once")).toBe("✓ Allowed (Once)");
+    expect(formatPermissionReplied("once")).toBe("✓ Allowed (once)");
   });
 
   it("formats 'always' reply", () => {
-    expect(formatPermissionReplied("always")).toBe("✓ Allowed (Always)");
+    expect(formatPermissionReplied("always")).toBe("✓ Allowed (always)");
   });
 
   it("formats 'reject' reply", () => {

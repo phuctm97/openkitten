@@ -289,8 +289,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       /** Builds an InlineKeyboard for a permission request. */
       const buildPermissionKeyboard = (localId: string) => {
         const kb = new InlineKeyboard();
-        kb.text("Allow (Once)", `p:${localId}:once`);
-        kb.text("Allow (Always)", `p:${localId}:always`);
+        kb.text("Allow (once)", `p:${localId}:once`);
+        kb.text("Allow (always)", `p:${localId}:always`);
         kb.row();
         kb.text("Deny", `pr:${localId}`);
         return kb;

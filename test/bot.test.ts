@@ -322,7 +322,7 @@ const {
     formatPermissionPromptMock: vi
       .fn()
       .mockReturnValue("_How would you like to proceed?_"),
-    formatPermissionRepliedMock: vi.fn().mockReturnValue("✓ Allowed (Once)"),
+    formatPermissionRepliedMock: vi.fn().mockReturnValue("✓ Allowed (once)"),
     formatQuestionMessageMock: vi
       .fn()
       .mockReturnValue(
