@@ -21,7 +21,11 @@ import {
   Ref,
   Runtime,
 } from "effect";
-import { Bot as GrammyBot, InlineKeyboard } from "grammy";
+import {
+  Bot as GrammyBot,
+  type Context as GrammyContext,
+  InlineKeyboard,
+} from "grammy";
 import invariant from "tiny-invariant";
 import { Database } from "~/lib/database";
 import { formatBusy } from "~/lib/format-busy";
@@ -969,6 +973,41 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
 
       // --- grammY handlers ---
 
+      // Forks handler work into botScope so grammY's sequential event loop is
+      // never blocked — updates are processed concurrently instead of queuing
+      // behind slow network calls or API requests.
+      const grammyHandler = (
+        ctx: GrammyContext,
+        effect: Effect.Effect<void>,
+      ): Promise<void> =>
+        Runtime.runPromise(runtime)(
+          effect.pipe(
+            Effect.catchAllDefect((defect) =>
+              Effect.gen(function* () {
+                yield* Effect.logError(defect).pipe(
+                  Effect.annotateLogs("debugHint", "Bot.grammyEventHandler"),
+                );
+                if (ctx.chat) {
+                  yield* Bot.sendChunks({
+                    client,
+                    chunks: yield* formatError(defect),
+                    ignoreErrors: true,
+                    chatId: ctx.chat.id,
+                    threadId: ctx.msg?.message_thread_id,
+                  });
+                }
+              }),
+            ),
+            Effect.annotateLogs("userId", ctx.from?.id),
+            Effect.annotateLogs("messageId", ctx.msg?.message_id),
+            Effect.annotateLogs("chatId", ctx.chat?.id),
+            Effect.annotateLogs("threadId", ctx.msg?.message_thread_id),
+            Effect.forkIn(botScope),
+            Effect.asVoid,
+          ),
+        );
+
+      // Safety net — only fires for errors in grammyHandler setup itself (rare).
       client.catch(({ error, ctx }) =>
         Runtime.runPromise(runtime)(
           Effect.gen(function* () {
@@ -976,7 +1015,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ? Cause.squash(error[Runtime.FiberFailureCauseId])
               : error;
             yield* Effect.logError(cause).pipe(
-              Effect.annotateLogs("debugHint", "Bot.grammyHandlerError"),
+              Effect.annotateLogs("debugHint", "Bot.grammyErrorHandler"),
             );
             if (ctx.chat) {
               yield* Bot.sendChunks({
@@ -984,14 +1023,14 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 chunks: yield* formatError(cause),
                 ignoreErrors: true,
                 chatId: ctx.chat.id,
-                threadId: ctx.message?.message_thread_id,
+                threadId: ctx.msg?.message_thread_id,
               });
             }
           }).pipe(
             Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("messageId", ctx.message?.message_id),
+            Effect.annotateLogs("messageId", ctx.msg?.message_id),
             Effect.annotateLogs("chatId", ctx.chat?.id),
-            Effect.annotateLogs("threadId", ctx.message?.message_thread_id),
+            Effect.annotateLogs("threadId", ctx.msg?.message_thread_id),
           ),
         ),
       );
@@ -1004,7 +1043,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         }) => Effect.Effect<void>,
       ) =>
         client.command(name, (ctx) =>
-          Runtime.runPromise(runtime)(
+          grammyHandler(
+            ctx,
             Effect.gen(function* () {
               if (ctx.from?.id !== userId) {
                 return yield* Effect.logWarning(
@@ -1016,12 +1056,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 chatId: ctx.chat.id,
                 threadId: ctx.message?.message_thread_id,
               });
-            }).pipe(
-              Effect.annotateLogs("userId", ctx.from?.id),
-              Effect.annotateLogs("messageId", ctx.message?.message_id),
-              Effect.annotateLogs("chatId", ctx.chat.id),
-              Effect.annotateLogs("threadId", ctx.message?.message_thread_id),
-            ),
+            }),
           ),
         );
 
@@ -1191,7 +1226,8 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
 
       // --- Callback query handler for inline keyboard buttons ---
       client.on("callback_query:data", (ctx) =>
-        Runtime.runPromise(runtime)(
+        grammyHandler(
+          ctx,
           Effect.gen(function* () {
             if (ctx.from?.id !== userId) return;
             const data = ctx.callbackQuery.data;
@@ -1331,15 +1367,13 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             yield* Effect.promise(() => ctx.answerCallbackQuery()).pipe(
               Effect.ignoreLogged,
             );
-          }).pipe(
-            Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("chatId", ctx.chat?.id),
-          ),
+          }),
         ),
       );
 
       client.on("message:text", (ctx) =>
-        Runtime.runPromise(runtime)(
+        grammyHandler(
+          ctx,
           Effect.gen(function* () {
             if (ctx.from?.id !== userId) {
               return yield* Effect.logWarning(
@@ -1444,12 +1478,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 ),
               );
             }).pipe(Effect.annotateLogs("sessionId", sessionId));
-          }).pipe(
-            Effect.annotateLogs("userId", ctx.from?.id),
-            Effect.annotateLogs("messageId", ctx.message?.message_id),
-            Effect.annotateLogs("chatId", ctx.chat.id),
-            Effect.annotateLogs("threadId", ctx.message?.message_thread_id),
-          ),
+          }),
         ),
       );
 

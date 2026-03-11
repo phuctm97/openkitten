@@ -14,6 +14,18 @@ import { Database } from "~/lib/database";
 import { defaultLayer } from "~/test/default-layer";
 import { opencodeLayer } from "~/test/opencode-layer";
 
+// Flush JS microtasks and yield to let forked Effect fibers complete.
+// Handlers are forked via grammyHandler, so the handler promise resolves
+// immediately; this helper lets the background fiber finish its async work.
+const flushFibers = Effect.forEach(
+  Array.from({ length: 10 }),
+  () =>
+    Effect.promise(() => Promise.resolve()).pipe(
+      Effect.tap(() => Effect.yieldNow()),
+    ),
+  { discard: true },
+);
+
 // --- Types for grammY mock ---
 
 interface GrammyBotContext {
@@ -659,7 +671,7 @@ describe("handler", () => {
       }).pipe(Effect.provide(validFullLayer)),
   );
 
-  it.scopedLive("dies when insert defects and no winner found", () =>
+  it.scopedLive("sends error when insert defects and no winner found", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       vi.spyOn(database.session, "insert").mockImplementationOnce(() =>
@@ -670,20 +682,45 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "hello" },
-          }),
-        ).rejects.toThrow("disk I/O error");
-      });
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+        }),
+      );
+      yield* Effect.sleep(0);
       expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
+      expect(formatErrorMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 
-  it.scopedLive("dies when orphaned session delete fails", () =>
+  it.scopedLive(
+    "sends error when insert defects and ctx.chat is undefined",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        vi.spyOn(database.session, "insert").mockImplementationOnce(() =>
+          Effect.die(new Error("disk I/O error")),
+        );
+        yield* Bot;
+        yield* Effect.sleep(0);
+        const call = onSpy.mock.lastCall;
+        assert.isDefined(call);
+        const handler = call[1];
+        yield* Effect.promise(() =>
+          handler({
+            from: { id: 123 },
+            message: { message_id: 1, text: "hello" },
+          }),
+        );
+        yield* Effect.sleep(0);
+        expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
+        expect(formatErrorMock).not.toHaveBeenCalled();
+      }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("sends error when orphaned session delete fails", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       // Pre-insert the winner
@@ -719,16 +756,16 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "hello" },
-          }),
-        ).rejects.toThrow("delete failed");
-      });
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+        }),
+      );
+      yield* Effect.sleep(0);
       expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
+      expect(formatErrorMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 
@@ -800,9 +837,7 @@ describe("handler", () => {
     }).pipe(Effect.provide(validFullLayer)),
   );
 
-  // Uses Effect.promise + rejects.toThrow instead of it.scopedLive.fails so
-  // we can assert post-failure state (e.g. reply not called).
-  it.scopedLive("dies when session create returns error", () =>
+  it.scopedLive("sends error when session create returns error", () =>
     Effect.gen(function* () {
       sessionCreateMock.mockResolvedValueOnce({
         data: undefined,
@@ -813,20 +848,20 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "hello" },
-          }),
-        ).rejects.toThrow();
-      });
-      expect(sendMessageMock).not.toHaveBeenCalled();
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(formatErrorMock).toHaveBeenCalled();
+      expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 
-  it.scopedLive("dies when session prompt returns error", () =>
+  it.scopedLive("sends error when session prompt returns error", () =>
     Effect.gen(function* () {
       sessionPromptAsyncMock.mockResolvedValueOnce({
         data: undefined,
@@ -837,20 +872,19 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "hello" },
-          }),
-        ).rejects.toThrow();
-      });
-      expect(sendMessageMock).not.toHaveBeenCalled();
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(formatErrorMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 
-  it.scopedLive("dies when session status returns error", () =>
+  it.scopedLive("sends error when session status returns error", () =>
     Effect.gen(function* () {
       // First call is consumed by typing reconciliation on startup
       sessionStatusMock
@@ -864,16 +898,15 @@ describe("handler", () => {
       const call = onSpy.mock.lastCall;
       assert.isDefined(call);
       const handler = call[1];
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "hello" },
-          }),
-        ).rejects.toThrow();
-      });
-      expect(sendMessageMock).not.toHaveBeenCalled();
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "hello" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      expect(formatErrorMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 
@@ -1517,7 +1550,7 @@ describe("handler", () => {
           message: { message_id: 1, text: "hello" },
         }),
       );
-      yield* Effect.yieldNow();
+      yield* flushFibers;
       expect(sendMessageMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer));
   });
@@ -1704,6 +1737,7 @@ describe("handler", () => {
           },
         }),
       );
+      yield* Effect.sleep(0);
       expect(formatBusyMock).toHaveBeenCalled();
       expect(sendMessageMock).toHaveBeenCalledWith(123, expect.any(String), {
         parse_mode: "MarkdownV2",
@@ -2099,7 +2133,7 @@ describe("/stop command", () => {
     }).pipe(Effect.provide(validFullLayer)),
   );
 
-  it.scopedLive("dies when session.abort returns error", () =>
+  it.scopedLive("sends error when session.abort returns error", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
@@ -2115,16 +2149,16 @@ describe("/stop command", () => {
       yield* Bot;
       yield* Effect.sleep(0);
       const handler = getCommandHandler("stop");
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "/stop" },
-          }),
-        ).rejects.toThrow("abort failed");
-      });
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/stop" },
+        }),
+      );
+      yield* Effect.sleep(0);
       expect(formatStopMock).not.toHaveBeenCalled();
+      expect(formatErrorMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 
@@ -2201,7 +2235,7 @@ describe("/reset command", () => {
     }).pipe(Effect.provide(validFullLayer)),
   );
 
-  it.scopedLive("dies when session.abort returns error in /reset", () =>
+  it.scopedLive("sends error when session.abort returns error in /reset", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
@@ -2217,17 +2251,17 @@ describe("/reset command", () => {
       yield* Bot;
       yield* Effect.sleep(0);
       const handler = getCommandHandler("reset");
-      yield* Effect.promise(async () => {
-        await expect(
-          handler({
-            from: { id: 123 },
-            chat: { id: 123 },
-            message: { message_id: 1, text: "/reset" },
-          }),
-        ).rejects.toThrow("abort failed");
-      });
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/reset" },
+        }),
+      );
+      yield* Effect.sleep(0);
       expect(sessionDeleteMock).not.toHaveBeenCalled();
       expect(formatResetMock).not.toHaveBeenCalled();
+      expect(formatErrorMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 
@@ -2327,7 +2361,7 @@ describe("/compact command", () => {
     }).pipe(Effect.provide(validFullLayer)),
   );
 
-  it.scopedLive("dies when summarize returns error", () =>
+  it.scopedLive("sends error when summarize returns error", () =>
     Effect.gen(function* () {
       const database = yield* Database;
       yield* database.session.insert({
@@ -2349,8 +2383,10 @@ describe("/compact command", () => {
           chat: { id: 123 },
           message: { message_id: 1, text: "/compact" },
         }),
-      ).pipe(Effect.exit);
+      );
+      yield* Effect.sleep(0);
       expect(sessionSummarizeMock).toHaveBeenCalled();
+      expect(formatErrorMock).toHaveBeenCalled();
     }).pipe(Effect.provide(validFullLayer)),
   );
 
@@ -2929,6 +2965,7 @@ describe("question callback", () => {
       const cbHandler = getCallbackQueryHandler();
       const ctx = makeCallbackCtx("q:99:0");
       yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
       expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
         text: "The question has expired.",
       });
@@ -3040,6 +3077,7 @@ describe("question callback", () => {
       // Confirm — should fail because nothing selected
       const ctx3 = makeCallbackCtx("qc:0");
       yield* Effect.promise(() => cbHandler(ctx3));
+      yield* Effect.sleep(0);
       expect(ctx3.answerCallbackQuery).toHaveBeenCalledWith({
         text: "Select at least one option.",
       });
@@ -3075,6 +3113,7 @@ describe("question callback", () => {
       const cbHandler = getCallbackQueryHandler();
       const ctx = makeCallbackCtx("qc:0");
       yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
       expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
         text: "Select at least one option.",
       });
@@ -3499,6 +3538,7 @@ describe("question event cleanup", () => {
       const handler = getCallbackQueryHandler();
       const ctx = makeCallbackCtx("q:0:0");
       yield* Effect.promise(() => handler(ctx));
+      yield* flushFibers;
       // answerCallbackQuery is called at the end of the handler (not the expired path)
       expect(ctx.answerCallbackQuery).toHaveBeenCalled();
       expect(ctx.answerCallbackQuery).not.toHaveBeenCalledWith(
@@ -3745,6 +3785,7 @@ describe("permission callback", () => {
       const cbHandler = getCallbackQueryHandler();
       const ctx = makeCallbackCtx("p:p99:once");
       yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
       expect(ctx.answerCallbackQuery).toHaveBeenCalledWith({
         text: "The permission request has expired.",
       });
@@ -3959,6 +4000,7 @@ describe("permission event cleanup", () => {
       const handler = getCallbackQueryHandler();
       const ctx = makeCallbackCtx("p:p0:once");
       yield* Effect.promise(() => handler(ctx));
+      yield* flushFibers;
       // answerCallbackQuery is called at the end (not the expired path)
       expect(ctx.answerCallbackQuery).toHaveBeenCalled();
       expect(ctx.answerCallbackQuery).not.toHaveBeenCalledWith(
