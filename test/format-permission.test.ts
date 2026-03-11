@@ -59,7 +59,7 @@ describe("formatPermissionMessage", () => {
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Read file");
+    expect(text).toContain("Read contents");
     expect(text).not.toContain("```path");
   });
 
@@ -74,8 +74,8 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("The agent needs permission.");
-    expect(text).toContain("Read file");
-    expect(text).toContain("Read the contents of a file.");
+    expect(text).toContain("Read contents");
+    expect(text).toContain("Read the contents of a file or folder.");
     expect(text).toContain("```path");
     expect(text).toContain("src/main.ts");
   });
@@ -222,8 +222,46 @@ describe("formatPermissionMessage", () => {
     expect(text).not.toContain("```include");
   });
 
+  it("formats list with path from metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "list",
+          patterns: ["/Users/foo/project/src"],
+          metadata: { path: "/Users/foo/project/src" },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("List directory");
+    expect(text).toContain("```path");
+    expect(text).toContain("/Users/foo/project/src");
+  });
+
+  it("formats list without metadata or patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "list", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("List directory");
+    expect(text).not.toContain("```path");
+  });
+
+  it("formats list without metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "list", patterns: ["/Users/foo/src"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("List directory");
+    expect(text).toContain("```path");
+    expect(text).toContain("/Users/foo/src");
+  });
+
   it.each([
-    ["list", "List directory", "List the contents of a directory."],
     ["task", "Launch agent", "Spawn a sub-agent to handle a task."],
     ["webfetch", "Fetch URL", "Fetch content from a URL."],
     ["websearch", "Web search", "Search the web for information."],

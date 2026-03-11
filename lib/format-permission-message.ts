@@ -15,9 +15,9 @@ const permissionTypes: Record<
     description: "Execute a shell command on the system.",
   },
   read: {
-    emoji: "📄",
-    title: "Read file",
-    description: "Read the contents of a file.",
+    emoji: "🗂",
+    title: "Read contents",
+    description: "Read the contents of a file or folder.",
   },
   edit: {
     emoji: "✏️",
@@ -25,14 +25,14 @@ const permissionTypes: Record<
     description: "Modify the contents of a file.",
   },
   glob: {
-    emoji: "🗂",
+    emoji: "🗃",
     title: "Find files",
-    description: "Search for files matching a pattern.",
+    description: "Search for file paths matching a pattern.",
   },
   grep: {
     emoji: "🔎",
     title: "Find contents",
-    description: "Search file contents for a pattern.",
+    description: "Search for file contents matching a pattern.",
   },
   list: {
     emoji: "📁",
@@ -148,6 +148,15 @@ function formatGrep(lines: string[], request: PermissionRequest) {
   }
 }
 
+function formatList(lines: string[], request: PermissionRequest) {
+  const dir = stringMeta(request.metadata, "path") ?? request.patterns[0];
+  if (dir) {
+    lines.push("```path");
+    lines.push(dir);
+    lines.push("```");
+  }
+}
+
 function formatRead(lines: string[], request: PermissionRequest) {
   if (request.patterns.length > 0) {
     lines.push("```path");
@@ -197,6 +206,8 @@ export function formatPermissionMessage(request: PermissionRequest) {
     formatGlob(lines, request);
   } else if (request.permission === "grep") {
     formatGrep(lines, request);
+  } else if (request.permission === "list") {
+    formatList(lines, request);
   } else if (request.permission === "external_directory") {
     formatExternalDirectory(lines, request);
   } else {
