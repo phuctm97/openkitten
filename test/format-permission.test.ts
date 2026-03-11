@@ -608,7 +608,45 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("+new");
   });
 
-  it("formats edit without diff", () => {
+  it("formats edit without diff, falls back to files", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "edit",
+          patterns: ["src/main.ts"],
+          metadata: {
+            files: [
+              { relativePath: "src/main.ts", type: "edit", additions: 5 },
+            ],
+          },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Edit file");
+    expect(text).not.toContain("```diff");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("src/main.ts");
+  });
+
+  it("formats edit without diff or files, falls back to filepath", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "edit",
+          patterns: ["src/main.ts"],
+          metadata: { filepath: "/Users/foo/project/src/main.ts" },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Edit file");
+    expect(text).not.toContain("```diff");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("/Users/foo/project/src/main.ts");
+  });
+
+  it("formats edit without metadata, falls back to patterns", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
         makeRequest({
@@ -620,6 +658,23 @@ describe("formatPermissionMessage", () => {
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Edit file");
     expect(text).not.toContain("```diff");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("src/main.ts");
+  });
+
+  it("formats edit without anything", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "edit",
+          patterns: [],
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Edit file");
+    expect(text).not.toContain("```diff");
+    expect(text).not.toContain("```pattern");
   });
 
   it("formats external_directory with metadata directory", () => {

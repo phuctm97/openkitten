@@ -122,6 +122,28 @@ function formatEdit(lines: string[], request: PermissionRequest) {
     lines.push("```diff");
     lines.push(diff);
     lines.push("```");
+    return;
+  }
+  const files = jsonMeta(request.metadata, "files");
+  if (files) {
+    lines.push("```pattern");
+    lines.push(files);
+    lines.push("```");
+    return;
+  }
+  const filepath = stringMeta(request.metadata, "filepath");
+  if (filepath) {
+    lines.push("```pattern");
+    lines.push(filepath);
+    lines.push("```");
+    return;
+  }
+  if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const pattern of request.patterns) {
+      lines.push(pattern);
+    }
+    lines.push("```");
   }
 }
 
@@ -307,9 +329,7 @@ export function formatPermissionMessage(request: PermissionRequest) {
     "\u2800",
     `${emoji} **${title}**`,
   ];
-  if (description) {
-    lines.push(`_${description}_`);
-  }
+  lines.push(`_${description}_`);
 
   if (request.permission === "bash") {
     formatBash(lines, request);
