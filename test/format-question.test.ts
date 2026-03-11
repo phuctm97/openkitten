@@ -79,7 +79,7 @@ test("formatQuestionPrompt returns correct text for multi-select", () => {
       multiple: true,
     }),
   ).toBe(
-    "_Select all that apply and press *Confirm*, or reply with your own answer_",
+    "_Select all that apply and press **Confirm**, or reply with your own answer_",
   );
 });
 
@@ -92,7 +92,7 @@ test("formatQuestionPrompt returns correct text for multi-select custom:false", 
       multiple: true,
       custom: false,
     }),
-  ).toBe("_Select all that apply and press *Confirm*_");
+  ).toBe("_Select all that apply and press **Confirm**_");
 });
 
 test("formatQuestionReplied includes answers", () => {
