@@ -37,15 +37,15 @@ const permissionTypes: Record<
     title: "Edit files",
     description: "Modify the contents of one or more files.",
   },
-  glob: {
-    emoji: "🗃",
-    title: "Find files",
-    description: "Search for file paths matching a pattern.",
-  },
   grep: {
     emoji: "🔎",
     title: "Find contents",
     description: "Search for file contents matching a pattern.",
+  },
+  glob: {
+    emoji: "🗃",
+    title: "Find files",
+    description: "Search for file paths matching a pattern.",
   },
   list: {
     emoji: "📂",
@@ -175,27 +175,6 @@ function formatEdit(lines: string[], request: PermissionRequest) {
   }
 }
 
-function formatGlob(lines: string[], request: PermissionRequest) {
-  const pattern = stringMeta(request.metadata, "pattern");
-  if (pattern) {
-    lines.push("```pattern");
-    lines.push(pattern);
-    lines.push("```");
-  } else if (request.patterns.length > 0) {
-    lines.push("```pattern");
-    for (const p of request.patterns) {
-      lines.push(p);
-    }
-    lines.push("```");
-  }
-  const dir = stringMeta(request.metadata, "path");
-  if (dir) {
-    lines.push("```path");
-    lines.push(dir);
-    lines.push("```");
-  }
-}
-
 function formatGrep(lines: string[], request: PermissionRequest) {
   const pattern = stringMeta(request.metadata, "pattern");
   if (pattern) {
@@ -219,6 +198,27 @@ function formatGrep(lines: string[], request: PermissionRequest) {
   if (include) {
     lines.push("```include");
     lines.push(include);
+    lines.push("```");
+  }
+}
+
+function formatGlob(lines: string[], request: PermissionRequest) {
+  const pattern = stringMeta(request.metadata, "pattern");
+  if (pattern) {
+    lines.push("```pattern");
+    lines.push(pattern);
+    lines.push("```");
+  } else if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
+    lines.push("```");
+  }
+  const dir = stringMeta(request.metadata, "path");
+  if (dir) {
+    lines.push("```path");
+    lines.push(dir);
     lines.push("```");
   }
 }
@@ -383,10 +383,10 @@ export function formatPermissionMessage(request: PermissionRequest) {
     formatRead(lines, request);
   } else if (request.permission === "edit") {
     formatEdit(lines, request);
-  } else if (request.permission === "glob") {
-    formatGlob(lines, request);
   } else if (request.permission === "grep") {
     formatGrep(lines, request);
+  } else if (request.permission === "glob") {
+    formatGlob(lines, request);
   } else if (request.permission === "list") {
     formatList(lines, request);
   } else if (request.permission === "task") {

@@ -214,63 +214,6 @@ describe("formatPermissionMessage", () => {
     expect(text).not.toContain("```pattern");
   });
 
-  it("formats glob with pattern and path from metadata", () => {
-    const chunks = Effect.runSync(
-      formatPermissionMessage(
-        makeRequest({
-          permission: "glob",
-          patterns: ["**/*.ts"],
-          metadata: { pattern: "**/*.ts", path: "/Users/foo/project/src" },
-        }),
-      ),
-    );
-    const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Find files");
-    expect(text).toContain("```pattern");
-    expect(text).toContain("**/*.ts");
-    expect(text).toContain("```path");
-    expect(text).toContain("/Users/foo/project/src");
-  });
-
-  it("formats glob without metadata, falls back to patterns", () => {
-    const chunks = Effect.runSync(
-      formatPermissionMessage(
-        makeRequest({ permission: "glob", patterns: ["**/*.ts"] }),
-      ),
-    );
-    const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Find files");
-    expect(text).toContain("```pattern");
-    expect(text).toContain("**/*.ts");
-    expect(text).not.toContain("```path");
-  });
-
-  it("formats glob without metadata or patterns", () => {
-    const chunks = Effect.runSync(
-      formatPermissionMessage(
-        makeRequest({ permission: "glob", patterns: [] }),
-      ),
-    );
-    const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Find files");
-    expect(text).not.toContain("```pattern");
-  });
-
-  it("formats glob without path", () => {
-    const chunks = Effect.runSync(
-      formatPermissionMessage(
-        makeRequest({
-          permission: "glob",
-          patterns: ["**/*.ts"],
-          metadata: { pattern: "**/*.ts" },
-        }),
-      ),
-    );
-    const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("```pattern");
-    expect(text).not.toContain("```path");
-  });
-
   it("formats grep with pattern, path, and include from metadata", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
@@ -332,6 +275,63 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("```pattern");
     expect(text).not.toContain("```path");
     expect(text).not.toContain("```include");
+  });
+
+  it("formats glob with pattern and path from metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "glob",
+          patterns: ["**/*.ts"],
+          metadata: { pattern: "**/*.ts", path: "/Users/foo/project/src" },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Find files");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("**/*.ts");
+    expect(text).toContain("```path");
+    expect(text).toContain("/Users/foo/project/src");
+  });
+
+  it("formats glob without metadata, falls back to patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "glob", patterns: ["**/*.ts"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Find files");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("**/*.ts");
+    expect(text).not.toContain("```path");
+  });
+
+  it("formats glob without metadata or patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "glob", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Find files");
+    expect(text).not.toContain("```pattern");
+  });
+
+  it("formats glob without path", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "glob",
+          patterns: ["**/*.ts"],
+          metadata: { pattern: "**/*.ts" },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("```pattern");
+    expect(text).not.toContain("```path");
   });
 
   it("formats list with path from metadata", () => {
