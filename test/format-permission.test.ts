@@ -698,9 +698,9 @@ describe("formatPermissionMessage", () => {
     expect(text).not.toContain("```diff");
     expect(text).toContain("```files");
     expect(text).toContain("update /project/src/main.ts");
-    expect(text).toContain("add    /project/src/util.ts");
+    expect(text).toContain("add /project/src/util.ts");
     expect(text).toContain("delete /project/src/old.ts");
-    expect(text).toContain("move   /project/src/old.ts → /project/src/new.ts");
+    expect(text).toContain("move /project/src/old.ts → /project/src/new.ts");
   });
 
   it("formats edit without diff or files, falls back to filepath", () => {

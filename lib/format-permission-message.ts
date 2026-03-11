@@ -149,11 +149,10 @@ function formatEdit(lines: string[], request: PermissionRequest) {
   if (files) {
     lines.push(files.length === 1 ? "```file" : "```files");
     for (const file of files) {
-      const prefix = file.type.padEnd(6);
       if (file.type === "move") {
-        lines.push(`${prefix} ${file.filePath} → ${file.movePath}`);
+        lines.push(`${file.type} ${file.filePath} → ${file.movePath}`);
       } else {
-        lines.push(`${prefix} ${file.filePath}`);
+        lines.push(`${file.type} ${file.filePath}`);
       }
     }
     lines.push("```");
