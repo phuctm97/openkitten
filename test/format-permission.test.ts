@@ -261,8 +261,42 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("/Users/foo/src");
   });
 
+  it("formats task with description and type from metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "task",
+          patterns: ["code-reviewer"],
+          metadata: {
+            description: "Review the pull request",
+            subagent_type: "code-reviewer",
+          },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Launch agent");
+    expect(text).toContain("Spawn a sub-agent to handle a task.");
+    expect(text).toContain("```description");
+    expect(text).toContain("Review the pull request");
+    expect(text).toContain("```agent");
+    expect(text).toContain("code-reviewer");
+  });
+
+  it("formats task without metadata, falls back type to pattern", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "task", patterns: ["general"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Launch agent");
+    expect(text).not.toContain("```description");
+    expect(text).toContain("```agent");
+    expect(text).toContain("general");
+  });
+
   it.each([
-    ["task", "Launch agent", "Spawn a sub-agent to handle a task."],
     ["webfetch", "Fetch URL", "Fetch content from a URL."],
     ["websearch", "Web search", "Search the web for information."],
     ["codesearch", "Code search", "Search the web for code examples."],

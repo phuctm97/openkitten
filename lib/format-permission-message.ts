@@ -15,7 +15,7 @@ const permissionTypes: Record<
     description: "Execute a shell command on the system.",
   },
   read: {
-    emoji: "🗂",
+    emoji: "👁",
     title: "Read contents",
     description: "Read the contents of a file or folder.",
   },
@@ -35,7 +35,7 @@ const permissionTypes: Record<
     description: "Search for file contents matching a pattern.",
   },
   list: {
-    emoji: "📁",
+    emoji: "📂",
     title: "List directory",
     description: "List the contents of a directory.",
   },
@@ -148,6 +148,22 @@ function formatGrep(lines: string[], request: PermissionRequest) {
   }
 }
 
+function formatTask(lines: string[], request: PermissionRequest) {
+  const description = stringMeta(request.metadata, "description");
+  if (description) {
+    lines.push("```description");
+    lines.push(description);
+    lines.push("```");
+  }
+  const subagentType =
+    stringMeta(request.metadata, "subagent_type") ?? request.patterns[0];
+  if (subagentType) {
+    lines.push("```agent");
+    lines.push(subagentType);
+    lines.push("```");
+  }
+}
+
 function formatList(lines: string[], request: PermissionRequest) {
   const dir = stringMeta(request.metadata, "path") ?? request.patterns[0];
   if (dir) {
@@ -206,6 +222,8 @@ export function formatPermissionMessage(request: PermissionRequest) {
     formatGlob(lines, request);
   } else if (request.permission === "grep") {
     formatGrep(lines, request);
+  } else if (request.permission === "task") {
+    formatTask(lines, request);
   } else if (request.permission === "list") {
     formatList(lines, request);
   } else if (request.permission === "external_directory") {
