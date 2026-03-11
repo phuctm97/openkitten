@@ -21,7 +21,7 @@ test("formatQuestionMessage renders header, question, and options", () => {
   );
   expect(chunks.length).toBeGreaterThan(0);
   const text = chunks.map((c) => c.text).join("\n");
-  expect(text).toContain("❔");
+  expect(text).toContain("🏷️");
   expect(text).toContain("Action");
   expect(text).toContain("What would you like to do?");
   expect(text).toContain("Yes");
