@@ -280,16 +280,22 @@ function formatWebfetch(lines: string[], request: PermissionRequest) {
   const timeout = numberMeta(request.metadata, "timeout");
   if (timeout) {
     lines.push("```timeout");
-    lines.push(`${timeout}s`);
+    lines.push(`${timeout} ${timeout === 1 ? "second" : "seconds"}`);
     lines.push("```");
   }
 }
 
 function formatWebsearch(lines: string[], request: PermissionRequest) {
-  const query = stringMeta(request.metadata, "query") ?? request.patterns[0];
+  const query = stringMeta(request.metadata, "query");
   if (query) {
     lines.push("```query");
     lines.push(query);
+    lines.push("```");
+  } else if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
     lines.push("```");
   }
   const type = stringMeta(request.metadata, "type");
@@ -316,35 +322,61 @@ function formatWebsearch(lines: string[], request: PermissionRequest) {
 }
 
 function formatCodesearch(lines: string[], request: PermissionRequest) {
-  const query = stringMeta(request.metadata, "query") ?? request.patterns[0];
+  const query = stringMeta(request.metadata, "query");
   if (query) {
     lines.push("```query");
     lines.push(query);
+    lines.push("```");
+  } else if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
     lines.push("```");
   }
   const tokensNum = numberMeta(request.metadata, "tokensNum");
   if (tokensNum) {
     lines.push("```limit");
-    lines.push(`up to ${tokensNum} tokens`);
+    lines.push(`up to ${tokensNum} ${tokensNum === 1 ? "token" : "tokens"}`);
     lines.push("```");
   }
 }
 
 function formatExternalDirectory(lines: string[], request: PermissionRequest) {
+  const filepath = stringMeta(request.metadata, "filepath");
+  if (filepath) {
+    lines.push("```path");
+    lines.push(filepath);
+    lines.push("```");
+    return;
+  }
+  const parentDir = stringMeta(request.metadata, "parentDir");
+  if (parentDir) {
+    lines.push("```path");
+    lines.push(parentDir);
+    lines.push("```");
+    return;
+  }
   if (request.patterns.length > 0) {
     lines.push("```pattern");
-    for (const pattern of request.patterns) {
-      lines.push(pattern);
+    for (const p of request.patterns) {
+      lines.push(p);
     }
     lines.push("```");
   }
 }
 
 function formatDoomLoop(lines: string[], request: PermissionRequest) {
-  const tool = stringMeta(request.metadata, "tool") ?? request.patterns[0];
+  const tool = stringMeta(request.metadata, "tool");
   if (tool) {
     lines.push("```tool");
     lines.push(tool);
+    lines.push("```");
+  } else if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
     lines.push("```");
   }
   const input = jsonMeta(request.metadata, "input");

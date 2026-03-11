@@ -144,7 +144,8 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Continue after repeated calls");
-    expect(text).toContain("```tool");
+    expect(text).not.toContain("```tool");
+    expect(text).toContain("```pattern");
     expect(text).toContain("bash");
     expect(text).not.toContain("```json");
   });
@@ -476,7 +477,22 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("```format");
     expect(text).toContain("markdown");
     expect(text).toContain("```timeout");
-    expect(text).toContain("30s");
+    expect(text).toContain("30 seconds");
+  });
+
+  it("formats webfetch with singular timeout", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "webfetch",
+          patterns: [],
+          metadata: { url: "https://example.com", timeout: 1 },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("1 second");
+    expect(text).not.toContain("seconds");
   });
 
   it("formats webfetch without metadata, falls back url to pattern", () => {
@@ -535,7 +551,8 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Web search");
-    expect(text).toContain("```query");
+    expect(text).not.toContain("```query");
+    expect(text).toContain("```pattern");
     expect(text).toContain("effect typescript");
     expect(text).not.toContain("```mode");
     expect(text).not.toContain("```limit");
@@ -581,6 +598,21 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("up to 10000 tokens");
   });
 
+  it("formats codesearch with singular token", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "codesearch",
+          patterns: [],
+          metadata: { query: "test", tokensNum: 1 },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("up to 1 token");
+    expect(text).not.toContain("tokens");
+  });
+
   it("formats codesearch without metadata, falls back query to pattern", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
@@ -592,7 +624,8 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Code search");
-    expect(text).toContain("```query");
+    expect(text).not.toContain("```query");
+    expect(text).toContain("```pattern");
     expect(text).toContain("effect typescript");
     expect(text).not.toContain("```limit");
   });
@@ -753,7 +786,7 @@ describe("formatPermissionMessage", () => {
     expect(text).not.toContain("```pattern");
   });
 
-  it("formats external_directory with metadata directory", () => {
+  it("formats external_directory with filepath from metadata", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
         makeRequest({
@@ -769,8 +802,25 @@ describe("formatPermissionMessage", () => {
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Access external directory");
     expect(text).toContain("Access a path outside the project.");
-    expect(text).toContain("```pattern");
-    expect(text).toContain("/Users/foo/projects/*");
+    expect(text).toContain("```path");
+    expect(text).toContain("/Users/foo/projects/file.ts");
+    expect(text).not.toContain("```pattern");
+  });
+
+  it("formats external_directory with parentDir fallback", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "external_directory",
+          patterns: ["/Users/foo/projects/*"],
+          metadata: { parentDir: "/Users/foo/projects" },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("```path");
+    expect(text).toContain("/Users/foo/projects");
+    expect(text).not.toContain("```pattern");
   });
 
   it("formats external_directory without metadata", () => {
