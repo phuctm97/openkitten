@@ -6,6 +6,7 @@
   "main": "lib/main.ts",
   "scripts": {
     "prepare": "bun prepare.ts",
+    "compile": "bun compile.ts",
     "start": "bun .",
     "dev": "bun --hot --no-clear-screen .",
     "typecheck": "bun --bun tsc --build"

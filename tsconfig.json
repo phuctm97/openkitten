@@ -1,5 +1,5 @@
 {
-  "include": ["prepare.ts", "lib"],
+  "include": ["prepare.ts", "compile.ts", "lib"],
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "incremental": true,
