@@ -391,7 +391,10 @@ function formatDefault(lines: string[], request: PermissionRequest) {
   lines.push("```tool");
   lines.push(request.permission);
   lines.push("```");
-  if (request.patterns.length > 0) {
+  const hasPatterns =
+    request.patterns.length > 0 &&
+    !(request.patterns.length === 1 && request.patterns[0] === "*");
+  if (hasPatterns) {
     lines.push("```pattern");
     for (const pattern of request.patterns) {
       lines.push(pattern);

@@ -215,6 +215,21 @@ describe("formatPermissionMessage", () => {
     expect(text).not.toContain("```pattern");
   });
 
+  it("formats unknown permission with wildcard pattern as no patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "custom_tool",
+          patterns: ["*"],
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("```tool");
+    expect(text).toContain("custom_tool");
+    expect(text).not.toContain("```pattern");
+  });
+
   it("formats grep with pattern, path, and include from metadata", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
