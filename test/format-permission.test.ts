@@ -232,7 +232,7 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("/Users/foo/project/src");
   });
 
-  it("formats glob without metadata", () => {
+  it("formats glob without metadata, falls back to patterns", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
         makeRequest({ permission: "glob", patterns: ["**/*.ts"] }),
@@ -240,8 +240,20 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Find files");
-    expect(text).not.toContain("```pattern");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("**/*.ts");
     expect(text).not.toContain("```path");
+  });
+
+  it("formats glob without metadata or patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "glob", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Find files");
+    expect(text).not.toContain("```pattern");
   });
 
   it("formats glob without path", () => {
@@ -283,10 +295,22 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("*.ts");
   });
 
-  it("formats grep without metadata", () => {
+  it("formats grep without metadata, falls back to patterns", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
         makeRequest({ permission: "grep", patterns: ["TODO"] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Find contents");
+    expect(text).toContain("```pattern");
+    expect(text).toContain("TODO");
+  });
+
+  it("formats grep without metadata or patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "grep", patterns: [] }),
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");

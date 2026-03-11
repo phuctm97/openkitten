@@ -153,6 +153,12 @@ function formatGlob(lines: string[], request: PermissionRequest) {
     lines.push("```pattern");
     lines.push(pattern);
     lines.push("```");
+  } else if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
+    lines.push("```");
   }
   const dir = stringMeta(request.metadata, "path");
   if (dir) {
@@ -167,6 +173,12 @@ function formatGrep(lines: string[], request: PermissionRequest) {
   if (pattern) {
     lines.push("```pattern");
     lines.push(pattern);
+    lines.push("```");
+  } else if (request.patterns.length > 0) {
+    lines.push("```pattern");
+    for (const p of request.patterns) {
+      lines.push(p);
+    }
     lines.push("```");
   }
   const dir = stringMeta(request.metadata, "path");
