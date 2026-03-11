@@ -1,11 +1,5 @@
-import { homedir } from "node:os";
 import type { PermissionRequest } from "@opencode-ai/sdk/v2";
 import { formatMessage } from "~/lib/format-message";
-
-function shortenPath(path: string): string {
-  const home = homedir();
-  return path.startsWith(home) ? `~${path.slice(home.length)}` : path;
-}
 
 const permissionTypes: Record<
   string,
@@ -99,7 +93,7 @@ function formatEdit(lines: string[], request: PermissionRequest) {
   if (request.patterns.length > 0) {
     lines.push("```path");
     for (const pattern of request.patterns) {
-      lines.push(shortenPath(pattern));
+      lines.push(pattern);
     }
     lines.push("```");
   }
@@ -116,11 +110,11 @@ function formatExternalDirectory(lines: string[], request: PermissionRequest) {
     stringMeta(request.metadata, "parentDir") ??
     stringMeta(request.metadata, "filepath");
   if (dir) {
-    lines.push(`\`${shortenPath(dir)}\``);
+    lines.push(`\`${dir}\``);
   }
   for (const pattern of request.patterns) {
     if (pattern !== dir) {
-      lines.push(`\`${shortenPath(pattern)}\``);
+      lines.push(`\`${pattern}\``);
     }
   }
 }
@@ -129,7 +123,7 @@ function formatRead(lines: string[], request: PermissionRequest) {
   if (request.patterns.length > 0) {
     lines.push("```path");
     for (const pattern of request.patterns) {
-      lines.push(shortenPath(pattern));
+      lines.push(pattern);
     }
     lines.push("```");
   }
@@ -144,7 +138,7 @@ function formatDefault(
     lines.push(`\`${request.permission}\``);
   }
   for (const pattern of request.patterns) {
-    lines.push(`\`${shortenPath(pattern)}\``);
+    lines.push(`\`${pattern}\``);
   }
 }
 
