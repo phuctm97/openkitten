@@ -3,13 +3,16 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "description": "Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in capabilities people actually need.",
   "main": "lib/main.ts",
   "scripts": {
     "prepare": "bun prepare.ts",
     "compile": "bun compile.ts",
-    "start": "bun .",
-    "dev": "bun --hot --no-clear-screen .",
-    "typecheck": "bun --bun tsc --build"
+    "typecheck": "bun --bun tsc --build",
+    "dev": "bun --hot --no-clear-screen . serve",
+    "start": "bun . serve",
+    "up": "bun . up",
+    "down": "bun . down"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
@@ -18,5 +21,8 @@
     "@types/node": "^25.4.0",
     "lefthook": "^2.1.3",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "citty": "^0.2.1"
   }
 }
