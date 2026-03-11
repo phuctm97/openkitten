@@ -1,5 +1,5 @@
 {
-  "include": [],
+  "include": ["lib"],
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "incremental": true,

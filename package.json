@@ -3,6 +3,12 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "main": "lib/main.ts",
+  "scripts": {
+    "start": "bun .",
+    "dev": "bun --hot --no-clear-screen .",
+    "typecheck": "bun --bun tsc --build"
+  },
   "devDependencies": {
     "@tsconfig/bun": "^1.0.10",
     "@types/bun": "^1.3.10",
