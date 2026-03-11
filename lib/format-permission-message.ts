@@ -50,17 +50,17 @@ const permissionTypes: Record<
     description: "Fetch content from a URL.",
   },
   websearch: {
-    emoji: "🔎",
+    emoji: "🌍",
     title: "Web search",
     description: "Search the web for information.",
   },
   codesearch: {
-    emoji: "🔎",
+    emoji: "📦",
     title: "Code search",
     description: "Search the web for code examples.",
   },
   external_directory: {
-    emoji: "📂",
+    emoji: "💾",
     title: "Access external directory",
     description: "Access a directory outside the project.",
   },
