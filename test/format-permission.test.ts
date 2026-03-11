@@ -1,3 +1,4 @@
+import { homedir } from "node:os";
 import type { PermissionRequest } from "@opencode-ai/sdk/v2";
 import { Effect } from "effect";
 import { describe, expect, it } from "vitest";
@@ -247,6 +248,33 @@ describe("formatPermissionMessage", () => {
     // Should show the dir once, not duplicated
     const matches = text.match(/\/Users\/foo\/projects/g);
     expect(matches).toHaveLength(1);
+  });
+  it("shortens home directory paths to ~", () => {
+    const home = homedir();
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "read",
+          patterns: [`${home}/project/src/main.ts`],
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("~/project/src/main.ts");
+    expect(text).not.toContain(home);
+  });
+
+  it("leaves non-home paths unchanged", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "read",
+          patterns: ["/var/log/app.log"],
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("/var/log/app.log");
   });
 });
 
