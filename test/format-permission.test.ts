@@ -653,7 +653,7 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).not.toContain("```diff");
-    expect(text).toContain("```file");
+    expect(text).toContain("```patch");
     expect(text).toContain("update /project/src/main.ts");
   });
 
@@ -696,7 +696,7 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).not.toContain("```diff");
-    expect(text).toContain("```files");
+    expect(text).toContain("```patch");
     expect(text).toContain("update /project/src/main.ts");
     expect(text).toContain("add /project/src/util.ts");
     expect(text).toContain("delete /project/src/old.ts");

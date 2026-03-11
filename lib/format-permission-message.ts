@@ -147,7 +147,7 @@ function formatEdit(lines: string[], request: PermissionRequest) {
   }
   const files = arrayMeta(request.metadata, "files") as EditFile[] | undefined;
   if (files) {
-    lines.push(files.length === 1 ? "```file" : "```files");
+    lines.push("```patch");
     for (const file of files) {
       if (file.type === "move") {
         lines.push(`${file.type} ${file.filePath} → ${file.movePath}`);
