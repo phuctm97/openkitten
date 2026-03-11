@@ -90,8 +90,12 @@ function formatBash(lines: string[], request: PermissionRequest) {
 }
 
 function formatEdit(lines: string[], request: PermissionRequest) {
-  for (const pattern of request.patterns) {
-    lines.push(`\`${pattern}\``);
+  if (request.patterns.length > 0) {
+    lines.push("```path");
+    for (const pattern of request.patterns) {
+      lines.push(pattern);
+    }
+    lines.push("```");
   }
   const diff = stringMeta(request.metadata, "diff");
   if (diff) {
@@ -112,6 +116,16 @@ function formatExternalDirectory(lines: string[], request: PermissionRequest) {
     if (pattern !== dir) {
       lines.push(`\`${pattern}\``);
     }
+  }
+}
+
+function formatRead(lines: string[], request: PermissionRequest) {
+  if (request.patterns.length > 0) {
+    lines.push("```path");
+    for (const pattern of request.patterns) {
+      lines.push(pattern);
+    }
+    lines.push("```");
   }
 }
 
@@ -136,16 +150,18 @@ export function formatPermissionMessage(request: PermissionRequest) {
     description: "",
   };
   const lines: string[] = [
-    "> 🔒 The agent needs permission.",
-    "",
+    `> 🔒 The agent needs permission.\n`,
+    "\u2800",
     `${emoji} **${title}**`,
   ];
   if (description) {
-    lines.push(description);
+    lines.push(`_${description}_`);
   }
 
   if (request.permission === "bash") {
     formatBash(lines, request);
+  } else if (request.permission === "read") {
+    formatRead(lines, request);
   } else if (request.permission === "edit") {
     formatEdit(lines, request);
   } else if (request.permission === "external_directory") {

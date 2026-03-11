@@ -52,7 +52,18 @@ describe("formatPermissionMessage", () => {
     expect(text).not.toContain("```bash");
   });
 
-  it("formats known permission with inline code", () => {
+  it("formats read without patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "read", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Read file");
+    expect(text).not.toContain("```path");
+  });
+
+  it("formats read with path code block", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
         makeRequest({
@@ -65,6 +76,7 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("The agent needs permission.");
     expect(text).toContain("Read file");
     expect(text).toContain("Read the contents of a file.");
+    expect(text).toContain("```path");
     expect(text).toContain("src/main.ts");
   });
 
@@ -165,10 +177,22 @@ describe("formatPermissionMessage", () => {
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Edit file");
     expect(text).toContain("Modify the contents of a file.");
+    expect(text).toContain("```path");
     expect(text).toContain("src/main.ts");
     expect(text).toContain("```diff");
     expect(text).toContain("-old");
     expect(text).toContain("+new");
+  });
+
+  it("formats edit without patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({ permission: "edit", patterns: [] }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Edit file");
+    expect(text).not.toContain("```path");
   });
 
   it("formats edit without diff", () => {
@@ -182,6 +206,7 @@ describe("formatPermissionMessage", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Edit file");
+    expect(text).toContain("```path");
     expect(text).toContain("src/main.ts");
     expect(text).not.toContain("```diff");
   });
