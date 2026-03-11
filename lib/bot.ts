@@ -531,7 +531,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           Effect.annotateLogs("threadId", session.threadId || undefined),
         );
 
-      /** Handles a single SSE event: sends the reply or error to Telegram. */
+      /** Dispatches a single SSE event to the appropriate handler. */
       const processEvent = (event: Event) =>
         Effect.gen(function* () {
           if (event.type === "message.updated") {
@@ -797,7 +797,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
               ),
             { concurrency: "unbounded", discard: true },
           );
-          // Reconcile questions and typing indicators concurrently.
+          // Reconcile questions, permissions, and typing indicators concurrently.
           yield* Effect.all(
             [
               // Reconcile questions — clear stale entries and re-send
@@ -1085,8 +1085,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
       // Tears down the current session. No-ops without an active session.
       // 1. Abort any in-flight generation
       // 2. Stop typing indicator and clear prompting guard
-      // 3. Delete the session from the local DB
-      // 4. Send the reset message
+      // 3. Reject pending questions and permissions
+      // 4. Delete the session from the local DB
+      // 5. Send the reset message
       registerCommand("reset", ({ chatId, threadId }) =>
         Effect.gen(function* () {
           const existing = yield* database.session.findByChat({
