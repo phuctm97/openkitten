@@ -83,6 +83,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
         HashMap.empty<string, Bot.PendingPermission>(),
       );
       const permissionCounter = yield* Ref.make(0);
+      const permissionQueue = yield* Ref.make(
+        HashMap.empty<string, ReadonlyArray<Bot.PermissionQueueEntry>>(),
+      );
 
       /** Starts sending "typing" chat actions every 4 s. Idempotent per session. */
       const startTyping = (
@@ -333,25 +336,30 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
           Effect.annotateLogs("threadId", pp.threadId),
         );
 
-      /** Processes a permission.asked event or reconciled pending permission. */
+      /** Processes a permission.asked event — sends immediately or queues. */
       const processPermissionAsked = (
         request: PermissionRequest,
         session: Database.Session,
       ) =>
         Effect.gen(function* () {
-          const localId = yield* Ref.getAndUpdate(
-            permissionCounter,
-            (n) => n + 1,
-          ).pipe(Effect.map((n) => `p${n.toString(36)}`));
-          const pp: Bot.PendingPermission = {
-            localId,
-            request,
-            chatId: session.chatId,
-            threadId: session.threadId || undefined,
-            interactionMessageId: 0,
-          };
-          yield* Ref.update(pendingPermissions, HashMap.set(localId, pp));
-          yield* sendPermission(pp);
+          const chatId = session.chatId;
+          const threadId = session.threadId || undefined;
+          const active = yield* findPendingPermissionByChat(chatId, threadId);
+          if (Option.isSome(active)) {
+            const key = permissionChatKey(chatId, threadId);
+            yield* Ref.update(permissionQueue, (queue) => {
+              const existing = Option.getOrElse(
+                HashMap.get(queue, key),
+                (): ReadonlyArray<Bot.PermissionQueueEntry> => [],
+              );
+              return HashMap.set(queue, key, [
+                ...existing,
+                { request, chatId, threadId },
+              ]);
+            });
+          } else {
+            yield* sendNewPermission(request, chatId, threadId);
+          }
         }).pipe(
           Effect.annotateLogs("requestId", request.id),
           Effect.annotateLogs("sessionId", request.sessionID),
@@ -380,6 +388,74 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
             ).pipe(Option.map(([, pp]) => pp)),
           ),
         );
+
+      const permissionChatKey = (
+        chatId: number,
+        threadId: number | undefined,
+      ) => (threadId ? `${chatId}:${threadId}` : String(chatId));
+
+      /** Creates a PendingPermission, stores it, and sends it to Telegram. */
+      const sendNewPermission = (
+        request: PermissionRequest,
+        chatId: number,
+        threadId: number | undefined,
+      ) =>
+        Effect.gen(function* () {
+          const localId = yield* Ref.getAndUpdate(
+            permissionCounter,
+            (n) => n + 1,
+          ).pipe(Effect.map((n) => `p${n.toString(36)}`));
+          const pp: Bot.PendingPermission = {
+            localId,
+            request,
+            chatId,
+            threadId,
+            interactionMessageId: 0,
+          };
+          yield* Ref.update(pendingPermissions, HashMap.set(localId, pp));
+          yield* sendPermission(pp);
+        });
+
+      /** Sends the next queued permission for a chat, if any. */
+      const drainPermissionQueue = (
+        chatId: number,
+        threadId: number | undefined,
+      ) =>
+        Effect.gen(function* () {
+          const key = permissionChatKey(chatId, threadId);
+          const next = yield* Ref.modify(permissionQueue, (queue) => {
+            const entries = Option.getOrElse(
+              HashMap.get(queue, key),
+              (): ReadonlyArray<Bot.PermissionQueueEntry> => [],
+            );
+            const head = entries[0];
+            if (!head) return [undefined, queue];
+            const rest: ReadonlyArray<Bot.PermissionQueueEntry> =
+              entries.slice(1);
+            return [
+              head,
+              rest.length > 0
+                ? HashMap.set(queue, key, rest)
+                : HashMap.remove(queue, key),
+            ];
+          });
+          if (!next) return;
+          yield* sendNewPermission(next.request, next.chatId, next.threadId);
+        });
+
+      /** Removes a queued permission by request ID (e.g. auto-resolved server-side). */
+      const removeQueuedPermission = (requestId: string) =>
+        Ref.update(permissionQueue, (queue) => {
+          for (const [key, entries] of HashMap.entries(queue)) {
+            const filtered = entries.filter((e) => e.request.id !== requestId);
+            if (filtered.length !== entries.length) {
+              return filtered.length > 0
+                ? HashMap.set(queue, key, filtered)
+                : HashMap.remove(queue, key);
+            }
+          }
+          return queue;
+        });
 
       // --- Event processing ---
 
@@ -635,6 +711,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                   formatPermissionReplied(reply),
                 ),
               ).pipe(Effect.ignoreLogged);
+              yield* drainPermissionQueue(pp.value.chatId, pp.value.threadId);
+            } else {
+              yield* removeQueuedPermission(requestID);
             }
           }
         }).pipe(
@@ -783,7 +862,9 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                     );
                   }
                 }
-                // Re-send permissions that belong to tracked sessions
+                // Clear the queue — re-processing will re-enqueue as needed.
+                yield* Ref.set(permissionQueue, HashMap.empty());
+                // Re-send or queue permissions that belong to tracked sessions
                 for (const pr of pendingData) {
                   const existing = yield* findPendingPermissionByRequestId(
                     pr.id,
@@ -1040,7 +1121,41 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 yield* Ref.update(pendingQuestions, HashMap.remove(localId));
               }
             }
-            // Reject any pending permissions for this session
+            // Reject queued permissions for this session first, so
+            // concurrent drains see an empty queue during the async
+            // reject calls below.
+            const queueSnapshot = yield* Ref.get(permissionQueue);
+            yield* Ref.update(permissionQueue, (queue) => {
+              let updated = queue;
+              for (const [key, entries] of HashMap.entries(queue)) {
+                const hasMatch = entries.some(
+                  (e) => e.request.sessionID === sessionId,
+                );
+                if (hasMatch) {
+                  // One chat = one session = one queue key, so all
+                  // entries in this key belong to the same session.
+                  invariant(
+                    entries.every((e) => e.request.sessionID === sessionId),
+                    "queue key must not mix sessions",
+                  );
+                  updated = HashMap.remove(updated, key);
+                }
+              }
+              return updated;
+            });
+            for (const [, entries] of HashMap.entries(queueSnapshot)) {
+              for (const e of entries) {
+                if (e.request.sessionID === sessionId) {
+                  yield* Effect.promise(() =>
+                    opencode.client.permission.reply({
+                      requestID: e.request.id,
+                      reply: "reject",
+                    }),
+                  ).pipe(Effect.ignoreLogged);
+                }
+              }
+            }
+            // Reject any active permissions for this session
             const pendingPerms = yield* Ref.get(pendingPermissions);
             for (const [localId, pp] of HashMap.entries(pendingPerms)) {
               if (pp.request.sessionID === sessionId) {
@@ -1129,6 +1244,7 @@ export class Bot extends Context.Tag(`${pkg.name}/Bot`)<
                 ),
                 Effect.ignoreLogged,
               );
+              yield* drainPermissionQueue(pp.chatId, pp.threadId);
               yield* Effect.promise(() => ctx.answerCallbackQuery()).pipe(
                 Effect.ignoreLogged,
               );
@@ -1526,5 +1642,11 @@ export namespace Bot {
     readonly chatId: number;
     readonly threadId: number | undefined;
     readonly interactionMessageId: number;
+  }
+
+  export interface PermissionQueueEntry {
+    readonly request: PermissionRequest;
+    readonly chatId: number;
+    readonly threadId: number | undefined;
   }
 }

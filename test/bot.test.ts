@@ -4138,4 +4138,398 @@ describe("permission event cleanup", () => {
         expect(sessionPromptAsyncMock).not.toHaveBeenCalled();
       }).pipe(Effect.provide(validFullLayer)),
   );
+
+  it.scopedLive("queues second permission when one is already active", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      // First permission — should be sent immediately
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      expect(sendMessageMock).toHaveBeenCalledTimes(2); // content + keyboard
+      sendMessageMock.mockClear();
+      // Second permission — should be queued, not sent
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-2",
+          patterns: ["echo hello"],
+        },
+      });
+      yield* Effect.sleep(0);
+      expect(sendMessageMock).not.toHaveBeenCalled();
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("drains queued permission after answering active one", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 42,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Send three permissions — first active, second and third queued
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-2",
+          patterns: ["echo hello"],
+        },
+      });
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-3",
+          patterns: ["ls -la"],
+        },
+      });
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      formatPermissionMessageMock.mockClear();
+      // Answer first permission — should drain and send second (third stays queued)
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("p:p0:once");
+      yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
+      expect(permissionReplyMock).toHaveBeenCalledWith({
+        requestID: "preq-1",
+        reply: "once",
+      });
+      // Second permission should now be displayed
+      expect(formatPermissionMessageMock).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalledTimes(2); // content + keyboard
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("permission.replied for active entry drains queue", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Send two permissions
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-2",
+          patterns: ["echo hello"],
+        },
+      });
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      formatPermissionMessageMock.mockClear();
+      // Server-side reply to first permission
+      eventRef.current.push({
+        type: "permission.replied",
+        properties: {
+          sessionID: "p-session",
+          requestID: "preq-1",
+          reply: "once",
+        },
+      });
+      yield* Effect.sleep(0);
+      // Second permission should now be displayed
+      expect(formatPermissionMessageMock).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive(
+    "permission.replied removes queued permission without displaying",
+    () =>
+      Effect.gen(function* () {
+        const database = yield* Database;
+        yield* database.session.insert({
+          id: "p-session",
+          chatId: 123,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+        // Second session in a different chat so removeQueuedPermission
+        // iterates past its queue key before finding the match.
+        yield* database.session.insert({
+          id: "p-session-2",
+          chatId: 456,
+          threadId: 0,
+          createdAt: undefined,
+          updatedAt: undefined,
+        });
+        yield* Bot;
+        yield* Effect.sleep(0);
+        // Active + queued for session 1
+        eventRef.current.push({
+          type: "permission.asked",
+          properties: samplePermission,
+        });
+        yield* Effect.sleep(0);
+        eventRef.current.push({
+          type: "permission.asked",
+          properties: {
+            ...samplePermission,
+            id: "preq-2",
+            patterns: ["echo hello"],
+          },
+        });
+        yield* Effect.sleep(0);
+        // Active + queued for session 2 (different chat)
+        eventRef.current.push({
+          type: "permission.asked",
+          properties: {
+            ...samplePermission,
+            id: "preq-other-1",
+            sessionID: "p-session-2",
+          },
+        });
+        yield* Effect.sleep(0);
+        eventRef.current.push({
+          type: "permission.asked",
+          properties: {
+            ...samplePermission,
+            id: "preq-other-2",
+            sessionID: "p-session-2",
+            patterns: ["echo world"],
+          },
+        });
+        yield* Effect.sleep(0);
+        sendMessageMock.mockClear();
+        formatPermissionMessageMock.mockClear();
+        // Server-side reply to QUEUED permission (preq-2) in session 1
+        eventRef.current.push({
+          type: "permission.replied",
+          properties: {
+            sessionID: "p-session",
+            requestID: "preq-2",
+            reply: "always",
+          },
+        });
+        yield* Effect.sleep(0);
+        // Queued permission silently removed — no new messages sent
+        expect(sendMessageMock).not.toHaveBeenCalled();
+        // Now answer the active one — queue should be empty, no drain
+        const cbHandler = getCallbackQueryHandler();
+        const ctx = makeCallbackCtx("p:p0:once");
+        yield* Effect.promise(() => cbHandler(ctx));
+        yield* Effect.sleep(0);
+        expect(formatPermissionMessageMock).not.toHaveBeenCalled();
+      }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("permission.replied keeps remaining queued entries", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Send three permissions — first active, second and third queued
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-2",
+          patterns: ["echo hello"],
+        },
+      });
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-3",
+          patterns: ["ls -la"],
+        },
+      });
+      yield* Effect.sleep(0);
+      // Remove second (queued) permission via server-side reply
+      eventRef.current.push({
+        type: "permission.replied",
+        properties: {
+          sessionID: "p-session",
+          requestID: "preq-2",
+          reply: "always",
+        },
+      });
+      yield* Effect.sleep(0);
+      sendMessageMock.mockClear();
+      formatPermissionMessageMock.mockClear();
+      // Answer first (active) — should drain third, skipping removed second
+      const cbHandler = getCallbackQueryHandler();
+      const ctx = makeCallbackCtx("p:p0:once");
+      yield* Effect.promise(() => cbHandler(ctx));
+      yield* Effect.sleep(0);
+      // Third permission should now be displayed
+      expect(formatPermissionMessageMock).toHaveBeenCalled();
+      expect(sendMessageMock).toHaveBeenCalledTimes(2);
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("/reset rejects queued permissions", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Send two permissions — first active, second queued
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-2",
+          patterns: ["echo hello"],
+        },
+      });
+      yield* Effect.sleep(0);
+      permissionReplyMock.mockClear();
+      // Reset the session
+      const handler = getCommandHandler("reset");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/reset" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      // Both active and queued permissions should be rejected
+      expect(permissionReplyMock).toHaveBeenCalledWith({
+        requestID: "preq-1",
+        reply: "reject",
+      });
+      expect(permissionReplyMock).toHaveBeenCalledWith({
+        requestID: "preq-2",
+        reply: "reject",
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
+
+  it.scopedLive("/reset keeps queued permissions from other sessions", () =>
+    Effect.gen(function* () {
+      const database = yield* Database;
+      yield* database.session.insert({
+        id: "p-session",
+        chatId: 123,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* database.session.insert({
+        id: "p-session-2",
+        chatId: 456,
+        threadId: 0,
+        createdAt: undefined,
+        updatedAt: undefined,
+      });
+      yield* Bot;
+      yield* Effect.sleep(0);
+      // Active + queued permission for session 1 (chat 123)
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: samplePermission,
+      });
+      yield* Effect.sleep(0);
+      // Active + queued permission for session 2 (chat 456)
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-other-1",
+          sessionID: "p-session-2",
+        },
+      });
+      yield* Effect.sleep(0);
+      eventRef.current.push({
+        type: "permission.asked",
+        properties: {
+          ...samplePermission,
+          id: "preq-other-2",
+          sessionID: "p-session-2",
+          patterns: ["echo hello"],
+        },
+      });
+      yield* Effect.sleep(0);
+      permissionReplyMock.mockClear();
+      sendMessageMock.mockClear();
+      formatPermissionMessageMock.mockClear();
+      // Reset session 1 only
+      const handler = getCommandHandler("reset");
+      yield* Effect.promise(() =>
+        handler({
+          from: { id: 123 },
+          chat: { id: 123 },
+          message: { message_id: 1, text: "/reset" },
+        }),
+      );
+      yield* Effect.sleep(0);
+      // Session 1's permission rejected
+      expect(permissionReplyMock).toHaveBeenCalledWith({
+        requestID: "preq-1",
+        reply: "reject",
+      });
+      // Session 2's queued permission should NOT have been rejected
+      expect(permissionReplyMock).not.toHaveBeenCalledWith({
+        requestID: "preq-other-2",
+        reply: "reject",
+      });
+    }).pipe(Effect.provide(validFullLayer)),
+  );
 });
