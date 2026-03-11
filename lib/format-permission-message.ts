@@ -66,8 +66,8 @@ const permissionTypes: Record<
   },
   doom_loop: {
     emoji: "🔄",
-    title: "Continue after repeated failures",
-    description: "Keep the session running despite repeated failures.",
+    title: "Continue after repeated calls",
+    description: "The same tool was called repeatedly with identical input.",
   },
 };
 
@@ -87,9 +87,28 @@ function numberMeta(
   return typeof value === "number" ? value : undefined;
 }
 
+function jsonMeta(
+  metadata: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = metadata[key];
+  if (value === undefined || value === null) return undefined;
+  return typeof value === "string" ? value : JSON.stringify(value, null, 2);
+}
+
 function formatBash(lines: string[], request: PermissionRequest) {
   if (request.patterns.length > 0) {
     lines.push("```bash");
+    for (const pattern of request.patterns) {
+      lines.push(pattern);
+    }
+    lines.push("```");
+  }
+}
+
+function formatRead(lines: string[], request: PermissionRequest) {
+  if (request.patterns.length > 0) {
+    lines.push("```path");
     for (const pattern of request.patterns) {
       lines.push(pattern);
     }
@@ -102,16 +121,6 @@ function formatEdit(lines: string[], request: PermissionRequest) {
   if (diff) {
     lines.push("```diff");
     lines.push(diff);
-    lines.push("```");
-  }
-}
-
-function formatExternalDirectory(lines: string[], request: PermissionRequest) {
-  if (request.patterns.length > 0) {
-    lines.push("```pattern");
-    for (const pattern of request.patterns) {
-      lines.push(pattern);
-    }
     lines.push("```");
   }
 }
@@ -152,6 +161,15 @@ function formatGrep(lines: string[], request: PermissionRequest) {
   }
 }
 
+function formatList(lines: string[], request: PermissionRequest) {
+  const dir = stringMeta(request.metadata, "path") ?? request.patterns[0];
+  if (dir) {
+    lines.push("```path");
+    lines.push(dir);
+    lines.push("```");
+  }
+}
+
 function formatTask(lines: string[], request: PermissionRequest) {
   const description = stringMeta(request.metadata, "description");
   if (description) {
@@ -164,6 +182,27 @@ function formatTask(lines: string[], request: PermissionRequest) {
   if (subagentType) {
     lines.push("```agent");
     lines.push(subagentType);
+    lines.push("```");
+  }
+}
+
+function formatWebfetch(lines: string[], request: PermissionRequest) {
+  const url = stringMeta(request.metadata, "url") ?? request.patterns[0];
+  if (url) {
+    lines.push("```url");
+    lines.push(url);
+    lines.push("```");
+  }
+  const format = stringMeta(request.metadata, "format");
+  if (format) {
+    lines.push("```format");
+    lines.push(format);
+    lines.push("```");
+  }
+  const timeout = numberMeta(request.metadata, "timeout");
+  if (timeout) {
+    lines.push("```timeout");
+    lines.push(`${timeout}s`);
     lines.push("```");
   }
 }
@@ -213,39 +252,9 @@ function formatCodesearch(lines: string[], request: PermissionRequest) {
   }
 }
 
-function formatWebfetch(lines: string[], request: PermissionRequest) {
-  const url = stringMeta(request.metadata, "url") ?? request.patterns[0];
-  if (url) {
-    lines.push("```url");
-    lines.push(url);
-    lines.push("```");
-  }
-  const format = stringMeta(request.metadata, "format");
-  if (format) {
-    lines.push("```format");
-    lines.push(format);
-    lines.push("```");
-  }
-  const timeout = numberMeta(request.metadata, "timeout");
-  if (timeout) {
-    lines.push("```timeout");
-    lines.push(`${timeout}s`);
-    lines.push("```");
-  }
-}
-
-function formatList(lines: string[], request: PermissionRequest) {
-  const dir = stringMeta(request.metadata, "path") ?? request.patterns[0];
-  if (dir) {
-    lines.push("```path");
-    lines.push(dir);
-    lines.push("```");
-  }
-}
-
-function formatRead(lines: string[], request: PermissionRequest) {
+function formatExternalDirectory(lines: string[], request: PermissionRequest) {
   if (request.patterns.length > 0) {
-    lines.push("```path");
+    lines.push("```pattern");
     for (const pattern of request.patterns) {
       lines.push(pattern);
     }
@@ -253,14 +262,23 @@ function formatRead(lines: string[], request: PermissionRequest) {
   }
 }
 
-function formatDefault(
-  lines: string[],
-  request: PermissionRequest,
-  known: boolean,
-) {
-  if (!known) {
-    lines.push(`\`${request.permission}\``);
+function formatDoomLoop(lines: string[], request: PermissionRequest) {
+  const tool = stringMeta(request.metadata, "tool") ?? request.patterns[0];
+  if (tool) {
+    lines.push("```tool");
+    lines.push(tool);
+    lines.push("```");
   }
+  const input = jsonMeta(request.metadata, "input");
+  if (input) {
+    lines.push("```json");
+    lines.push(input);
+    lines.push("```");
+  }
+}
+
+function formatDefault(lines: string[], request: PermissionRequest) {
+  lines.push(`\`${request.permission}\``);
   for (const pattern of request.patterns) {
     lines.push(`\`${pattern}\``);
   }
@@ -292,20 +310,22 @@ export function formatPermissionMessage(request: PermissionRequest) {
     formatGlob(lines, request);
   } else if (request.permission === "grep") {
     formatGrep(lines, request);
+  } else if (request.permission === "list") {
+    formatList(lines, request);
   } else if (request.permission === "task") {
     formatTask(lines, request);
+  } else if (request.permission === "webfetch") {
+    formatWebfetch(lines, request);
   } else if (request.permission === "websearch") {
     formatWebsearch(lines, request);
   } else if (request.permission === "codesearch") {
     formatCodesearch(lines, request);
-  } else if (request.permission === "webfetch") {
-    formatWebfetch(lines, request);
-  } else if (request.permission === "list") {
-    formatList(lines, request);
   } else if (request.permission === "external_directory") {
     formatExternalDirectory(lines, request);
+  } else if (request.permission === "doom_loop") {
+    formatDoomLoop(lines, request);
   } else {
-    formatDefault(lines, request, !!known);
+    formatDefault(lines, request);
   }
 
   return formatMessage(lines.join("\n"));

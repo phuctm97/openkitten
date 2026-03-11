@@ -80,7 +80,76 @@ describe("formatPermissionMessage", () => {
     expect(text).toContain("src/main.ts");
   });
 
-  it("formats known permission without patterns", () => {
+  it("formats doom_loop with tool and input from metadata", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "doom_loop",
+          patterns: ["bash"],
+          metadata: {
+            tool: "bash",
+            input: { command: "git status" },
+          },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Continue after repeated calls");
+    expect(text).toContain(
+      "The same tool was called repeatedly with identical input.",
+    );
+    expect(text).toContain("```tool");
+    expect(text).toContain("bash");
+    expect(text).toContain("```json");
+    expect(text).toContain("git status");
+  });
+
+  it("formats doom_loop with string input", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "doom_loop",
+          patterns: ["bash"],
+          metadata: { tool: "bash", input: "git status" },
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("```json");
+    expect(text).toContain("git status");
+  });
+
+  it("formats external_directory without patterns", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "external_directory",
+          patterns: [],
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Access external directory");
+    expect(text).not.toContain("```pattern");
+  });
+
+  it("formats doom_loop without metadata, falls back tool to pattern", () => {
+    const chunks = Effect.runSync(
+      formatPermissionMessage(
+        makeRequest({
+          permission: "doom_loop",
+          patterns: ["bash"],
+        }),
+      ),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Continue after repeated calls");
+    expect(text).toContain("```tool");
+    expect(text).toContain("bash");
+    expect(text).not.toContain("```json");
+  });
+
+  it("formats doom_loop without metadata or patterns", () => {
     const chunks = Effect.runSync(
       formatPermissionMessage(
         makeRequest({
@@ -90,10 +159,9 @@ describe("formatPermissionMessage", () => {
       ),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Continue after repeated failures");
-    expect(text).toContain(
-      "Keep the session running despite repeated failures.",
-    );
+    expect(text).toContain("Continue after repeated calls");
+    expect(text).not.toContain("```tool");
+    expect(text).not.toContain("```json");
   });
 
   it("formats unknown permission with name and patterns", () => {
