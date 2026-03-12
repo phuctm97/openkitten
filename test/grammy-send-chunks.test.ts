@@ -1,6 +1,6 @@
 import { consola } from "consola";
 import { beforeEach, expect, test, vi } from "vitest";
-import { sendChunks } from "~/lib/send-chunks";
+import { grammySendChunks } from "~/lib/grammy-send-chunks";
 
 function mockBot() {
   return { api: { sendMessage: vi.fn().mockResolvedValue(undefined) } };
@@ -16,7 +16,7 @@ function send(
   chunks: Array<{ text: string; markdown?: string }>,
   options?: { readonly ignoreErrors?: boolean; readonly threadId?: number },
 ) {
-  return sendChunks({
+  return grammySendChunks({
     bot: bot as never,
     chunks,
     chatId: 123,

@@ -1,15 +1,17 @@
 import { expect, test, vi } from "vitest";
 import * as grammyFormatMessageModule from "~/lib/grammy-format-message";
-import * as sendChunksModule from "~/lib/send-chunks";
-import { sendMessage } from "~/lib/send-message";
+import * as grammySendChunksModule from "~/lib/grammy-send-chunks";
+import { grammySendMessage } from "~/lib/grammy-send-message";
 
 test("formats text and sends chunks", async () => {
   const chunks = [{ text: "hello" }];
   vi.spyOn(grammyFormatMessageModule, "grammyFormatMessage").mockReturnValue(
     chunks,
   );
-  vi.spyOn(sendChunksModule, "sendChunks").mockResolvedValue(undefined);
-  await sendMessage({
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+  await grammySendMessage({
     bot: {} as never,
     text: "hello",
     ignoreErrors: false,
@@ -19,7 +21,7 @@ test("formats text and sends chunks", async () => {
   expect(grammyFormatMessageModule.grammyFormatMessage).toHaveBeenCalledWith(
     "hello",
   );
-  expect(sendChunksModule.sendChunks).toHaveBeenCalledWith({
+  expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
     bot: {} as never,
     chunks,
     ignoreErrors: false,

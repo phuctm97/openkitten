@@ -1,13 +1,13 @@
 import { consola } from "consola";
-import type { SendChunksOptions } from "~/lib/send-chunks-options";
+import type { GrammySendChunksOptions } from "~/lib/grammy-send-chunks-options";
 
-export async function sendChunks({
+export async function grammySendChunks({
   bot,
   chunks,
   ignoreErrors,
   chatId,
   threadId,
-}: SendChunksOptions): Promise<void> {
+}: GrammySendChunksOptions): Promise<void> {
   const sendOpts = {
     ...(threadId && { message_thread_id: threadId }),
   };

@@ -1,6 +1,6 @@
 import type { Bot } from "grammy";
 
-export interface SendOptions {
+export interface GrammySendOptions {
   readonly bot: Bot;
   readonly ignoreErrors: boolean;
   readonly chatId: number;

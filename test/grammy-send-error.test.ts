@@ -1,16 +1,18 @@
 import { expect, test, vi } from "vitest";
 import * as grammyFormatErrorModule from "~/lib/grammy-format-error";
-import * as sendChunksModule from "~/lib/send-chunks";
-import { sendError } from "~/lib/send-error";
+import * as grammySendChunksModule from "~/lib/grammy-send-chunks";
+import { grammySendError } from "~/lib/grammy-send-error";
 
 test("formats error and sends chunks", async () => {
   const chunks = [{ text: "error" }];
   vi.spyOn(grammyFormatErrorModule, "grammyFormatError").mockReturnValue(
     chunks,
   );
-  vi.spyOn(sendChunksModule, "sendChunks").mockResolvedValue(undefined);
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
   const error = new Error("boom");
-  await sendError({
+  await grammySendError({
     bot: {} as never,
     error,
     ignoreErrors: true,
@@ -18,7 +20,7 @@ test("formats error and sends chunks", async () => {
     threadId: 789,
   });
   expect(grammyFormatErrorModule.grammyFormatError).toHaveBeenCalledWith(error);
-  expect(sendChunksModule.sendChunks).toHaveBeenCalledWith({
+  expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
     bot: {} as never,
     chunks,
     ignoreErrors: true,
