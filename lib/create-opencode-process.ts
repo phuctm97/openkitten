@@ -77,8 +77,8 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
         OPENCODE_SERVER_PASSWORD: password,
       },
       onExit(_proc, exitCode, signalCode, error) {
-        consola.debug("opencode exit info", { exitCode, signalCode });
-        if (error) consola.fatal("opencode exit error", error);
+        consola.debug("opencode is stopped", { exitCode, signalCode });
+        if (error) consola.fatal("opencode exited abnormally", error);
       },
     },
   );
@@ -107,16 +107,16 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
     () => {},
   );
 
-  const client = createOpencodeClient({
-    baseUrl: `http://127.0.0.1:${port}`,
-    headers: {
-      authorization: `Basic ${btoa(`${username}:${password}`)}`,
-    },
-  });
+  consola.ready("opencode is ready");
 
   return {
-    client,
     exited,
+    client: createOpencodeClient({
+      baseUrl: `http://127.0.0.1:${port}`,
+      headers: {
+        authorization: `Basic ${btoa(`${username}:${password}`)}`,
+      },
+    }),
     [Symbol.asyncDispose]: async () => {
       disposed = true;
       proc.kill();

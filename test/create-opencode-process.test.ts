@@ -68,6 +68,12 @@ test("createOpenCodeProcess returns client", async () => {
   expect(opencodeProcess.client).toBeDefined();
 });
 
+test("createOpenCodeProcess logs ready", async () => {
+  mockSpawn();
+  await createOpenCodeProcess();
+  expect(consola.ready).toHaveBeenCalledWith("opencode is ready");
+});
+
 test("createOpenCodeProcess passes credentials to opencode", async () => {
   let capturedEnv: Record<string, string> | undefined;
   const kill = vi.fn();
@@ -107,17 +113,17 @@ test("createOpenCodeProcess is async disposable", async () => {
   expect(kill).toHaveBeenCalledOnce();
 });
 
-test("createOpenCodeProcess logs on exit", async () => {
+test("createOpenCodeProcess logs stopped on exit", async () => {
   mockSpawn();
   const opencodeProcess = await createOpenCodeProcess();
   await opencodeProcess.exited.catch(() => {});
-  expect(consola.debug).toHaveBeenCalledWith("opencode exit info", {
+  expect(consola.debug).toHaveBeenCalledWith("opencode is stopped", {
     exitCode: 0,
     signalCode: null,
   });
 });
 
-test("createOpenCodeProcess logs error on exit error", async () => {
+test("createOpenCodeProcess logs abnormal exit", async () => {
   const error = new Error("waitpid2 failed");
   vi.spyOn(Bun, "spawn").mockImplementation(((
     _cmd: string[],
@@ -135,7 +141,10 @@ test("createOpenCodeProcess logs error on exit error", async () => {
   }) as never);
   const opencodeProcess = await createOpenCodeProcess();
   await opencodeProcess.exited.catch(() => {});
-  expect(consola.fatal).toHaveBeenCalledWith("opencode exit error", error);
+  expect(consola.fatal).toHaveBeenCalledWith(
+    "opencode exited abnormally",
+    error,
+  );
 });
 
 test("createOpenCodeProcess.exited rejects on unexpected exit", async () => {

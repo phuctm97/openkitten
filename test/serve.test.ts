@@ -1,5 +1,4 @@
 import { runCommand } from "citty";
-import { consola } from "consola";
 import { expect, test, vi } from "vitest";
 import * as createExitHookModule from "~/lib/create-exit-hook";
 import * as createOpenCodeProcessModule from "~/lib/create-opencode-process";
@@ -18,8 +17,8 @@ function mockCreateOpenCodeProcess() {
     createOpenCodeProcessModule,
     "createOpenCodeProcess",
   ).mockResolvedValue({
-    client: {} as never,
     exited,
+    client: {} as never,
     [Symbol.asyncDispose]: dispose,
   });
   return dispose;
@@ -38,18 +37,6 @@ function mockCreateExitHook() {
   });
   return () => resolveExited();
 }
-
-test("serve runs and logs ready", async () => {
-  const dispose = mockCreateOpenCodeProcess();
-  const triggerExit = mockCreateExitHook();
-  const run = runCommand(serve, { rawArgs: [] });
-  await vi.waitFor(() =>
-    expect(consola.ready).toHaveBeenCalledWith("opencode is ready"),
-  );
-  triggerExit();
-  await run;
-  expect(dispose).toHaveBeenCalledOnce();
-});
 
 test("serve disposes on exit", async () => {
   const dispose = mockCreateOpenCodeProcess();
@@ -70,8 +57,8 @@ test("serve exits on unexpected opencode exit", async () => {
     createOpenCodeProcessModule,
     "createOpenCodeProcess",
   ).mockResolvedValue({
-    client: {} as never,
     exited,
+    client: {} as never,
     [Symbol.asyncDispose]: async () => {},
   });
   mockCreateExitHook();
