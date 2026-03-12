@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
-import { createBot } from "~/lib/create-bot";
 import { createExitHook } from "~/lib/create-exit-hook";
+import { createGrammy } from "~/lib/create-grammy";
 import { createOpencodeProcess } from "~/lib/create-opencode-process";
 
 export const serve = defineCommand({
@@ -8,7 +8,11 @@ export const serve = defineCommand({
   run: async () => {
     using exitHook = createExitHook();
     await using opencodeProcess = await createOpencodeProcess();
-    await using bot = await createBot();
-    await Promise.race([exitHook.exited, opencodeProcess.exited, bot.stopped]);
+    await using grammy = await createGrammy();
+    await Promise.race([
+      exitHook.exited,
+      opencodeProcess.exited,
+      grammy.stopped,
+    ]);
   },
 });

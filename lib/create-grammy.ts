@@ -1,8 +1,8 @@
 import { consola } from "consola";
 import { Bot as Client } from "grammy";
-import type { Bot } from "~/lib/bot";
+import type { Grammy } from "~/lib/grammy";
 
-export async function createBot(): Promise<Bot> {
+export async function createGrammy(): Promise<Grammy> {
   const token = Bun.env["TELEGRAM_BOT_TOKEN"];
   if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
 
@@ -11,7 +11,7 @@ export async function createBot(): Promise<Bot> {
   // Fatal: errors should never reach here — all event handlers will have
   // their own error boundaries.
   client.catch((error) => {
-    consola.fatal("bot caught an error", error);
+    consola.fatal("grammy caught an error", error);
   });
 
   const { resolve, promise: started } = Promise.withResolvers<void>();
@@ -24,7 +24,7 @@ export async function createBot(): Promise<Bot> {
   let disposed = false;
   const stopped = polling.then(() => {
     if (disposed) return;
-    throw new Error("bot stopped unexpectedly");
+    throw new Error("grammy stopped unexpectedly");
   });
 
   // stopped rejects on unexpected stop but may not be awaited immediately by
@@ -34,7 +34,7 @@ export async function createBot(): Promise<Bot> {
     () => {},
   );
 
-  consola.ready("bot is ready");
+  consola.ready("grammy is ready");
 
   return {
     stopped,
@@ -42,7 +42,7 @@ export async function createBot(): Promise<Bot> {
     [Symbol.asyncDispose]: async () => {
       disposed = true;
       await client.stop();
-      consola.debug("bot is stopped");
+      consola.debug("grammy is stopped");
       resolve();
       await Promise.all([started, stopped]);
     },

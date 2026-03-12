@@ -1,7 +1,7 @@
 import { runCommand } from "citty";
 import { expect, test, vi } from "vitest";
-import * as createBotModule from "~/lib/create-bot";
 import * as createExitHookModule from "~/lib/create-exit-hook";
+import * as createGrammyModule from "~/lib/create-grammy";
 import * as createOpencodeProcessModule from "~/lib/create-opencode-process";
 import { serve } from "~/lib/serve";
 
@@ -28,7 +28,7 @@ function mockCreateOpencodeProcess() {
   return dispose;
 }
 
-function mockCreateBot() {
+function mockCreateGrammy() {
   let resolveStopped: () => void;
   const stopped = new Promise<void>((r) => {
     resolveStopped = r;
@@ -40,7 +40,7 @@ function mockCreateBot() {
   const dispose = vi.fn(async () => {
     resolveStopped();
   });
-  vi.spyOn(createBotModule, "createBot").mockResolvedValue({
+  vi.spyOn(createGrammyModule, "createGrammy").mockResolvedValue({
     stopped,
     client: {} as never,
     [Symbol.asyncDispose]: dispose,
@@ -64,7 +64,7 @@ function mockCreateExitHook() {
 
 test("serve disposes on exit", async () => {
   const disposeOpencode = mockCreateOpencodeProcess();
-  const disposeBot = mockCreateBot();
+  const disposeGrammy = mockCreateGrammy();
   const triggerExit = mockCreateExitHook();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
@@ -73,7 +73,7 @@ test("serve disposes on exit", async () => {
   triggerExit();
   await run;
   expect(disposeOpencode).toHaveBeenCalledOnce();
-  expect(disposeBot).toHaveBeenCalledOnce();
+  expect(disposeGrammy).toHaveBeenCalledOnce();
 });
 
 test("serve exits on unexpected opencode exit", async () => {
@@ -90,27 +90,27 @@ test("serve exits on unexpected opencode exit", async () => {
     client: {} as never,
     [Symbol.asyncDispose]: async () => {},
   });
-  mockCreateBot();
+  mockCreateGrammy();
   mockCreateExitHook();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
     "opencode exited unexpectedly (1)",
   );
 });
 
-test("serve exits on unexpected bot stop", async () => {
+test("serve exits on unexpected grammy stop", async () => {
   mockCreateOpencodeProcess();
-  const stopped = Promise.reject(new Error("bot stopped unexpectedly"));
+  const stopped = Promise.reject(new Error("grammy stopped unexpectedly"));
   stopped.then(
     () => {},
     () => {},
   );
-  vi.spyOn(createBotModule, "createBot").mockResolvedValue({
+  vi.spyOn(createGrammyModule, "createGrammy").mockResolvedValue({
     stopped,
     client: {} as never,
     [Symbol.asyncDispose]: async () => {},
   });
   mockCreateExitHook();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "bot stopped unexpectedly",
+    "grammy stopped unexpectedly",
   );
 });

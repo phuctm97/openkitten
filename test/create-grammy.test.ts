@@ -1,6 +1,6 @@
 import { consola } from "consola";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import { createBot } from "~/lib/create-bot";
+import { createGrammy } from "~/lib/create-grammy";
 
 let capturedToken: string;
 let mockStart: ReturnType<typeof vi.fn>;
@@ -62,60 +62,62 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-test("createBot returns bot with client", async () => {
-  await using bot = await createBot();
-  expect(bot.client).toBeDefined();
+test("createGrammy returns grammy with client", async () => {
+  await using grammy = await createGrammy();
+  expect(grammy.client).toBeDefined();
 });
 
-test("createBot passes token to grammy", async () => {
+test("createGrammy passes token to grammy", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "my-token");
-  await using _bot = await createBot();
+  await using _grammy = await createGrammy();
   expect(capturedToken).toBe("my-token");
 });
 
-test("createBot throws if TELEGRAM_BOT_TOKEN is missing", async () => {
+test("createGrammy throws if TELEGRAM_BOT_TOKEN is missing", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "");
-  await expect(createBot()).rejects.toThrow("TELEGRAM_BOT_TOKEN is required");
+  await expect(createGrammy()).rejects.toThrow(
+    "TELEGRAM_BOT_TOKEN is required",
+  );
 });
 
-test("createBot logs ready", async () => {
-  await using _bot = await createBot();
-  expect(consola.ready).toHaveBeenCalledWith("bot is ready");
+test("createGrammy logs ready", async () => {
+  await using _grammy = await createGrammy();
+  expect(consola.ready).toHaveBeenCalledWith("grammy is ready");
 });
 
-test("createBot is async disposable", async () => {
+test("createGrammy is async disposable", async () => {
   {
-    await using _bot = await createBot();
+    await using _grammy = await createGrammy();
   }
   expect(mockStop).toHaveBeenCalledOnce();
-  expect(consola.debug).toHaveBeenCalledWith("bot is stopped");
+  expect(consola.debug).toHaveBeenCalledWith("grammy is stopped");
 });
 
-test("createBot propagates startup error", async () => {
+test("createGrammy propagates startup error", async () => {
   setupMock({ startError: new Error("polling failed") });
-  await expect(createBot()).rejects.toThrow("polling failed");
+  await expect(createGrammy()).rejects.toThrow("polling failed");
 });
 
-test("createBot.stopped rejects on unexpected stop", async () => {
-  const bot = await createBot();
+test("createGrammy.stopped rejects on unexpected stop", async () => {
+  const grammy = await createGrammy();
   controls.resolveStopped();
-  await expect(bot.stopped).rejects.toThrow("bot stopped unexpectedly");
+  await expect(grammy.stopped).rejects.toThrow("grammy stopped unexpectedly");
 });
 
-test("createBot installs fatal error handler", async () => {
-  await using _bot = await createBot();
+test("createGrammy installs fatal error handler", async () => {
+  await using _grammy = await createGrammy();
   expect(mockCatch).toHaveBeenCalledOnce();
   const [handler] = mockCatch.mock.calls[0] as [(error: unknown) => void];
   const error = new Error("unexpected");
   handler(error);
-  expect(consola.fatal).toHaveBeenCalledWith("bot caught an error", error);
+  expect(consola.fatal).toHaveBeenCalledWith("grammy caught an error", error);
 });
 
-test("createBot.stopped does not reject after dispose", async () => {
-  let botStopped: Promise<void>;
+test("createGrammy.stopped does not reject after dispose", async () => {
+  let grammyStopped: Promise<void>;
   {
-    await using bot = await createBot();
-    botStopped = bot.stopped;
+    await using grammy = await createGrammy();
+    grammyStopped = grammy.stopped;
   }
-  await expect(botStopped).resolves.toBeUndefined();
+  await expect(grammyStopped).resolves.toBeUndefined();
 });
