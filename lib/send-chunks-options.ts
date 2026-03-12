@@ -1,10 +1,6 @@
-import type { Bot as Client } from "grammy";
 import type { MessageChunk } from "~/lib/message-chunk";
+import type { SendOptions } from "~/lib/send-options";
 
-export interface SendChunksOptions {
-  readonly client: Client;
+export interface SendChunksOptions extends SendOptions {
   readonly chunks: MessageChunk[];
-  readonly ignoreErrors: boolean;
-  readonly chatId: number;
-  readonly threadId: number | undefined;
 }
