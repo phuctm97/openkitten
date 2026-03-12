@@ -43,7 +43,6 @@ export async function createBot(): Promise<Bot> {
       disposed = true;
       await client.stop();
       consola.debug("bot is stopped");
-      // Resolve started and await all promises to ensure no stuck promises.
       resolve();
       await Promise.all([started, stopped]);
     },

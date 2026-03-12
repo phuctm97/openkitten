@@ -6,15 +6,29 @@ import type { OpencodeProcess } from "~/lib/opencode-process";
 import { textDecoder } from "~/lib/text-decoder";
 import pkg from "~/package.json" with { type: "json" };
 
-interface ReadPortResult {
-  readonly port: number;
-  readonly rest: ReadableStream<Uint8Array>;
+interface Proc {
+  kill(signal?: number): void;
+  readonly exited: Promise<number>;
+  readonly stdout: ReadableStream<Uint8Array>;
 }
 
-async function readPort(
-  stdout: ReadableStream<Uint8Array>,
-): Promise<ReadPortResult> {
-  const reader = stdout.getReader();
+async function killProc(proc: Proc): Promise<void> {
+  proc.kill();
+  const forceKill = setTimeout(() => proc.kill(9), 5000);
+  try {
+    await proc.exited;
+  } finally {
+    clearTimeout(forceKill);
+  }
+}
+
+interface ReadPortResult {
+  readonly port: number;
+  readonly stdout: ReadableStream<Uint8Array>;
+}
+
+async function readPort(proc: Proc): Promise<ReadPortResult> {
+  const reader = proc.stdout.getReader();
   let buffer = "";
   try {
     for (;;) {
@@ -28,10 +42,13 @@ async function readPort(
         buffer = buffer.slice(newline + 1);
         if (!line.includes("listening")) continue;
         const match = line.match(/:(\d+)/);
-        if (match) return { port: Number(match[1]), rest: stdout };
+        if (match) return { port: Number(match[1]), stdout: proc.stdout };
       }
     }
     throw new Error("opencode exited without announcing port");
+  } catch (error) {
+    await killProc(proc);
+    throw error;
   } finally {
     reader.releaseLock();
   }
@@ -77,18 +94,18 @@ export async function createOpencodeProcess(): Promise<OpencodeProcess> {
         OPENCODE_SERVER_PASSWORD: password,
       },
       onExit(_proc, exitCode, signalCode, error) {
-        consola.debug("opencode is stopped", { exitCode, signalCode });
-        if (error) consola.fatal("opencode exited with an error", error);
+        consola.debug("opencode is terminated", { exitCode, signalCode });
+        if (error) consola.fatal("opencode exited abnormally", error);
       },
     },
   );
 
-  const { port, rest } = await readPort(proc.stdout);
+  const { port, stdout } = await readPort(proc);
 
   // Aborted in dispose to stop draining in case the stdout stream doesn't
   // close when the child process exits.
   const drainController = new AbortController();
-  const drained = drain(rest, drainController.signal).then(
+  const drained = drain(stdout, drainController.signal).then(
     () => {},
     () => {},
   );
@@ -119,16 +136,9 @@ export async function createOpencodeProcess(): Promise<OpencodeProcess> {
     }),
     [Symbol.asyncDispose]: async () => {
       disposed = true;
-      proc.kill();
-      // Force kill if the process doesn't exit within 5 seconds.
-      const forceKill = setTimeout(() => proc.kill(9), 5000);
-      try {
-        // Stop draining stdout so drained resolves and dispose can complete.
-        drainController.abort();
-        await Promise.all([drained, exited]);
-      } finally {
-        clearTimeout(forceKill);
-      }
+      await killProc(proc);
+      drainController.abort();
+      await Promise.all([drained, exited]);
     },
   };
 }
