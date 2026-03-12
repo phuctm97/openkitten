@@ -78,7 +78,7 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
       },
       onExit(_proc, exitCode, signalCode, error) {
         consola.debug("opencode is stopped", { exitCode, signalCode });
-        if (error) consola.fatal("opencode exited abnormally", error);
+        if (error) consola.fatal("opencode exited with an error", error);
       },
     },
   );

@@ -108,10 +108,7 @@ test("createBot installs fatal error handler", async () => {
   const [handler] = mockCatch.mock.calls[0] as [(error: unknown) => void];
   const error = new Error("unexpected");
   handler(error);
-  expect(consola.fatal).toHaveBeenCalledWith(
-    "bot caught an unhandled error",
-    error,
-  );
+  expect(consola.fatal).toHaveBeenCalledWith("bot caught an error", error);
 });
 
 test("createBot.stopped does not reject after dispose", async () => {

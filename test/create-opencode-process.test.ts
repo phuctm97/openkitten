@@ -122,7 +122,7 @@ test("createOpenCodeProcess logs abnormal exit", async () => {
   const opencodeProcess = await createOpenCodeProcess();
   await opencodeProcess.exited.catch(() => {});
   expect(consola.fatal).toHaveBeenCalledWith(
-    "opencode exited abnormally",
+    "opencode exited with an error",
     error,
   );
 });
