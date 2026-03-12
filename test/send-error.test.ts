@@ -9,7 +9,7 @@ test("formats error and sends chunks", async () => {
   vi.spyOn(sendChunksModule, "sendChunks").mockResolvedValue(undefined);
   const error = new Error("boom");
   await sendError({
-    client: {} as never,
+    bot: {} as never,
     error,
     ignoreErrors: true,
     chatId: 456,
@@ -17,7 +17,7 @@ test("formats error and sends chunks", async () => {
   });
   expect(formatErrorModule.formatError).toHaveBeenCalledWith(error);
   expect(sendChunksModule.sendChunks).toHaveBeenCalledWith({
-    client: {} as never,
+    bot: {} as never,
     chunks,
     ignoreErrors: true,
     chatId: 456,

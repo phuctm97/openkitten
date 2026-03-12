@@ -42,7 +42,7 @@ function mockCreateGrammy() {
   });
   vi.spyOn(createGrammyModule, "createGrammy").mockResolvedValue({
     stopped,
-    client: {} as never,
+    bot: {} as never,
     [Symbol.asyncDispose]: dispose,
   });
   return dispose;
@@ -106,7 +106,7 @@ test("serve exits on unexpected grammy stop", async () => {
   );
   vi.spyOn(createGrammyModule, "createGrammy").mockResolvedValue({
     stopped,
-    client: {} as never,
+    bot: {} as never,
     [Symbol.asyncDispose]: async () => {},
   });
   mockCreateExitHook();

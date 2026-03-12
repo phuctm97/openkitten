@@ -2,7 +2,7 @@ import { consola } from "consola";
 import type { SendChunksOptions } from "~/lib/send-chunks-options";
 
 export async function sendChunks({
-  client,
+  bot,
   chunks,
   ignoreErrors,
   chatId,
@@ -16,7 +16,7 @@ export async function sendChunks({
     for (const { markdown, text } of chunks) {
       if (markdown) {
         try {
-          await client.api.sendMessage(chatId, markdown, {
+          await bot.api.sendMessage(chatId, markdown, {
             parse_mode: "MarkdownV2",
             ...sendOpts,
           });
@@ -25,10 +25,10 @@ export async function sendChunks({
             "failed to send MarkdownV2 message, falling back to plain text",
             { error, markdown, text },
           );
-          await client.api.sendMessage(chatId, text, sendOpts);
+          await bot.api.sendMessage(chatId, text, sendOpts);
         }
       } else {
-        await client.api.sendMessage(chatId, text, sendOpts);
+        await bot.api.sendMessage(chatId, text, sendOpts);
       }
     }
   } catch (error) {

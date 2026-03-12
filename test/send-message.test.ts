@@ -8,7 +8,7 @@ test("formats text and sends chunks", async () => {
   vi.spyOn(formatMessageModule, "formatMessage").mockReturnValue(chunks);
   vi.spyOn(sendChunksModule, "sendChunks").mockResolvedValue(undefined);
   await sendMessage({
-    client: {} as never,
+    bot: {} as never,
     text: "hello",
     ignoreErrors: false,
     chatId: 123,
@@ -16,7 +16,7 @@ test("formats text and sends chunks", async () => {
   });
   expect(formatMessageModule.formatMessage).toHaveBeenCalledWith("hello");
   expect(sendChunksModule.sendChunks).toHaveBeenCalledWith({
-    client: {} as never,
+    bot: {} as never,
     chunks,
     ignoreErrors: false,
     chatId: 123,

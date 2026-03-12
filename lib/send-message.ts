@@ -3,12 +3,12 @@ import { sendChunks } from "~/lib/send-chunks";
 import type { SendMessageOptions } from "~/lib/send-message-options";
 
 export async function sendMessage({
-  client,
+  bot,
   text,
   ignoreErrors,
   chatId,
   threadId,
 }: SendMessageOptions): Promise<void> {
   const chunks = formatMessage(text);
-  await sendChunks({ client, chunks, ignoreErrors, chatId, threadId });
+  await sendChunks({ bot, chunks, ignoreErrors, chatId, threadId });
 }

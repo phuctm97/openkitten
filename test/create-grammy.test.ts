@@ -62,9 +62,9 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-test("createGrammy returns grammy with client", async () => {
+test("createGrammy returns grammy with bot", async () => {
   await using grammy = await createGrammy();
-  expect(grammy.client).toBeDefined();
+  expect(grammy.bot).toBeDefined();
 });
 
 test("createGrammy passes token to grammy", async () => {

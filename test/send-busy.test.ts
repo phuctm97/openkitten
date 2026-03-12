@@ -8,14 +8,14 @@ test("formats busy and sends chunks", async () => {
   vi.spyOn(formatBusyModule, "formatBusy").mockReturnValue(chunks);
   vi.spyOn(sendChunksModule, "sendChunks").mockResolvedValue(undefined);
   await sendBusy({
-    client: {} as never,
+    bot: {} as never,
     ignoreErrors: true,
     chatId: 456,
     threadId: 789,
   });
   expect(formatBusyModule.formatBusy).toHaveBeenCalled();
   expect(sendChunksModule.sendChunks).toHaveBeenCalledWith({
-    client: {} as never,
+    bot: {} as never,
     chunks,
     ignoreErrors: true,
     chatId: 456,
