@@ -14,6 +14,7 @@
     "@opencode-ai/sdk": "^1.2.24",
     "citty": "^0.2.1",
     "consola": "^3.4.2",
+    "grammy": "^1.41.1",
     "opencode-ai": "^1.2.24"
   },
   "devDependencies": {
