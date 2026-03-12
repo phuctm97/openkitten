@@ -1,12 +1,12 @@
 import { convert } from "telegram-markdown-v2";
 import { assert, expect, test, vi } from "vitest";
-import { formatError } from "~/lib/format-error";
+import { grammyFormatError } from "~/lib/grammy-format-error";
 
 vi.mock("telegram-markdown-v2", { spy: true });
 
 test("formats Error with stack trace and Trace label", () => {
   const error = new Error("something broke");
-  const chunks = formatError(error);
+  const chunks = grammyFormatError(error);
   expect(chunks.length).toBeGreaterThan(0);
   const text = chunks.map((c) => c.text).join("\n");
   expect(text).toContain("❌");
@@ -19,7 +19,7 @@ test("formats Error with stack trace and Trace label", () => {
 });
 
 test("formats non-Error value", () => {
-  const chunks = formatError("raw string error");
+  const chunks = grammyFormatError("raw string error");
   const text = chunks.map((c) => c.text).join("\n");
   expect(text).toContain("❌");
   expect(text).toContain("An error occurred");
@@ -30,7 +30,7 @@ test("preserves Trace label when markdown is absent", () => {
   vi.mocked(convert).mockImplementationOnce(() => {
     throw new Error("conversion failed");
   });
-  const chunks = formatError(new Error("fail"));
+  const chunks = grammyFormatError(new Error("fail"));
   expect(chunks.length).toBeGreaterThan(0);
   expect(chunks[0]?.markdown).toBeUndefined();
   expect(chunks[0]?.text).toContain("An error occurred");

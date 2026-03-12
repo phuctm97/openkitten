@@ -1,4 +1,4 @@
-import { formatBusy } from "~/lib/format-busy";
+import { grammyFormatBusy } from "~/lib/grammy-format-busy";
 import { sendChunks } from "~/lib/send-chunks";
 import type { SendOptions } from "~/lib/send-options";
 
@@ -8,6 +8,6 @@ export async function sendBusy({
   chatId,
   threadId,
 }: SendOptions): Promise<void> {
-  const chunks = formatBusy();
+  const chunks = grammyFormatBusy();
   await sendChunks({ bot, chunks, ignoreErrors, chatId, threadId });
 }

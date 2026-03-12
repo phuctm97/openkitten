@@ -1,11 +1,11 @@
 import { expect, test, vi } from "vitest";
-import * as formatBusyModule from "~/lib/format-busy";
+import * as grammyFormatBusyModule from "~/lib/grammy-format-busy";
 import { sendBusy } from "~/lib/send-busy";
 import * as sendChunksModule from "~/lib/send-chunks";
 
 test("formats busy and sends chunks", async () => {
   const chunks = [{ text: "busy" }];
-  vi.spyOn(formatBusyModule, "formatBusy").mockReturnValue(chunks);
+  vi.spyOn(grammyFormatBusyModule, "grammyFormatBusy").mockReturnValue(chunks);
   vi.spyOn(sendChunksModule, "sendChunks").mockResolvedValue(undefined);
   await sendBusy({
     bot: {} as never,
@@ -13,7 +13,7 @@ test("formats busy and sends chunks", async () => {
     chatId: 456,
     threadId: 789,
   });
-  expect(formatBusyModule.formatBusy).toHaveBeenCalled();
+  expect(grammyFormatBusyModule.grammyFormatBusy).toHaveBeenCalled();
   expect(sendChunksModule.sendChunks).toHaveBeenCalledWith({
     bot: {} as never,
     chunks,

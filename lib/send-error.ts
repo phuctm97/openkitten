@@ -1,4 +1,4 @@
-import { formatError } from "~/lib/format-error";
+import { grammyFormatError } from "~/lib/grammy-format-error";
 import { sendChunks } from "~/lib/send-chunks";
 import type { SendErrorOptions } from "~/lib/send-error-options";
 
@@ -9,6 +9,6 @@ export async function sendError({
   chatId,
   threadId,
 }: SendErrorOptions): Promise<void> {
-  const chunks = formatError(error);
+  const chunks = grammyFormatError(error);
   await sendChunks({ bot, chunks, ignoreErrors, chatId, threadId });
 }
