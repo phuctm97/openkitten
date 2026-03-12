@@ -1,10 +1,6 @@
 import { consola } from "consola";
 import { convert } from "telegram-markdown-v2";
-
-export interface MessageChunk {
-  text: string;
-  markdown?: string | undefined;
-}
+import type { MessageChunk } from "~/lib/message-chunk";
 
 const telegramMaxLength = 4096;
 const telegramSplitLength = Math.floor(telegramMaxLength * 0.8);
