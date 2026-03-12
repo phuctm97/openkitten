@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import exitHook from "exit-hook";
 import type { OpenCode } from "~/lib/opencode";
 import { textDecoder } from "~/lib/text-decoder";
 
@@ -25,9 +26,7 @@ export async function startOpenCode(): Promise<OpenCode> {
     stderr: "pipe",
   });
 
-  const kill = () => proc.kill();
-  process.on("SIGINT", kill);
-  process.on("SIGTERM", kill);
+  const unhook = exitHook(() => proc.kill());
 
   // TODO: drain stdout after reading port to prevent pipe buffer from blocking
   drain(proc.stderr);
@@ -38,8 +37,7 @@ export async function startOpenCode(): Promise<OpenCode> {
     port,
     exited: proc.exited,
     [Symbol.asyncDispose]: async () => {
-      process.off("SIGINT", kill);
-      process.off("SIGTERM", kill);
+      unhook();
       proc.kill();
       await proc.exited;
     },

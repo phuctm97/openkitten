@@ -1,6 +1,21 @@
-import { expect, test, vi } from "vitest";
+import { assert, beforeEach, expect, test, vi } from "vitest";
 import { startOpenCode } from "~/lib/start-opencode";
 import { textEncoder } from "~/lib/text-encoder";
+
+let onExit: (() => void) | undefined;
+const unhook = vi.fn();
+
+vi.mock("exit-hook", () => ({
+  default: (cb: () => void) => {
+    onExit = cb;
+    return unhook;
+  },
+}));
+
+beforeEach(() => {
+  onExit = undefined;
+  unhook.mockClear();
+});
 
 function mockSpawn(portLine = "listening on :3000\n") {
   const kill = vi.fn();
@@ -47,14 +62,29 @@ test("startOpenCode is async disposable", async () => {
     await using _opencode = await startOpenCode();
   }
   expect(kill).toHaveBeenCalledOnce();
+  expect(unhook).toHaveBeenCalledOnce();
 });
 
-test("startOpenCode kills on SIGINT", async () => {
-  const spawn = mockSpawn();
+test("startOpenCode kills on exit", async () => {
+  const kill = vi.fn();
+  vi.spyOn(Bun, "spawn").mockImplementation(
+    () =>
+      ({
+        kill,
+        stdout: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(textEncoder.encode("listening on :3000\n"));
+            controller.close();
+          },
+        }),
+        stderr: new ReadableStream({ start: (c) => c.close() }),
+        exited: Promise.resolve(0),
+      }) as never,
+  );
   await startOpenCode();
-  process.emit("SIGINT");
-  const mock = spawn.mock.results[0]?.value;
-  expect(mock.kill).toHaveBeenCalledOnce();
+  assert(onExit);
+  onExit();
+  expect(kill).toHaveBeenCalledOnce();
 });
 
 test("startOpenCode throws if port not found", async () => {

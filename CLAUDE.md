@@ -19,4 +19,4 @@ Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js AP
 
 ## No Hacks
 
-No dirty hacks: no suppression comments (`@ts-ignore`, `@ts-expect-error`, `biome-ignore`, `istanbul ignore`), no hacky type casts (`as unknown as`, `as any`). The only exception is `as never` when mocking in tests.
+No dirty hacks: no suppression comments (`@ts-ignore`, `@ts-expect-error`, `biome-ignore`, `istanbul ignore`), no hacky type casts (`as unknown as`, `as any`), no non-null assertions (`!`). The only exception is `as never` when mocking in tests.
