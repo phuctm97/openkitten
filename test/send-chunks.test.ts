@@ -82,20 +82,18 @@ test("sends multiple chunks in order", async () => {
   expect(calls).toEqual(["first", "second", "third"]);
 });
 
-test("ignoreErrors logs and continues on error", async () => {
+test("ignoreErrors logs and stops on error", async () => {
   const client = mockClient();
-  client.api.sendMessage
-    .mockRejectedValueOnce(new Error("network error"))
-    .mockResolvedValueOnce(undefined);
+  client.api.sendMessage.mockRejectedValueOnce(new Error("network error"));
   await sendChunks({
     client: client as never,
-    chunks: [{ text: "fail" }, { text: "ok" }],
+    chunks: [{ text: "fail" }, { text: "skipped" }],
     ignoreErrors: true,
     chatId: 123,
     threadId: undefined,
   });
   expect(consola.error).toHaveBeenCalledWith(expect.any(Error));
-  expect(client.api.sendMessage).toHaveBeenCalledTimes(2);
+  expect(client.api.sendMessage).toHaveBeenCalledTimes(1);
 });
 
 test("throws when ignoreErrors is false", async () => {

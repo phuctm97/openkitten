@@ -1,7 +1,6 @@
 import { consola } from "consola";
 import type { SendChunksOptions } from "~/lib/send-chunks-options";
 
-/** Sends chunks to Telegram, falling back to plain text if MarkdownV2 fails. */
 export async function sendChunks({
   client,
   chunks,
@@ -13,8 +12,8 @@ export async function sendChunks({
     ...(threadId && { message_thread_id: threadId }),
   };
 
-  for (const { markdown, text } of chunks) {
-    try {
+  try {
+    for (const { markdown, text } of chunks) {
       if (markdown) {
         try {
           await client.api.sendMessage(chatId, markdown, {
@@ -31,12 +30,12 @@ export async function sendChunks({
       } else {
         await client.api.sendMessage(chatId, text, sendOpts);
       }
-    } catch (error) {
-      if (ignoreErrors) {
-        consola.error(error);
-      } else {
-        throw error;
-      }
+    }
+  } catch (error) {
+    if (ignoreErrors) {
+      consola.error(error);
+    } else {
+      throw error;
     }
   }
 }
