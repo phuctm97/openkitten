@@ -265,7 +265,8 @@ test("consumeOpencodeEvents returns silently when aborted during error", async (
   expect(opencodeClient.event.subscribe).toHaveBeenCalledOnce();
 });
 
-test("consumeOpencodeEvents reconnects on normal stream end", async () => {
+test("consumeOpencodeEvents reconnects on normal stream end with backoff", async () => {
+  const sleep = mockSleep();
   const controller = new AbortController();
   let calls = 0;
   const opencodeClient = {
@@ -285,4 +286,5 @@ test("consumeOpencodeEvents reconnects on normal stream end", async () => {
   );
 
   expect(calls).toBe(2);
+  expect(sleep).toHaveBeenCalledWith(1000);
 });

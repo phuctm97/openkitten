@@ -25,7 +25,7 @@ export async function consumeOpencodeEvents(
         consola.debug("opencode event stream is connected");
         for (;;) {
           const result = await iter.next();
-          if (result.done) break;
+          if (result.done) throw new Error("opencode event stream ended");
           onEvent(result.value);
         }
       } finally {
