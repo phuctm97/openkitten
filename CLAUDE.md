@@ -2,6 +2,12 @@
 
 Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in capabilities people actually need.
 
+## Vendor
+
+`.vendor/` contains cloned source repos of open-source libraries we depend on. Use them to explore real implementations, understand internals, and verify API behavior.
+
+When you need to understand how a library works internally, ensure its source is cloned and up to date in `.vendor/<name>/`. Examples: `.vendor/opencode/`, `.vendor/grammy/`.
+
 ## Bun
 
 Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js APIs only when there is no Bun alternative.

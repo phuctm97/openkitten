@@ -1,0 +1,56 @@
+import { consola } from "consola";
+import { eq } from "drizzle-orm";
+import { expect, test } from "vitest";
+import { createDatabase } from "~/lib/create-database";
+import * as schema from "~/lib/schema";
+
+function db() {
+  return createDatabase(":memory:");
+}
+
+test("createDatabase logs ready", () => {
+  db();
+  expect(consola.ready).toHaveBeenCalledWith("database is ready");
+});
+
+test("createDatabase is disposable", () => {
+  {
+    using _db = db();
+  }
+  expect(consola.debug).toHaveBeenCalledWith("database is closed");
+});
+
+test("createDatabase inserts session with default timestamps", () => {
+  const database = db();
+  const result = database
+    .insert(schema.session)
+    .values({ id: "s1", chatId: 123 })
+    .returning()
+    .get();
+  expect(result.createdAt).toBeInstanceOf(Date);
+  expect(result.updatedAt).toBeInstanceOf(Date);
+});
+
+test("createDatabase updates updatedAt on session update", () => {
+  const database = db();
+  const inserted = database
+    .insert(schema.session)
+    .values({ id: "s1", chatId: 123 })
+    .returning()
+    .get();
+  const updated = database
+    .update(schema.session)
+    .set({ chatId: 456 })
+    .where(eq(schema.session.id, "s1"))
+    .returning()
+    .get();
+  expect(updated?.updatedAt >= inserted.updatedAt).toBe(true);
+});
+
+test("createDatabase cascades message delete on session delete", () => {
+  const database = db();
+  database.insert(schema.session).values({ id: "s1", chatId: 123 }).run();
+  database.insert(schema.message).values({ id: "m1", sessionId: "s1" }).run();
+  database.delete(schema.session).where(eq(schema.session.id, "s1")).run();
+  expect(database.select().from(schema.message).all()).toHaveLength(0);
+});

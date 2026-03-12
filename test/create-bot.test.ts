@@ -9,15 +9,15 @@ let mockCatch: ReturnType<typeof vi.fn>;
 
 vi.mock("grammy", () => {
   class MockBot {
+    declare start: typeof mockStart;
+    declare stop: typeof mockStop;
+    declare catch: typeof mockCatch;
     constructor(token: string) {
       capturedToken = token;
       this.start = mockStart;
       this.stop = mockStop;
       this.catch = mockCatch;
     }
-    start = mockStart;
-    stop = mockStop;
-    catch = mockCatch;
   }
   return { Bot: MockBot };
 });

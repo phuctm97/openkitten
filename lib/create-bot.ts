@@ -14,11 +14,11 @@ export async function createBot(): Promise<Bot> {
     consola.fatal("bot caught an unhandled error", error);
   });
 
-  const ready = Promise.withResolvers<void>();
-  const polling = client.start({ onStart: () => ready.resolve() });
+  const { resolve, promise: started } = Promise.withResolvers<void>();
+  const polling = client.start({ onStart: () => resolve() });
 
   // client.start() rejects if polling fails before onStart fires.
-  await Promise.race([ready.promise, polling]);
+  await Promise.race([started, polling]);
 
   // Only reject if polling stops on its own, not when we stop it.
   let disposed = false;
@@ -27,6 +27,8 @@ export async function createBot(): Promise<Bot> {
     throw new Error("bot stopped unexpectedly");
   });
 
+  // stopped rejects on unexpected stop but may not be awaited immediately by
+  // the consumer. Without this handler, the rejection would be unhandled.
   stopped.then(
     () => {},
     () => {},
@@ -41,8 +43,9 @@ export async function createBot(): Promise<Bot> {
       disposed = true;
       await client.stop();
       consola.debug("bot is stopped");
-      ready.resolve();
-      await Promise.all([ready.promise, stopped]);
+      // Resolve started and await all promises to ensure no stuck promises.
+      resolve();
+      await Promise.all([started, stopped]);
     },
   };
 }
