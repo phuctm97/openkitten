@@ -4,7 +4,7 @@ import { grammyFormatError } from "~/lib/grammy-format-error";
 
 vi.mock("telegram-markdown-v2", { spy: true });
 
-test("formats Error with stack trace and Trace label", () => {
+test("formats error with stack trace", () => {
   const error = new Error("something broke");
   const chunks = grammyFormatError(error);
   expect(chunks.length).toBeGreaterThan(0);
@@ -26,7 +26,7 @@ test("formats non-Error value", () => {
   expect(text).toContain("raw string error");
 });
 
-test("preserves Trace label when markdown is absent", () => {
+test("falls back to plain text when conversion fails", () => {
   vi.mocked(convert).mockImplementationOnce(() => {
     throw new Error("conversion failed");
   });

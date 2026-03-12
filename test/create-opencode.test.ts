@@ -106,7 +106,7 @@ test("is async disposable", async () => {
   expect(kill).toHaveBeenCalledOnce();
 });
 
-test("logs stopped on exit", async () => {
+test("logs terminated on exit", async () => {
   mockSpawn();
   const opencode = await createOpencode();
   await opencode.exited.catch(() => {});

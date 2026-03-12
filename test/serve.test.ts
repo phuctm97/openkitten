@@ -59,7 +59,7 @@ function mockCreateExit() {
   return () => resolveExited();
 }
 
-test("serve disposes on exit", async () => {
+test("disposes on exit", async () => {
   const disposeOpencode = mockCreateOpencode();
   const disposeGrammy = mockCreateGrammy();
   const triggerExit = mockCreateExit();
@@ -73,7 +73,7 @@ test("serve disposes on exit", async () => {
   expect(disposeGrammy).toHaveBeenCalledOnce();
 });
 
-test("serve exits on unexpected opencode exit", async () => {
+test("exits on unexpected opencode exit", async () => {
   const exited = Promise.reject(new Error("opencode exited unexpectedly (1)"));
   exited.then(
     () => {},
@@ -91,7 +91,7 @@ test("serve exits on unexpected opencode exit", async () => {
   );
 });
 
-test("serve exits on unexpected grammy stop", async () => {
+test("exits on unexpected grammy stop", async () => {
   mockCreateOpencode();
   const stopped = Promise.reject(new Error("grammy stopped unexpectedly"));
   stopped.then(

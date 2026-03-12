@@ -26,7 +26,7 @@ beforeEach(() => {
 });
 
 for (const event of exitEvents) {
-  test(`createExit resolves on ${event}`, async () => {
+  test(`resolves on ${event}`, async () => {
     using hook = createExit();
     handlers.get(event)?.();
     await expect(hook.exited).resolves.toBeUndefined();

@@ -62,7 +62,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-test("returns grammy with bot", async () => {
+test("returns bot", async () => {
   await using grammy = await createGrammy();
   expect(grammy.bot).toBeDefined();
 });

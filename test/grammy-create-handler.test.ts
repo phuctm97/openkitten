@@ -44,7 +44,7 @@ test("catches error and sends to chat", async () => {
   });
 });
 
-test("logs error on failure", async () => {
+test("logs error with chat context", async () => {
   const { resolve, promise } = Promise.withResolvers<void>();
   const error = new Error("fail");
   const callback = vi.fn().mockRejectedValue(error);
