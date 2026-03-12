@@ -17,8 +17,11 @@ beforeEach(() => {
 });
 
 function mockCreateOpenCode(port = 3000) {
+  const exited = new Promise<never>(() => {});
+  exited.catch(() => {});
   return vi.spyOn(createOpenCodeModule, "createOpenCode").mockResolvedValue({
     port,
+    exited,
     [Symbol.asyncDispose]: async () => {},
   });
 }

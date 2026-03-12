@@ -44,9 +44,20 @@ export async function createOpenCode(): Promise<OpenCode> {
   const { port, rest } = await readPort(proc.stdout);
   const drainStdout = drain(rest);
 
+  let disposed = false;
+  const exited = proc.exited.then((code) => {
+    if (disposed) return;
+    throw new Error(`opencode exited unexpectedly with code ${code}`);
+  });
+  exited.catch(() => {
+    // Prevent unhandled rejection if caller doesn't await exited before dispose
+  });
+
   return {
     port,
+    exited,
     [Symbol.asyncDispose]: async () => {
+      disposed = true;
       proc.kill();
       await Promise.all([proc.exited, drainStdout, drainStderr]);
     },
