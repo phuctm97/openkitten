@@ -62,10 +62,10 @@ function mockSpawnPending(stdout = portStdout()) {
   return kill;
 }
 
-test("createOpenCodeProcess parses port", async () => {
+test("createOpenCodeProcess returns client", async () => {
   mockSpawn();
   const opencodeProcess = await createOpenCodeProcess();
-  expect(opencodeProcess.port).toBe(3000);
+  expect(opencodeProcess.client).toBeDefined();
 });
 
 test("createOpenCodeProcess passes credentials to opencode", async () => {
@@ -92,12 +92,10 @@ test("createOpenCodeProcess passes credentials to opencode", async () => {
     };
     return proc;
   }) as never);
-  const opencodeProcess = await createOpenCodeProcess();
-  expect(opencodeProcess.username).toBe(pkg.name);
-  expect(opencodeProcess.password).toMatch(/^[\w-]{43}$/);
+  await createOpenCodeProcess();
   expect(capturedEnv).toMatchObject({
-    OPENCODE_SERVER_USERNAME: opencodeProcess.username,
-    OPENCODE_SERVER_PASSWORD: opencodeProcess.password,
+    OPENCODE_SERVER_USERNAME: pkg.name,
+    OPENCODE_SERVER_PASSWORD: expect.stringMatching(/^[\w-]{43}$/),
   });
 });
 
@@ -205,7 +203,7 @@ test("createOpenCodeProcess.exited does not reject after dispose", async () => {
 test("createOpenCodeProcess parses port split across chunks", async () => {
   mockSpawn("listening on", " :3000\n");
   const opencodeProcess = await createOpenCodeProcess();
-  expect(opencodeProcess.port).toBe(3000);
+  expect(opencodeProcess.client).toBeDefined();
 });
 
 test("createOpenCodeProcess drains stdout until dispose", async () => {

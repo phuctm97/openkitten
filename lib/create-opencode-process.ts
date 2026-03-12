@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { consola } from "consola";
 import type { OpenCodeProcess } from "~/lib/opencode-process";
 import { textDecoder } from "~/lib/text-decoder";
@@ -97,10 +98,15 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
   // the consumer. Without this catch, the rejection would be unhandled.
   exited.catch(() => {});
 
+  const client = createOpencodeClient({
+    baseUrl: `http://127.0.0.1:${port}`,
+    headers: {
+      authorization: `Basic ${btoa(`${username}:${password}`)}`,
+    },
+  });
+
   return {
-    port,
-    username,
-    password,
+    client,
     exited,
     [Symbol.asyncDispose]: async () => {
       disposed = true;

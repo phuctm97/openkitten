@@ -1,6 +1,6 @@
+import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
+
 export interface OpenCodeProcess extends AsyncDisposable {
-  readonly port: number;
-  readonly username: string;
-  readonly password: string;
+  readonly client: OpencodeClient;
   readonly exited: Promise<void>;
 }

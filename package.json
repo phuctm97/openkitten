@@ -11,6 +11,7 @@
     "typecheck": "bun --bun tsc --build"
   },
   "dependencies": {
+    "@opencode-ai/sdk": "^1.2.24",
     "citty": "^0.2.1",
     "consola": "^3.4.2",
     "opencode-ai": "^1.2.24"
