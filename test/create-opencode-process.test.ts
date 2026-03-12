@@ -10,6 +10,15 @@ type OnExit = (
   error?: Error,
 ) => void;
 
+function portStdout() {
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(textEncoder.encode("listening on :3000\n"));
+      controller.close();
+    },
+  });
+}
+
 function mockSpawn(...chunks: string[]) {
   if (chunks.length === 0) chunks = ["listening on :3000\n"];
   const kill = vi.fn();
@@ -38,13 +47,7 @@ function mockSpawn(...chunks: string[]) {
   }) as never);
 }
 
-test("createOpenCodeProcess parses port", async () => {
-  mockSpawn();
-  const opencodeProcess = await createOpenCodeProcess();
-  expect(opencodeProcess.port).toBe(3000);
-});
-
-test("createOpenCodeProcess is async disposable", async () => {
+function mockSpawnPending(stdout = portStdout()) {
   let resolveExited: (code: number) => void;
   const exited = new Promise<number>((r) => {
     resolveExited = r;
@@ -52,15 +55,20 @@ test("createOpenCodeProcess is async disposable", async () => {
   const kill = vi.fn(() => resolveExited(0));
   vi.spyOn(Bun, "spawn").mockImplementation((() => ({
     kill,
-    stdout: new ReadableStream<Uint8Array>({
-      start(controller) {
-        controller.enqueue(textEncoder.encode("listening on :3000\n"));
-        controller.close();
-      },
-    }),
-    stderr: new ReadableStream({ start: (c) => c.close() }),
+    stdout,
     exited,
   })) as never);
+  return kill;
+}
+
+test("createOpenCodeProcess parses port", async () => {
+  mockSpawn();
+  const opencodeProcess = await createOpenCodeProcess();
+  expect(opencodeProcess.port).toBe(3000);
+});
+
+test("createOpenCodeProcess is async disposable", async () => {
+  const kill = mockSpawnPending();
   {
     await using _opencodeProcess = await createOpenCodeProcess();
   }
@@ -85,12 +93,7 @@ test("createOpenCodeProcess logs error on exit error", async () => {
   ) => {
     const proc = {
       kill: vi.fn(),
-      stdout: new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(textEncoder.encode("listening on :3000\n"));
-          controller.close();
-        },
-      }),
+      stdout: portStdout(),
       exited: Promise.resolve(0).then((code) => {
         opts.onExit?.(proc, null, null, error);
         return code;
@@ -125,12 +128,7 @@ test("createOpenCodeProcess force kills after timeout", async () => {
     });
     vi.spyOn(Bun, "spawn").mockImplementation((() => ({
       kill,
-      stdout: new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(textEncoder.encode("listening on :3000\n"));
-          controller.close();
-        },
-      }),
+      stdout: portStdout(),
       exited,
     })) as never);
     const opencodeProcess = await createOpenCodeProcess();
@@ -157,13 +155,7 @@ test("createOpenCodeProcess.exited does not reject after dispose", async () => {
         resolveExited(0);
         opts.onExit?.(proc, 0, null);
       }),
-      stdout: new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(textEncoder.encode("listening on :3000\n"));
-          controller.close();
-        },
-      }),
-
+      stdout: portStdout(),
       exited,
     };
     return proc;
@@ -183,15 +175,9 @@ test("createOpenCodeProcess parses port split across chunks", async () => {
 });
 
 test("createOpenCodeProcess drains stdout until dispose", async () => {
-  let resolveExited: (code: number) => void;
-  const exited = new Promise<number>((r) => {
-    resolveExited = r;
-  });
-  const kill = vi.fn(() => resolveExited(0));
   let chunks = 0;
-  vi.spyOn(Bun, "spawn").mockImplementation((() => ({
-    kill,
-    stdout: new ReadableStream<Uint8Array>({
+  const kill = mockSpawnPending(
+    new ReadableStream<Uint8Array>({
       async pull(controller) {
         await new Promise((r) => setTimeout(r, 0));
         if (chunks === 0) {
@@ -202,9 +188,7 @@ test("createOpenCodeProcess drains stdout until dispose", async () => {
         chunks++;
       },
     }),
-    stderr: new ReadableStream({ start: (c) => c.close() }),
-    exited,
-  })) as never);
+  );
   {
     await using _opencodeProcess = await createOpenCodeProcess();
     await vi.waitFor(() => expect(chunks).toBeGreaterThan(1));
@@ -213,15 +197,9 @@ test("createOpenCodeProcess drains stdout until dispose", async () => {
 });
 
 test("createOpenCodeProcess tolerates stdout stream error after port", async () => {
-  let resolveExited: (code: number) => void;
-  const exited = new Promise<number>((r) => {
-    resolveExited = r;
-  });
-  const kill = vi.fn(() => resolveExited(0));
   let enqueued = false;
-  vi.spyOn(Bun, "spawn").mockImplementation((() => ({
-    kill,
-    stdout: new ReadableStream<Uint8Array>({
+  const kill = mockSpawnPending(
+    new ReadableStream<Uint8Array>({
       pull(controller) {
         if (!enqueued) {
           enqueued = true;
@@ -231,9 +209,7 @@ test("createOpenCodeProcess tolerates stdout stream error after port", async () 
         }
       },
     }),
-    stderr: new ReadableStream({ start: (c) => c.close() }),
-    exited,
-  })) as never);
+  );
   {
     await using _opencodeProcess = await createOpenCodeProcess();
   }

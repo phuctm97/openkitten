@@ -25,7 +25,7 @@ function mockCreateOpenCodeProcess(port = 3000) {
   return dispose;
 }
 
-function mockExitHook() {
+function mockCreateExitHook() {
   let resolveExited: () => void;
   const exited = new Promise<void>((r) => {
     resolveExited = r;
@@ -41,7 +41,7 @@ function mockExitHook() {
 
 test("serve runs and logs port", async () => {
   const dispose = mockCreateOpenCodeProcess();
-  const triggerExit = mockExitHook();
+  const triggerExit = mockCreateExitHook();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
     expect(consola.log).toHaveBeenCalledWith(
@@ -55,7 +55,7 @@ test("serve runs and logs port", async () => {
 
 test("serve disposes on exit", async () => {
   const dispose = mockCreateOpenCodeProcess();
-  const triggerExit = mockExitHook();
+  const triggerExit = mockCreateExitHook();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
     expect(createExitHookModule.createExitHook).toHaveBeenCalled(),
@@ -76,7 +76,7 @@ test("serve exits on unexpected opencode exit", async () => {
     exited,
     [Symbol.asyncDispose]: async () => {},
   });
-  mockExitHook();
+  mockCreateExitHook();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
     "opencode exited unexpectedly (1)",
   );
