@@ -2,6 +2,7 @@ import { consola } from "consola";
 import { expect, test, vi } from "vitest";
 import { createOpenCodeProcess } from "~/lib/create-opencode-process";
 import { textEncoder } from "~/lib/text-encoder";
+import pkg from "~/package.json" with { type: "json" };
 
 type OnExit = (
   proc: unknown,
@@ -65,6 +66,39 @@ test("createOpenCodeProcess parses port", async () => {
   mockSpawn();
   const opencodeProcess = await createOpenCodeProcess();
   expect(opencodeProcess.port).toBe(3000);
+});
+
+test("createOpenCodeProcess passes credentials to opencode", async () => {
+  let capturedEnv: Record<string, string> | undefined;
+  const kill = vi.fn();
+  const stdout = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(textEncoder.encode("listening on :3000\n"));
+      controller.close();
+    },
+  });
+  vi.spyOn(Bun, "spawn").mockImplementation(((
+    _cmd: string[],
+    opts: { env?: Record<string, string>; onExit?: OnExit },
+  ) => {
+    capturedEnv = opts.env;
+    const proc = {
+      kill,
+      stdout,
+      exited: Promise.resolve(0).then((code) => {
+        opts.onExit?.(proc, code, null);
+        return code;
+      }),
+    };
+    return proc;
+  }) as never);
+  const opencodeProcess = await createOpenCodeProcess();
+  expect(opencodeProcess.username).toBe(pkg.name);
+  expect(opencodeProcess.password).toMatch(/^[\w-]{43}$/);
+  expect(capturedEnv).toMatchObject({
+    OPENCODE_SERVER_USERNAME: opencodeProcess.username,
+    OPENCODE_SERVER_PASSWORD: opencodeProcess.password,
+  });
 });
 
 test("createOpenCodeProcess is async disposable", async () => {

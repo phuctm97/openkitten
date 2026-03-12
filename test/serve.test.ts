@@ -19,6 +19,8 @@ function mockCreateOpenCodeProcess(port = 3000) {
     "createOpenCodeProcess",
   ).mockResolvedValue({
     port,
+    username: "test",
+    password: "test",
     exited,
     [Symbol.asyncDispose]: dispose,
   });
@@ -73,6 +75,8 @@ test("serve exits on unexpected opencode exit", async () => {
     "createOpenCodeProcess",
   ).mockResolvedValue({
     port: 3000,
+    username: "test",
+    password: "test",
     exited,
     [Symbol.asyncDispose]: async () => {},
   });

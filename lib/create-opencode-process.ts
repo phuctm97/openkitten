@@ -1,7 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { consola } from "consola";
 import type { OpenCodeProcess } from "~/lib/opencode-process";
 import { textDecoder } from "~/lib/text-decoder";
+import pkg from "~/package.json" with { type: "json" };
 
 interface ReadPortResult {
   port: number;
@@ -61,9 +63,16 @@ async function drain(stream: ReadableStream, signal: AbortSignal) {
 const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
 export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
+  const username = pkg.name;
+  const password = randomBytes(32).toString("base64url");
   const proc = Bun.spawn([bin, "serve"], {
     stdout: "pipe",
     stderr: "ignore",
+    env: {
+      ...Bun.env,
+      OPENCODE_SERVER_USERNAME: username,
+      OPENCODE_SERVER_PASSWORD: password,
+    },
     onExit(_proc, exitCode, signalCode, error) {
       consola.debug("opencode exit info", { exitCode, signalCode });
       if (error) consola.fatal("opencode exit error", error);
@@ -90,6 +99,8 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
 
   return {
     port,
+    username,
+    password,
     exited,
     [Symbol.asyncDispose]: async () => {
       disposed = true;
