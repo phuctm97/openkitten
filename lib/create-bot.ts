@@ -8,6 +8,12 @@ export async function createBot(): Promise<Bot> {
 
   const client = new Client(token);
 
+  // Fatal: errors should never reach here — all event handlers will have
+  // their own error boundaries.
+  client.catch((error) => {
+    consola.fatal("bot caught an unhandled error", error);
+  });
+
   const ready = Promise.withResolvers<void>();
   const polling = client.start({ onStart: () => ready.resolve() });
 

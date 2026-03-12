@@ -20,8 +20,16 @@ function portStdout() {
   });
 }
 
-function mockSpawn(...chunks: string[]) {
-  if (chunks.length === 0) chunks = ["listening on :3000\n"];
+interface MockSpawnOptions {
+  readonly chunks?: string[];
+  readonly onExitError?: Error;
+}
+
+let capturedEnv: Record<string, string> | undefined;
+
+function mockSpawn(options?: MockSpawnOptions) {
+  const chunks = options?.chunks ?? ["listening on :3000\n"];
+  capturedEnv = undefined;
   const kill = vi.fn();
   const stdout = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -33,14 +41,21 @@ function mockSpawn(...chunks: string[]) {
   });
   return vi.spyOn(Bun, "spawn").mockImplementation(((
     _cmd: string[],
-    opts: { onExit?: OnExit },
+    opts: {
+      readonly env?: Record<string, string>;
+      readonly onExit?: OnExit;
+    },
   ) => {
+    capturedEnv = opts.env;
     const proc = {
       kill,
       stdout,
-
       exited: Promise.resolve(0).then((code) => {
-        opts.onExit?.(proc, code, null);
+        if (options?.onExitError) {
+          opts.onExit?.(proc, null, null, options.onExitError);
+        } else {
+          opts.onExit?.(proc, code, null);
+        }
         return code;
       }),
     };
@@ -75,29 +90,7 @@ test("createOpenCodeProcess logs ready", async () => {
 });
 
 test("createOpenCodeProcess passes credentials to opencode", async () => {
-  let capturedEnv: Record<string, string> | undefined;
-  const kill = vi.fn();
-  const stdout = new ReadableStream<Uint8Array>({
-    start(controller) {
-      controller.enqueue(textEncoder.encode("listening on :3000\n"));
-      controller.close();
-    },
-  });
-  vi.spyOn(Bun, "spawn").mockImplementation(((
-    _cmd: string[],
-    opts: { env?: Record<string, string>; onExit?: OnExit },
-  ) => {
-    capturedEnv = opts.env;
-    const proc = {
-      kill,
-      stdout,
-      exited: Promise.resolve(0).then((code) => {
-        opts.onExit?.(proc, code, null);
-        return code;
-      }),
-    };
-    return proc;
-  }) as never);
+  mockSpawn();
   await createOpenCodeProcess();
   expect(capturedEnv).toMatchObject({
     OPENCODE_SERVER_USERNAME: pkg.name,
@@ -125,20 +118,7 @@ test("createOpenCodeProcess logs stopped on exit", async () => {
 
 test("createOpenCodeProcess logs abnormal exit", async () => {
   const error = new Error("waitpid2 failed");
-  vi.spyOn(Bun, "spawn").mockImplementation(((
-    _cmd: string[],
-    opts: { onExit?: OnExit },
-  ) => {
-    const proc = {
-      kill: vi.fn(),
-      stdout: portStdout(),
-      exited: Promise.resolve(0).then((code) => {
-        opts.onExit?.(proc, null, null, error);
-        return code;
-      }),
-    };
-    return proc;
-  }) as never);
+  mockSpawn({ onExitError: error });
   const opencodeProcess = await createOpenCodeProcess();
   await opencodeProcess.exited.catch(() => {});
   expect(consola.fatal).toHaveBeenCalledWith(
@@ -189,7 +169,7 @@ test("createOpenCodeProcess.exited does not reject after dispose", async () => {
   });
   vi.spyOn(Bun, "spawn").mockImplementation(((
     _cmd: string[],
-    opts: { onExit?: OnExit },
+    opts: { readonly onExit?: OnExit },
   ) => {
     const proc = {
       kill: vi.fn(() => {
@@ -210,7 +190,7 @@ test("createOpenCodeProcess.exited does not reject after dispose", async () => {
 });
 
 test("createOpenCodeProcess parses port split across chunks", async () => {
-  mockSpawn("listening on", " :3000\n");
+  mockSpawn({ chunks: ["listening on", " :3000\n"] });
   const opencodeProcess = await createOpenCodeProcess();
   expect(opencodeProcess.client).toBeDefined();
 });
@@ -258,14 +238,14 @@ test("createOpenCodeProcess tolerates stdout stream error after port", async () 
 });
 
 test("createOpenCodeProcess throws if port not found", async () => {
-  mockSpawn("no port here\n");
+  mockSpawn({ chunks: ["no port here\n"] });
   await expect(createOpenCodeProcess()).rejects.toThrow(
     "opencode exited without announcing port",
   );
 });
 
 test("createOpenCodeProcess throws if listening line has no port", async () => {
-  mockSpawn("listening\n");
+  mockSpawn({ chunks: ["listening\n"] });
   await expect(createOpenCodeProcess()).rejects.toThrow(
     "opencode exited without announcing port",
   );
