@@ -10,7 +10,7 @@ function mockSleep() {
   return vi.spyOn(Bun, "sleep").mockResolvedValue(undefined as never);
 }
 
-test("opencodeSubscribeEvents calls onEvent for each event", async () => {
+test("calls onEvent for each event", async () => {
   const events = [{ type: "a" }, { type: "b" }];
   const controller = new AbortController();
   const received: unknown[] = [];
@@ -37,7 +37,7 @@ test("opencodeSubscribeEvents calls onEvent for each event", async () => {
   expect(received).toEqual(events);
 });
 
-test("opencodeSubscribeEvents reconnects on stream error", async () => {
+test("reconnects on stream error", async () => {
   mockSleep();
   const controller = new AbortController();
   const event = { type: "ok" };
@@ -67,7 +67,7 @@ test("opencodeSubscribeEvents reconnects on stream error", async () => {
   expect(onEvent).toHaveBeenCalledWith(event);
 });
 
-test("opencodeSubscribeEvents stops when signal is already aborted", async () => {
+test("stops when signal is already aborted", async () => {
   const controller = new AbortController();
   controller.abort();
   const opencodeClient = {
@@ -83,7 +83,7 @@ test("opencodeSubscribeEvents stops when signal is already aborted", async () =>
   expect(opencodeClient.event.subscribe).not.toHaveBeenCalled();
 });
 
-test("opencodeSubscribeEvents throws after max reconnect attempts", async () => {
+test("throws after max reconnect attempts", async () => {
   mockSleep();
   const controller = new AbortController();
   const error = new Error("persistent failure");
@@ -106,7 +106,7 @@ test("opencodeSubscribeEvents throws after max reconnect attempts", async () => 
   expect(opencodeClient.event.subscribe).toHaveBeenCalledTimes(11);
 });
 
-test("opencodeSubscribeEvents resets attempt counter on success", async () => {
+test("resets attempt counter on success", async () => {
   const sleep = mockSleep();
   const controller = new AbortController();
   let calls = 0;
@@ -140,7 +140,7 @@ test("opencodeSubscribeEvents resets attempt counter on success", async () => {
   expect(sleep).toHaveBeenNthCalledWith(2, 1000);
 });
 
-test("opencodeSubscribeEvents uses exponential backoff", async () => {
+test("uses exponential backoff", async () => {
   const sleep = mockSleep();
   const controller = new AbortController();
   let calls = 0;
@@ -166,7 +166,7 @@ test("opencodeSubscribeEvents uses exponential backoff", async () => {
   expect(sleep).toHaveBeenNthCalledWith(3, 4000);
 });
 
-test("opencodeSubscribeEvents caps backoff at 30 seconds", async () => {
+test("caps backoff at 30 seconds", async () => {
   const sleep = mockSleep();
   const controller = new AbortController();
   let calls = 0;
@@ -191,7 +191,7 @@ test("opencodeSubscribeEvents caps backoff at 30 seconds", async () => {
   expect(sleep).toHaveBeenNthCalledWith(6, 30_000);
 });
 
-test("opencodeSubscribeEvents logs connecting and connected", async () => {
+test("logs connecting and connected", async () => {
   const controller = new AbortController();
   const onEvent = vi.fn(() => controller.abort());
   const opencodeClient = {
@@ -218,7 +218,7 @@ test("opencodeSubscribeEvents logs connecting and connected", async () => {
   );
 });
 
-test("opencodeSubscribeEvents logs reconnection", async () => {
+test("logs reconnection", async () => {
   mockSleep();
   const controller = new AbortController();
   let calls = 0;
@@ -245,7 +245,7 @@ test("opencodeSubscribeEvents logs reconnection", async () => {
   );
 });
 
-test("opencodeSubscribeEvents returns silently when aborted during error", async () => {
+test("returns silently when aborted during error", async () => {
   const controller = new AbortController();
   const opencodeClient = {
     event: {
@@ -265,7 +265,7 @@ test("opencodeSubscribeEvents returns silently when aborted during error", async
   expect(opencodeClient.event.subscribe).toHaveBeenCalledOnce();
 });
 
-test("opencodeSubscribeEvents reconnects on normal stream end with backoff", async () => {
+test("reconnects on normal stream end with backoff", async () => {
   const sleep = mockSleep();
   const controller = new AbortController();
   let calls = 0;

@@ -10,7 +10,7 @@ function mockCtx(chatId: number, threadId?: number) {
   } as never;
 }
 
-test("grammyCreateHandler calls callback", () => {
+test("calls callback", () => {
   const callback = vi.fn().mockResolvedValue(undefined);
   const handler = grammyCreateHandler({} as never, callback);
   const ctx = mockCtx(1);
@@ -20,7 +20,7 @@ test("grammyCreateHandler calls callback", () => {
   expect(callback).toHaveBeenCalledWith(ctx);
 });
 
-test("grammyCreateHandler catches error and sends to chat", async () => {
+test("catches error and sends to chat", async () => {
   const { resolve, promise } = Promise.withResolvers<void>();
   const error = new Error("boom");
   const callback = vi.fn().mockRejectedValue(error);
@@ -44,7 +44,7 @@ test("grammyCreateHandler catches error and sends to chat", async () => {
   });
 });
 
-test("grammyCreateHandler logs error on failure", async () => {
+test("logs error on failure", async () => {
   const { resolve, promise } = Promise.withResolvers<void>();
   const error = new Error("fail");
   const callback = vi.fn().mockRejectedValue(error);
@@ -65,7 +65,7 @@ test("grammyCreateHandler logs error on failure", async () => {
   );
 });
 
-test("grammyCreateHandler passes undefined threadId when msg has none", async () => {
+test("passes undefined threadId when msg has none", async () => {
   const { resolve, promise } = Promise.withResolvers<void>();
   const error = new Error("fail");
   const callback = vi.fn().mockRejectedValue(error);
@@ -84,7 +84,7 @@ test("grammyCreateHandler passes undefined threadId when msg has none", async ()
   );
 });
 
-test("grammyCreateHandler throws when chat is missing", () => {
+test("throws when chat is missing", () => {
   const callback = vi.fn();
   const handler = grammyCreateHandler({} as never, callback);
   const ctx = { chat: undefined, msg: undefined } as never;

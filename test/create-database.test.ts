@@ -8,19 +8,19 @@ function db() {
   return createDatabase(":memory:");
 }
 
-test("createDatabase logs ready", () => {
+test("logs ready", () => {
   using _database = db();
   expect(consola.ready).toHaveBeenCalledWith("database is ready");
 });
 
-test("createDatabase is disposable", () => {
+test("is disposable", () => {
   {
     using _db = db();
   }
   expect(consola.debug).toHaveBeenCalledWith("database is closed");
 });
 
-test("createDatabase inserts session with default timestamps", () => {
+test("inserts session with default timestamps", () => {
   using database = db();
   const result = database
     .insert(schema.session)
@@ -31,7 +31,7 @@ test("createDatabase inserts session with default timestamps", () => {
   expect(result.updatedAt).toBeInstanceOf(Date);
 });
 
-test("createDatabase updates updatedAt on session update", () => {
+test("updates updatedAt on session update", () => {
   using database = db();
   const inserted = database
     .insert(schema.session)
@@ -47,7 +47,7 @@ test("createDatabase updates updatedAt on session update", () => {
   expect(updated?.updatedAt >= inserted.updatedAt).toBe(true);
 });
 
-test("createDatabase cascades message delete on session delete", () => {
+test("cascades message delete on session delete", () => {
   using database = db();
   database.insert(schema.session).values({ id: "s1", chatId: 123 }).run();
   database.insert(schema.message).values({ id: "m1", sessionId: "s1" }).run();

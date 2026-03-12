@@ -62,30 +62,30 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-test("createGrammy returns grammy with bot", async () => {
+test("returns grammy with bot", async () => {
   await using grammy = await createGrammy();
   expect(grammy.bot).toBeDefined();
 });
 
-test("createGrammy passes token to grammy", async () => {
+test("passes token to grammy", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "my-token");
   await using _grammy = await createGrammy();
   expect(capturedToken).toBe("my-token");
 });
 
-test("createGrammy throws if TELEGRAM_BOT_TOKEN is missing", async () => {
+test("throws if TELEGRAM_BOT_TOKEN is missing", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "");
   await expect(createGrammy()).rejects.toThrow(
     "TELEGRAM_BOT_TOKEN is required",
   );
 });
 
-test("createGrammy logs ready", async () => {
+test("logs ready", async () => {
   await using _grammy = await createGrammy();
   expect(consola.ready).toHaveBeenCalledWith("grammy is ready");
 });
 
-test("createGrammy is async disposable", async () => {
+test("is async disposable", async () => {
   {
     await using _grammy = await createGrammy();
   }
@@ -93,18 +93,18 @@ test("createGrammy is async disposable", async () => {
   expect(consola.debug).toHaveBeenCalledWith("grammy is stopped");
 });
 
-test("createGrammy propagates startup error", async () => {
+test("propagates startup error", async () => {
   setupMock({ startError: new Error("polling failed") });
   await expect(createGrammy()).rejects.toThrow("polling failed");
 });
 
-test("createGrammy.stopped rejects on unexpected stop", async () => {
+test("stopped rejects on unexpected stop", async () => {
   const grammy = await createGrammy();
   controls.resolveStopped();
   await expect(grammy.stopped).rejects.toThrow("grammy stopped unexpectedly");
 });
 
-test("createGrammy installs fatal error handler", async () => {
+test("installs fatal error handler", async () => {
   await using _grammy = await createGrammy();
   expect(mockCatch).toHaveBeenCalledOnce();
   const [handler] = mockCatch.mock.calls[0] as [(error: unknown) => void];
@@ -113,7 +113,7 @@ test("createGrammy installs fatal error handler", async () => {
   expect(consola.fatal).toHaveBeenCalledWith("grammy catch error", error);
 });
 
-test("createGrammy.stopped does not reject after dispose", async () => {
+test("stopped does not reject after dispose", async () => {
   let grammyStopped: Promise<void>;
   {
     await using grammy = await createGrammy();
