@@ -8,11 +8,7 @@
   "scripts": {
     "prepare": "bun prepare.ts",
     "compile": "bun compile.ts",
-    "typecheck": "bun --bun tsc --build",
-    "dev": "bun --hot --no-clear-screen . serve",
-    "start": "bun . serve",
-    "up": "bun . up",
-    "down": "bun . down"
+    "typecheck": "bun --bun tsc --build"
   },
   "dependencies": {
     "citty": "^0.2.1",
