@@ -20,12 +20,14 @@ vi.mock("grammy", () => {
 });
 
 interface MockControls {
+  resolveStopped: () => void;
   rejectStopped: (error: Error) => void;
 }
 
 function setupMock(options?: { startError?: Error }): MockControls {
   capturedToken = "";
   const controls: MockControls = {
+    resolveStopped: () => {},
     rejectStopped: () => {},
   };
   let resolveStopped: () => void;
@@ -34,6 +36,7 @@ function setupMock(options?: { startError?: Error }): MockControls {
     (opts?: { onStart?: () => void }) =>
       new Promise<void>((resolve, reject) => {
         resolveStopped = resolve;
+        controls.resolveStopped = resolve;
         controls.rejectStopped = reject;
         if (options?.startError) {
           reject(options.startError);
@@ -94,12 +97,23 @@ test("createBot propagates startup error", async () => {
   vi.unstubAllEnvs();
 });
 
-test("createBot tolerates polling error after startup", async () => {
+test("createBot.stopped rejects on unexpected stop", async () => {
   const controls = setupMock();
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
-  await createBot();
-  controls.rejectStopped(new Error("polling crashed"));
-  // Flush microtask so the catch handler runs.
-  await new Promise((r) => setTimeout(r, 0));
+  const bot = await createBot();
+  controls.resolveStopped();
+  await expect(bot.stopped).rejects.toThrow("bot stopped unexpectedly");
+  vi.unstubAllEnvs();
+});
+
+test("createBot.stopped does not reject after dispose", async () => {
+  setupMock();
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  let botStopped: Promise<void>;
+  {
+    await using bot = await createBot();
+    botStopped = bot.stopped;
+  }
+  await expect(botStopped).resolves.toBeUndefined();
   vi.unstubAllEnvs();
 });

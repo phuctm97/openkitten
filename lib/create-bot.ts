@@ -9,13 +9,19 @@ export async function createBot(): Promise<Bot> {
   const client = new Client(token);
 
   const ready = Promise.withResolvers<void>();
-  const stopped = client.start({ onStart: () => ready.resolve() });
+  const polling = client.start({ onStart: () => ready.resolve() });
 
   // client.start() rejects if polling fails before onStart fires.
-  await Promise.race([ready.promise, stopped]);
+  await Promise.race([ready.promise, polling]);
 
-  // Prevent unhandled rejection if polling errors between startup and dispose.
-  const settled = stopped.then(
+  // Only reject if polling stops on its own, not when we stop it.
+  let disposed = false;
+  const stopped = polling.then(() => {
+    if (disposed) return;
+    throw new Error("bot stopped unexpectedly");
+  });
+
+  stopped.then(
     () => {},
     () => {},
   );
@@ -23,12 +29,14 @@ export async function createBot(): Promise<Bot> {
   consola.ready("bot is ready");
 
   return {
+    stopped,
     client,
     [Symbol.asyncDispose]: async () => {
+      disposed = true;
       await client.stop();
       consola.debug("bot is stopped");
       ready.resolve();
-      await Promise.all([ready.promise, settled]);
+      await Promise.all([ready.promise, stopped]);
     },
   };
 }
