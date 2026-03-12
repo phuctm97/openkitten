@@ -1,6 +1,13 @@
+import { consola } from "consola";
 import { expect, test, vi } from "vitest";
 import { createOpenCode } from "~/lib/create-opencode";
 import { textEncoder } from "~/lib/text-encoder";
+
+type OnExit = (
+  proc: unknown,
+  exitCode: number | null,
+  signalCode: string | null,
+) => void;
 
 function mockSpawn(portLine = "listening on :3000\n") {
   const kill = vi.fn();
@@ -10,15 +17,21 @@ function mockSpawn(portLine = "listening on :3000\n") {
       controller.close();
     },
   });
-  return vi.spyOn(Bun, "spawn").mockImplementation(
-    () =>
-      ({
-        kill,
-        stdout,
-        stderr: new ReadableStream({ start: (c) => c.close() }),
-        exited: Promise.resolve(0),
-      }) as never,
-  );
+  return vi.spyOn(Bun, "spawn").mockImplementation(((
+    _cmd: string[],
+    opts: { onExit?: OnExit },
+  ) => {
+    const proc = {
+      kill,
+      stdout,
+      stderr: new ReadableStream({ start: (c) => c.close() }),
+      exited: Promise.resolve(0).then((code) => {
+        opts.onExit?.(proc, code, null);
+        return code;
+      }),
+    };
+    return proc;
+  }) as never);
 }
 
 test("createOpenCode parses port", async () => {
@@ -29,24 +42,65 @@ test("createOpenCode parses port", async () => {
 
 test("createOpenCode is async disposable", async () => {
   const kill = vi.fn();
-  vi.spyOn(Bun, "spawn").mockImplementation(
-    () =>
-      ({
-        kill,
-        stdout: new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(textEncoder.encode("listening on :3000\n"));
-            controller.close();
-          },
-        }),
-        stderr: new ReadableStream({ start: (c) => c.close() }),
-        exited: Promise.resolve(0),
-      }) as never,
-  );
+  vi.spyOn(Bun, "spawn").mockImplementation(((
+    _cmd: string[],
+    opts: { onExit?: OnExit },
+  ) => {
+    const proc = {
+      kill,
+      stdout: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(textEncoder.encode("listening on :3000\n"));
+          controller.close();
+        },
+      }),
+      stderr: new ReadableStream({ start: (c) => c.close() }),
+      exited: Promise.resolve(0).then((code) => {
+        opts.onExit?.(proc, code, null);
+        return code;
+      }),
+    };
+    return proc;
+  }) as never);
   {
     await using _opencode = await createOpenCode();
   }
   expect(kill).toHaveBeenCalledOnce();
+});
+
+test("createOpenCode logs exit code on exit", async () => {
+  mockSpawn();
+  const opencode = await createOpenCode();
+  await opencode.exited.catch(() => {});
+  expect(consola.log).toHaveBeenCalledWith("opencode exited with code 0");
+});
+
+test("createOpenCode logs signal on signal exit", async () => {
+  vi.spyOn(Bun, "spawn").mockImplementation(((
+    _cmd: string[],
+    opts: { onExit?: OnExit },
+  ) => {
+    const proc = {
+      kill: vi.fn(),
+      stdout: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(textEncoder.encode("listening on :3000\n"));
+          controller.close();
+        },
+      }),
+      stderr: new ReadableStream({ start: (c) => c.close() }),
+      exited: Promise.resolve(0).then((code) => {
+        opts.onExit?.(proc, null, "SIGTERM");
+        return code;
+      }),
+    };
+    return proc;
+  }) as never);
+  const opencode = await createOpenCode();
+  await opencode.exited.catch(() => {});
+  expect(consola.log).toHaveBeenCalledWith(
+    "opencode exited with signal SIGTERM",
+  );
 });
 
 test("createOpenCode.exited rejects on unexpected exit", async () => {
@@ -62,20 +116,26 @@ test("createOpenCode.exited does not reject after dispose", async () => {
   const exited = new Promise<number>((r) => {
     resolveExited = r;
   });
-  vi.spyOn(Bun, "spawn").mockImplementation(
-    () =>
-      ({
-        kill: vi.fn(() => resolveExited(0)),
-        stdout: new ReadableStream<Uint8Array>({
-          start(controller) {
-            controller.enqueue(textEncoder.encode("listening on :3000\n"));
-            controller.close();
-          },
-        }),
-        stderr: new ReadableStream({ start: (c) => c.close() }),
-        exited,
-      }) as never,
-  );
+  vi.spyOn(Bun, "spawn").mockImplementation(((
+    _cmd: string[],
+    opts: { onExit?: OnExit },
+  ) => {
+    const proc = {
+      kill: vi.fn(() => {
+        resolveExited(0);
+        opts.onExit?.(proc, 0, null);
+      }),
+      stdout: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(textEncoder.encode("listening on :3000\n"));
+          controller.close();
+        },
+      }),
+      stderr: new ReadableStream({ start: (c) => c.close() }),
+      exited,
+    };
+    return proc;
+  }) as never);
   const opencode = await createOpenCode();
   await opencode[Symbol.asyncDispose]();
   await expect(opencode.exited).resolves.toBeUndefined();

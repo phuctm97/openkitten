@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { consola } from "consola";
 import type { OpenCode } from "~/lib/opencode";
 import { textDecoder } from "~/lib/text-decoder";
 
@@ -38,6 +39,13 @@ export async function createOpenCode(): Promise<OpenCode> {
   const proc = Bun.spawn([bin, "serve"], {
     stdout: "pipe",
     stderr: "pipe",
+    onExit(_proc, exitCode, signalCode) {
+      if (signalCode) {
+        consola.log(`opencode exited with signal ${signalCode}`);
+      } else {
+        consola.log(`opencode exited with code ${exitCode}`);
+      }
+    },
   });
 
   const drainStderr = drain(proc.stderr);
