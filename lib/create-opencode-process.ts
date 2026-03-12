@@ -7,8 +7,8 @@ import { textDecoder } from "~/lib/text-decoder";
 import pkg from "~/package.json" with { type: "json" };
 
 interface ReadPortResult {
-  port: number;
-  rest: ReadableStream<Uint8Array>;
+  readonly port: number;
+  readonly rest: ReadableStream<Uint8Array>;
 }
 
 async function readPort(
@@ -43,7 +43,7 @@ async function drain(stream: ReadableStream, signal: AbortSignal) {
   const reader = stream.getReader();
   // Resolves to { done: true } on abort, matching reader.read() shape.
   const controller = new AbortController();
-  const aborted = new Promise<{ done: true }>((r) =>
+  const aborted = new Promise<{ readonly done: true }>((r) =>
     signal.addEventListener("abort", () => r({ done: true }), {
       once: true,
       // Auto-remove listener if the stream ends before abort.

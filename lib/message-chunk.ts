@@ -1,4 +1,4 @@
 export interface MessageChunk {
-  text: string;
-  markdown?: string | undefined;
+  readonly text: string;
+  readonly markdown?: string | undefined;
 }

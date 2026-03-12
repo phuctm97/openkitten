@@ -6,9 +6,9 @@ const telegramMaxLength = 4096;
 const telegramSplitLength = Math.floor(telegramMaxLength * 0.8);
 
 interface CodeBlockRange {
-  start: number;
-  end: number;
-  lang: string;
+  readonly start: number;
+  readonly end: number;
+  readonly lang: string;
 }
 
 function findCodeBlockRanges(text: string): CodeBlockRange[] {
@@ -49,7 +49,10 @@ function isInCodeBlock(
   return null;
 }
 
-const splitPriorities: ReadonlyArray<{ pattern: RegExp; offset: number }> = [
+const splitPriorities: ReadonlyArray<{
+  readonly pattern: RegExp;
+  readonly offset: number;
+}> = [
   { pattern: /\n(?=#{1,6} |---|___|\*\*\*)/g, offset: 0 },
   { pattern: /\n\n/g, offset: 0 },
   { pattern: /\n(?=[-*] |\d+\. )/g, offset: 0 },
