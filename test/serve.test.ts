@@ -1,7 +1,7 @@
 import { runCommand } from "citty";
 import { consola } from "consola";
 import { expect, test, vi } from "vitest";
-import serve from "~/lib/serve";
+import { serve } from "~/lib/serve";
 import * as startOpenCodeModule from "~/lib/start-opencode";
 
 function mockStartOpenCode(port = 3000) {
