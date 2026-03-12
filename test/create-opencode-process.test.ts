@@ -111,6 +111,35 @@ test("createOpenCodeProcess.exited rejects on unexpected exit", async () => {
   );
 });
 
+test("createOpenCodeProcess force kills after timeout", async () => {
+  vi.useFakeTimers();
+  let resolveExited: (code: number) => void;
+  const exited = new Promise<number>((r) => {
+    resolveExited = r;
+  });
+  const kill = vi.fn((signal?: number) => {
+    if (signal === 9) {
+      resolveExited(0);
+    }
+  });
+  vi.spyOn(Bun, "spawn").mockImplementation((() => ({
+    kill,
+    stdout: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(textEncoder.encode("listening on :3000\n"));
+        controller.close();
+      },
+    }),
+    exited,
+  })) as never);
+  const opencodeProcess = await createOpenCodeProcess();
+  const disposePromise = opencodeProcess[Symbol.asyncDispose]();
+  await vi.advanceTimersByTimeAsync(5000);
+  await disposePromise;
+  expect(kill).toHaveBeenCalledWith(9);
+  vi.useRealTimers();
+});
+
 test("createOpenCodeProcess.exited does not reject after dispose", async () => {
   let resolveExited: (code: number) => void;
   const exited = new Promise<number>((r) => {

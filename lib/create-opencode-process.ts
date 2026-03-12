@@ -35,7 +35,7 @@ async function readPort(
 }
 
 // Race each read against an abort promise so the caller can break out even
-// if the stream never closes (Bun bug).
+// if the stream never closes.
 async function drain(stream: ReadableStream, signal: AbortSignal) {
   const reader = stream.getReader();
   // Resolves to { done: true } on abort, matching reader.read() shape.
@@ -72,11 +72,12 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
 
   const { port, rest } = await readPort(proc.stdout);
 
-  // Aborted in dispose to stop draining, working around Bun not closing
-  // the stdout stream when the child process exits.
+  // Aborted in dispose to stop draining in case the stdout stream doesn't
+  // close when the child process exits.
   const drainController = new AbortController();
   const drained = drain(rest, drainController.signal).catch(() => {});
 
+  // Only reject if the process exits on its own, not when we kill it.
   let disposed = false;
   const exited = proc.exited.then((code) => {
     if (disposed) return;
@@ -93,8 +94,15 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
     [Symbol.asyncDispose]: async () => {
       disposed = true;
       proc.kill();
-      drainController.abort();
-      await Promise.all([drained, exited]);
+      // Force kill if the process doesn't exit within 5 seconds.
+      const forceKill = setTimeout(() => proc.kill(9), 5000);
+      try {
+        // Stop draining stdout so drained resolves and dispose can complete.
+        drainController.abort();
+        await Promise.all([drained, exited]);
+      } finally {
+        clearTimeout(forceKill);
+      }
     },
   };
 }
