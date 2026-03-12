@@ -34,8 +34,27 @@ async function readPort(
   }
 }
 
-async function drain(stream: ReadableStream) {
-  for await (const _ of stream) {
+// Race each read against an abort promise so the caller can break out even
+// if the stream never closes (Bun bug).
+async function drain(stream: ReadableStream, signal: AbortSignal) {
+  const reader = stream.getReader();
+  // Resolves to { done: true } on abort, matching reader.read() shape.
+  const controller = new AbortController();
+  const aborted = new Promise<{ done: true }>((r) =>
+    signal.addEventListener("abort", () => r({ done: true }), {
+      once: true,
+      // Auto-remove listener if the stream ends before abort.
+      signal: controller.signal,
+    }),
+  );
+  try {
+    for (;;) {
+      const result = await Promise.race([reader.read(), aborted]);
+      if (result.done) break;
+    }
+  } finally {
+    controller.abort();
+    reader.releaseLock();
   }
 }
 
@@ -53,9 +72,10 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
 
   const { port, rest } = await readPort(proc.stdout);
 
-  // Fire-and-forget: don't await in dispose because Bun doesn't close
-  // the stdout stream when the child process exits, causing a hang.
-  drain(rest).catch(() => {});
+  // Aborted in dispose to stop draining, working around Bun not closing
+  // the stdout stream when the child process exits.
+  const drainController = new AbortController();
+  const drained = drain(rest, drainController.signal).catch(() => {});
 
   let disposed = false;
   const exited = proc.exited.then((code) => {
@@ -63,7 +83,8 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
     throw new Error(`opencode exited unexpectedly (${code})`);
   });
 
-  // Prevent unhandled rejection for floating promise awaited later in dispose.
+  // exited rejects on unexpected exit but may not be awaited immediately by
+  // the consumer. Without this catch, the rejection would be unhandled.
   exited.catch(() => {});
 
   return {
@@ -72,7 +93,8 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
     [Symbol.asyncDispose]: async () => {
       disposed = true;
       proc.kill();
-      await exited;
+      drainController.abort();
+      await Promise.all([drained, exited]);
     },
   };
 }

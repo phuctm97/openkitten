@@ -150,6 +150,36 @@ test("createOpenCodeProcess parses port split across chunks", async () => {
   expect(opencodeProcess.port).toBe(3000);
 });
 
+test("createOpenCodeProcess drains stdout until dispose", async () => {
+  let resolveExited: (code: number) => void;
+  const exited = new Promise<number>((r) => {
+    resolveExited = r;
+  });
+  const kill = vi.fn(() => resolveExited(0));
+  let chunks = 0;
+  vi.spyOn(Bun, "spawn").mockImplementation((() => ({
+    kill,
+    stdout: new ReadableStream<Uint8Array>({
+      async pull(controller) {
+        await new Promise((r) => setTimeout(r, 0));
+        if (chunks === 0) {
+          controller.enqueue(textEncoder.encode("listening on :3000\n"));
+        } else {
+          controller.enqueue(textEncoder.encode("log output\n"));
+        }
+        chunks++;
+      },
+    }),
+    stderr: new ReadableStream({ start: (c) => c.close() }),
+    exited,
+  })) as never);
+  {
+    await using _opencodeProcess = await createOpenCodeProcess();
+    await vi.waitFor(() => expect(chunks).toBeGreaterThan(1));
+  }
+  expect(kill).toHaveBeenCalledOnce();
+});
+
 test("createOpenCodeProcess tolerates stdout stream error after port", async () => {
   let resolveExited: (code: number) => void;
   const exited = new Promise<number>((r) => {
