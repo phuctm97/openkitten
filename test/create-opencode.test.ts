@@ -16,6 +16,7 @@ function mockSpawn(portLine = "listening on :3000\n") {
         kill,
         stdout,
         stderr: new ReadableStream({ start: (c) => c.close() }),
+        exited: Promise.resolve(0),
       }) as never,
   );
 }
@@ -39,6 +40,7 @@ test("createOpenCode is async disposable", async () => {
           },
         }),
         stderr: new ReadableStream({ start: (c) => c.close() }),
+        exited: Promise.resolve(0),
       }) as never,
   );
   {

@@ -2,14 +2,28 @@ import { resolve } from "node:path";
 import type { OpenCode } from "~/lib/opencode";
 import { textDecoder } from "~/lib/text-decoder";
 
-async function readPort(stdout: ReadableStream<Uint8Array>): Promise<number> {
-  for await (const chunk of stdout) {
-    const line = textDecoder.decode(chunk);
-    if (!line.includes("listening")) continue;
-    const match = line.match(/:(\d+)/);
-    if (match) return Number(match[1]);
+interface ReadPortResult {
+  port: number;
+  rest: ReadableStream<Uint8Array>;
+}
+
+async function readPort(
+  stdout: ReadableStream<Uint8Array>,
+): Promise<ReadPortResult> {
+  const reader = stdout.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const line = textDecoder.decode(value);
+      if (!line.includes("listening")) continue;
+      const match = line.match(/:(\d+)/);
+      if (match) return { port: Number(match[1]), rest: stdout };
+    }
+    throw new Error("opencode exited without announcing port");
+  } finally {
+    reader.releaseLock();
   }
-  throw new Error("opencode exited without announcing port");
 }
 
 async function drain(stream: ReadableStream) {
@@ -18,23 +32,23 @@ async function drain(stream: ReadableStream) {
   }
 }
 
+const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
+
 export async function createOpenCode(): Promise<OpenCode> {
-  const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
   const proc = Bun.spawn([bin, "serve"], {
     stdout: "pipe",
     stderr: "pipe",
   });
 
-  // TODO: drain stdout after reading port to prevent pipe buffer from blocking
-  drain(proc.stderr);
-
-  const port = await readPort(proc.stdout);
+  const drainStderr = drain(proc.stderr);
+  const { port, rest } = await readPort(proc.stdout);
+  const drainStdout = drain(rest);
 
   return {
     port,
     [Symbol.asyncDispose]: async () => {
       proc.kill();
-      await proc.exited;
+      await Promise.all([proc.exited, drainStdout, drainStderr]);
     },
   };
 }
