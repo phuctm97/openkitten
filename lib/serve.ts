@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
+import exitHook from "exit-hook";
 import { createOpenCode } from "~/lib/create-opencode";
 
 export const serve = defineCommand({
@@ -7,12 +8,15 @@ export const serve = defineCommand({
   run: async () => {
     await using opencode = await createOpenCode();
     consola.log(`opencode is listening on port ${opencode.port}`);
-    await Promise.race([
-      new Promise<void>((resolve) => {
-        process.once("SIGINT", () => resolve());
-        process.once("SIGTERM", () => resolve());
-      }),
-      opencode.exited,
-    ]);
+
+    // Block until process exits or opencode exits
+    const { resolve: processExit, promise: processExited } =
+      Promise.withResolvers<void>();
+    const unsubscribe = exitHook(() => processExit());
+    try {
+      await Promise.race([processExited, opencode.exited]);
+    } finally {
+      unsubscribe();
+    }
   },
 });
