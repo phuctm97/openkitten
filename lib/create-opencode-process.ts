@@ -88,7 +88,10 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
   // Aborted in dispose to stop draining in case the stdout stream doesn't
   // close when the child process exits.
   const drainController = new AbortController();
-  const drained = drain(rest, drainController.signal).catch(() => {});
+  const drained = drain(rest, drainController.signal).then(
+    () => {},
+    () => {},
+  );
 
   // Only reject if the process exits on its own, not when we kill it.
   let disposed = false;
@@ -98,8 +101,11 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
   });
 
   // exited rejects on unexpected exit but may not be awaited immediately by
-  // the consumer. Without this catch, the rejection would be unhandled.
-  exited.catch(() => {});
+  // the consumer. Without this handler, the rejection would be unhandled.
+  exited.then(
+    () => {},
+    () => {},
+  );
 
   const client = createOpencodeClient({
     baseUrl: `http://127.0.0.1:${port}`,
