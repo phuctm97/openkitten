@@ -1,5 +1,4 @@
 import { resolve } from "node:path";
-import exitHook from "exit-hook";
 import type { OpenCode } from "~/lib/opencode";
 import { textDecoder } from "~/lib/text-decoder";
 
@@ -19,14 +18,12 @@ async function drain(stream: ReadableStream) {
   }
 }
 
-export async function startOpenCode(): Promise<OpenCode> {
+export async function createOpenCode(): Promise<OpenCode> {
   const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
   const proc = Bun.spawn([bin, "serve"], {
     stdout: "pipe",
     stderr: "pipe",
   });
-
-  const unhook = exitHook(() => proc.kill());
 
   // TODO: drain stdout after reading port to prevent pipe buffer from blocking
   drain(proc.stderr);
@@ -35,9 +32,7 @@ export async function startOpenCode(): Promise<OpenCode> {
 
   return {
     port,
-    exited: proc.exited,
     [Symbol.asyncDispose]: async () => {
-      unhook();
       proc.kill();
       await proc.exited;
     },
