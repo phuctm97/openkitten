@@ -79,7 +79,7 @@ test("createOpenCodeProcess logs on exit", async () => {
   mockSpawn();
   const opencodeProcess = await createOpenCodeProcess();
   await opencodeProcess.exited.catch(() => {});
-  expect(consola.log).toHaveBeenCalledWith("opencode exit info", {
+  expect(consola.debug).toHaveBeenCalledWith("opencode exit info", {
     exitCode: 0,
     signalCode: null,
   });
@@ -103,7 +103,7 @@ test("createOpenCodeProcess logs error on exit error", async () => {
   }) as never);
   const opencodeProcess = await createOpenCodeProcess();
   await opencodeProcess.exited.catch(() => {});
-  expect(consola.error).toHaveBeenCalledWith("opencode exit error", error);
+  expect(consola.fatal).toHaveBeenCalledWith("opencode exit error", error);
 });
 
 test("createOpenCodeProcess.exited rejects on unexpected exit", async () => {

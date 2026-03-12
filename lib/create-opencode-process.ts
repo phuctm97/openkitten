@@ -65,8 +65,8 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
     stdout: "pipe",
     stderr: "ignore",
     onExit(_proc, exitCode, signalCode, error) {
-      consola.log("opencode exit info", { exitCode, signalCode });
-      if (error) consola.error("opencode exit error", error);
+      consola.debug("opencode exit info", { exitCode, signalCode });
+      if (error) consola.fatal("opencode exit error", error);
     },
   });
 
