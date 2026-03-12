@@ -1,6 +1,6 @@
 import { consola } from "consola";
 import { afterEach, expect, test, vi } from "vitest";
-import { consumeOpencodeEvents } from "~/lib/consume-opencode-events";
+import { opencodeSubscribeEvents } from "~/lib/opencode-subscribe-events";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -10,7 +10,7 @@ function mockSleep() {
   return vi.spyOn(Bun, "sleep").mockResolvedValue(undefined as never);
 }
 
-test("consumeOpencodeEvents calls onEvent for each event", async () => {
+test("opencodeSubscribeEvents calls onEvent for each event", async () => {
   const events = [{ type: "a" }, { type: "b" }];
   const controller = new AbortController();
   const received: unknown[] = [];
@@ -28,7 +28,7 @@ test("consumeOpencodeEvents calls onEvent for each event", async () => {
     },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     onEvent as never,
     controller.signal,
@@ -37,7 +37,7 @@ test("consumeOpencodeEvents calls onEvent for each event", async () => {
   expect(received).toEqual(events);
 });
 
-test("consumeOpencodeEvents reconnects on stream error", async () => {
+test("opencodeSubscribeEvents reconnects on stream error", async () => {
   mockSleep();
   const controller = new AbortController();
   const event = { type: "ok" };
@@ -57,7 +57,7 @@ test("consumeOpencodeEvents reconnects on stream error", async () => {
     },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     onEvent as never,
     controller.signal,
@@ -67,14 +67,14 @@ test("consumeOpencodeEvents reconnects on stream error", async () => {
   expect(onEvent).toHaveBeenCalledWith(event);
 });
 
-test("consumeOpencodeEvents stops when signal is already aborted", async () => {
+test("opencodeSubscribeEvents stops when signal is already aborted", async () => {
   const controller = new AbortController();
   controller.abort();
   const opencodeClient = {
     event: { subscribe: vi.fn() },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     vi.fn() as never,
     controller.signal,
@@ -83,7 +83,7 @@ test("consumeOpencodeEvents stops when signal is already aborted", async () => {
   expect(opencodeClient.event.subscribe).not.toHaveBeenCalled();
 });
 
-test("consumeOpencodeEvents throws after max reconnect attempts", async () => {
+test("opencodeSubscribeEvents throws after max reconnect attempts", async () => {
   mockSleep();
   const controller = new AbortController();
   const error = new Error("persistent failure");
@@ -96,7 +96,7 @@ test("consumeOpencodeEvents throws after max reconnect attempts", async () => {
   };
 
   await expect(
-    consumeOpencodeEvents(
+    opencodeSubscribeEvents(
       opencodeClient as never,
       vi.fn() as never,
       controller.signal,
@@ -106,7 +106,7 @@ test("consumeOpencodeEvents throws after max reconnect attempts", async () => {
   expect(opencodeClient.event.subscribe).toHaveBeenCalledTimes(11);
 });
 
-test("consumeOpencodeEvents resets attempt counter on success", async () => {
+test("opencodeSubscribeEvents resets attempt counter on success", async () => {
   const sleep = mockSleep();
   const controller = new AbortController();
   let calls = 0;
@@ -129,7 +129,7 @@ test("consumeOpencodeEvents resets attempt counter on success", async () => {
     },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     vi.fn() as never,
     controller.signal,
@@ -140,7 +140,7 @@ test("consumeOpencodeEvents resets attempt counter on success", async () => {
   expect(sleep).toHaveBeenNthCalledWith(2, 1000);
 });
 
-test("consumeOpencodeEvents uses exponential backoff", async () => {
+test("opencodeSubscribeEvents uses exponential backoff", async () => {
   const sleep = mockSleep();
   const controller = new AbortController();
   let calls = 0;
@@ -155,7 +155,7 @@ test("consumeOpencodeEvents uses exponential backoff", async () => {
     },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     vi.fn() as never,
     controller.signal,
@@ -166,7 +166,7 @@ test("consumeOpencodeEvents uses exponential backoff", async () => {
   expect(sleep).toHaveBeenNthCalledWith(3, 4000);
 });
 
-test("consumeOpencodeEvents caps backoff at 30 seconds", async () => {
+test("opencodeSubscribeEvents caps backoff at 30 seconds", async () => {
   const sleep = mockSleep();
   const controller = new AbortController();
   let calls = 0;
@@ -181,7 +181,7 @@ test("consumeOpencodeEvents caps backoff at 30 seconds", async () => {
     },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     vi.fn() as never,
     controller.signal,
@@ -191,7 +191,7 @@ test("consumeOpencodeEvents caps backoff at 30 seconds", async () => {
   expect(sleep).toHaveBeenNthCalledWith(6, 30_000);
 });
 
-test("consumeOpencodeEvents logs connecting and connected", async () => {
+test("opencodeSubscribeEvents logs connecting and connected", async () => {
   const controller = new AbortController();
   const onEvent = vi.fn(() => controller.abort());
   const opencodeClient = {
@@ -204,7 +204,7 @@ test("consumeOpencodeEvents logs connecting and connected", async () => {
     },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     onEvent as never,
     controller.signal,
@@ -218,7 +218,7 @@ test("consumeOpencodeEvents logs connecting and connected", async () => {
   );
 });
 
-test("consumeOpencodeEvents logs reconnection", async () => {
+test("opencodeSubscribeEvents logs reconnection", async () => {
   mockSleep();
   const controller = new AbortController();
   let calls = 0;
@@ -233,7 +233,7 @@ test("consumeOpencodeEvents logs reconnection", async () => {
     },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     vi.fn() as never,
     controller.signal,
@@ -245,7 +245,7 @@ test("consumeOpencodeEvents logs reconnection", async () => {
   );
 });
 
-test("consumeOpencodeEvents returns silently when aborted during error", async () => {
+test("opencodeSubscribeEvents returns silently when aborted during error", async () => {
   const controller = new AbortController();
   const opencodeClient = {
     event: {
@@ -256,7 +256,7 @@ test("consumeOpencodeEvents returns silently when aborted during error", async (
     },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     vi.fn() as never,
     controller.signal,
@@ -265,7 +265,7 @@ test("consumeOpencodeEvents returns silently when aborted during error", async (
   expect(opencodeClient.event.subscribe).toHaveBeenCalledOnce();
 });
 
-test("consumeOpencodeEvents reconnects on normal stream end with backoff", async () => {
+test("opencodeSubscribeEvents reconnects on normal stream end with backoff", async () => {
   const sleep = mockSleep();
   const controller = new AbortController();
   let calls = 0;
@@ -279,7 +279,7 @@ test("consumeOpencodeEvents reconnects on normal stream end with backoff", async
     },
   };
 
-  await consumeOpencodeEvents(
+  await opencodeSubscribeEvents(
     opencodeClient as never,
     vi.fn() as never,
     controller.signal,

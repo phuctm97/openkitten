@@ -4,7 +4,7 @@ import { consola } from "consola";
 
 const maxAttempts = 10;
 
-export async function consumeOpencodeEvents(
+export async function opencodeSubscribeEvents(
   opencodeClient: OpencodeClient,
   onEvent: (event: Event) => void,
   signal: AbortSignal,
