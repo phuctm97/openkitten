@@ -15,7 +15,8 @@
     "citty": "^0.2.1",
     "consola": "^3.4.2",
     "grammy": "^1.41.1",
-    "opencode-ai": "^1.2.24"
+    "opencode-ai": "^1.2.24",
+    "telegram-markdown-v2": "^0.0.4"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.6",
