@@ -66,19 +66,22 @@ const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
   const username = pkg.name;
   const password = randomBytes(32).toString("base64url");
-  const proc = Bun.spawn([bin, "serve"], {
-    stdout: "pipe",
-    stderr: "ignore",
-    env: {
-      ...Bun.env,
-      OPENCODE_SERVER_USERNAME: username,
-      OPENCODE_SERVER_PASSWORD: password,
+  const proc = Bun.spawn(
+    [bin, "serve", "--hostname", "127.0.0.1", "--port", "0"],
+    {
+      stdout: "pipe",
+      stderr: "ignore",
+      env: {
+        ...Bun.env,
+        OPENCODE_SERVER_USERNAME: username,
+        OPENCODE_SERVER_PASSWORD: password,
+      },
+      onExit(_proc, exitCode, signalCode, error) {
+        consola.debug("opencode exit info", { exitCode, signalCode });
+        if (error) consola.fatal("opencode exit error", error);
+      },
     },
-    onExit(_proc, exitCode, signalCode, error) {
-      consola.debug("opencode exit info", { exitCode, signalCode });
-      if (error) consola.fatal("opencode exit error", error);
-    },
-  });
+  );
 
   const { port, rest } = await readPort(proc.stdout);
 
