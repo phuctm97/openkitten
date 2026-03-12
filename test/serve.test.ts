@@ -2,10 +2,10 @@ import { runCommand } from "citty";
 import { expect, test, vi } from "vitest";
 import * as createExitHookModule from "~/lib/create-exit-hook";
 import * as createGrammyModule from "~/lib/create-grammy";
-import * as createOpencodeProcessModule from "~/lib/create-opencode-process";
+import * as createOpencodeModule from "~/lib/create-opencode";
 import { serve } from "~/lib/serve";
 
-function mockCreateOpencodeProcess() {
+function mockCreateOpencode() {
   let resolveExited: () => void;
   const exited = new Promise<void>((r) => {
     resolveExited = r;
@@ -17,10 +17,7 @@ function mockCreateOpencodeProcess() {
   const dispose = vi.fn(async () => {
     resolveExited();
   });
-  vi.spyOn(
-    createOpencodeProcessModule,
-    "createOpencodeProcess",
-  ).mockResolvedValue({
+  vi.spyOn(createOpencodeModule, "createOpencode").mockResolvedValue({
     exited,
     client: {} as never,
     [Symbol.asyncDispose]: dispose,
@@ -63,7 +60,7 @@ function mockCreateExitHook() {
 }
 
 test("serve disposes on exit", async () => {
-  const disposeOpencode = mockCreateOpencodeProcess();
+  const disposeOpencode = mockCreateOpencode();
   const disposeGrammy = mockCreateGrammy();
   const triggerExit = mockCreateExitHook();
   const run = runCommand(serve, { rawArgs: [] });
@@ -82,10 +79,7 @@ test("serve exits on unexpected opencode exit", async () => {
     () => {},
     () => {},
   );
-  vi.spyOn(
-    createOpencodeProcessModule,
-    "createOpencodeProcess",
-  ).mockResolvedValue({
+  vi.spyOn(createOpencodeModule, "createOpencode").mockResolvedValue({
     exited,
     client: {} as never,
     [Symbol.asyncDispose]: async () => {},
@@ -98,7 +92,7 @@ test("serve exits on unexpected opencode exit", async () => {
 });
 
 test("serve exits on unexpected grammy stop", async () => {
-  mockCreateOpencodeProcess();
+  mockCreateOpencode();
   const stopped = Promise.reject(new Error("grammy stopped unexpectedly"));
   stopped.then(
     () => {},
