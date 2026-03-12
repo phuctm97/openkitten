@@ -1,6 +1,6 @@
 import { runCommand } from "citty";
 import { consola } from "consola";
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import serve from "~/lib/serve";
 import * as startOpenCodeModule from "~/lib/start-opencode";
 
@@ -11,10 +11,6 @@ function mockStartOpenCode(port = 3000) {
     [Symbol.asyncDispose]: async () => {},
   });
 }
-
-beforeEach(() => {
-  consola.mockTypes(() => vi.fn());
-});
 
 test("serve runs and parses port", async () => {
   const start = mockStartOpenCode();
