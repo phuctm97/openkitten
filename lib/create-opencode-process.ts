@@ -46,12 +46,9 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
   const proc = Bun.spawn([bin, "serve"], {
     stdout: "pipe",
     stderr: "ignore",
-    onExit(_proc, exitCode, signalCode) {
-      if (signalCode) {
-        consola.log(`opencode exited with signal ${signalCode}`);
-      } else {
-        consola.log(`opencode exited with code ${exitCode}`);
-      }
+    onExit(_proc, exitCode, signalCode, error) {
+      consola.log("opencode exit info", { exitCode, signalCode });
+      if (error) consola.error("opencode exit error", error);
     },
   });
 
@@ -61,7 +58,7 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
   let disposed = false;
   const exited = proc.exited.then((code) => {
     if (disposed) return;
-    throw new Error(`opencode exited unexpectedly with code ${code}`);
+    throw new Error(`opencode exited unexpectedly (${code})`);
   });
 
   const pending = [drained, exited];

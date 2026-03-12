@@ -6,7 +6,8 @@ import { textEncoder } from "~/lib/text-encoder";
 type OnExit = (
   proc: unknown,
   exitCode: number | null,
-  signalCode: string | null,
+  signalCode: number | null,
+  error?: Error,
 ) => void;
 
 function mockSpawn(...chunks: string[]) {
@@ -66,14 +67,18 @@ test("createOpenCodeProcess is async disposable", async () => {
   expect(kill).toHaveBeenCalledOnce();
 });
 
-test("createOpenCodeProcess logs exit code on exit", async () => {
+test("createOpenCodeProcess logs on exit", async () => {
   mockSpawn();
   const opencodeProcess = await createOpenCodeProcess();
   await opencodeProcess.exited.catch(() => {});
-  expect(consola.log).toHaveBeenCalledWith("opencode exited with code 0");
+  expect(consola.log).toHaveBeenCalledWith("opencode exit info", {
+    exitCode: 0,
+    signalCode: null,
+  });
 });
 
-test("createOpenCodeProcess logs signal on signal exit", async () => {
+test("createOpenCodeProcess logs error on exit error", async () => {
+  const error = new Error("waitpid2 failed");
   vi.spyOn(Bun, "spawn").mockImplementation(((
     _cmd: string[],
     opts: { onExit?: OnExit },
@@ -86,9 +91,8 @@ test("createOpenCodeProcess logs signal on signal exit", async () => {
           controller.close();
         },
       }),
-
       exited: Promise.resolve(0).then((code) => {
-        opts.onExit?.(proc, null, "SIGTERM");
+        opts.onExit?.(proc, null, null, error);
         return code;
       }),
     };
@@ -96,16 +100,14 @@ test("createOpenCodeProcess logs signal on signal exit", async () => {
   }) as never);
   const opencodeProcess = await createOpenCodeProcess();
   await opencodeProcess.exited.catch(() => {});
-  expect(consola.log).toHaveBeenCalledWith(
-    "opencode exited with signal SIGTERM",
-  );
+  expect(consola.error).toHaveBeenCalledWith("opencode exit error", error);
 });
 
 test("createOpenCodeProcess.exited rejects on unexpected exit", async () => {
   mockSpawn();
   const opencodeProcess = await createOpenCodeProcess();
   await expect(opencodeProcess.exited).rejects.toThrow(
-    "opencode exited unexpectedly with code 0",
+    "opencode exited unexpectedly (0)",
   );
 });
 

@@ -68,9 +68,7 @@ test("serve disposes on exit", async () => {
 });
 
 test("serve exits on unexpected opencode exit", async () => {
-  const exited = Promise.reject(
-    new Error("opencode exited unexpectedly with code 1"),
-  );
+  const exited = Promise.reject(new Error("opencode exited unexpectedly (1)"));
   exited.catch(() => {
     // Ignore
   });
@@ -84,6 +82,6 @@ test("serve exits on unexpected opencode exit", async () => {
   });
   mockExitHook();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "opencode exited unexpectedly with code 1",
+    "opencode exited unexpectedly (1)",
   );
 });
