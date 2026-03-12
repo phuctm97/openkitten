@@ -12,14 +12,21 @@ async function readPort(
   stdout: ReadableStream<Uint8Array>,
 ): Promise<ReadPortResult> {
   const reader = stdout.getReader();
+  let buffer = "";
   try {
     for (;;) {
       const { done, value } = await reader.read();
       if (done) break;
-      const line = textDecoder.decode(value);
-      if (!line.includes("listening")) continue;
-      const match = line.match(/:(\d+)/);
-      if (match) return { port: Number(match[1]), rest: stdout };
+      buffer += textDecoder.decode(value);
+      for (;;) {
+        const newline = buffer.indexOf("\n");
+        if (newline === -1) break;
+        const line = buffer.slice(0, newline);
+        buffer = buffer.slice(newline + 1);
+        if (!line.includes("listening")) continue;
+        const match = line.match(/:(\d+)/);
+        if (match) return { port: Number(match[1]), rest: stdout };
+      }
     }
     throw new Error("opencode exited without announcing port");
   } finally {
@@ -29,7 +36,7 @@ async function readPort(
 
 async function drain(stream: ReadableStream) {
   for await (const _ of stream) {
-    // discard
+    // Discard
   }
 }
 
@@ -38,7 +45,7 @@ const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 export async function createOpenCode(): Promise<OpenCode> {
   const proc = Bun.spawn([bin, "serve"], {
     stdout: "pipe",
-    stderr: "pipe",
+    stderr: "ignore",
     onExit(_proc, exitCode, signalCode) {
       if (signalCode) {
         consola.log(`opencode exited with signal ${signalCode}`);
@@ -48,18 +55,22 @@ export async function createOpenCode(): Promise<OpenCode> {
     },
   });
 
-  const drainStderr = drain(proc.stderr);
   const { port, rest } = await readPort(proc.stdout);
-  const drainStdout = drain(rest);
 
+  const drained = drain(rest);
   let disposed = false;
   const exited = proc.exited.then((code) => {
     if (disposed) return;
     throw new Error(`opencode exited unexpectedly with code ${code}`);
   });
-  exited.catch(() => {
-    // Prevent unhandled rejection if caller doesn't await exited before dispose
-  });
+
+  const pending = [drained, exited];
+
+  // Prevent unhandled rejections for floating promises awaited later in dispose
+  for (const p of pending)
+    p.catch(() => {
+      // Ignore
+    });
 
   return {
     port,
@@ -67,7 +78,7 @@ export async function createOpenCode(): Promise<OpenCode> {
     [Symbol.asyncDispose]: async () => {
       disposed = true;
       proc.kill();
-      await Promise.all([proc.exited, drainStdout, drainStderr]);
+      await Promise.all(pending);
     },
   };
 }

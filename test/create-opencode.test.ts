@@ -9,11 +9,14 @@ type OnExit = (
   signalCode: string | null,
 ) => void;
 
-function mockSpawn(portLine = "listening on :3000\n") {
+function mockSpawn(...chunks: string[]) {
+  if (chunks.length === 0) chunks = ["listening on :3000\n"];
   const kill = vi.fn();
   const stdout = new ReadableStream<Uint8Array>({
     start(controller) {
-      controller.enqueue(textEncoder.encode(portLine));
+      for (const chunk of chunks) {
+        controller.enqueue(textEncoder.encode(chunk));
+      }
       controller.close();
     },
   });
@@ -24,7 +27,7 @@ function mockSpawn(portLine = "listening on :3000\n") {
     const proc = {
       kill,
       stdout,
-      stderr: new ReadableStream({ start: (c) => c.close() }),
+
       exited: Promise.resolve(0).then((code) => {
         opts.onExit?.(proc, code, null);
         return code;
@@ -41,27 +44,22 @@ test("createOpenCode parses port", async () => {
 });
 
 test("createOpenCode is async disposable", async () => {
-  const kill = vi.fn();
-  vi.spyOn(Bun, "spawn").mockImplementation(((
-    _cmd: string[],
-    opts: { onExit?: OnExit },
-  ) => {
-    const proc = {
-      kill,
-      stdout: new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(textEncoder.encode("listening on :3000\n"));
-          controller.close();
-        },
-      }),
-      stderr: new ReadableStream({ start: (c) => c.close() }),
-      exited: Promise.resolve(0).then((code) => {
-        opts.onExit?.(proc, code, null);
-        return code;
-      }),
-    };
-    return proc;
-  }) as never);
+  let resolveExited: (code: number) => void;
+  const exited = new Promise<number>((r) => {
+    resolveExited = r;
+  });
+  const kill = vi.fn(() => resolveExited(0));
+  vi.spyOn(Bun, "spawn").mockImplementation((() => ({
+    kill,
+    stdout: new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(textEncoder.encode("listening on :3000\n"));
+        controller.close();
+      },
+    }),
+    stderr: new ReadableStream({ start: (c) => c.close() }),
+    exited,
+  })) as never);
   {
     await using _opencode = await createOpenCode();
   }
@@ -88,7 +86,7 @@ test("createOpenCode logs signal on signal exit", async () => {
           controller.close();
         },
       }),
-      stderr: new ReadableStream({ start: (c) => c.close() }),
+
       exited: Promise.resolve(0).then((code) => {
         opts.onExit?.(proc, null, "SIGTERM");
         return code;
@@ -131,7 +129,7 @@ test("createOpenCode.exited does not reject after dispose", async () => {
           controller.close();
         },
       }),
-      stderr: new ReadableStream({ start: (c) => c.close() }),
+
       exited,
     };
     return proc;
@@ -139,6 +137,38 @@ test("createOpenCode.exited does not reject after dispose", async () => {
   const opencode = await createOpenCode();
   await opencode[Symbol.asyncDispose]();
   await expect(opencode.exited).resolves.toBeUndefined();
+});
+
+test("createOpenCode parses port split across chunks", async () => {
+  mockSpawn("listening on", " :3000\n");
+  const opencode = await createOpenCode();
+  expect(opencode.port).toBe(3000);
+});
+
+test("createOpenCode tolerates stdout stream error after port", async () => {
+  let resolveExited: (code: number) => void;
+  const exited = new Promise<number>((r) => {
+    resolveExited = r;
+  });
+  const kill = vi.fn(() => resolveExited(0));
+  let enqueued = false;
+  vi.spyOn(Bun, "spawn").mockImplementation((() => ({
+    kill,
+    stdout: new ReadableStream<Uint8Array>({
+      pull(controller) {
+        if (!enqueued) {
+          enqueued = true;
+          controller.enqueue(textEncoder.encode("listening on :3000\n"));
+        } else {
+          controller.error(new Error("stdout broke"));
+        }
+      },
+    }),
+    stderr: new ReadableStream({ start: (c) => c.close() }),
+    exited,
+  })) as never);
+  const opencode = await createOpenCode();
+  await expect(opencode[Symbol.asyncDispose]()).rejects.toThrow("stdout broke");
 });
 
 test("createOpenCode throws if port not found", async () => {
