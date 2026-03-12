@@ -36,7 +36,6 @@ async function readPort(
 
 async function drain(stream: ReadableStream) {
   for await (const _ of stream) {
-    // Discard
   }
 }
 
@@ -54,20 +53,18 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
 
   const { port, rest } = await readPort(proc.stdout);
 
-  const drained = drain(rest);
+  // Fire-and-forget: don't await in dispose because Bun doesn't close
+  // the stdout stream when the child process exits, causing a hang.
+  drain(rest).catch(() => {});
+
   let disposed = false;
   const exited = proc.exited.then((code) => {
     if (disposed) return;
     throw new Error(`opencode exited unexpectedly (${code})`);
   });
 
-  const pending = [drained, exited];
-
-  // Prevent unhandled rejections for floating promises awaited later in dispose
-  for (const p of pending)
-    p.catch(() => {
-      // Ignore
-    });
+  // Prevent unhandled rejection for floating promise awaited later in dispose.
+  exited.catch(() => {});
 
   return {
     port,
@@ -75,7 +72,7 @@ export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
     [Symbol.asyncDispose]: async () => {
       disposed = true;
       proc.kill();
-      await Promise.all(pending);
+      await exited;
     },
   };
 }

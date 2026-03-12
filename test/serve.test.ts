@@ -10,9 +10,7 @@ function mockCreateOpenCodeProcess(port = 3000) {
   const exited = new Promise<void>((r) => {
     resolveExited = r;
   });
-  exited.catch(() => {
-    // Ignore
-  });
+  exited.catch(() => {});
   const dispose = vi.fn(async () => {
     resolveExited();
   });
@@ -69,9 +67,7 @@ test("serve disposes on exit", async () => {
 
 test("serve exits on unexpected opencode exit", async () => {
   const exited = Promise.reject(new Error("opencode exited unexpectedly (1)"));
-  exited.catch(() => {
-    // Ignore
-  });
+  exited.catch(() => {});
   vi.spyOn(
     createOpenCodeProcessModule,
     "createOpenCodeProcess",

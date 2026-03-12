@@ -136,9 +136,12 @@ test("createOpenCodeProcess.exited does not reject after dispose", async () => {
     };
     return proc;
   }) as never);
-  const opencodeProcess = await createOpenCodeProcess();
-  await opencodeProcess[Symbol.asyncDispose]();
-  await expect(opencodeProcess.exited).resolves.toBeUndefined();
+  let processExited: Promise<void>;
+  {
+    await using opencodeProcess = await createOpenCodeProcess();
+    processExited = opencodeProcess.exited;
+  }
+  await expect(processExited).resolves.toBeUndefined();
 });
 
 test("createOpenCodeProcess parses port split across chunks", async () => {
@@ -169,10 +172,10 @@ test("createOpenCodeProcess tolerates stdout stream error after port", async () 
     stderr: new ReadableStream({ start: (c) => c.close() }),
     exited,
   })) as never);
-  const opencodeProcess = await createOpenCodeProcess();
-  await expect(opencodeProcess[Symbol.asyncDispose]()).rejects.toThrow(
-    "stdout broke",
-  );
+  {
+    await using _opencodeProcess = await createOpenCodeProcess();
+  }
+  expect(kill).toHaveBeenCalledOnce();
 });
 
 test("createOpenCodeProcess throws if port not found", async () => {

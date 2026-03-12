@@ -13,7 +13,6 @@
   "dependencies": {
     "citty": "^0.2.1",
     "consola": "^3.4.2",
-    "exit-hook": "^5.1.0",
     "opencode-ai": "^1.2.24"
   },
   "devDependencies": {
