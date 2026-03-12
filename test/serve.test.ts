@@ -1,11 +1,11 @@
 import { runCommand } from "citty";
 import { consola } from "consola";
 import { expect, test, vi } from "vitest";
-import * as createExitSignalModule from "~/lib/create-exit-signal";
-import * as createOpenCodeModule from "~/lib/create-opencode";
+import * as createExitHookModule from "~/lib/create-exit-hook";
+import * as createOpenCodeProcessModule from "~/lib/create-opencode-process";
 import { serve } from "~/lib/serve";
 
-function mockCreateOpenCode(port = 3000) {
+function mockCreateOpenCodeProcess(port = 3000) {
   let resolveExited: () => void;
   const exited = new Promise<void>((r) => {
     resolveExited = r;
@@ -16,7 +16,10 @@ function mockCreateOpenCode(port = 3000) {
   const dispose = vi.fn(async () => {
     resolveExited();
   });
-  vi.spyOn(createOpenCodeModule, "createOpenCode").mockResolvedValue({
+  vi.spyOn(
+    createOpenCodeProcessModule,
+    "createOpenCodeProcess",
+  ).mockResolvedValue({
     port,
     exited,
     [Symbol.asyncDispose]: dispose,
@@ -24,12 +27,12 @@ function mockCreateOpenCode(port = 3000) {
   return dispose;
 }
 
-function mockExitSignal() {
+function mockExitHook() {
   let resolveExited: () => void;
   const exited = new Promise<void>((r) => {
     resolveExited = r;
   });
-  vi.spyOn(createExitSignalModule, "createExitSignal").mockReturnValue({
+  vi.spyOn(createExitHookModule, "createExitHook").mockReturnValue({
     exited,
     [Symbol.dispose]() {
       resolveExited();
@@ -39,8 +42,8 @@ function mockExitSignal() {
 }
 
 test("serve runs and logs port", async () => {
-  const dispose = mockCreateOpenCode();
-  const triggerExit = mockExitSignal();
+  const dispose = mockCreateOpenCodeProcess();
+  const triggerExit = mockExitHook();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
     expect(consola.log).toHaveBeenCalledWith(
@@ -53,11 +56,11 @@ test("serve runs and logs port", async () => {
 });
 
 test("serve disposes on exit", async () => {
-  const dispose = mockCreateOpenCode();
-  const triggerExit = mockExitSignal();
+  const dispose = mockCreateOpenCodeProcess();
+  const triggerExit = mockExitHook();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
-    expect(createExitSignalModule.createExitSignal).toHaveBeenCalled(),
+    expect(createExitHookModule.createExitHook).toHaveBeenCalled(),
   );
   triggerExit();
   await run;
@@ -71,12 +74,15 @@ test("serve exits on unexpected opencode exit", async () => {
   exited.catch(() => {
     // Ignore
   });
-  vi.spyOn(createOpenCodeModule, "createOpenCode").mockResolvedValue({
+  vi.spyOn(
+    createOpenCodeProcessModule,
+    "createOpenCodeProcess",
+  ).mockResolvedValue({
     port: 3000,
     exited,
     [Symbol.asyncDispose]: async () => {},
   });
-  mockExitSignal();
+  mockExitHook();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
     "opencode exited unexpectedly with code 1",
   );

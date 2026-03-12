@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { consola } from "consola";
-import type { OpenCode } from "~/lib/opencode";
+import type { OpenCodeProcess } from "~/lib/opencode-process";
 import { textDecoder } from "~/lib/text-decoder";
 
 interface ReadPortResult {
@@ -42,7 +42,7 @@ async function drain(stream: ReadableStream) {
 
 const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
-export async function createOpenCode(): Promise<OpenCode> {
+export async function createOpenCodeProcess(): Promise<OpenCodeProcess> {
   const proc = Bun.spawn([bin, "serve"], {
     stdout: "pipe",
     stderr: "ignore",

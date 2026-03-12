@@ -1,10 +1,7 @@
 import exitHook from "exit-hook";
+import type { ExitHook } from "~/lib/exit-hook";
 
-export interface ExitSignal extends Disposable {
-  readonly exited: Promise<void>;
-}
-
-export function createExitSignal(): ExitSignal {
+export function createExitHook(): ExitHook {
   const { resolve, promise: exited } = Promise.withResolvers<void>();
   const unsubscribe = exitHook(() => resolve());
 

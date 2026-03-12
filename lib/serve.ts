@@ -1,14 +1,14 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
-import { createExitSignal } from "~/lib/create-exit-signal";
-import { createOpenCode } from "~/lib/create-opencode";
+import { createExitHook } from "~/lib/create-exit-hook";
+import { createOpenCodeProcess } from "~/lib/create-opencode-process";
 
 export const serve = defineCommand({
   meta: { description: "Start the OpenKitten server." },
   run: async () => {
-    using exitSignal = createExitSignal();
-    await using opencode = await createOpenCode();
-    consola.log(`opencode is listening on port ${opencode.port}`);
-    await Promise.race([exitSignal.exited, opencode.exited]);
+    using exitHook = createExitHook();
+    await using opencodeProcess = await createOpenCodeProcess();
+    consola.log(`opencode is listening on port ${opencodeProcess.port}`);
+    await Promise.race([exitHook.exited, opencodeProcess.exited]);
   },
 });
