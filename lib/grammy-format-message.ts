@@ -142,7 +142,7 @@ function convertSingleChunk(chunk: string): GrammyMessageChunk {
     const markdown = restoreCodeBlockLangs(convert(chunk), langs);
     return { text: chunk, markdown };
   } catch (error) {
-    consola.debug(error, { debugHint: "formatMessage" });
+    consola.debug(error, { debugHint: "grammyFormatMessage" });
     return { text: chunk };
   }
 }
@@ -172,7 +172,7 @@ function tryConvert(chunk: string): GrammyMessageChunk[] {
 
 const hrPattern = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
 
-export function formatMessage(text: string): GrammyMessageChunk[] {
+export function grammyFormatMessage(text: string): GrammyMessageChunk[] {
   const sections = text.split(hrPattern);
   const results: GrammyMessageChunk[] = [];
 

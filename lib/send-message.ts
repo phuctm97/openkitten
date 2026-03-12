@@ -1,4 +1,4 @@
-import { formatMessage } from "~/lib/format-message";
+import { grammyFormatMessage } from "~/lib/grammy-format-message";
 import { sendChunks } from "~/lib/send-chunks";
 import type { SendMessageOptions } from "~/lib/send-message-options";
 
@@ -9,6 +9,6 @@ export async function sendMessage({
   chatId,
   threadId,
 }: SendMessageOptions): Promise<void> {
-  const chunks = formatMessage(text);
+  const chunks = grammyFormatMessage(text);
   await sendChunks({ bot, chunks, ignoreErrors, chatId, threadId });
 }
