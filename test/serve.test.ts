@@ -1,5 +1,6 @@
 import { runCommand } from "citty";
-import { expect, test, vi } from "vitest";
+import { consola } from "consola";
+import { beforeEach, expect, test, vi } from "vitest";
 import serve from "~/lib/serve";
 import * as startOpenCodeModule from "~/lib/start-opencode";
 
@@ -11,12 +12,15 @@ function mockStartOpenCode(port = 3000) {
   });
 }
 
+beforeEach(() => {
+  consola.mockTypes(() => vi.fn());
+});
+
 test("serve runs and parses port", async () => {
-  vi.spyOn(console, "log").mockImplementation(() => {});
   const start = mockStartOpenCode();
   await expect(runCommand(serve, { rawArgs: [] })).resolves.not.toThrow();
   expect(start).toHaveBeenCalledOnce();
-  expect(console.log).toHaveBeenCalledWith(
+  expect(consola.log).toHaveBeenCalledWith(
     "opencode is listening on port 3000",
   );
 });

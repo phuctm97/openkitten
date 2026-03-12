@@ -1,8 +1,12 @@
 import { runCommand } from "citty";
-import { expect, test, vi } from "vitest";
+import { consola } from "consola";
+import { beforeEach, expect, test, vi } from "vitest";
 import down from "~/lib/down";
 
+beforeEach(() => {
+  consola.mockTypes(() => vi.fn());
+});
+
 test("down runs", async () => {
-  vi.spyOn(console, "log").mockImplementation(() => {});
   await expect(runCommand(down, { rawArgs: [] })).resolves.not.toThrow();
 });
