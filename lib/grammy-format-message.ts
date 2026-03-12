@@ -142,7 +142,7 @@ function convertSingleChunk(chunk: string): GrammyMessageChunk {
     const markdown = restoreCodeBlockLangs(convert(chunk), langs);
     return { text: chunk, markdown };
   } catch (error) {
-    consola.debug(error, { debugHint: "grammyFormatMessage" });
+    consola.debug("grammy format error", error);
     return { text: chunk };
   }
 }

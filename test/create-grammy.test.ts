@@ -110,7 +110,7 @@ test("createGrammy installs fatal error handler", async () => {
   const [handler] = mockCatch.mock.calls[0] as [(error: unknown) => void];
   const error = new Error("unexpected");
   handler(error);
-  expect(consola.fatal).toHaveBeenCalledWith("grammy caught an error", error);
+  expect(consola.fatal).toHaveBeenCalledWith("grammy catch error", error);
 });
 
 test("createGrammy.stopped does not reject after dispose", async () => {

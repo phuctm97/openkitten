@@ -11,7 +11,7 @@ export async function createGrammy(): Promise<Grammy> {
   // Fatal: errors should never reach here — all event handlers will have
   // their own error boundaries.
   bot.catch((error) => {
-    consola.fatal("grammy caught an error", error);
+    consola.fatal("grammy catch error", error);
   });
 
   const { resolve, promise: started } = Promise.withResolvers<void>();
