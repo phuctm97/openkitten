@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { consola, LogLevels } from "consola";
 import { down } from "~/lib/down";
 import { serve } from "~/lib/serve";
 import { up } from "~/lib/up";
@@ -9,6 +10,15 @@ export const cli = defineCommand({
     name: pkg.name,
     version: pkg.version,
     description: pkg.description,
+  },
+  args: {
+    verbose: {
+      type: "boolean",
+      description: "Show verbose logs.",
+    },
+  },
+  setup({ args }) {
+    if (args.verbose) consola.level = LogLevels.verbose;
   },
   subCommands: {
     serve,
