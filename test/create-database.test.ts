@@ -9,7 +9,7 @@ function db() {
 }
 
 test("createDatabase logs ready", () => {
-  db();
+  using _database = db();
   expect(consola.ready).toHaveBeenCalledWith("database is ready");
 });
 
@@ -21,7 +21,7 @@ test("createDatabase is disposable", () => {
 });
 
 test("createDatabase inserts session with default timestamps", () => {
-  const database = db();
+  using database = db();
   const result = database
     .insert(schema.session)
     .values({ id: "s1", chatId: 123 })
@@ -32,7 +32,7 @@ test("createDatabase inserts session with default timestamps", () => {
 });
 
 test("createDatabase updates updatedAt on session update", () => {
-  const database = db();
+  using database = db();
   const inserted = database
     .insert(schema.session)
     .values({ id: "s1", chatId: 123 })
@@ -48,7 +48,7 @@ test("createDatabase updates updatedAt on session update", () => {
 });
 
 test("createDatabase cascades message delete on session delete", () => {
-  const database = db();
+  using database = db();
   database.insert(schema.session).values({ id: "s1", chatId: 123 }).run();
   database.insert(schema.message).values({ id: "m1", sessionId: "s1" }).run();
   database.delete(schema.session).where(eq(schema.session.id, "s1")).run();

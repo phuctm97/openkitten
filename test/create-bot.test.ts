@@ -63,13 +63,13 @@ afterEach(() => {
 });
 
 test("createBot returns bot with client", async () => {
-  const bot = await createBot();
+  await using bot = await createBot();
   expect(bot.client).toBeDefined();
 });
 
 test("createBot passes token to grammy", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "my-token");
-  await createBot();
+  await using _bot = await createBot();
   expect(capturedToken).toBe("my-token");
 });
 
@@ -79,7 +79,7 @@ test("createBot throws if TELEGRAM_BOT_TOKEN is missing", async () => {
 });
 
 test("createBot logs ready", async () => {
-  await createBot();
+  await using _bot = await createBot();
   expect(consola.ready).toHaveBeenCalledWith("bot is ready");
 });
 
@@ -103,7 +103,7 @@ test("createBot.stopped rejects on unexpected stop", async () => {
 });
 
 test("createBot installs fatal error handler", async () => {
-  await createBot();
+  await using _bot = await createBot();
   expect(mockCatch).toHaveBeenCalledOnce();
   const [handler] = mockCatch.mock.calls[0] as [(error: unknown) => void];
   const error = new Error("unexpected");

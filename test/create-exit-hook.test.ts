@@ -27,20 +27,20 @@ beforeEach(() => {
 
 for (const event of exitEvents) {
   test(`createExitHook resolves on ${event}`, async () => {
-    const hook = createExitHook();
+    using hook = createExitHook();
     handlers.get(event)?.();
     await expect(hook.exited).resolves.toBeUndefined();
   });
 }
 
 test("createExitHook resolves on PM2 shutdown message", async () => {
-  const hook = createExitHook();
+  using hook = createExitHook();
   for (const handler of messageHandlers) handler("shutdown");
   await expect(hook.exited).resolves.toBeUndefined();
 });
 
 test("createExitHook ignores non-shutdown messages", async () => {
-  const hook = createExitHook();
+  using hook = createExitHook();
   for (const handler of messageHandlers) handler("other");
   const result = await Promise.race([
     hook.exited.then(() => "resolved"),
@@ -50,7 +50,7 @@ test("createExitHook ignores non-shutdown messages", async () => {
 });
 
 test("createExitHook cleans up listeners on signal", () => {
-  createExitHook();
+  using _hook = createExitHook();
   const offBefore = vi.mocked(process.off).mock.calls.length;
   handlers.get("SIGINT")?.();
   // 8 events + 1 message handler
