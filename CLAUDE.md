@@ -16,3 +16,7 @@ Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js AP
 - `bun compile` — compile binary
 - `bun --bun biome check` — lint and format check (`--write` to auto-fix)
 - `bun --bun vitest run` — run tests (`--coverage` for coverage report)
+
+## No Hacks
+
+No dirty hacks: no suppression comments (`@ts-ignore`, `@ts-expect-error`, `biome-ignore`, `istanbul ignore`), no hacky type casts (`as unknown as`, `as any`). The only exception is `as never` when mocking in tests.
