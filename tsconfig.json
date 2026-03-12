@@ -1,7 +1,6 @@
 {
   "include": [
     "prepare.ts",
-    "compile.ts",
     "drizzle.config.ts",
     "vitest.config.ts",
     "lib",
