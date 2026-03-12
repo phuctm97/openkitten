@@ -7,7 +7,7 @@ import pkg from "~/package.json" with { type: "json" };
 
 export async function findOrCreateSession(
   database: Database,
-  opencode: OpencodeClient,
+  opencodeClient: OpencodeClient,
   chatId: number,
   threadId: number | undefined,
 ): Promise<{ readonly sessionId: string; readonly isNew: boolean }> {
@@ -23,7 +23,7 @@ export async function findOrCreateSession(
 
   if (existing) return { sessionId: existing.id, isNew: false };
 
-  const createResult = await opencode.session.create({});
+  const createResult = await opencodeClient.session.create({});
   if (createResult.error) throw createResult.error;
   const sessionId = createResult.data.id;
 
@@ -35,8 +35,8 @@ export async function findOrCreateSession(
     return { sessionId, isNew: true };
   } catch (insertError) {
     // Race condition: another concurrent call created the session first.
-    // Clean up the orphaned OpenCode session before looking up the winner.
-    const deleteResult = await opencode.session.delete({
+    // Clean up the orphaned opencode session before looking up the winner.
+    const deleteResult = await opencodeClient.session.delete({
       sessionID: sessionId,
     });
     if (deleteResult.error) throw deleteResult.error;

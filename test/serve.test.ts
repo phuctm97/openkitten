@@ -2,10 +2,10 @@ import { runCommand } from "citty";
 import { expect, test, vi } from "vitest";
 import * as createBotModule from "~/lib/create-bot";
 import * as createExitHookModule from "~/lib/create-exit-hook";
-import * as createOpenCodeProcessModule from "~/lib/create-opencode-process";
+import * as createOpencodeProcessModule from "~/lib/create-opencode-process";
 import { serve } from "~/lib/serve";
 
-function mockCreateOpenCodeProcess() {
+function mockCreateOpencodeProcess() {
   let resolveExited: () => void;
   const exited = new Promise<void>((r) => {
     resolveExited = r;
@@ -18,8 +18,8 @@ function mockCreateOpenCodeProcess() {
     resolveExited();
   });
   vi.spyOn(
-    createOpenCodeProcessModule,
-    "createOpenCodeProcess",
+    createOpencodeProcessModule,
+    "createOpencodeProcess",
   ).mockResolvedValue({
     exited,
     client: {} as never,
@@ -63,7 +63,7 @@ function mockCreateExitHook() {
 }
 
 test("serve disposes on exit", async () => {
-  const disposeOpenCode = mockCreateOpenCodeProcess();
+  const disposeOpencode = mockCreateOpencodeProcess();
   const disposeBot = mockCreateBot();
   const triggerExit = mockCreateExitHook();
   const run = runCommand(serve, { rawArgs: [] });
@@ -72,7 +72,7 @@ test("serve disposes on exit", async () => {
   );
   triggerExit();
   await run;
-  expect(disposeOpenCode).toHaveBeenCalledOnce();
+  expect(disposeOpencode).toHaveBeenCalledOnce();
   expect(disposeBot).toHaveBeenCalledOnce();
 });
 
@@ -83,8 +83,8 @@ test("serve exits on unexpected opencode exit", async () => {
     () => {},
   );
   vi.spyOn(
-    createOpenCodeProcessModule,
-    "createOpenCodeProcess",
+    createOpencodeProcessModule,
+    "createOpencodeProcess",
   ).mockResolvedValue({
     exited,
     client: {} as never,
@@ -98,7 +98,7 @@ test("serve exits on unexpected opencode exit", async () => {
 });
 
 test("serve exits on unexpected bot stop", async () => {
-  mockCreateOpenCodeProcess();
+  mockCreateOpencodeProcess();
   const stopped = Promise.reject(new Error("bot stopped unexpectedly"));
   stopped.then(
     () => {},
