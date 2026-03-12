@@ -44,9 +44,9 @@ test("serve runs and logs port", async () => {
   const triggerExit = mockCreateExitHook();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
-    expect(consola.ready).toHaveBeenCalledWith(
-      "opencode is listening on port 3000",
-    ),
+    expect(consola.ready).toHaveBeenCalledWith("opencode is listening", {
+      port: 3000,
+    }),
   );
   triggerExit();
   await run;

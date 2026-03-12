@@ -8,7 +8,7 @@ export const serve = defineCommand({
   run: async () => {
     using exitHook = createExitHook();
     await using opencodeProcess = await createOpenCodeProcess();
-    consola.ready(`opencode is listening on port ${opencodeProcess.port}`);
+    consola.ready("opencode is listening", { port: opencodeProcess.port });
     await Promise.race([exitHook.exited, opencodeProcess.exited]);
   },
 });
