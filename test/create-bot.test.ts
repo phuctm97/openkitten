@@ -72,7 +72,7 @@ test("createBot logs ready", async () => {
   setupMock();
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
   await createBot();
-  expect(consola.ready).toHaveBeenCalledWith("telegram bot is ready");
+  expect(consola.ready).toHaveBeenCalledWith("bot is ready");
   vi.unstubAllEnvs();
 });
 
@@ -83,6 +83,7 @@ test("createBot is async disposable", async () => {
     await using _bot = await createBot();
   }
   expect(mockStop).toHaveBeenCalledOnce();
+  expect(consola.debug).toHaveBeenCalledWith("bot is stopped");
   vi.unstubAllEnvs();
 });
 

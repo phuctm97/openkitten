@@ -20,12 +20,13 @@ export async function createBot(): Promise<Bot> {
     () => {},
   );
 
-  consola.ready("telegram bot is ready");
+  consola.ready("bot is ready");
 
   return {
     client,
     [Symbol.asyncDispose]: async () => {
       await client.stop();
+      consola.debug("bot is stopped");
       ready.resolve();
       await Promise.all([ready.promise, settled]);
     },
