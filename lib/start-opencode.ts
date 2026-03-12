@@ -29,6 +29,7 @@ export async function startOpenCode(): Promise<OpenCode> {
   process.on("SIGINT", kill);
   process.on("SIGTERM", kill);
 
+  // TODO: drain stdout after reading port to prevent pipe buffer from blocking
   drain(proc.stderr);
 
   const port = await readPort(proc.stdout);
