@@ -1,7 +1,7 @@
+import type { Exit } from "~/lib/exit";
 import { exitEvents } from "~/lib/exit-events";
-import type { ExitHook } from "~/lib/exit-hook";
 
-export function createExitHook(): ExitHook {
+export function createExit(): Exit {
   const { resolve, promise: exited } = Promise.withResolvers<void>();
 
   function cleanup() {

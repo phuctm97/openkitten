@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { createExitHook } from "~/lib/create-exit-hook";
+import { createExit } from "~/lib/create-exit";
 import { exitEvents } from "~/lib/exit-events";
 
 let handlers: Map<string, () => void>;
@@ -26,21 +26,21 @@ beforeEach(() => {
 });
 
 for (const event of exitEvents) {
-  test(`createExitHook resolves on ${event}`, async () => {
-    using hook = createExitHook();
+  test(`createExit resolves on ${event}`, async () => {
+    using hook = createExit();
     handlers.get(event)?.();
     await expect(hook.exited).resolves.toBeUndefined();
   });
 }
 
-test("createExitHook resolves on PM2 shutdown message", async () => {
-  using hook = createExitHook();
+test("createExit resolves on PM2 shutdown message", async () => {
+  using hook = createExit();
   for (const handler of messageHandlers) handler("shutdown");
   await expect(hook.exited).resolves.toBeUndefined();
 });
 
-test("createExitHook ignores non-shutdown messages", async () => {
-  using hook = createExitHook();
+test("createExit ignores non-shutdown messages", async () => {
+  using hook = createExit();
   for (const handler of messageHandlers) handler("other");
   const result = await Promise.race([
     hook.exited.then(() => "resolved"),
@@ -49,18 +49,18 @@ test("createExitHook ignores non-shutdown messages", async () => {
   expect(result).toBe("pending");
 });
 
-test("createExitHook cleans up listeners on signal", () => {
-  using _hook = createExitHook();
+test("createExit cleans up listeners on signal", () => {
+  using _hook = createExit();
   const offBefore = vi.mocked(process.off).mock.calls.length;
   handlers.get("SIGINT")?.();
   // 8 events + 1 message handler
   expect(vi.mocked(process.off).mock.calls.length - offBefore).toBe(9);
 });
 
-test("createExitHook resolves exited on dispose", async () => {
-  let hook: ReturnType<typeof createExitHook>;
+test("createExit resolves exited on dispose", async () => {
+  let hook: ReturnType<typeof createExit>;
   {
-    using _hook = createExitHook();
+    using _hook = createExit();
     hook = _hook;
   }
   await expect(hook.exited).resolves.toBeUndefined();
