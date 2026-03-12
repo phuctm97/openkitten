@@ -1,6 +1,6 @@
-import type { MessageChunk } from "~/lib/message-chunk";
+import type { GrammyMessageChunk } from "~/lib/grammy-message-chunk";
 import type { SendOptions } from "~/lib/send-options";
 
 export interface SendChunksOptions extends SendOptions {
-  readonly chunks: MessageChunk[];
+  readonly chunks: GrammyMessageChunk[];
 }
