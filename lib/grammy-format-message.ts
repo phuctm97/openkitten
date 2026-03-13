@@ -1,6 +1,6 @@
 import { consola } from "consola";
 import { convert } from "telegram-markdown-v2";
-import type { GrammyMessageChunk } from "~/lib/grammy-message-chunk";
+import type { GrammyChunk } from "~/lib/grammy-chunk";
 
 const telegramMaxLength = 4096;
 const telegramSplitLength = Math.floor(telegramMaxLength * 0.8);
@@ -138,7 +138,7 @@ function restoreCodeBlockLangs(text: string, langs: string[]): string {
   });
 }
 
-function convertSingleChunk(chunk: string): GrammyMessageChunk {
+function convertSingleChunk(chunk: string): GrammyChunk {
   try {
     const langs = extractCodeBlockLangs(chunk);
     const markdown = restoreCodeBlockLangs(convert(chunk), langs);
@@ -149,7 +149,7 @@ function convertSingleChunk(chunk: string): GrammyMessageChunk {
   }
 }
 
-function tryConvert(chunk: string): GrammyMessageChunk[] {
+function tryConvert(chunk: string): GrammyChunk[] {
   const result = convertSingleChunk(chunk);
   if (result.markdown === undefined) return [result];
   if (result.markdown.length <= telegramMaxLength) return [result];
@@ -157,7 +157,7 @@ function tryConvert(chunk: string): GrammyMessageChunk[] {
   const ratio = telegramMaxLength / result.markdown.length;
   const smallerLimit = Math.floor(chunk.length * ratio * 0.9);
   const subChunks = splitMessage(chunk, smallerLimit);
-  const results: GrammyMessageChunk[] = [];
+  const results: GrammyChunk[] = [];
   for (const sub of subChunks) {
     const subResult = convertSingleChunk(sub);
     if (
@@ -174,9 +174,9 @@ function tryConvert(chunk: string): GrammyMessageChunk[] {
 
 const hrPattern = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
 
-export function grammyFormatMessage(text: string): GrammyMessageChunk[] {
+export function grammyFormatMessage(text: string): GrammyChunk[] {
   const sections = text.split(hrPattern);
-  const results: GrammyMessageChunk[] = [];
+  const results: GrammyChunk[] = [];
 
   for (const section of sections) {
     const trimmed = section.trim();
