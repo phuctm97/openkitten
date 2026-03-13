@@ -1,3 +1,3 @@
-export function grammyFormatQuestionReplied(answers: ReadonlyArray<string>) {
+export function grammyFormatQuestionReplied(answers: readonly string[]) {
   return `✓ ${answers.join(", ")}`;
 }

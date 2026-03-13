@@ -6,8 +6,8 @@ import * as schema from "~/lib/schema";
 import type { Session } from "~/lib/session";
 
 interface InvalidateSessionsResult {
-  reachable: Session[];
-  unreachable: Session[];
+  readonly reachable: readonly Session[];
+  readonly unreachable: readonly Session[];
 }
 
 export async function invalidateSessions(

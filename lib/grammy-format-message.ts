@@ -54,7 +54,7 @@ interface SplitPriority {
   readonly offset: number;
 }
 
-const splitPriorities: ReadonlyArray<SplitPriority> = [
+const splitPriorities: readonly SplitPriority[] = [
   { pattern: /\n(?=#{1,6} |---|___|\*\*\*)/g, offset: 0 },
   { pattern: /\n\n/g, offset: 0 },
   { pattern: /\n(?=[-*] |\d+\. )/g, offset: 0 },
