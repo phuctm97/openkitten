@@ -8,7 +8,8 @@ const maxDelay = 30_000;
 
 export function opencodeStream(
   opencodeClient: OpencodeClient,
-  onEvent: (event: Event) => void,
+  onRestart: () => void | Promise<void>,
+  onEvent: (event: Event) => void | Promise<void>,
 ): OpencodeEventStream {
   const controller = new AbortController();
   const { signal } = controller;
@@ -28,10 +29,13 @@ export function opencodeStream(
         try {
           attempt = 0;
           consola.debug("opencode event stream is connected");
+          // onRestart errors are treated as stream failures and trigger reconnection.
+          await onRestart();
           for (;;) {
             const result = await iter.next();
             if (result.done) throw new Error("opencode event stream ended");
-            onEvent(result.value);
+            // onEvent errors are treated as stream failures and trigger reconnection.
+            await onEvent(result.value);
           }
         } finally {
           signal.removeEventListener("abort", onAbort);
@@ -51,9 +55,10 @@ export function opencodeStream(
     }
   }
 
-  // run() only rejects before abort (max retries exhausted) and only resolves
-  // after abort (signal.aborted check in catch). So ended never rejects during
-  // or after dispose.
+  // run() rejects before abort (max retries exhausted — errors from subscribe,
+  // onRestart, or onEvent all flow through the catch block) and only resolves
+  // after abort (signal.aborted check in catch). So ended never rejects after
+  // dispose.
   const ended = run();
 
   // ended rejects on max reconnect attempts but may not be awaited immediately
