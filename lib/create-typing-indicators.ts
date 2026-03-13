@@ -9,9 +9,9 @@ export function createTypingIndicators(
   bot: Bot,
   opencodeClient: OpencodeClient,
 ): TypingIndicators {
-  const timers = new Map<string, Timer>();
+  const timers = new Map<string, Timer | undefined>();
 
-  function start(session: Session) {
+  async function start(session: Session) {
     if (timers.has(session.id)) return;
     const chatId = session.chatId;
     const threadId = session.threadId || undefined;
@@ -31,15 +31,17 @@ export function createTypingIndicators(
             );
           }
         });
-    send();
+    timers.set(session.id, undefined);
+    await send();
+    if (!timers.has(session.id)) return;
     timers.set(session.id, setInterval(send, 4_000));
   }
 
   function stop(...sessionIds: string[]) {
     for (const sessionId of sessionIds) {
+      if (!timers.has(sessionId)) continue;
       const timer = timers.get(sessionId);
-      if (!timer) continue;
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
       timers.delete(sessionId);
     }
   }
@@ -53,6 +55,7 @@ export function createTypingIndicators(
     if (statusResult.error) throw statusResult.error;
     if (questionResult.error) throw questionResult.error;
     if (permissionResult.error) throw permissionResult.error;
+    const promises: Promise<void>[] = [];
     for (const session of sessions) {
       const status = statusResult.data[session.id];
       const isActive = status?.type === "busy" || status?.type === "retry";
@@ -65,11 +68,12 @@ export function createTypingIndicators(
       // Show typing only when the session is actively working (busy/retry)
       // and not waiting for user input (question or permission prompt).
       if (isActive && !hasQuestion && !hasPermission) {
-        start(session);
+        promises.push(start(session));
       } else {
         stop(session.id);
       }
     }
+    await Promise.all(promises);
   }
 
   return {
