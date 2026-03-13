@@ -5,8 +5,10 @@ import type { Grammy } from "~/lib/grammy";
 export async function grammyStart(bot: Bot): Promise<Grammy> {
   // Fatal: errors should never reach here — all event handlers will have
   // their own error boundaries.
-  bot.catch((error) => {
-    consola.fatal("grammy catch error", error);
+  bot.catch(({ ctx, error }) => {
+    const chatId = ctx.chat?.id;
+    const threadId = ctx.msg?.message_thread_id || undefined;
+    consola.fatal("grammy catch error", { chatId, threadId }, error);
   });
 
   const { resolve, promise: started } = Promise.withResolvers<void>();

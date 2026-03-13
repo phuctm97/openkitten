@@ -68,13 +68,42 @@ test("stopped rejects on unexpected stop", async () => {
   await expect(grammy.stopped).rejects.toThrow("grammy stopped unexpectedly");
 });
 
-test("installs fatal error handler", async () => {
+test("catch handler logs error with chat and thread", async () => {
   await using _grammy = await grammyStart(createMockBot());
   expect(mockCatch).toHaveBeenCalledOnce();
-  const [handler] = mockCatch.mock.calls[0] as [(error: unknown) => void];
+  const [handler] = mockCatch.mock.calls[0] as [
+    (err: {
+      ctx: { chat?: { id: number }; msg?: { message_thread_id?: number } };
+      error: unknown;
+    }) => void,
+  ];
   const error = new Error("unexpected");
-  handler(error);
-  expect(consola.fatal).toHaveBeenCalledWith("grammy catch error", error);
+  handler({
+    ctx: { chat: { id: 123 }, msg: { message_thread_id: 456 } },
+    error,
+  });
+  expect(consola.fatal).toHaveBeenCalledWith(
+    "grammy catch error",
+    { chatId: 123, threadId: 456 },
+    error,
+  );
+});
+
+test("catch handler handles missing chat and msg", async () => {
+  await using _grammy = await grammyStart(createMockBot());
+  const [handler] = mockCatch.mock.calls[0] as [
+    (err: {
+      ctx: { chat?: { id: number }; msg?: { message_thread_id?: number } };
+      error: unknown;
+    }) => void,
+  ];
+  const error = new Error("unexpected");
+  handler({ ctx: {}, error });
+  expect(consola.fatal).toHaveBeenCalledWith(
+    "grammy catch error",
+    { chatId: undefined, threadId: undefined },
+    error,
+  );
 });
 
 test("stopped does not reject after dispose", async () => {
