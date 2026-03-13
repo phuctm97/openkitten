@@ -2,7 +2,7 @@ import { consola } from "consola";
 import type { Bot } from "grammy";
 import type { Grammy } from "~/lib/grammy";
 
-export async function startGrammy(bot: Bot): Promise<Grammy> {
+export async function grammyStart(bot: Bot): Promise<Grammy> {
   // Fatal: errors should never reach here — all event handlers will have
   // their own error boundaries.
   bot.catch((error) => {

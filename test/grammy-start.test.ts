@@ -1,6 +1,6 @@
 import { consola } from "consola";
 import { beforeEach, expect, test, vi } from "vitest";
-import { startGrammy } from "~/lib/start-grammy";
+import { grammyStart } from "~/lib/grammy-start";
 
 interface MockControls {
   resolveStopped: () => void;
@@ -45,13 +45,13 @@ beforeEach(() => {
 });
 
 test("logs ready", async () => {
-  await using _grammy = await startGrammy(createMockBot());
+  await using _grammy = await grammyStart(createMockBot());
   expect(consola.ready).toHaveBeenCalledWith("grammy is ready");
 });
 
 test("is async disposable", async () => {
   {
-    await using _grammy = await startGrammy(createMockBot());
+    await using _grammy = await grammyStart(createMockBot());
   }
   expect(mockStop).toHaveBeenCalledOnce();
   expect(consola.debug).toHaveBeenCalledWith("grammy is stopped");
@@ -59,17 +59,17 @@ test("is async disposable", async () => {
 
 test("propagates startup error", async () => {
   setupMock({ startError: new Error("polling failed") });
-  await expect(startGrammy(createMockBot())).rejects.toThrow("polling failed");
+  await expect(grammyStart(createMockBot())).rejects.toThrow("polling failed");
 });
 
 test("stopped rejects on unexpected stop", async () => {
-  const grammy = await startGrammy(createMockBot());
+  const grammy = await grammyStart(createMockBot());
   controls.resolveStopped();
   await expect(grammy.stopped).rejects.toThrow("grammy stopped unexpectedly");
 });
 
 test("installs fatal error handler", async () => {
-  await using _grammy = await startGrammy(createMockBot());
+  await using _grammy = await grammyStart(createMockBot());
   expect(mockCatch).toHaveBeenCalledOnce();
   const [handler] = mockCatch.mock.calls[0] as [(error: unknown) => void];
   const error = new Error("unexpected");
@@ -80,7 +80,7 @@ test("installs fatal error handler", async () => {
 test("stopped does not reject after dispose", async () => {
   let grammyStopped: Promise<void>;
   {
-    await using grammy = await startGrammy(createMockBot());
+    await using grammy = await grammyStart(createMockBot());
     grammyStopped = grammy.stopped;
   }
   await expect(grammyStopped).resolves.toBeUndefined();
