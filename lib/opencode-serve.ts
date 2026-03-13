@@ -80,7 +80,7 @@ async function drain(stream: ReadableStream, signal: AbortSignal) {
 
 const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
-export async function createOpencode(): Promise<Opencode> {
+export async function opencodeServe(): Promise<Opencode> {
   const username = pkg.name;
   const password = randomBytes(32).toString("base64url");
   const proc = Bun.spawn(

@@ -1,8 +1,8 @@
 import { runCommand } from "citty";
 import { afterEach, expect, test, vi } from "vitest";
 import * as createExitModule from "~/lib/create-exit";
-import * as createOpencodeModule from "~/lib/create-opencode";
 import * as grammyStartModule from "~/lib/grammy-start";
+import * as opencodeServeModule from "~/lib/opencode-serve";
 import { serve } from "~/lib/serve";
 
 vi.mock("grammy", () => ({
@@ -13,7 +13,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function mockCreateOpencode() {
+function mockOpencodeServe() {
   let resolveExited: () => void;
   const exited = new Promise<void>((r) => {
     resolveExited = r;
@@ -25,7 +25,7 @@ function mockCreateOpencode() {
   const dispose = vi.fn(async () => {
     resolveExited();
   });
-  vi.spyOn(createOpencodeModule, "createOpencode").mockResolvedValue({
+  vi.spyOn(opencodeServeModule, "opencodeServe").mockResolvedValue({
     exited,
     client: {} as never,
     [Symbol.asyncDispose]: dispose,
@@ -68,7 +68,7 @@ function mockCreateExit() {
 
 test("disposes on exit", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
-  const disposeOpencode = mockCreateOpencode();
+  const disposeOpencode = mockOpencodeServe();
   const disposeGrammy = mockGrammyStart();
   const triggerExit = mockCreateExit();
   const run = runCommand(serve, { rawArgs: [] });
@@ -88,7 +88,7 @@ test("exits on unexpected opencode exit", async () => {
     () => {},
     () => {},
   );
-  vi.spyOn(createOpencodeModule, "createOpencode").mockResolvedValue({
+  vi.spyOn(opencodeServeModule, "opencodeServe").mockResolvedValue({
     exited,
     client: {} as never,
     [Symbol.asyncDispose]: async () => {},
@@ -102,7 +102,7 @@ test("exits on unexpected opencode exit", async () => {
 
 test("exits on unexpected grammy stop", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
-  mockCreateOpencode();
+  mockOpencodeServe();
   const stopped = Promise.reject(new Error("grammy stopped unexpectedly"));
   stopped.then(
     () => {},

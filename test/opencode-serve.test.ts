@@ -1,6 +1,6 @@
 import { consola } from "consola";
 import { expect, test, vi } from "vitest";
-import { createOpencode } from "~/lib/create-opencode";
+import { opencodeServe } from "~/lib/opencode-serve";
 import { textEncoder } from "~/lib/text-encoder";
 import pkg from "~/package.json" with { type: "json" };
 
@@ -79,19 +79,19 @@ function mockSpawnPending(stdout = portStdout()) {
 
 test("returns client", async () => {
   mockSpawn();
-  const opencode = await createOpencode();
+  const opencode = await opencodeServe();
   expect(opencode.client).toBeDefined();
 });
 
 test("logs ready", async () => {
   mockSpawn();
-  await createOpencode();
+  await opencodeServe();
   expect(consola.ready).toHaveBeenCalledWith("opencode is ready");
 });
 
 test("passes credentials to opencode", async () => {
   mockSpawn();
-  await createOpencode();
+  await opencodeServe();
   expect(capturedEnv).toMatchObject({
     OPENCODE_SERVER_USERNAME: pkg.name,
     OPENCODE_SERVER_PASSWORD: expect.stringMatching(/^[\w-]{43}$/),
@@ -101,14 +101,14 @@ test("passes credentials to opencode", async () => {
 test("is async disposable", async () => {
   const kill = mockSpawnPending();
   {
-    await using _opencode = await createOpencode();
+    await using _opencode = await opencodeServe();
   }
   expect(kill).toHaveBeenCalledOnce();
 });
 
 test("logs terminated on exit", async () => {
   mockSpawn();
-  const opencode = await createOpencode();
+  const opencode = await opencodeServe();
   await opencode.exited.catch(() => {});
   expect(consola.debug).toHaveBeenCalledWith("opencode is terminated", {
     exitCode: 0,
@@ -119,7 +119,7 @@ test("logs terminated on exit", async () => {
 test("logs abnormal exit", async () => {
   const error = new Error("waitpid2 failed");
   mockSpawn({ onExitError: error });
-  const opencode = await createOpencode();
+  const opencode = await opencodeServe();
   await opencode.exited.catch(() => {});
   expect(consola.fatal).toHaveBeenCalledWith(
     "opencode exited abnormally",
@@ -129,7 +129,7 @@ test("logs abnormal exit", async () => {
 
 test("exited rejects on unexpected exit", async () => {
   mockSpawn();
-  const opencode = await createOpencode();
+  const opencode = await opencodeServe();
   await expect(opencode.exited).rejects.toThrow(
     "opencode exited unexpectedly (0)",
   );
@@ -152,7 +152,7 @@ test("force kills after timeout", async () => {
       stdout: portStdout(),
       exited,
     })) as never);
-    const opencode = await createOpencode();
+    const opencode = await opencodeServe();
     const disposePromise = opencode[Symbol.asyncDispose]();
     await vi.advanceTimersByTimeAsync(5000);
     await disposePromise;
@@ -183,7 +183,7 @@ test("exited does not reject after dispose", async () => {
   }) as never);
   let processExited: Promise<void>;
   {
-    await using opencode = await createOpencode();
+    await using opencode = await opencodeServe();
     processExited = opencode.exited;
   }
   await expect(processExited).resolves.toBeUndefined();
@@ -191,7 +191,7 @@ test("exited does not reject after dispose", async () => {
 
 test("parses port split across chunks", async () => {
   mockSpawn({ chunks: ["listening on", " :3000\n"] });
-  const opencode = await createOpencode();
+  const opencode = await opencodeServe();
   expect(opencode.client).toBeDefined();
 });
 
@@ -211,7 +211,7 @@ test("drains stdout until dispose", async () => {
     }),
   );
   {
-    await using _opencode = await createOpencode();
+    await using _opencode = await opencodeServe();
     await vi.waitFor(() => expect(chunks).toBeGreaterThan(1));
   }
   expect(kill).toHaveBeenCalledOnce();
@@ -232,21 +232,21 @@ test("tolerates stdout stream error after port", async () => {
     }),
   );
   {
-    await using _opencode = await createOpencode();
+    await using _opencode = await opencodeServe();
   }
   expect(kill).toHaveBeenCalledOnce();
 });
 
 test("throws if port not found", async () => {
   mockSpawn({ chunks: ["no port here\n"] });
-  await expect(createOpencode()).rejects.toThrow(
+  await expect(opencodeServe()).rejects.toThrow(
     "opencode exited without announcing port",
   );
 });
 
 test("throws if listening line has no port", async () => {
   mockSpawn({ chunks: ["listening\n"] });
-  await expect(createOpencode()).rejects.toThrow(
+  await expect(opencodeServe()).rejects.toThrow(
     "opencode exited without announcing port",
   );
 });
