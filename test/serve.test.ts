@@ -68,7 +68,7 @@ function mockShutdownListen() {
 
 test("disposes on shutdown", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
-  const disposeOpencode = mockOpencodeServe();
+  const disposeOpencodeServer = mockOpencodeServe();
   const disposeGrammy = mockGrammyStart();
   const triggerShutdown = mockShutdownListen();
   const run = runCommand(serve, { rawArgs: [] });
@@ -77,7 +77,7 @@ test("disposes on shutdown", async () => {
   );
   triggerShutdown();
   await run;
-  expect(disposeOpencode).toHaveBeenCalledOnce();
+  expect(disposeOpencodeServer).toHaveBeenCalledOnce();
   expect(disposeGrammy).toHaveBeenCalledOnce();
 });
 

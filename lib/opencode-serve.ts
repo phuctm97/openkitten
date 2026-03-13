@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { consola } from "consola";
-import type { Opencode } from "~/lib/opencode";
+import type { OpencodeServer } from "~/lib/opencode-server";
 import { textDecoder } from "~/lib/text-decoder";
 import pkg from "~/package.json" with { type: "json" };
 
@@ -85,7 +85,7 @@ async function drain(stream: ReadableStream, signal: AbortSignal) {
 
 const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
-export async function opencodeServe(): Promise<Opencode> {
+export async function opencodeServe(): Promise<OpencodeServer> {
   const username = pkg.name;
   const password = randomBytes(32).toString("base64url");
   const proc = Bun.spawn(

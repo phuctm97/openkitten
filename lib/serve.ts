@@ -11,8 +11,12 @@ export const serve = defineCommand({
     const token = Bun.env["TELEGRAM_BOT_TOKEN"];
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
     const bot = new Bot(token);
-    await using opencode = await opencodeServe();
+    await using opencodeServer = await opencodeServe();
     await using grammy = await grammyStart(bot);
-    await Promise.race([shutdown.signaled, opencode.exited, grammy.stopped]);
+    await Promise.race([
+      shutdown.signaled,
+      opencodeServer.exited,
+      grammy.stopped,
+    ]);
   },
 });
