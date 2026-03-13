@@ -1,9 +1,17 @@
 import { runCommand } from "citty";
-import { expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vitest";
 import * as createExitModule from "~/lib/create-exit";
-import * as createGrammyModule from "~/lib/create-grammy";
 import * as createOpencodeModule from "~/lib/create-opencode";
 import { serve } from "~/lib/serve";
+import * as startGrammyModule from "~/lib/start-grammy";
+
+vi.mock("grammy", () => ({
+  Bot: vi.fn(),
+}));
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 function mockCreateOpencode() {
   let resolveExited: () => void;
@@ -25,7 +33,7 @@ function mockCreateOpencode() {
   return dispose;
 }
 
-function mockCreateGrammy() {
+function mockStartGrammy() {
   let resolveStopped: () => void;
   const stopped = new Promise<void>((r) => {
     resolveStopped = r;
@@ -37,9 +45,8 @@ function mockCreateGrammy() {
   const dispose = vi.fn(async () => {
     resolveStopped();
   });
-  vi.spyOn(createGrammyModule, "createGrammy").mockResolvedValue({
+  vi.spyOn(startGrammyModule, "startGrammy").mockResolvedValue({
     stopped,
-    bot: {} as never,
     [Symbol.asyncDispose]: dispose,
   });
   return dispose;
@@ -60,8 +67,9 @@ function mockCreateExit() {
 }
 
 test("disposes on exit", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
   const disposeOpencode = mockCreateOpencode();
-  const disposeGrammy = mockCreateGrammy();
+  const disposeGrammy = mockStartGrammy();
   const triggerExit = mockCreateExit();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
@@ -74,6 +82,7 @@ test("disposes on exit", async () => {
 });
 
 test("exits on unexpected opencode exit", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
   const exited = Promise.reject(new Error("opencode exited unexpectedly (1)"));
   exited.then(
     () => {},
@@ -84,7 +93,7 @@ test("exits on unexpected opencode exit", async () => {
     client: {} as never,
     [Symbol.asyncDispose]: async () => {},
   });
-  mockCreateGrammy();
+  mockStartGrammy();
   mockCreateExit();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
     "opencode exited unexpectedly (1)",
@@ -92,19 +101,26 @@ test("exits on unexpected opencode exit", async () => {
 });
 
 test("exits on unexpected grammy stop", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
   mockCreateOpencode();
   const stopped = Promise.reject(new Error("grammy stopped unexpectedly"));
   stopped.then(
     () => {},
     () => {},
   );
-  vi.spyOn(createGrammyModule, "createGrammy").mockResolvedValue({
+  vi.spyOn(startGrammyModule, "startGrammy").mockResolvedValue({
     stopped,
-    bot: {} as never,
     [Symbol.asyncDispose]: async () => {},
   });
   mockCreateExit();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
     "grammy stopped unexpectedly",
+  );
+});
+
+test("throws if TELEGRAM_BOT_TOKEN is missing", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "");
+  await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
+    "TELEGRAM_BOT_TOKEN is required",
   );
 });

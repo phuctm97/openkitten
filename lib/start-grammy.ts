@@ -1,13 +1,8 @@
 import { consola } from "consola";
-import { Bot } from "grammy";
+import type { Bot } from "grammy";
 import type { Grammy } from "~/lib/grammy";
 
-export async function createGrammy(): Promise<Grammy> {
-  const token = Bun.env["TELEGRAM_BOT_TOKEN"];
-  if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
-
-  const bot = new Bot(token);
-
+export async function startGrammy(bot: Bot): Promise<Grammy> {
   // Fatal: errors should never reach here — all event handlers will have
   // their own error boundaries.
   bot.catch((error) => {
@@ -38,7 +33,6 @@ export async function createGrammy(): Promise<Grammy> {
 
   return {
     stopped,
-    bot,
     [Symbol.asyncDispose]: async () => {
       disposed = true;
       await bot.stop();
