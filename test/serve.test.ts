@@ -1,6 +1,7 @@
 import { runCommand } from "citty";
 import { afterEach, expect, test, vi } from "vitest";
 import * as createDatabaseModule from "~/lib/create-database";
+import * as createPendingPromptsModule from "~/lib/create-pending-prompts";
 import * as createTypingIndicatorsModule from "~/lib/create-typing-indicators";
 import * as grammyStartModule from "~/lib/grammy-start";
 import * as invalidateSessionsModule from "~/lib/invalidate-sessions";
@@ -55,11 +56,11 @@ function mockOpencodeServe() {
   return dispose;
 }
 
-function mockCreateTypingIndicators(ids: string[] = []) {
+function mockCreateTypingIndicators(sessionIds: string[] = []) {
   const invalidate = vi.fn();
   const stop = vi.fn();
   const typingIndicators = {
-    ids,
+    sessionIds,
     invalidate,
     stop,
     [Symbol.dispose]() {},
@@ -69,6 +70,21 @@ function mockCreateTypingIndicators(ids: string[] = []) {
     "createTypingIndicators",
   ).mockReturnValue(typingIndicators as never);
   return { typingIndicators, invalidate, stop };
+}
+
+function mockCreatePendingPrompts(sessionIds: string[] = []) {
+  const invalidate = vi.fn();
+  const dismiss = vi.fn();
+  const pendingPrompts = {
+    sessionIds,
+    invalidate,
+    dismiss,
+    [Symbol.dispose]() {},
+  };
+  vi.spyOn(createPendingPromptsModule, "createPendingPrompts").mockReturnValue(
+    pendingPrompts as never,
+  );
+  return { pendingPrompts, invalidate, dismiss };
 }
 
 function mockOpencodeStream() {
@@ -138,6 +154,7 @@ function mockAll() {
   mockCreateDatabase();
   const disposeOpencodeServer = mockOpencodeServe();
   const typing = mockCreateTypingIndicators();
+  const prompts = mockCreatePendingPrompts();
   mockInvalidateSessions();
   const stream = mockOpencodeStream();
   const disposeGrammy = mockGrammyStart();
@@ -145,6 +162,7 @@ function mockAll() {
   return {
     disposeOpencodeServer,
     typing,
+    prompts,
     stream,
     disposeGrammy,
     triggerShutdown,
@@ -180,6 +198,7 @@ test("exits on unexpected opencode server exit", async () => {
     [Symbol.asyncDispose]: async () => {},
   });
   mockCreateTypingIndicators();
+  mockCreatePendingPrompts();
   mockOpencodeStream();
   mockGrammyStart();
   mockShutdownListen();
@@ -193,6 +212,7 @@ test("exits on unexpected grammy stop", async () => {
   mockCreateDatabase();
   mockOpencodeServe();
   mockCreateTypingIndicators();
+  mockCreatePendingPrompts();
   mockOpencodeStream();
   const stopped = Promise.reject(new Error("grammy stopped unexpectedly"));
   stopped.then(
@@ -214,6 +234,7 @@ test("exits on event stream failure", async () => {
   mockCreateDatabase();
   mockOpencodeServe();
   mockCreateTypingIndicators();
+  mockCreatePendingPrompts();
   const ended = Promise.reject(new Error("event stream failed"));
   ended.then(
     () => {},
@@ -242,6 +263,7 @@ test("onEvent is a no-op", async () => {
   mockCreateDatabase();
   mockOpencodeServe();
   mockCreateTypingIndicators();
+  mockCreatePendingPrompts();
   const stream = mockOpencodeStream();
   mockGrammyStart();
   const triggerShutdown = mockShutdownListen();
@@ -264,6 +286,7 @@ test("reconciles typing indicators on restart", async () => {
   mockCreateDatabase();
   mockOpencodeServe();
   const { invalidate } = mockCreateTypingIndicators();
+  mockCreatePendingPrompts();
   mockInvalidateSessions(reachable);
   const stream = mockOpencodeStream();
   mockGrammyStart();
@@ -287,6 +310,7 @@ test("stops stale typing indicators on restart", async () => {
   mockCreateDatabase();
   mockOpencodeServe();
   const { stop } = mockCreateTypingIndicators(["s1", "s-stale"]);
+  mockCreatePendingPrompts();
   mockInvalidateSessions(reachable);
   const stream = mockOpencodeStream();
   mockGrammyStart();
@@ -299,6 +323,57 @@ test("stops stale typing indicators on restart", async () => {
 
   expect(stop).toHaveBeenCalledOnce();
   expect(stop).toHaveBeenCalledWith("s-stale");
+
+  triggerShutdown();
+  await run;
+});
+
+test("reconciles pending prompts on restart", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  const reachable = [
+    { id: "s1", chatId: 100, threadId: 0 },
+    { id: "s2", chatId: 200, threadId: 5 },
+  ];
+  mockCreateDatabase();
+  mockOpencodeServe();
+  mockCreateTypingIndicators();
+  const { invalidate } = mockCreatePendingPrompts();
+  mockInvalidateSessions(reachable);
+  const stream = mockOpencodeStream();
+  mockGrammyStart();
+  const triggerShutdown = mockShutdownListen();
+
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(stream.onRestart()).toBeDefined());
+
+  await stream.onRestart()();
+
+  expect(invalidate).toHaveBeenCalledOnce();
+  expect(invalidate).toHaveBeenCalledWith(...reachable);
+
+  triggerShutdown();
+  await run;
+});
+
+test("dismisses stale pending prompts on restart", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  const reachable = [{ id: "s1", chatId: 100, threadId: 0 }];
+  mockCreateDatabase();
+  mockOpencodeServe();
+  mockCreateTypingIndicators();
+  const { dismiss } = mockCreatePendingPrompts(["s1", "s-stale"]);
+  mockInvalidateSessions(reachable);
+  const stream = mockOpencodeStream();
+  mockGrammyStart();
+  const triggerShutdown = mockShutdownListen();
+
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(stream.onRestart()).toBeDefined());
+
+  await stream.onRestart()();
+
+  expect(dismiss).toHaveBeenCalledOnce();
+  expect(dismiss).toHaveBeenCalledWith("s-stale");
 
   triggerShutdown();
   await run;

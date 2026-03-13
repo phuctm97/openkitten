@@ -75,7 +75,7 @@ export function createTypingIndicators(
   }
 
   return {
-    get ids() {
+    get sessionIds() {
       return [...timers.keys()];
     },
     invalidate,

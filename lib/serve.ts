@@ -1,6 +1,7 @@
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { createDatabase } from "~/lib/create-database";
+import { createPendingPrompts } from "~/lib/create-pending-prompts";
 import { createTypingIndicators } from "~/lib/create-typing-indicators";
 import { grammyStart } from "~/lib/grammy-start";
 import { invalidateSessions } from "~/lib/invalidate-sessions";
@@ -18,16 +19,23 @@ export const serve = defineCommand({
     using database = createDatabase("openkitten.db");
     await using opencodeServer = await opencodeServe();
     using typingIndicators = createTypingIndicators(bot, opencodeServer.client);
+    using pendingPrompts = createPendingPrompts(opencodeServer.client);
     await using opencodeEventStream = opencodeStream(
       opencodeServer.client,
       async () => {
         const { reachable } = await invalidateSessions(bot, database);
         const reachableSessionIds = new Set(reachable.map((s) => s.id));
-        const staleTypingIndicatorIds = typingIndicators.ids.filter(
+        const staleTypingIndicatorSessionIds =
+          typingIndicators.sessionIds.filter(
+            (id) => !reachableSessionIds.has(id),
+          );
+        typingIndicators.stop(...staleTypingIndicatorSessionIds);
+        await typingIndicators.invalidate(...reachable);
+        const stalePendingPromptSessionIds = pendingPrompts.sessionIds.filter(
           (id) => !reachableSessionIds.has(id),
         );
-        typingIndicators.stop(...staleTypingIndicatorIds);
-        await typingIndicators.invalidate(...reachable);
+        pendingPrompts.dismiss(...stalePendingPromptSessionIds);
+        await pendingPrompts.invalidate(...reachable);
       },
       () => {},
     );
