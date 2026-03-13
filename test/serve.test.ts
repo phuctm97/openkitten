@@ -79,7 +79,7 @@ function mockCreatePendingPrompts(sessionIds: string[] = []) {
     sessionIds,
     invalidate,
     dismiss,
-    [Symbol.dispose]() {},
+    async [Symbol.asyncDispose]() {},
   };
   vi.spyOn(createPendingPromptsModule, "createPendingPrompts").mockReturnValue(
     pendingPrompts as never,

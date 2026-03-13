@@ -57,14 +57,14 @@ export function createPendingPrompts(
     return (keyCounter++).toString(36);
   }
 
-  function grammyEdit(
+  async function grammyEdit(
     sessionId: string,
     chatId: number,
     messageId: number | undefined,
     text: string,
   ) {
-    if (messageId === undefined) return undefined;
-    return bot.api
+    if (messageId === undefined) return;
+    await bot.api
       .editMessageText(chatId, messageId, text, {
         reply_markup: { inline_keyboard: [] },
       })
@@ -79,9 +79,9 @@ export function createPendingPrompts(
       });
   }
 
-  function opencodeDismiss(sessionId: string, item: PendingPromptItem) {
+  async function opencodeDismiss(sessionId: string, item: PendingPromptItem) {
     if (item.kind === "question") {
-      opencodeClient.question
+      await opencodeClient.question
         .reject({ requestID: item.request.id })
         .catch((error: unknown) => {
           consola.warn(
@@ -91,7 +91,7 @@ export function createPendingPrompts(
           );
         });
     } else {
-      opencodeClient.permission
+      await opencodeClient.permission
         .reply({ requestID: item.request.id, reply: "reject" })
         .catch((error: unknown) => {
           consola.warn(
@@ -214,20 +214,24 @@ export function createPendingPrompts(
     }
   }
 
-  function dismiss(...sessionIds: string[]) {
+  async function dismiss(...sessionIds: string[]) {
+    const promises: Promise<void>[] = [];
     for (const sessionId of sessionIds) {
       const entry = sessions.get(sessionId);
       if (!entry) continue;
       for (const item of entry.items) {
-        opencodeDismiss(sessionId, item);
+        promises.push(opencodeDismiss(sessionId, item));
         const text =
           item.kind === "question"
             ? grammyFormatQuestionRejected()
             : grammyFormatPermissionReplied("reject");
-        grammyEdit(sessionId, entry.chatId, item.messageId, text);
+        promises.push(
+          grammyEdit(sessionId, entry.chatId, item.messageId, text),
+        );
       }
       sessions.delete(sessionId);
     }
+    await Promise.all(promises);
   }
 
   async function invalidate(...sessionsArr: Session[]) {
@@ -239,7 +243,7 @@ export function createPendingPrompts(
     if (permissionResult.error) throw permissionResult.error;
     const questions = questionResult.data ?? [];
     const permissions = permissionResult.data ?? [];
-    const promises: Promise<unknown>[] = [];
+    const promises: Promise<void>[] = [];
     for (const session of sessionsArr) {
       const serverQuestionIds = new Set(
         questions.filter((q) => q.sessionID === session.id).map((q) => q.id),
@@ -260,8 +264,7 @@ export function createPendingPrompts(
             item.kind === "question"
               ? grammyFormatQuestionRejected()
               : grammyFormatPermissionReplied("reject");
-          const promise = grammyEdit(session.id, chatId, item.messageId, text);
-          if (promise) promises.push(promise);
+          promises.push(grammyEdit(session.id, chatId, item.messageId, text));
         }
       }
       // Keep items still on server
@@ -566,8 +569,8 @@ export function createPendingPrompts(
     answer,
     resolve,
     dismiss,
-    [Symbol.dispose]() {
-      dismiss(...sessions.keys());
+    async [Symbol.asyncDispose]() {
+      await dismiss(...sessions.keys());
     },
   };
 }

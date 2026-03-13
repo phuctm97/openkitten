@@ -19,7 +19,10 @@ export const serve = defineCommand({
     using database = createDatabase("openkitten.db");
     await using opencodeServer = await opencodeServe();
     using typingIndicators = createTypingIndicators(bot, opencodeServer.client);
-    using pendingPrompts = createPendingPrompts(bot, opencodeServer.client);
+    await using pendingPrompts = createPendingPrompts(
+      bot,
+      opencodeServer.client,
+    );
     await using opencodeEventStream = opencodeStream(
       opencodeServer.client,
       async () => {
@@ -34,7 +37,7 @@ export const serve = defineCommand({
         const stalePendingPromptSessionIds = pendingPrompts.sessionIds.filter(
           (id) => !reachableSessionIds.has(id),
         );
-        pendingPrompts.dismiss(...stalePendingPromptSessionIds);
+        await pendingPrompts.dismiss(...stalePendingPromptSessionIds);
         await pendingPrompts.invalidate(...reachable);
       },
       () => {},
