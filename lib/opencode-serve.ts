@@ -54,13 +54,18 @@ async function readPort(proc: Proc): Promise<ReadPortResult> {
   }
 }
 
+interface DrainDone {
+  readonly done: true;
+}
+
 // Race each read against an abort promise so the caller can break out even
 // if the stream never closes.
 async function drain(stream: ReadableStream, signal: AbortSignal) {
   const reader = stream.getReader();
+
   // Resolves to { done: true } on abort, matching reader.read() shape.
   const controller = new AbortController();
-  const aborted = new Promise<{ readonly done: true }>((r) =>
+  const aborted = new Promise<DrainDone>((r) =>
     signal.addEventListener("abort", () => r({ done: true }), {
       once: true,
       // Auto-remove listener if the stream ends before abort.

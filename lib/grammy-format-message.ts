@@ -49,10 +49,12 @@ function isInCodeBlock(
   return null;
 }
 
-const splitPriorities: ReadonlyArray<{
+interface SplitPriority {
   readonly pattern: RegExp;
   readonly offset: number;
-}> = [
+}
+
+const splitPriorities: ReadonlyArray<SplitPriority> = [
   { pattern: /\n(?=#{1,6} |---|___|\*\*\*)/g, offset: 0 },
   { pattern: /\n\n/g, offset: 0 },
   { pattern: /\n(?=[-*] |\d+\. )/g, offset: 0 },

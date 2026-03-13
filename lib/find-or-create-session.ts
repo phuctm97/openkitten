@@ -5,12 +5,17 @@ import type { Database } from "~/lib/database";
 import * as schema from "~/lib/schema";
 import pkg from "~/package.json" with { type: "json" };
 
+interface FindOrCreateSessionResult {
+  readonly sessionId: string;
+  readonly isNew: boolean;
+}
+
 export async function findOrCreateSession(
   database: Database,
   opencodeClient: OpencodeClient,
   chatId: number,
   threadId: number | undefined,
-): Promise<{ readonly sessionId: string; readonly isNew: boolean }> {
+): Promise<FindOrCreateSessionResult> {
   const [existing] = await database
     .select({ id: schema.session.id })
     .from(schema.session)
