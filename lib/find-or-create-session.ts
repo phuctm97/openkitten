@@ -16,15 +16,13 @@ export async function findOrCreateSession(
   chatId: number,
   threadId: number | undefined,
 ): Promise<FindOrCreateSessionResult> {
-  const [existing] = await database
-    .select({ id: schema.session.id })
-    .from(schema.session)
-    .where(
-      and(
-        eq(schema.session.chatId, chatId),
-        eq(schema.session.threadId, threadId || 0),
-      ),
-    );
+  const existing = await database.query.session.findFirst({
+    columns: { id: true },
+    where: and(
+      eq(schema.session.chatId, chatId),
+      eq(schema.session.threadId, threadId || 0),
+    ),
+  });
 
   if (existing) return { sessionId: existing.id, isNew: false };
 
@@ -46,15 +44,13 @@ export async function findOrCreateSession(
     });
     if (deleteResult.error) throw deleteResult.error;
 
-    const [raced] = await database
-      .select({ id: schema.session.id })
-      .from(schema.session)
-      .where(
-        and(
-          eq(schema.session.chatId, chatId),
-          eq(schema.session.threadId, threadId || 0),
-        ),
-      );
+    const raced = await database.query.session.findFirst({
+      columns: { id: true },
+      where: and(
+        eq(schema.session.chatId, chatId),
+        eq(schema.session.threadId, threadId || 0),
+      ),
+    });
 
     // Insert may have failed for a reason other than a unique constraint.
     if (!raced) throw insertError;

@@ -1,7 +1,10 @@
 import { runCommand } from "citty";
 import { afterEach, expect, test, vi } from "vitest";
+import * as createDatabaseModule from "~/lib/create-database";
+import * as createTypingIndicatorsModule from "~/lib/create-typing-indicators";
 import * as grammyStartModule from "~/lib/grammy-start";
 import * as opencodeServeModule from "~/lib/opencode-serve";
+import * as opencodeStreamModule from "~/lib/opencode-stream";
 import { serve } from "~/lib/serve";
 import * as shutdownListenModule from "~/lib/shutdown-listen";
 
@@ -12,6 +15,18 @@ vi.mock("grammy", () => ({
 afterEach(() => {
   vi.unstubAllEnvs();
 });
+
+function mockCreateDatabase(sessions: unknown[] = []) {
+  const findMany = vi.fn().mockResolvedValue(sessions);
+  const database = {
+    query: { session: { findMany } },
+    [Symbol.dispose]() {},
+  };
+  vi.spyOn(createDatabaseModule, "createDatabase").mockReturnValue(
+    database as never,
+  );
+  return { database, findMany };
+}
 
 function mockOpencodeServe() {
   let resolveExited: () => void;
@@ -31,6 +46,49 @@ function mockOpencodeServe() {
     [Symbol.asyncDispose]: dispose,
   });
   return dispose;
+}
+
+function mockCreateTypingIndicators() {
+  const invalidate = vi.fn();
+  const typingIndicators = {
+    invalidate,
+    [Symbol.dispose]() {},
+  };
+  vi.spyOn(
+    createTypingIndicatorsModule,
+    "createTypingIndicators",
+  ).mockReturnValue(typingIndicators as never);
+  return { typingIndicators, invalidate };
+}
+
+function mockOpencodeStream() {
+  let resolveEnded: () => void;
+  const ended = new Promise<void>((r) => {
+    resolveEnded = r;
+  });
+  ended.then(
+    () => {},
+    () => {},
+  );
+  let onRestart: () => void | Promise<void>;
+  let onEvent: (event: never) => void;
+  vi.spyOn(opencodeStreamModule, "opencodeStream").mockImplementation(
+    (_client, restart, event) => {
+      onRestart = restart;
+      onEvent = event as never;
+      return {
+        ended,
+        async [Symbol.asyncDispose]() {
+          resolveEnded();
+        },
+      };
+    },
+  );
+  return {
+    onRestart: () => onRestart,
+    onEvent: () => onEvent,
+    resolveEnded: () => resolveEnded(),
+  };
 }
 
 function mockGrammyStart() {
@@ -66,11 +124,26 @@ function mockShutdownListen() {
   return () => resolveSignaled();
 }
 
-test("disposes on shutdown", async () => {
-  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+function mockAll() {
+  const db = mockCreateDatabase();
   const disposeOpencodeServer = mockOpencodeServe();
+  const typing = mockCreateTypingIndicators();
+  const stream = mockOpencodeStream();
   const disposeGrammy = mockGrammyStart();
   const triggerShutdown = mockShutdownListen();
+  return {
+    db,
+    disposeOpencodeServer,
+    typing,
+    stream,
+    disposeGrammy,
+    triggerShutdown,
+  };
+}
+
+test("disposes on shutdown", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  const { disposeOpencodeServer, disposeGrammy, triggerShutdown } = mockAll();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
     expect(shutdownListenModule.shutdownListen).toHaveBeenCalled(),
@@ -83,6 +156,7 @@ test("disposes on shutdown", async () => {
 
 test("exits on unexpected opencode server exit", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  mockCreateDatabase();
   const exited = Promise.reject(
     new Error("opencode server exited unexpectedly (1)"),
   );
@@ -95,6 +169,8 @@ test("exits on unexpected opencode server exit", async () => {
     client: {} as never,
     [Symbol.asyncDispose]: async () => {},
   });
+  mockCreateTypingIndicators();
+  mockOpencodeStream();
   mockGrammyStart();
   mockShutdownListen();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
@@ -104,7 +180,10 @@ test("exits on unexpected opencode server exit", async () => {
 
 test("exits on unexpected grammy stop", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  mockCreateDatabase();
   mockOpencodeServe();
+  mockCreateTypingIndicators();
+  mockOpencodeStream();
   const stopped = Promise.reject(new Error("grammy stopped unexpectedly"));
   stopped.then(
     () => {},
@@ -120,9 +199,74 @@ test("exits on unexpected grammy stop", async () => {
   );
 });
 
+test("exits on event stream failure", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  mockCreateDatabase();
+  mockOpencodeServe();
+  mockCreateTypingIndicators();
+  const ended = Promise.reject(new Error("event stream failed"));
+  ended.then(
+    () => {},
+    () => {},
+  );
+  vi.spyOn(opencodeStreamModule, "opencodeStream").mockReturnValue({
+    ended,
+    async [Symbol.asyncDispose]() {},
+  });
+  mockGrammyStart();
+  mockShutdownListen();
+  await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
+    "event stream failed",
+  );
+});
+
 test("throws if TELEGRAM_BOT_TOKEN is missing", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "");
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
     "TELEGRAM_BOT_TOKEN is required",
   );
+});
+
+test("onEvent is a no-op", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  mockCreateDatabase();
+  mockOpencodeServe();
+  mockCreateTypingIndicators();
+  const stream = mockOpencodeStream();
+  mockGrammyStart();
+  const triggerShutdown = mockShutdownListen();
+
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(stream.onEvent()).toBeDefined());
+
+  stream.onEvent()({ type: "any-event" } as never);
+
+  triggerShutdown();
+  await run;
+});
+
+test("reconciles typing indicators on restart", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  const sessions = [
+    { id: "s1", chatId: 100, threadId: 0 },
+    { id: "s2", chatId: 200, threadId: 5 },
+  ];
+  const { findMany } = mockCreateDatabase(sessions);
+  mockOpencodeServe();
+  const { invalidate } = mockCreateTypingIndicators();
+  const stream = mockOpencodeStream();
+  mockGrammyStart();
+  const triggerShutdown = mockShutdownListen();
+
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(stream.onRestart()).toBeDefined());
+
+  await stream.onRestart()();
+
+  expect(findMany).toHaveBeenCalledOnce();
+  expect(invalidate).toHaveBeenCalledOnce();
+  expect(invalidate).toHaveBeenCalledWith(...sessions);
+
+  triggerShutdown();
+  await run;
 });

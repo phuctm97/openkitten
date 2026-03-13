@@ -20,7 +20,7 @@ export function createTypingIndicators(
           ...(threadId && { message_thread_id: threadId }),
         })
         .catch((error) => {
-          consola.warn("typing indicator send error", error);
+          consola.warn("typing indicator failed", { chatId, threadId }, error);
         });
     send();
     timers.set(session.id, setInterval(send, 4_000));
@@ -35,13 +35,7 @@ export function createTypingIndicators(
     consola.debug("typing indicator stopped", { sessionId });
   }
 
-  function invalidate(session: Session) {
-    check(session).catch((error) => {
-      consola.error("typing indicator check error", error);
-    });
-  }
-
-  async function check(session: Session) {
+  async function invalidate(...sessions: Session[]) {
     const [statusResult, questionResult, permissionResult] = await Promise.all([
       opencodeClient.session.status({}),
       opencodeClient.question.list({}),
@@ -50,20 +44,22 @@ export function createTypingIndicators(
     if (statusResult.error) throw statusResult.error;
     if (questionResult.error) throw questionResult.error;
     if (permissionResult.error) throw permissionResult.error;
-    const status = statusResult.data[session.id];
-    const isActive = status?.type === "busy" || status?.type === "retry";
-    const hasQuestion = (questionResult.data ?? []).some(
-      (q) => q.sessionID === session.id,
-    );
-    const hasPermission = (permissionResult.data ?? []).some(
-      (p) => p.sessionID === session.id,
-    );
-    // Show typing only when the session is actively working (busy/retry)
-    // and not waiting for user input (question or permission prompt).
-    if (isActive && !hasQuestion && !hasPermission) {
-      start(session);
-    } else {
-      stop(session.id);
+    for (const session of sessions) {
+      const status = statusResult.data[session.id];
+      const isActive = status?.type === "busy" || status?.type === "retry";
+      const hasQuestion = (questionResult.data ?? []).some(
+        (q) => q.sessionID === session.id,
+      );
+      const hasPermission = (permissionResult.data ?? []).some(
+        (p) => p.sessionID === session.id,
+      );
+      // Show typing only when the session is actively working (busy/retry)
+      // and not waiting for user input (question or permission prompt).
+      if (isActive && !hasQuestion && !hasPermission) {
+        start(session);
+      } else {
+        stop(session.id);
+      }
     }
   }
 
