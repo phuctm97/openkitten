@@ -3,6 +3,7 @@ import { Bot } from "grammy";
 import { createDatabase } from "~/lib/create-database";
 import { createTypingIndicators } from "~/lib/create-typing-indicators";
 import { grammyStart } from "~/lib/grammy-start";
+import { invalidateSessions } from "~/lib/invalidate-sessions";
 import { opencodeServe } from "~/lib/opencode-serve";
 import { opencodeStream } from "~/lib/opencode-stream";
 import { shutdownListen } from "~/lib/shutdown-listen";
@@ -20,13 +21,13 @@ export const serve = defineCommand({
     await using opencodeEventStream = opencodeStream(
       opencodeServer.client,
       async () => {
-        const sessions = await database.query.session.findMany();
-        const activeIds = new Set(sessions.map((s) => s.id));
-        const staleIds = typingIndicators.sessionIds.filter(
-          (id) => !activeIds.has(id),
+        const { reachable } = await invalidateSessions(bot, database);
+        const reachableSessionIds = new Set(reachable.map((s) => s.id));
+        const staleTypingIndicatorIds = typingIndicators.ids.filter(
+          (id) => !reachableSessionIds.has(id),
         );
-        typingIndicators.stop(...staleIds);
-        await typingIndicators.invalidate(...sessions);
+        typingIndicators.stop(...staleTypingIndicatorIds);
+        await typingIndicators.invalidate(...reachable);
       },
       () => {},
     );

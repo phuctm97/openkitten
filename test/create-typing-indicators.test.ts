@@ -212,11 +212,11 @@ test("exposes active session ids", async () => {
     createMockBot(),
     createMockOpencodeClient(),
   );
-  expect(indicators.sessionIds).toEqual([]);
+  expect(indicators.ids).toEqual([]);
   await indicators.invalidate(session, threadSession);
-  expect(indicators.sessionIds).toEqual(["sess-1", "sess-2"]);
+  expect(indicators.ids).toEqual(["sess-1", "sess-2"]);
   indicators.stop("sess-1");
-  expect(indicators.sessionIds).toEqual(["sess-2"]);
+  expect(indicators.ids).toEqual(["sess-2"]);
 });
 
 test("disposes all active timers", async () => {
@@ -280,7 +280,7 @@ test("self-removes on access error", async () => {
   );
   await indicators.invalidate(session);
   await vi.advanceTimersByTimeAsync(0);
-  expect(indicators.sessionIds).toEqual([]);
+  expect(indicators.ids).toEqual([]);
   expect(consola.warn).not.toHaveBeenCalled();
 });
 

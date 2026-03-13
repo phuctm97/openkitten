@@ -3,6 +3,7 @@ import { afterEach, expect, test, vi } from "vitest";
 import * as createDatabaseModule from "~/lib/create-database";
 import * as createTypingIndicatorsModule from "~/lib/create-typing-indicators";
 import * as grammyStartModule from "~/lib/grammy-start";
+import * as invalidateSessionsModule from "~/lib/invalidate-sessions";
 import * as opencodeServeModule from "~/lib/opencode-serve";
 import * as opencodeStreamModule from "~/lib/opencode-stream";
 import { serve } from "~/lib/serve";
@@ -16,16 +17,22 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-function mockCreateDatabase(sessions: unknown[] = []) {
-  const findMany = vi.fn().mockResolvedValue(sessions);
-  const database = {
-    query: { session: { findMany } },
-    [Symbol.dispose]() {},
-  };
+function mockCreateDatabase() {
+  const database = { [Symbol.dispose]() {} };
   vi.spyOn(createDatabaseModule, "createDatabase").mockReturnValue(
     database as never,
   );
-  return { database, findMany };
+  return database;
+}
+
+function mockInvalidateSessions(
+  reachable: unknown[] = [],
+  unreachable: unknown[] = [],
+) {
+  const mock = vi
+    .spyOn(invalidateSessionsModule, "invalidateSessions")
+    .mockResolvedValue({ reachable, unreachable } as never);
+  return mock;
 }
 
 function mockOpencodeServe() {
@@ -48,11 +55,11 @@ function mockOpencodeServe() {
   return dispose;
 }
 
-function mockCreateTypingIndicators(sessionIds: string[] = []) {
+function mockCreateTypingIndicators(ids: string[] = []) {
   const invalidate = vi.fn();
   const stop = vi.fn();
   const typingIndicators = {
-    sessionIds,
+    ids,
     invalidate,
     stop,
     [Symbol.dispose]() {},
@@ -128,14 +135,14 @@ function mockShutdownListen() {
 }
 
 function mockAll() {
-  const db = mockCreateDatabase();
+  mockCreateDatabase();
   const disposeOpencodeServer = mockOpencodeServe();
   const typing = mockCreateTypingIndicators();
+  mockInvalidateSessions();
   const stream = mockOpencodeStream();
   const disposeGrammy = mockGrammyStart();
   const triggerShutdown = mockShutdownListen();
   return {
-    db,
     disposeOpencodeServer,
     typing,
     stream,
@@ -250,13 +257,14 @@ test("onEvent is a no-op", async () => {
 
 test("reconciles typing indicators on restart", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
-  const sessions = [
+  const reachable = [
     { id: "s1", chatId: 100, threadId: 0 },
     { id: "s2", chatId: 200, threadId: 5 },
   ];
-  const { findMany } = mockCreateDatabase(sessions);
+  mockCreateDatabase();
   mockOpencodeServe();
   const { invalidate } = mockCreateTypingIndicators();
+  mockInvalidateSessions(reachable);
   const stream = mockOpencodeStream();
   mockGrammyStart();
   const triggerShutdown = mockShutdownListen();
@@ -266,20 +274,20 @@ test("reconciles typing indicators on restart", async () => {
 
   await stream.onRestart()();
 
-  expect(findMany).toHaveBeenCalledOnce();
   expect(invalidate).toHaveBeenCalledOnce();
-  expect(invalidate).toHaveBeenCalledWith(...sessions);
+  expect(invalidate).toHaveBeenCalledWith(...reachable);
 
   triggerShutdown();
   await run;
 });
 
-test("stops typing indicators for deleted sessions on restart", async () => {
+test("stops stale typing indicators on restart", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
-  const sessions = [{ id: "s1", chatId: 100, threadId: 0 }];
-  mockCreateDatabase(sessions);
+  const reachable = [{ id: "s1", chatId: 100, threadId: 0 }];
+  mockCreateDatabase();
   mockOpencodeServe();
-  const { stop } = mockCreateTypingIndicators(["s1", "s-deleted"]);
+  const { stop } = mockCreateTypingIndicators(["s1", "s-stale"]);
+  mockInvalidateSessions(reachable);
   const stream = mockOpencodeStream();
   mockGrammyStart();
   const triggerShutdown = mockShutdownListen();
@@ -290,7 +298,7 @@ test("stops typing indicators for deleted sessions on restart", async () => {
   await stream.onRestart()();
 
   expect(stop).toHaveBeenCalledOnce();
-  expect(stop).toHaveBeenCalledWith("s-deleted");
+  expect(stop).toHaveBeenCalledWith("s-stale");
 
   triggerShutdown();
   await run;
