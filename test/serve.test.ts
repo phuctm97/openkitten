@@ -81,9 +81,11 @@ test("disposes on shutdown", async () => {
   expect(disposeGrammy).toHaveBeenCalledOnce();
 });
 
-test("exits on unexpected opencode exit", async () => {
+test("exits on unexpected opencode server exit", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
-  const exited = Promise.reject(new Error("opencode exited unexpectedly (1)"));
+  const exited = Promise.reject(
+    new Error("opencode server exited unexpectedly (1)"),
+  );
   exited.then(
     () => {},
     () => {},
@@ -96,7 +98,7 @@ test("exits on unexpected opencode exit", async () => {
   mockGrammyStart();
   mockShutdownListen();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "opencode exited unexpectedly (1)",
+    "opencode server exited unexpectedly (1)",
   );
 });
 

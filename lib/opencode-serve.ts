@@ -45,7 +45,7 @@ async function readPort(proc: Proc): Promise<ReadPortResult> {
         if (match) return { port: Number(match[1]), stdout: proc.stdout };
       }
     }
-    throw new Error("opencode exited without announcing port");
+    throw new Error("opencode server exited without announcing port");
   } catch (error) {
     await killProc(proc);
     throw error;
@@ -99,8 +99,11 @@ export async function opencodeServe(): Promise<OpencodeServer> {
         OPENCODE_SERVER_PASSWORD: password,
       },
       onExit(_proc, exitCode, signalCode, error) {
-        consola.debug("opencode is terminated", { exitCode, signalCode });
-        if (error) consola.fatal("opencode exited abnormally", error);
+        consola.debug("opencode server is terminated", {
+          exitCode,
+          signalCode,
+        });
+        if (error) consola.fatal("opencode server exited abnormally", error);
       },
     },
   );
@@ -119,7 +122,7 @@ export async function opencodeServe(): Promise<OpencodeServer> {
   let disposed = false;
   const exited = proc.exited.then((code) => {
     if (disposed) return;
-    throw new Error(`opencode exited unexpectedly (${code})`);
+    throw new Error(`opencode server exited unexpectedly (${code})`);
   });
 
   // exited rejects on unexpected exit but may not be awaited immediately by
@@ -129,7 +132,7 @@ export async function opencodeServe(): Promise<OpencodeServer> {
     () => {},
   );
 
-  consola.ready("opencode is ready");
+  consola.ready("opencode server is ready");
 
   return {
     exited,

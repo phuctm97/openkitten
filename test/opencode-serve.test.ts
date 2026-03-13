@@ -86,10 +86,10 @@ test("returns client", async () => {
 test("logs ready", async () => {
   mockSpawn();
   await opencodeServe();
-  expect(consola.ready).toHaveBeenCalledWith("opencode is ready");
+  expect(consola.ready).toHaveBeenCalledWith("opencode server is ready");
 });
 
-test("passes credentials to opencode", async () => {
+test("passes credentials to opencode server", async () => {
   mockSpawn();
   await opencodeServe();
   expect(capturedEnv).toMatchObject({
@@ -110,7 +110,7 @@ test("logs terminated on exit", async () => {
   mockSpawn();
   const opencodeServer = await opencodeServe();
   await opencodeServer.exited.catch(() => {});
-  expect(consola.debug).toHaveBeenCalledWith("opencode is terminated", {
+  expect(consola.debug).toHaveBeenCalledWith("opencode server is terminated", {
     exitCode: 0,
     signalCode: null,
   });
@@ -122,7 +122,7 @@ test("logs abnormal exit", async () => {
   const opencodeServer = await opencodeServe();
   await opencodeServer.exited.catch(() => {});
   expect(consola.fatal).toHaveBeenCalledWith(
-    "opencode exited abnormally",
+    "opencode server exited abnormally",
     error,
   );
 });
@@ -131,7 +131,7 @@ test("exited rejects on unexpected exit", async () => {
   mockSpawn();
   const opencodeServer = await opencodeServe();
   await expect(opencodeServer.exited).rejects.toThrow(
-    "opencode exited unexpectedly (0)",
+    "opencode server exited unexpectedly (0)",
   );
 });
 
@@ -240,13 +240,13 @@ test("tolerates stdout stream error after port", async () => {
 test("throws if port not found", async () => {
   mockSpawn({ chunks: ["no port here\n"] });
   await expect(opencodeServe()).rejects.toThrow(
-    "opencode exited without announcing port",
+    "opencode server exited without announcing port",
   );
 });
 
 test("throws if listening line has no port", async () => {
   mockSpawn({ chunks: ["listening\n"] });
   await expect(opencodeServe()).rejects.toThrow(
-    "opencode exited without announcing port",
+    "opencode server exited without announcing port",
   );
 });
