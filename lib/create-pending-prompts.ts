@@ -63,8 +63,8 @@ export function createPendingPrompts(
     messageId: number | undefined,
     text: string,
   ) {
-    if (messageId === undefined) return;
-    bot.api
+    if (messageId === undefined) return undefined;
+    return bot.api
       .editMessageText(chatId, messageId, text, {
         reply_markup: { inline_keyboard: [] },
       })
@@ -239,6 +239,7 @@ export function createPendingPrompts(
     if (permissionResult.error) throw permissionResult.error;
     const questions = questionResult.data ?? [];
     const permissions = permissionResult.data ?? [];
+    const promises: Promise<unknown>[] = [];
     for (const session of sessionsArr) {
       const serverQuestionIds = new Set(
         questions.filter((q) => q.sessionID === session.id).map((q) => q.id),
@@ -259,7 +260,8 @@ export function createPendingPrompts(
             item.kind === "question"
               ? grammyFormatQuestionRejected()
               : grammyFormatPermissionReplied("reject");
-          grammyEdit(session.id, chatId, item.messageId, text);
+          const promise = grammyEdit(session.id, chatId, item.messageId, text);
+          if (promise) promises.push(promise);
         }
       }
       // Keep items still on server
@@ -306,6 +308,7 @@ export function createPendingPrompts(
         sessions.delete(session.id);
       }
     }
+    await Promise.all(promises);
   }
 
   async function flush() {
