@@ -7,11 +7,10 @@ import { startGrammy } from "~/lib/start-grammy";
 export const serve = defineCommand({
   meta: { description: "Start the OpenKitten server." },
   run: async () => {
+    using exit = createExit();
     const token = Bun.env["TELEGRAM_BOT_TOKEN"];
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
     const bot = new Bot(token);
-
-    using exit = createExit();
     await using opencode = await createOpencode();
     await using grammy = await startGrammy(bot);
     await Promise.race([exit.exited, opencode.exited, grammy.stopped]);
