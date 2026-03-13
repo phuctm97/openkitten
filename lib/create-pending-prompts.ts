@@ -16,6 +16,7 @@ import { grammyFormatQuestionPrompt } from "~/lib/grammy-format-question-prompt"
 import { grammyFormatQuestionRejected } from "~/lib/grammy-format-question-rejected";
 import { grammyFormatQuestionReplied } from "~/lib/grammy-format-question-replied";
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
+import type { PendingPromptResolveResult } from "~/lib/pending-prompt-resolve-result";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import type { Session } from "~/lib/session";
 
@@ -178,17 +179,16 @@ export function createPendingPrompts(
     sessionId: string,
     entry: SessionEntry,
     item: PendingPromptQuestion,
-    itemIndex: number,
   ) {
     const currentAnswer = item.selected;
     const newAnswers = [...item.answers, currentAnswer];
-    grammyEdit(
-      entry.chatId,
-      item.messageId,
-      grammyFormatQuestionReplied(currentAnswer),
-    );
     const nextIndex = item.currentIndex + 1;
     if (nextIndex < item.request.questions.length) {
+      grammyEdit(
+        entry.chatId,
+        item.messageId,
+        grammyFormatQuestionReplied(currentAnswer),
+      );
       item.currentIndex = nextIndex;
       item.answers = newAnswers;
       item.selected = [];
@@ -204,7 +204,6 @@ export function createPendingPrompts(
             error,
           );
         });
-      removeItem(sessionId, entry, itemIndex);
     }
   }
 
@@ -326,9 +325,7 @@ export function createPendingPrompts(
 
   function answerReply(
     sessionId: string,
-    entry: SessionEntry,
     item: PendingPromptItem,
-    itemIndex: number,
     reply: "once" | "always" | "reject",
   ) {
     if (item.kind === "permission") {
@@ -341,11 +338,6 @@ export function createPendingPrompts(
             error,
           );
         });
-      grammyEdit(
-        entry.chatId,
-        item.messageId,
-        grammyFormatPermissionReplied(reply),
-      );
     } else {
       opencodeClient.question
         .reject({ requestID: item.request.id })
@@ -356,16 +348,13 @@ export function createPendingPrompts(
             error,
           );
         });
-      grammyEdit(entry.chatId, item.messageId, grammyFormatQuestionRejected());
     }
-    removeItem(sessionId, entry, itemIndex);
   }
 
   async function answerSelect(
     sessionId: string,
     entry: SessionEntry,
     item: PendingPromptQuestion,
-    itemIndex: number,
     select: number,
   ) {
     const question = item.request.questions[item.currentIndex];
@@ -380,7 +369,7 @@ export function createPendingPrompts(
       item.selected = [option.label];
     }
     if (!question.multiple) {
-      await advanceOrSubmit(sessionId, entry, item, itemIndex);
+      await advanceOrSubmit(sessionId, entry, item);
     } else if (item.messageId !== undefined) {
       const promptText = grammyFormatQuestionPrompt(question);
       const kb = buildQuestionKeyboard(item.key, question, item.selected);
@@ -417,18 +406,18 @@ export function createPendingPrompts(
       if (prefix !== "po" && prefix !== "pa" && prefix !== "pr") return;
       const reply =
         prefix === "po" ? "once" : prefix === "pa" ? "always" : "reject";
-      answerReply(sessionId, entry, found.item, found.itemIndex, reply);
+      answerReply(sessionId, found.item, reply);
       return;
     }
 
     // Question callbacks: qt:{key}:{index}, qc:{key}, qr:{key}
     if (prefix === "qr") {
-      answerReply(sessionId, entry, found.item, found.itemIndex, "reject");
+      answerReply(sessionId, found.item, "reject");
       return;
     }
 
     if (prefix === "qc") {
-      await advanceOrSubmit(sessionId, entry, found.item, found.itemIndex);
+      await advanceOrSubmit(sessionId, entry, found.item);
       return;
     }
 
@@ -437,8 +426,38 @@ export function createPendingPrompts(
       if (!selectStr) return;
       const select = Number.parseInt(selectStr, 10);
       if (Number.isNaN(select)) return;
-      await answerSelect(sessionId, entry, found.item, found.itemIndex, select);
+      await answerSelect(sessionId, entry, found.item, select);
     }
+  }
+
+  function resolve(sessionId: string, result: PendingPromptResolveResult) {
+    const entry = sessions.get(sessionId);
+    if (!entry) return;
+    const itemIndex = entry.items.findIndex(
+      (i) => i.request.id === result.requestId,
+    );
+    if (itemIndex === -1) return;
+    const item = entry.items[itemIndex];
+    invariant(item, "item not found at index");
+    if (result.kind === "question-replied") {
+      if (item.kind !== "question") return;
+      grammyEdit(
+        entry.chatId,
+        item.messageId,
+        grammyFormatQuestionReplied(item.selected),
+      );
+    } else if (result.kind === "question-rejected") {
+      if (item.kind !== "question") return;
+      grammyEdit(entry.chatId, item.messageId, grammyFormatQuestionRejected());
+    } else {
+      if (item.kind !== "permission") return;
+      grammyEdit(
+        entry.chatId,
+        item.messageId,
+        grammyFormatPermissionReplied(result.reply),
+      );
+    }
+    removeItem(sessionId, entry, itemIndex);
   }
 
   return {
@@ -448,6 +467,7 @@ export function createPendingPrompts(
     invalidate,
     flush,
     answer,
+    resolve,
     dismiss,
     [Symbol.dispose]() {
       dismiss(...sessions.keys());
