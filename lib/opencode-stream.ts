@@ -1,15 +1,15 @@
 import type { Event } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { consola } from "consola";
-import type { OpencodeSubscription } from "~/lib/opencode-subscription";
+import type { OpencodeEventStream } from "~/lib/opencode-event-stream";
 
 const maxAttempts = 10;
 const maxDelay = 30_000;
 
-export function opencodeSubscribe(
+export function opencodeStream(
   opencodeClient: OpencodeClient,
   onEvent: (event: Event) => void,
-): OpencodeSubscription {
+): OpencodeEventStream {
   const controller = new AbortController();
   const { signal } = controller;
 

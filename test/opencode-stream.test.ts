@@ -1,6 +1,6 @@
 import { consola } from "consola";
 import { afterEach, expect, test, vi } from "vitest";
-import { opencodeSubscribe } from "~/lib/opencode-subscribe";
+import { opencodeStream } from "~/lib/opencode-stream";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -27,7 +27,7 @@ test("calls onEvent for each event", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     onEvent as never,
   );
@@ -56,7 +56,7 @@ test("reconnects on stream error", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     onEvent as never,
   );
@@ -81,7 +81,7 @@ test("stops on dispose", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     vi.fn() as never,
   );
@@ -104,7 +104,7 @@ test("throws after max reconnect attempts", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     vi.fn() as never,
   );
@@ -136,7 +136,7 @@ test("resets attempt counter on success", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     vi.fn() as never,
   );
@@ -162,7 +162,7 @@ test("uses exponential backoff", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     vi.fn() as never,
   );
@@ -188,7 +188,7 @@ test("caps backoff at 30 seconds", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     vi.fn() as never,
   );
@@ -211,7 +211,7 @@ test("logs connecting and connected", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     onEvent as never,
   );
@@ -240,7 +240,7 @@ test("logs reconnection", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     vi.fn() as never,
   );
@@ -273,7 +273,7 @@ test("ended resolves when disposed mid-stream", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     vi.fn() as never,
   );
@@ -298,7 +298,7 @@ test("reconnects on normal stream end with backoff", async () => {
     },
   };
 
-  const subscription = opencodeSubscribe(
+  const subscription = opencodeStream(
     opencodeClient as never,
     vi.fn() as never,
   );
