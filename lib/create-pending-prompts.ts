@@ -22,7 +22,6 @@ import type { Session } from "~/lib/session";
 interface PendingPromptQuestion {
   readonly kind: "question";
   readonly key: string;
-  readonly requestId: string;
   readonly request: QuestionRequest;
   messageId: number | undefined;
   currentIndex: number;
@@ -33,7 +32,6 @@ interface PendingPromptQuestion {
 interface PendingPromptPermission {
   readonly kind: "permission";
   readonly key: string;
-  readonly requestId: string;
   readonly request: PermissionRequest;
   messageId: number | undefined;
 }
@@ -81,21 +79,21 @@ export function createPendingPrompts(
   function opencodeDismiss(sessionId: string, item: PendingPromptItem) {
     if (item.kind === "question") {
       opencodeClient.question
-        .reject({ requestID: item.requestId })
+        .reject({ requestID: item.request.id })
         .catch((error: unknown) => {
           consola.warn(
             "pending prompt opencode dismiss question failed",
-            { sessionId, requestID: item.requestId },
+            { sessionId, requestID: item.request.id },
             error,
           );
         });
     } else {
       opencodeClient.permission
-        .reply({ requestID: item.requestId, reply: "reject" })
+        .reply({ requestID: item.request.id, reply: "reject" })
         .catch((error: unknown) => {
           consola.warn(
             "pending prompt opencode dismiss permission failed",
-            { sessionId, requestID: item.requestId },
+            { sessionId, requestID: item.request.id },
             error,
           );
         });
@@ -198,11 +196,11 @@ export function createPendingPrompts(
       await flushItem(entry, item);
     } else {
       opencodeClient.question
-        .reply({ requestID: item.requestId, answers: newAnswers })
+        .reply({ requestID: item.request.id, answers: newAnswers })
         .catch((error: unknown) => {
           consola.warn(
             "pending prompt opencode question reply failed",
-            { sessionId, requestID: item.requestId },
+            { sessionId, requestID: item.request.id },
             error,
           );
         });
@@ -251,7 +249,7 @@ export function createPendingPrompts(
       for (const item of existingItems) {
         const serverIds =
           item.kind === "question" ? serverQuestionIds : serverPermissionIds;
-        if (!serverIds.has(item.requestId)) {
+        if (!serverIds.has(item.request.id)) {
           const text =
             item.kind === "question"
               ? grammyFormatQuestionRejected()
@@ -263,10 +261,12 @@ export function createPendingPrompts(
       const keptItems = existingItems.filter((item) => {
         const serverIds =
           item.kind === "question" ? serverQuestionIds : serverPermissionIds;
-        return serverIds.has(item.requestId);
+        return serverIds.has(item.request.id);
       });
       // Add new items from server
-      const existingRequestIds = new Set(existingItems.map((i) => i.requestId));
+      const existingRequestIds = new Set(
+        existingItems.map((i) => i.request.id),
+      );
       const newQuestionItems: PendingPromptItem[] = questions
         .filter(
           (q) => q.sessionID === session.id && !existingRequestIds.has(q.id),
@@ -274,7 +274,6 @@ export function createPendingPrompts(
         .map((q) => ({
           kind: "question" as const,
           key: nextKey(),
-          requestId: q.id,
           request: q,
           messageId: undefined,
           currentIndex: 0,
@@ -288,7 +287,6 @@ export function createPendingPrompts(
         .map((p) => ({
           kind: "permission" as const,
           key: nextKey(),
-          requestId: p.id,
           request: p,
           messageId: undefined,
         }));
@@ -335,11 +333,11 @@ export function createPendingPrompts(
   ) {
     if (item.kind === "permission") {
       opencodeClient.permission
-        .reply({ requestID: item.requestId, reply })
+        .reply({ requestID: item.request.id, reply })
         .catch((error: unknown) => {
           consola.warn(
             "pending prompt opencode permission reply failed",
-            { sessionId, requestID: item.requestId },
+            { sessionId, requestID: item.request.id },
             error,
           );
         });
@@ -350,11 +348,11 @@ export function createPendingPrompts(
       );
     } else {
       opencodeClient.question
-        .reject({ requestID: item.requestId })
+        .reject({ requestID: item.request.id })
         .catch((error: unknown) => {
           consola.warn(
             "pending prompt opencode question reject failed",
-            { sessionId, requestID: item.requestId },
+            { sessionId, requestID: item.request.id },
             error,
           );
         });
