@@ -58,6 +58,7 @@ export function createPendingPrompts(
   }
 
   function grammyEdit(
+    sessionId: string,
     chatId: number,
     messageId: number | undefined,
     text: string,
@@ -71,7 +72,7 @@ export function createPendingPrompts(
         if (!grammyCheckAccessError(error)) {
           consola.warn(
             "pending prompt grammy edit failed",
-            { chatId, messageId },
+            { sessionId, chatId, messageId },
             error,
           );
         }
@@ -190,6 +191,7 @@ export function createPendingPrompts(
     const nextIndex = item.currentIndex + 1;
     if (nextIndex < item.request.questions.length) {
       grammyEdit(
+        sessionId,
         entry.chatId,
         item.messageId,
         grammyFormatQuestionReplied(currentAnswer),
@@ -222,10 +224,9 @@ export function createPendingPrompts(
           item.kind === "question"
             ? grammyFormatQuestionRejected()
             : grammyFormatPermissionReplied("reject");
-        grammyEdit(entry.chatId, item.messageId, text);
+        grammyEdit(sessionId, entry.chatId, item.messageId, text);
       }
       sessions.delete(sessionId);
-      consola.debug("pending prompts dismissed", { sessionId });
     }
   }
 
@@ -258,7 +259,7 @@ export function createPendingPrompts(
             item.kind === "question"
               ? grammyFormatQuestionRejected()
               : grammyFormatPermissionReplied("reject");
-          grammyEdit(chatId, item.messageId, text);
+          grammyEdit(session.id, chatId, item.messageId, text);
         }
       }
       // Keep items still on server
@@ -360,14 +361,14 @@ export function createPendingPrompts(
     return `An error occurred: ${code}`;
   }
 
-  function grammyAnswerCallback(callbackId: string, text?: string) {
+  function grammyAnswerCallback(callbackQueryId: string, text?: string) {
     bot.api
-      .answerCallbackQuery(callbackId, text ? { text } : undefined)
+      .answerCallbackQuery(callbackQueryId, text ? { text } : undefined)
       .catch((error: unknown) => {
         if (!grammyCheckAccessError(error)) {
           consola.warn(
             "pending prompt grammy answer callback failed",
-            { callbackId },
+            { callbackQueryId },
             error,
           );
         }
@@ -379,13 +380,16 @@ export function createPendingPrompts(
     entry: SessionEntry,
     item: PendingPromptQuestion,
     select: number,
-    callbackId: string,
+    callbackQueryId: string,
   ) {
     const question = item.request.questions[item.currentIndex];
     invariant(question, "question index out of bounds");
     const option = question.options.at(select);
     if (!option) {
-      grammyAnswerCallback(callbackId, formatCallbackError("invalid_option"));
+      grammyAnswerCallback(
+        callbackQueryId,
+        formatCallbackError("invalid_option"),
+      );
       return;
     }
     if (item.selectedOptions.includes(option.label)) {
@@ -415,81 +419,102 @@ export function createPendingPrompts(
           if (!grammyCheckAccessError(error)) {
             consola.warn(
               "pending prompt grammy select failed",
-              { chatId: entry.chatId, messageId: item.messageId },
+              { sessionId, chatId: entry.chatId, messageId: item.messageId },
               error,
             );
           }
         });
     }
-    grammyAnswerCallback(callbackId);
+    grammyAnswerCallback(callbackQueryId);
   }
 
   async function answer({
     sessionId,
-    callbackQueryId: callbackId,
+    callbackQueryId,
     callbackQueryData: callbackData,
   }: PendingPromptAnswerOptions) {
     const entry = sessions.get(sessionId);
     if (!entry) {
-      grammyAnswerCallback(callbackId, formatCallbackError("expired_session"));
+      grammyAnswerCallback(
+        callbackQueryId,
+        formatCallbackError("expired_session"),
+      );
       return;
     }
     const parts = callbackData.split(":");
     const prefix = parts[0];
     const key = parts[1];
     if (!prefix || !key) {
-      grammyAnswerCallback(callbackId, formatCallbackError("invalid_format"));
+      grammyAnswerCallback(
+        callbackQueryId,
+        formatCallbackError("invalid_format"),
+      );
       return;
     }
 
     const found = findItemByKey(entry, key);
     if (!found) {
-      grammyAnswerCallback(callbackId, formatCallbackError("expired_prompt"));
+      grammyAnswerCallback(
+        callbackQueryId,
+        formatCallbackError("expired_prompt"),
+      );
       return;
     }
 
     // Permission callbacks: po:{key}, pa:{key}, pr:{key}
     if (found.item.kind === "permission") {
       if (prefix !== "po" && prefix !== "pa" && prefix !== "pr") {
-        grammyAnswerCallback(callbackId, formatCallbackError("invalid_prefix"));
+        grammyAnswerCallback(
+          callbackQueryId,
+          formatCallbackError("invalid_prefix"),
+        );
         return;
       }
       const reply =
         prefix === "po" ? "once" : prefix === "pa" ? "always" : "reject";
       answerReply(sessionId, found.item, reply);
-      grammyAnswerCallback(callbackId);
+      grammyAnswerCallback(callbackQueryId);
       return;
     }
 
     // Question callbacks: qt:{key}:{index}, qc:{key}, qr:{key}
     if (prefix === "qr") {
       answerReply(sessionId, found.item, "reject");
-      grammyAnswerCallback(callbackId);
+      grammyAnswerCallback(callbackQueryId);
       return;
     }
 
     if (prefix === "qc") {
       await advanceOrSubmit(sessionId, entry, found.item);
-      grammyAnswerCallback(callbackId);
+      grammyAnswerCallback(callbackQueryId);
       return;
     }
 
     if (prefix === "qt") {
       const selectStr = parts[2];
       if (!selectStr) {
-        grammyAnswerCallback(callbackId, formatCallbackError("invalid_index"));
+        grammyAnswerCallback(
+          callbackQueryId,
+          formatCallbackError("invalid_index"),
+        );
         return;
       }
       const select = Number.parseInt(selectStr, 10);
       if (Number.isNaN(select)) {
-        grammyAnswerCallback(callbackId, formatCallbackError("invalid_index"));
+        grammyAnswerCallback(
+          callbackQueryId,
+          formatCallbackError("invalid_index"),
+        );
         return;
       }
-      await answerSelect(sessionId, entry, found.item, select, callbackId);
+      await answerSelect(sessionId, entry, found.item, select, callbackQueryId);
       return;
     }
 
-    grammyAnswerCallback(callbackId, formatCallbackError("unknown_prefix"));
+    grammyAnswerCallback(
+      callbackQueryId,
+      formatCallbackError("unknown_prefix"),
+    );
   }
 
   function resolve(sessionId: string, promptResult: PendingPromptResult) {
@@ -504,16 +529,23 @@ export function createPendingPrompts(
     if (promptResult.kind === "question-replied") {
       if (item.kind !== "question") return;
       grammyEdit(
+        sessionId,
         entry.chatId,
         item.messageId,
         grammyFormatQuestionReplied(item.selectedOptions),
       );
     } else if (promptResult.kind === "question-rejected") {
       if (item.kind !== "question") return;
-      grammyEdit(entry.chatId, item.messageId, grammyFormatQuestionRejected());
+      grammyEdit(
+        sessionId,
+        entry.chatId,
+        item.messageId,
+        grammyFormatQuestionRejected(),
+      );
     } else {
       if (item.kind !== "permission") return;
       grammyEdit(
+        sessionId,
         entry.chatId,
         item.messageId,
         grammyFormatPermissionReplied(promptResult.reply),

@@ -252,7 +252,7 @@ test("logs warning on send failure", async () => {
   await vi.advanceTimersByTimeAsync(0);
   expect(consola.warn).toHaveBeenCalledWith(
     "typing indicator failed",
-    { chatId: 123, threadId: undefined },
+    { sessionId: "sess-1", chatId: 123, threadId: undefined },
     error,
   );
 });
@@ -336,27 +336,4 @@ test("handles undefined question and permission data", async () => {
   await indicators.invalidate(session);
   await vi.advanceTimersByTimeAsync(0);
   expect(mockSendChatAction).toHaveBeenCalledWith(123, "typing", {});
-});
-
-test("logs debug on start and stop", async () => {
-  mockSessionStatus = vi.fn(async () => ({
-    data: { "sess-1": { type: "busy" } },
-  }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await indicators.invalidate(session);
-  await vi.advanceTimersByTimeAsync(0);
-  expect(consola.debug).toHaveBeenCalledWith("typing indicator started", {
-    chatId: 123,
-    threadId: undefined,
-  });
-  mockSessionStatus = vi.fn(async () => ({
-    data: { "sess-1": { type: "idle" } },
-  }));
-  await indicators.invalidate(session);
-  expect(consola.debug).toHaveBeenCalledWith("typing indicator stopped", {
-    sessionId: "sess-1",
-  });
 });

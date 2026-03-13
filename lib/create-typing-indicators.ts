@@ -26,14 +26,13 @@ export function createTypingIndicators(
           } else {
             consola.warn(
               "typing indicator failed",
-              { chatId, threadId },
+              { sessionId: session.id, chatId, threadId },
               error,
             );
           }
         });
     send();
     timers.set(session.id, setInterval(send, 4_000));
-    consola.debug("typing indicator started", { chatId, threadId });
   }
 
   function stop(...sessionIds: string[]) {
@@ -42,7 +41,6 @@ export function createTypingIndicators(
       if (!timer) continue;
       clearInterval(timer);
       timers.delete(sessionId);
-      consola.debug("typing indicator stopped", { sessionId });
     }
   }
 

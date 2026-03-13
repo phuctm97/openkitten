@@ -401,17 +401,6 @@ test("dismiss logs warning on permission reply failure", async () => {
   );
 });
 
-test("dismiss logs debug message", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  prompts.dismiss("sess-1");
-  expect(consola.debug).toHaveBeenCalledWith("pending prompts dismissed", {
-    sessionId: "sess-1",
-  });
-});
-
 test("dispose dismisses all tracked sessions", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({
@@ -442,7 +431,7 @@ test("dismiss logs warning on grammy edit non-access error", async () => {
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
       "pending prompt grammy edit failed",
-      { chatId: 123, messageId: 100 },
+      { sessionId: "sess-1", chatId: 123, messageId: 100 },
       error,
     ),
   );
@@ -785,7 +774,7 @@ test("answer question select multi logs warning on grammy error", async () => {
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
       "pending prompt grammy select failed",
-      { chatId: 123, messageId: 100 },
+      { sessionId: "sess-1", chatId: 123, messageId: 100 },
       error,
     ),
   );
@@ -1059,7 +1048,7 @@ test("answer logs warning on answer callback non-access error", async () => {
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
       "pending prompt grammy answer callback failed",
-      { callbackId: "cb1" },
+      { callbackQueryId: "cb1" },
       error,
     ),
   );
@@ -1369,7 +1358,7 @@ test("resolve logs warning on grammy edit non-access error", async () => {
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
       "pending prompt grammy edit failed",
-      { chatId: 123, messageId: 100 },
+      { sessionId: "sess-1", chatId: 123, messageId: 100 },
       error,
     ),
   );
