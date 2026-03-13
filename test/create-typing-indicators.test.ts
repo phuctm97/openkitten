@@ -1,4 +1,5 @@
 import { consola } from "consola";
+import { GrammyError } from "grammy";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { createTypingIndicators } from "~/lib/create-typing-indicators";
 
@@ -254,6 +255,33 @@ test("logs warning on send failure", async () => {
     { chatId: 123, threadId: undefined },
     error,
   );
+});
+
+test("self-removes on access error", async () => {
+  mockSessionStatus = vi.fn(async () => ({
+    data: { "sess-1": { type: "busy" } },
+  }));
+  const error = new GrammyError(
+    "Call to 'sendChatAction' failed! (403: Forbidden: bot was blocked by the user)",
+    {
+      ok: false,
+      error_code: 403,
+      description: "Forbidden: bot was blocked by the user",
+    },
+    "sendChatAction",
+    {},
+  );
+  mockSendChatAction = vi.fn(async () => {
+    throw error;
+  });
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  await indicators.invalidate(session);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(indicators.sessionIds).toEqual([]);
+  expect(consola.warn).not.toHaveBeenCalled();
 });
 
 test("throws when session status API fails", async () => {
