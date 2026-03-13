@@ -48,17 +48,20 @@ function mockOpencodeServe() {
   return dispose;
 }
 
-function mockCreateTypingIndicators() {
+function mockCreateTypingIndicators(sessionIds: string[] = []) {
   const invalidate = vi.fn();
+  const stop = vi.fn();
   const typingIndicators = {
+    sessionIds,
     invalidate,
+    stop,
     [Symbol.dispose]() {},
   };
   vi.spyOn(
     createTypingIndicatorsModule,
     "createTypingIndicators",
   ).mockReturnValue(typingIndicators as never);
-  return { typingIndicators, invalidate };
+  return { typingIndicators, invalidate, stop };
 }
 
 function mockOpencodeStream() {
@@ -266,6 +269,28 @@ test("reconciles typing indicators on restart", async () => {
   expect(findMany).toHaveBeenCalledOnce();
   expect(invalidate).toHaveBeenCalledOnce();
   expect(invalidate).toHaveBeenCalledWith(...sessions);
+
+  triggerShutdown();
+  await run;
+});
+
+test("stops typing indicators for deleted sessions on restart", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  const sessions = [{ id: "s1", chatId: 100, threadId: 0 }];
+  mockCreateDatabase(sessions);
+  mockOpencodeServe();
+  const { stop } = mockCreateTypingIndicators(["s1", "s-deleted"]);
+  const stream = mockOpencodeStream();
+  mockGrammyStart();
+  const triggerShutdown = mockShutdownListen();
+
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(stream.onRestart()).toBeDefined());
+
+  await stream.onRestart()();
+
+  expect(stop).toHaveBeenCalledOnce();
+  expect(stop).toHaveBeenCalledWith("s-deleted");
 
   triggerShutdown();
   await run;

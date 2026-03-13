@@ -27,12 +27,14 @@ export function createTypingIndicators(
     consola.debug("typing indicator started", { chatId, threadId });
   }
 
-  function stop(sessionId: string) {
-    const timer = timers.get(sessionId);
-    if (!timer) return;
-    clearInterval(timer);
-    timers.delete(sessionId);
-    consola.debug("typing indicator stopped", { sessionId });
+  function stop(...sessionIds: string[]) {
+    for (const sessionId of sessionIds) {
+      const timer = timers.get(sessionId);
+      if (!timer) continue;
+      clearInterval(timer);
+      timers.delete(sessionId);
+      consola.debug("typing indicator stopped", { sessionId });
+    }
   }
 
   async function invalidate(...sessions: Session[]) {
@@ -64,9 +66,13 @@ export function createTypingIndicators(
   }
 
   return {
+    get sessionIds() {
+      return [...timers.keys()];
+    },
     invalidate,
+    stop,
     [Symbol.dispose]() {
-      for (const sessionId of timers.keys()) stop(sessionId);
+      stop(...timers.keys());
     },
   };
 }

@@ -21,6 +21,11 @@ export const serve = defineCommand({
       opencodeServer.client,
       async () => {
         const sessions = await database.query.session.findMany();
+        const activeIds = new Set(sessions.map((s) => s.id));
+        const staleIds = typingIndicators.sessionIds.filter(
+          (id) => !activeIds.has(id),
+        );
+        typingIndicators.stop(...staleIds);
         await typingIndicators.invalidate(...sessions);
       },
       () => {},

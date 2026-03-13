@@ -203,6 +203,21 @@ test("stops typing on invalidate when session becomes idle", async () => {
   expect(mockSendChatAction).toHaveBeenCalledTimes(1);
 });
 
+test("exposes active session ids", async () => {
+  mockSessionStatus = vi.fn(async () => ({
+    data: { "sess-1": { type: "busy" }, "sess-2": { type: "busy" } },
+  }));
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  expect(indicators.sessionIds).toEqual([]);
+  await indicators.invalidate(session, threadSession);
+  expect(indicators.sessionIds).toEqual(["sess-1", "sess-2"]);
+  indicators.stop("sess-1");
+  expect(indicators.sessionIds).toEqual(["sess-2"]);
+});
+
 test("disposes all active timers", async () => {
   mockSessionStatus = vi.fn(async () => ({
     data: { "sess-1": { type: "busy" }, "sess-2": { type: "busy" } },
