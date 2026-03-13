@@ -1,4 +1,4 @@
-export const exitEvents = [
+export const shutdownEvents = [
   "beforeExit",
   "disconnect",
   "SIGINT",

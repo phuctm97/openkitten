@@ -1,6 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { createExit } from "~/lib/create-exit";
-import { exitEvents } from "~/lib/exit-events";
+import { shutdownEvents } from "~/lib/shutdown-events";
+import { shutdownListen } from "~/lib/shutdown-listen";
 
 let handlers: Map<string, () => void>;
 let messageHandlers: Array<(message: unknown) => void>;
@@ -25,43 +25,43 @@ beforeEach(() => {
   vi.spyOn(process, "off").mockReturnValue(process);
 });
 
-for (const event of exitEvents) {
+for (const event of shutdownEvents) {
   test(`resolves on ${event}`, async () => {
-    using hook = createExit();
+    using shutdown = shutdownListen();
     handlers.get(event)?.();
-    await expect(hook.exited).resolves.toBeUndefined();
+    await expect(shutdown.signaled).resolves.toBeUndefined();
   });
 }
 
 test("resolves on PM2 shutdown message", async () => {
-  using hook = createExit();
+  using shutdown = shutdownListen();
   for (const handler of messageHandlers) handler("shutdown");
-  await expect(hook.exited).resolves.toBeUndefined();
+  await expect(shutdown.signaled).resolves.toBeUndefined();
 });
 
 test("ignores non-shutdown messages", async () => {
-  using hook = createExit();
+  using shutdown = shutdownListen();
   for (const handler of messageHandlers) handler("other");
   const result = await Promise.race([
-    hook.exited.then(() => "resolved"),
+    shutdown.signaled.then(() => "resolved"),
     Promise.resolve("pending"),
   ]);
   expect(result).toBe("pending");
 });
 
 test("cleans up listeners on signal", () => {
-  using _hook = createExit();
+  using _shutdown = shutdownListen();
   const offBefore = vi.mocked(process.off).mock.calls.length;
   handlers.get("SIGINT")?.();
   // 8 events + 1 message handler
   expect(vi.mocked(process.off).mock.calls.length - offBefore).toBe(9);
 });
 
-test("resolves exited on dispose", async () => {
-  let hook: ReturnType<typeof createExit>;
+test("resolves signaled on dispose", async () => {
+  let shutdown: ReturnType<typeof shutdownListen>;
   {
-    using _hook = createExit();
-    hook = _hook;
+    using _shutdown = shutdownListen();
+    shutdown = _shutdown;
   }
-  await expect(hook.exited).resolves.toBeUndefined();
+  await expect(shutdown.signaled).resolves.toBeUndefined();
 });
