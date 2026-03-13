@@ -19,7 +19,7 @@ export const serve = defineCommand({
     using database = createDatabase("openkitten.db");
     await using opencodeServer = await opencodeServe();
     using typingIndicators = createTypingIndicators(bot, opencodeServer.client);
-    using pendingPrompts = createPendingPrompts(opencodeServer.client);
+    using pendingPrompts = createPendingPrompts(bot, opencodeServer.client);
     await using opencodeEventStream = opencodeStream(
       opencodeServer.client,
       async () => {
