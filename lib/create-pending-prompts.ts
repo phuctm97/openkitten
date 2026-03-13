@@ -27,8 +27,8 @@ interface PendingPromptQuestion {
   readonly request: QuestionRequest;
   messageId: number | undefined;
   currentIndex: number;
-  answers: string[][];
-  selected: string[];
+  currentAnswers: string[][];
+  selectedOptions: string[];
 }
 
 interface PendingPromptPermission {
@@ -161,7 +161,11 @@ export function createPendingPrompts(
         threadId: entry.threadId,
       });
       const promptText = grammyFormatQuestionPrompt(question);
-      const kb = buildQuestionKeyboard(item.key, question, item.selected);
+      const kb = buildQuestionKeyboard(
+        item.key,
+        question,
+        item.selectedOptions,
+      );
       const sent = await bot.api.sendMessage(entry.chatId, promptText, {
         parse_mode: "MarkdownV2",
         reply_markup: kb,
@@ -181,8 +185,8 @@ export function createPendingPrompts(
     entry: SessionEntry,
     item: PendingPromptQuestion,
   ) {
-    const currentAnswer = item.selected;
-    const newAnswers = [...item.answers, currentAnswer];
+    const currentAnswer = item.selectedOptions;
+    const newAnswers = [...item.currentAnswers, currentAnswer];
     const nextIndex = item.currentIndex + 1;
     if (nextIndex < item.request.questions.length) {
       grammyEdit(
@@ -191,8 +195,8 @@ export function createPendingPrompts(
         grammyFormatQuestionReplied(currentAnswer),
       );
       item.currentIndex = nextIndex;
-      item.answers = newAnswers;
-      item.selected = [];
+      item.currentAnswers = newAnswers;
+      item.selectedOptions = [];
       item.messageId = undefined;
       await flushItem(entry, item);
     } else {
@@ -277,8 +281,8 @@ export function createPendingPrompts(
           request: q,
           messageId: undefined,
           currentIndex: 0,
-          answers: [],
-          selected: [],
+          currentAnswers: [],
+          selectedOptions: [],
         }));
       const newPermissionItems: PendingPromptItem[] = permissions
         .filter(
@@ -384,18 +388,24 @@ export function createPendingPrompts(
       grammyAnswerCallback(callbackId, formatCallbackError("invalid_option"));
       return;
     }
-    if (item.selected.includes(option.label)) {
-      item.selected = item.selected.filter((s) => s !== option.label);
+    if (item.selectedOptions.includes(option.label)) {
+      item.selectedOptions = item.selectedOptions.filter(
+        (s) => s !== option.label,
+      );
     } else if (question.multiple) {
-      item.selected = [...item.selected, option.label];
+      item.selectedOptions = [...item.selectedOptions, option.label];
     } else {
-      item.selected = [option.label];
+      item.selectedOptions = [option.label];
     }
     if (!question.multiple) {
       await advanceOrSubmit(sessionId, entry, item);
     } else if (item.messageId !== undefined) {
       const promptText = grammyFormatQuestionPrompt(question);
-      const kb = buildQuestionKeyboard(item.key, question, item.selected);
+      const kb = buildQuestionKeyboard(
+        item.key,
+        question,
+        item.selectedOptions,
+      );
       bot.api
         .editMessageText(entry.chatId, item.messageId, promptText, {
           parse_mode: "MarkdownV2",
@@ -496,7 +506,7 @@ export function createPendingPrompts(
       grammyEdit(
         entry.chatId,
         item.messageId,
-        grammyFormatQuestionReplied(item.selected),
+        grammyFormatQuestionReplied(item.selectedOptions),
       );
     } else if (promptResult.kind === "question-rejected") {
       if (item.kind !== "question") return;
