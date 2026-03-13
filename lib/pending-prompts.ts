@@ -1,11 +1,12 @@
-import type { PendingPromptResolveResult } from "~/lib/pending-prompt-resolve-result";
+import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
+import type { PendingPromptResult } from "~/lib/pending-prompt-result";
 import type { Session } from "~/lib/session";
 
 export interface PendingPrompts extends Disposable {
   readonly sessionIds: readonly string[];
   invalidate(...sessions: Session[]): Promise<void>;
   flush(): Promise<void>;
-  answer(sessionId: string, callbackId: string): Promise<void>;
-  resolve(sessionId: string, result: PendingPromptResolveResult): void;
+  answer(options: PendingPromptAnswerOptions): Promise<void>;
+  resolve(sessionId: string, promptResult: PendingPromptResult): void;
   dismiss(...sessionIds: string[]): void;
 }

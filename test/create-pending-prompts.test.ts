@@ -9,6 +9,7 @@ vi.mock("~/lib/grammy-send-chunks", () => ({
 
 type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 
+let mockAnswerCallbackQuery: MockFn;
 let mockEditMessageText: MockFn;
 let mockSendMessage: MockFn;
 let mockQuestionList: MockFn;
@@ -20,6 +21,8 @@ let mockPermissionReply: MockFn;
 function createMockBot() {
   return {
     api: {
+      answerCallbackQuery: (...args: unknown[]) =>
+        mockAnswerCallbackQuery(...args),
       editMessageText: (...args: unknown[]) => mockEditMessageText(...args),
       sendMessage: (...args: unknown[]) => mockSendMessage(...args),
     },
@@ -130,6 +133,7 @@ let messageIdCounter: number;
 
 function setup() {
   messageIdCounter = 100;
+  mockAnswerCallbackQuery = vi.fn(async () => ({}));
   mockEditMessageText = vi.fn(async () => ({}));
   mockSendMessage = vi.fn(async () => ({ message_id: messageIdCounter++ }));
   const bot = createMockBot();
@@ -555,11 +559,16 @@ test("answer permission with once calls opencode", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "po:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "po:0",
+  });
   expect(mockPermissionReply).toHaveBeenCalledWith({
     requestID: "p1",
     reply: "once",
   });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", undefined);
   expect(mockEditMessageText).not.toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
@@ -570,7 +579,11 @@ test("answer permission with always calls opencode", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "pa:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "pa:0",
+  });
   expect(mockPermissionReply).toHaveBeenCalledWith({
     requestID: "p1",
     reply: "always",
@@ -583,7 +596,11 @@ test("answer permission with reject calls opencode", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "pr:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "pr:0",
+  });
   expect(mockPermissionReply).toHaveBeenCalledWith({
     requestID: "p1",
     reply: "reject",
@@ -599,7 +616,11 @@ test("answer permission logs warning on opencode failure", async () => {
   });
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "po:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "po:0",
+  });
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
       "pending prompt opencode permission reply failed",
@@ -617,7 +638,11 @@ test("answer question with reject calls opencode", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "qr:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qr:0",
+  });
   expect(mockQuestionReject).toHaveBeenCalledWith({ requestID: "q1" });
   expect(mockEditMessageText).not.toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
@@ -632,7 +657,11 @@ test("answer question reject logs warning on opencode failure", async () => {
   });
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "qr:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qr:0",
+  });
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
       "pending prompt opencode question reject failed",
@@ -650,7 +679,11 @@ test("answer question select single auto-submits", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "qt:0:1");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:1",
+  });
   expect(mockQuestionReply).toHaveBeenCalledWith({
     requestID: "q1",
     answers: [["Claude"]],
@@ -667,12 +700,20 @@ test("answer question select multi toggles selection", async () => {
   await prompts.invalidate(session);
   await prompts.flush();
   // Select first option
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
   // Should update keyboard, not submit
   expect(mockQuestionReply).not.toHaveBeenCalled();
   expect(mockEditMessageText).toHaveBeenCalled();
   // Select second option
-  await prompts.answer("sess-1", "qt:0:1");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:1",
+  });
   expect(mockQuestionReply).not.toHaveBeenCalled();
 });
 
@@ -684,23 +725,42 @@ test("answer question select multi toggles off", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
   // Toggle off
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
   // Confirm with empty selection
-  await prompts.answer("sess-1", "qc:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qc:0",
+  });
   expect(mockQuestionReply).toHaveBeenCalledWith({
     requestID: "msq1",
     answers: [[]],
   });
 });
 
-test("answer question select invalid index is no-op", async () => {
+test("answer toasts invalid for out-of-bounds index", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "qt:0:99");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:99",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: invalid_option",
+  });
   expect(mockQuestionReply).not.toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
@@ -717,7 +777,11 @@ test("answer question select multi logs warning on grammy error", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
       "pending prompt grammy select failed",
@@ -744,7 +808,11 @@ test("answer question select multi silences grammy access error", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
   await vi.waitFor(() =>
     expect(consola.warn).not.toHaveBeenCalledWith(
       "pending prompt grammy select failed",
@@ -764,9 +832,21 @@ test("answer question confirm submits selected options", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "qt:0:0");
-  await prompts.answer("sess-1", "qt:0:2");
-  await prompts.answer("sess-1", "qc:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:2",
+  });
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qc:0",
+  });
   expect(mockQuestionReply).toHaveBeenCalledWith({
     requestID: "msq1",
     answers: [["Auth", "API"]],
@@ -783,14 +863,22 @@ test("answer advances to next question in multi-question", async () => {
   await prompts.invalidate(session);
   await prompts.flush();
   // Answer first question — should advance, not submit
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
   expect(mockQuestionReply).not.toHaveBeenCalled();
   // Session still tracked
   expect(prompts.sessionIds).toEqual(["sess-1"]);
   // A new sendMessage for the second question
   expect(mockSendMessage).toHaveBeenCalledTimes(2);
   // Answer second question — should submit
-  await prompts.answer("sess-1", "qt:0:1");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:1",
+  });
   expect(mockQuestionReply).toHaveBeenCalledWith({
     requestID: "mq1",
     answers: [["GPT-4"], ["Python"]],
@@ -804,7 +892,11 @@ test("advance edits current message with answered text", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "qt:0:1");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:1",
+  });
   expect(mockEditMessageText).toHaveBeenCalledWith(
     123,
     100,
@@ -823,7 +915,11 @@ test("advance logs warning on opencode question reply failure", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
       "pending prompt opencode question reply failed",
@@ -835,68 +931,166 @@ test("advance logs warning on opencode question reply failure", async () => {
 
 // --- answer edge cases ---
 
-test("answer is no-op for unknown session", async () => {
+test("answer toasts expired for unknown session", async () => {
   const { bot, client } = setup();
   using prompts = createPendingPrompts(bot, client);
-  await prompts.answer("unknown", "po:0");
+  await prompts.answer({
+    sessionId: "unknown",
+    callbackQueryId: "cb1",
+    callbackQueryData: "po:0",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: expired_session",
+  });
   expect(mockPermissionReply).not.toHaveBeenCalled();
   expect(mockQuestionReject).not.toHaveBeenCalled();
 });
 
-test("answer is no-op for unknown key", async () => {
+test("answer toasts expired for unknown key", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "po:999");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "po:999",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: expired_prompt",
+  });
   expect(mockPermissionReply).not.toHaveBeenCalled();
 });
 
-test("answer is no-op for invalid callback format", async () => {
+test("answer toasts invalid for bad callback format", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "invalid");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "invalid",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: invalid_format",
+  });
   expect(mockPermissionReply).not.toHaveBeenCalled();
 });
 
-test("answer permission ignores invalid prefix", async () => {
+test("answer toasts invalid for wrong prefix on permission", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "px:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "px:0",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: invalid_prefix",
+  });
   expect(mockPermissionReply).not.toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
-test("answer question select non-numeric index is no-op", async () => {
+test("answer toasts invalid for non-numeric index", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "qt:0:abc");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:abc",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: invalid_index",
+  });
   expect(mockQuestionReply).not.toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
-test("answer q prefix on permission item is no-op", async () => {
+test("answer toasts invalid for q prefix on permission item", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: invalid_prefix",
+  });
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
-test("answer p prefix on question item is no-op", async () => {
+test("answer toasts invalid for p prefix on question item", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "po:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "po:0",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: unknown_prefix",
+  });
   expect(prompts.sessionIds).toEqual(["sess-1"]);
+});
+
+test("answer logs warning on answer callback non-access error", async () => {
+  const { bot, client } = setup();
+  const error = new Error("callback failed");
+  mockAnswerCallbackQuery = vi.fn(async () => {
+    throw error;
+  });
+  using prompts = createPendingPrompts(bot, client);
+  await prompts.answer({
+    sessionId: "unknown",
+    callbackQueryId: "cb1",
+    callbackQueryData: "po:0",
+  });
+  await vi.waitFor(() =>
+    expect(consola.warn).toHaveBeenCalledWith(
+      "pending prompt grammy answer callback failed",
+      { callbackId: "cb1" },
+      error,
+    ),
+  );
+});
+
+test("answer silences answer callback access error", async () => {
+  const { bot, client } = setup();
+  mockAnswerCallbackQuery = vi.fn(async () => {
+    throw new GrammyError(
+      "Call to 'answerCallbackQuery' failed! (403: Forbidden)",
+      {
+        ok: false,
+        error_code: 403,
+        description: "Forbidden: bot was blocked by the user",
+      },
+      "answerCallbackQuery",
+      {},
+    );
+  });
+  using prompts = createPendingPrompts(bot, client);
+  await prompts.answer({
+    sessionId: "unknown",
+    callbackQueryId: "cb1",
+    callbackQueryData: "po:0",
+  });
+  await vi.waitFor(() =>
+    expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+      text: "An error occurred: expired_session",
+    }),
+  );
+  expect(consola.warn).not.toHaveBeenCalled();
 });
 
 test("answer does not remove item from session", async () => {
@@ -905,7 +1099,11 @@ test("answer does not remove item from session", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
   expect(mockQuestionReply).toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
@@ -937,7 +1135,11 @@ test("answer select multi without flush skips grammy edit", async () => {
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   // No flush — messageId is undefined
-  await prompts.answer("sess-1", "qt:0:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
   expect(mockEditMessageText).not.toHaveBeenCalled();
 });
 
@@ -951,12 +1153,19 @@ test("invalidate does not grammy edit when stale items have no message id", asyn
   expect(mockEditMessageText).not.toHaveBeenCalled();
 });
 
-test("answer qt select missing index part is no-op", async () => {
+test("answer toasts invalid for missing index part", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer("sess-1", "qt:0");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: invalid_index",
+  });
   expect(mockQuestionReply).not.toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
@@ -1028,7 +1237,11 @@ test("resolve question-replied edits telegram and removes item", async () => {
   await prompts.invalidate(session);
   await prompts.flush();
   // Select an option first so item.selected has data
-  await prompts.answer("sess-1", "qt:0:1");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:1",
+  });
   prompts.resolve("sess-1", {
     kind: "question-replied",
     requestId: "q1",

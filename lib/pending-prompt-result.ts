@@ -1,4 +1,4 @@
-export type PendingPromptResolveResult =
+export type PendingPromptResult =
   | {
       readonly kind: "question-replied";
       readonly requestId: string;

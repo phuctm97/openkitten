@@ -16,7 +16,8 @@ import { grammyFormatQuestionPrompt } from "~/lib/grammy-format-question-prompt"
 import { grammyFormatQuestionRejected } from "~/lib/grammy-format-question-rejected";
 import { grammyFormatQuestionReplied } from "~/lib/grammy-format-question-replied";
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
-import type { PendingPromptResolveResult } from "~/lib/pending-prompt-resolve-result";
+import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
+import type { PendingPromptResult } from "~/lib/pending-prompt-result";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import type { Session } from "~/lib/session";
 
@@ -351,16 +352,38 @@ export function createPendingPrompts(
     }
   }
 
+  function formatCallbackError(code: string) {
+    return `An error occurred: ${code}`;
+  }
+
+  function grammyAnswerCallback(callbackId: string, text?: string) {
+    bot.api
+      .answerCallbackQuery(callbackId, text ? { text } : undefined)
+      .catch((error: unknown) => {
+        if (!grammyCheckAccessError(error)) {
+          consola.warn(
+            "pending prompt grammy answer callback failed",
+            { callbackId },
+            error,
+          );
+        }
+      });
+  }
+
   async function answerSelect(
     sessionId: string,
     entry: SessionEntry,
     item: PendingPromptQuestion,
     select: number,
+    callbackId: string,
   ) {
     const question = item.request.questions[item.currentIndex];
     invariant(question, "question index out of bounds");
     const option = question.options.at(select);
-    if (!option) return;
+    if (!option) {
+      grammyAnswerCallback(callbackId, formatCallbackError("invalid_option"));
+      return;
+    }
     if (item.selected.includes(option.label)) {
       item.selected = item.selected.filter((s) => s !== option.label);
     } else if (question.multiple) {
@@ -388,65 +411,94 @@ export function createPendingPrompts(
           }
         });
     }
+    grammyAnswerCallback(callbackId);
   }
 
-  async function answer(sessionId: string, callbackId: string) {
+  async function answer({
+    sessionId,
+    callbackQueryId: callbackId,
+    callbackQueryData: callbackData,
+  }: PendingPromptAnswerOptions) {
     const entry = sessions.get(sessionId);
-    if (!entry) return;
-    const parts = callbackId.split(":");
+    if (!entry) {
+      grammyAnswerCallback(callbackId, formatCallbackError("expired_session"));
+      return;
+    }
+    const parts = callbackData.split(":");
     const prefix = parts[0];
     const key = parts[1];
-    if (!prefix || !key) return;
+    if (!prefix || !key) {
+      grammyAnswerCallback(callbackId, formatCallbackError("invalid_format"));
+      return;
+    }
 
     const found = findItemByKey(entry, key);
-    if (!found) return;
+    if (!found) {
+      grammyAnswerCallback(callbackId, formatCallbackError("expired_prompt"));
+      return;
+    }
 
     // Permission callbacks: po:{key}, pa:{key}, pr:{key}
     if (found.item.kind === "permission") {
-      if (prefix !== "po" && prefix !== "pa" && prefix !== "pr") return;
+      if (prefix !== "po" && prefix !== "pa" && prefix !== "pr") {
+        grammyAnswerCallback(callbackId, formatCallbackError("invalid_prefix"));
+        return;
+      }
       const reply =
         prefix === "po" ? "once" : prefix === "pa" ? "always" : "reject";
       answerReply(sessionId, found.item, reply);
+      grammyAnswerCallback(callbackId);
       return;
     }
 
     // Question callbacks: qt:{key}:{index}, qc:{key}, qr:{key}
     if (prefix === "qr") {
       answerReply(sessionId, found.item, "reject");
+      grammyAnswerCallback(callbackId);
       return;
     }
 
     if (prefix === "qc") {
       await advanceOrSubmit(sessionId, entry, found.item);
+      grammyAnswerCallback(callbackId);
       return;
     }
 
     if (prefix === "qt") {
       const selectStr = parts[2];
-      if (!selectStr) return;
+      if (!selectStr) {
+        grammyAnswerCallback(callbackId, formatCallbackError("invalid_index"));
+        return;
+      }
       const select = Number.parseInt(selectStr, 10);
-      if (Number.isNaN(select)) return;
-      await answerSelect(sessionId, entry, found.item, select);
+      if (Number.isNaN(select)) {
+        grammyAnswerCallback(callbackId, formatCallbackError("invalid_index"));
+        return;
+      }
+      await answerSelect(sessionId, entry, found.item, select, callbackId);
+      return;
     }
+
+    grammyAnswerCallback(callbackId, formatCallbackError("unknown_prefix"));
   }
 
-  function resolve(sessionId: string, result: PendingPromptResolveResult) {
+  function resolve(sessionId: string, promptResult: PendingPromptResult) {
     const entry = sessions.get(sessionId);
     if (!entry) return;
     const itemIndex = entry.items.findIndex(
-      (i) => i.request.id === result.requestId,
+      (i) => i.request.id === promptResult.requestId,
     );
     if (itemIndex === -1) return;
     const item = entry.items[itemIndex];
     invariant(item, "item not found at index");
-    if (result.kind === "question-replied") {
+    if (promptResult.kind === "question-replied") {
       if (item.kind !== "question") return;
       grammyEdit(
         entry.chatId,
         item.messageId,
         grammyFormatQuestionReplied(item.selected),
       );
-    } else if (result.kind === "question-rejected") {
+    } else if (promptResult.kind === "question-rejected") {
       if (item.kind !== "question") return;
       grammyEdit(entry.chatId, item.messageId, grammyFormatQuestionRejected());
     } else {
@@ -454,7 +506,7 @@ export function createPendingPrompts(
       grammyEdit(
         entry.chatId,
         item.messageId,
-        grammyFormatPermissionReplied(result.reply),
+        grammyFormatPermissionReplied(promptResult.reply),
       );
     }
     removeItem(sessionId, entry, itemIndex);
