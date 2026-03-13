@@ -1113,6 +1113,18 @@ test("resolve question result on permission item is no-op", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
+test("resolve question-rejected on permission item is no-op", async () => {
+  const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  prompts.resolve("sess-1", {
+    kind: "question-rejected",
+    requestId: "p1",
+  });
+  expect(prompts.sessionIds).toEqual(["sess-1"]);
+});
+
 test("resolve permission result on question item is no-op", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
