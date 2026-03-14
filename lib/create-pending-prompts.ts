@@ -137,7 +137,7 @@ export function createPendingPrompts(
     for (const sessionId of sessionIds) {
       const entry = sessions.get(sessionId);
       if (!entry) continue;
-      if (entry.items.some((item) => item.messageId !== undefined)) continue;
+      if (entry.items.some((item) => item.messageId)) continue;
       const item = entry.items[0];
       invariant(item, "entry has no items");
       promises.push(flushItem(entry, item));
@@ -296,7 +296,7 @@ export function createPendingPrompts(
     messageId: number | undefined,
     text: string,
   ) {
-    if (messageId === undefined) return;
+    if (!messageId) return;
     await bot.api.editMessageText(chatId, messageId, text, {
       reply_markup: { inline_keyboard: [] },
     });
@@ -476,7 +476,7 @@ export function createPendingPrompts(
     }
     if (!question.multiple) {
       await advanceOrSubmit(entry, item);
-    } else if (item.messageId !== undefined) {
+    } else if (item.messageId) {
       const promptText = grammyFormatQuestionPrompt(question);
       const kb = buildQuestionKeyboard(
         item.key,
