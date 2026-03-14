@@ -1,4 +1,6 @@
-export type PendingPromptResult =
+export type PendingPromptResolveOptions = {
+  readonly sessionId: string;
+} & (
   | {
       readonly kind: "question-replied";
       readonly requestId: string;
@@ -11,4 +13,5 @@ export type PendingPromptResult =
       readonly kind: "permission-replied";
       readonly requestId: string;
       readonly reply: "once" | "always" | "reject";
-    };
+    }
+);

@@ -1,5 +1,5 @@
 import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
-import type { PendingPromptResult } from "~/lib/pending-prompt-result";
+import type { PendingPromptResolveOptions } from "~/lib/pending-prompt-resolve-options";
 import type { Session } from "~/lib/session";
 
 export interface PendingPrompts extends AsyncDisposable {
@@ -7,6 +7,6 @@ export interface PendingPrompts extends AsyncDisposable {
   invalidate(...sessions: Session[]): Promise<void>;
   flush(...sessionIds: string[]): Promise<void>;
   answer(options: PendingPromptAnswerOptions): Promise<void>;
-  resolve(sessionId: string, promptResult: PendingPromptResult): Promise<void>;
+  resolve(options: PendingPromptResolveOptions): Promise<void>;
   dismiss(...sessionIds: string[]): Promise<void>;
 }

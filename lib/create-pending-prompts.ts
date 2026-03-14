@@ -19,7 +19,7 @@ import { grammySendChunks } from "~/lib/grammy-send-chunks";
 import { opencodeCheckGoneError } from "~/lib/opencode-check-gone-error";
 import { PendingPromptAnswerError } from "~/lib/pending-prompt-answer-error";
 import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
-import type { PendingPromptResult } from "~/lib/pending-prompt-result";
+import type { PendingPromptResolveOptions } from "~/lib/pending-prompt-resolve-options";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import type { Session } from "~/lib/session";
 
@@ -219,7 +219,10 @@ export function createPendingPrompts(
     }
   }
 
-  async function resolve(sessionId: string, promptResult: PendingPromptResult) {
+  async function resolve({
+    sessionId,
+    ...promptResult
+  }: PendingPromptResolveOptions) {
     const entry = sessions.get(sessionId);
     if (!entry) return;
     const itemIndex = entry.items.findIndex(

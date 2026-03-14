@@ -1065,7 +1065,8 @@ test("resolve permission-replied edits telegram and removes item", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush("sess-1");
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "permission-replied",
     requestId: "p1",
     reply: "once",
@@ -1085,7 +1086,8 @@ test("resolve permission-replied with always", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush("sess-1");
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "permission-replied",
     requestId: "p1",
     reply: "always",
@@ -1104,7 +1106,8 @@ test("resolve permission-replied with reject", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush("sess-1");
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "permission-replied",
     requestId: "p1",
     reply: "reject",
@@ -1129,7 +1132,8 @@ test("resolve question-replied edits telegram and removes item", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "qt:0:1",
   });
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "question-replied",
     requestId: "q1",
   });
@@ -1148,7 +1152,8 @@ test("resolve question-rejected edits telegram and removes item", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush("sess-1");
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "question-rejected",
     requestId: "q1",
   });
@@ -1164,7 +1169,8 @@ test("resolve question-rejected edits telegram and removes item", async () => {
 test("resolve is no-op for unknown session", async () => {
   const { bot, client } = setup();
   await using prompts = createPendingPrompts(bot, client);
-  await prompts.resolve("unknown", {
+  await prompts.resolve({
+    sessionId: "unknown",
     kind: "permission-replied",
     requestId: "p1",
     reply: "once",
@@ -1177,7 +1183,8 @@ test("resolve is no-op for unknown request id", async () => {
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "permission-replied",
     requestId: "unknown",
     reply: "once",
@@ -1192,7 +1199,8 @@ test("resolve skips grammy edit when item has no message id", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   // No flush — no messageId
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "permission-replied",
     requestId: "p1",
     reply: "once",
@@ -1206,7 +1214,8 @@ test("resolve question result on permission item is no-op", async () => {
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "question-replied",
     requestId: "p1",
   });
@@ -1218,7 +1227,8 @@ test("resolve question-rejected on permission item is no-op", async () => {
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "question-rejected",
     requestId: "p1",
   });
@@ -1230,7 +1240,8 @@ test("resolve permission result on question item is no-op", async () => {
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "permission-replied",
     requestId: "q1",
     reply: "once",
@@ -1249,7 +1260,8 @@ test("resolve throws on grammy edit failure", async () => {
     throw error;
   });
   await expect(
-    prompts.resolve("sess-1", {
+    prompts.resolve({
+      sessionId: "sess-1",
       kind: "permission-replied",
       requestId: "p1",
       reply: "once",
@@ -1263,7 +1275,8 @@ test("resolve keeps session when other items remain", async () => {
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.resolve("sess-1", {
+  await prompts.resolve({
+    sessionId: "sess-1",
     kind: "question-rejected",
     requestId: "q1",
   });
