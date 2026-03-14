@@ -14,7 +14,7 @@ interface Proc {
 
 async function killProc(proc: Proc): Promise<void> {
   proc.kill();
-  const forceKill = setTimeout(() => proc.kill(9), 5000);
+  const forceKill = setTimeout(() => proc.kill(9), 10_000);
   try {
     await proc.exited;
   } finally {

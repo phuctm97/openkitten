@@ -162,7 +162,7 @@ test("force kills after timeout", async () => {
     })) as never);
     const opencodeServer = await opencodeServe();
     const disposePromise = opencodeServer[Symbol.asyncDispose]();
-    await vi.advanceTimersByTimeAsync(5000);
+    await vi.advanceTimersByTimeAsync(10_000);
     await disposePromise;
     expect(kill).toHaveBeenCalledWith(9);
   } finally {
