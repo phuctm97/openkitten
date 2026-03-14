@@ -214,7 +214,7 @@ export function createPendingPrompts(
         await dismiss(sessionId);
         return;
       }
-      await grammyAnswerCallback(callbackQueryId, "An error occurred");
+      await grammyAnswerCallback(callbackQueryId, formatCallbackError());
       if (opencodeCheckGoneError(error)) {
         await dismiss(sessionId);
         return;
@@ -418,22 +418,16 @@ export function createPendingPrompts(
     }
   }
 
-  function formatCallbackError(code: string) {
-    return `An error occurred: ${code}`;
+  function formatCallbackError(code?: string) {
+    const base = "An error occurred";
+    return code ? `${base}: ${code}` : base;
   }
 
   async function grammyAnswerCallback(callbackQueryId: string, text?: string) {
-    await bot.api
-      .answerCallbackQuery(callbackQueryId, text ? { text } : undefined)
-      .catch((error: unknown) => {
-        if (!grammyCheckGoneError(error)) {
-          consola.warn(
-            "pending prompt grammy answer callback failed",
-            { callbackQueryId },
-            error,
-          );
-        }
-      });
+    await bot.api.answerCallbackQuery(
+      callbackQueryId,
+      text ? { text } : undefined,
+    );
   }
 
   async function answerSelect(

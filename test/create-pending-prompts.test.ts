@@ -1050,53 +1050,19 @@ test("answer question select multi silences grammy access error", async () => {
   );
 });
 
-test("answer logs warning on answer callback non-access error", async () => {
-  const { bot, client } = setup();
-  const error = new Error("callback failed");
-  mockAnswerCallbackQuery = vi.fn(async () => {
-    throw error;
-  });
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.answer({
-    sessionId: "unknown",
-    callbackQueryId: "cb1",
-    callbackQueryData: "po:0",
-  });
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt grammy answer callback failed",
-      { callbackQueryId: "cb1" },
-      error,
-    ),
-  );
-});
-
-test("answer silences answer callback access error", async () => {
+test("answer throws when answer callback fails", async () => {
   const { bot, client } = setup();
   mockAnswerCallbackQuery = vi.fn(async () => {
-    throw new GrammyError(
-      "Call to 'answerCallbackQuery' failed! (403: Forbidden)",
-      {
-        ok: false,
-        error_code: 403,
-        description: "Forbidden: bot was blocked by the user",
-      },
-      "answerCallbackQuery",
-      {},
-    );
+    throw new Error("callback failed");
   });
   await using prompts = createPendingPrompts(bot, client);
-  await prompts.answer({
-    sessionId: "unknown",
-    callbackQueryId: "cb1",
-    callbackQueryData: "po:0",
-  });
-  await vi.waitFor(() =>
-    expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-      text: "An error occurred: expired_session",
+  await expect(
+    prompts.answer({
+      sessionId: "unknown",
+      callbackQueryId: "cb1",
+      callbackQueryData: "po:0",
     }),
-  );
-  expect(consola.warn).not.toHaveBeenCalled();
+  ).rejects.toThrow("callback failed");
 });
 
 // --- resolve tests ---
