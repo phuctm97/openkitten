@@ -26,11 +26,9 @@ export async function findOrCreateSession(
 
   if (existing) return { sessionId: existing.id, isNew: false };
 
-  const createResult = await opencodeClient.session.create(
-    {},
-    { throwOnError: true },
-  );
-  const sessionId = createResult.data.id;
+  const {
+    data: { id: sessionId },
+  } = await opencodeClient.session.create({}, { throwOnError: true });
 
   try {
     await database

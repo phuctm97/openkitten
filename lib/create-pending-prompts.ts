@@ -57,12 +57,10 @@ export function createPendingPrompts(
 
   async function invalidate(...sessionsArr: Session[]) {
     if (sessionsArr.length === 0) return;
-    const [questionResult, permissionResult] = await Promise.all([
+    const [{ data: questions }, { data: permissions }] = await Promise.all([
       opencodeClient.question.list({}, { throwOnError: true }),
       opencodeClient.permission.list({}, { throwOnError: true }),
     ]);
-    const questions = questionResult.data;
-    const permissions = permissionResult.data;
     const promises: Promise<void>[] = [];
     for (const session of sessionsArr) {
       const serverQuestionIds = new Set(
