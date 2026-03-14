@@ -1209,44 +1209,47 @@ test("resolve skips grammy edit when item has no message id", async () => {
   expect(prompts.sessionIds).toEqual([]);
 });
 
-test("resolve question result on permission item is no-op", async () => {
+test("resolve throws on question result for permission item", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.resolve({
-    sessionId: "sess-1",
-    kind: "question-replied",
-    requestId: "p1",
-  });
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
+  await expect(
+    prompts.resolve({
+      sessionId: "sess-1",
+      kind: "question-replied",
+      requestId: "p1",
+    }),
+  ).rejects.toThrow("question result on permission item");
 });
 
-test("resolve question-rejected on permission item is no-op", async () => {
+test("resolve throws on question-rejected for permission item", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.resolve({
-    sessionId: "sess-1",
-    kind: "question-rejected",
-    requestId: "p1",
-  });
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
+  await expect(
+    prompts.resolve({
+      sessionId: "sess-1",
+      kind: "question-rejected",
+      requestId: "p1",
+    }),
+  ).rejects.toThrow("question result on permission item");
 });
 
-test("resolve permission result on question item is no-op", async () => {
+test("resolve throws on permission result for question item", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.resolve({
-    sessionId: "sess-1",
-    kind: "permission-replied",
-    requestId: "q1",
-    reply: "once",
-  });
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
+  await expect(
+    prompts.resolve({
+      sessionId: "sess-1",
+      kind: "permission-replied",
+      requestId: "q1",
+      reply: "once",
+    }),
+  ).rejects.toThrow("permission result on question item");
 });
 
 test("resolve throws on grammy edit failure", async () => {

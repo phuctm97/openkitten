@@ -232,21 +232,24 @@ export function createPendingPrompts(
     const item = entry.items[itemIndex];
     invariant(item, "item not found at index");
     if (promptResult.kind === "question-replied") {
-      if (item.kind !== "question") return;
+      invariant(item.kind === "question", "question result on permission item");
       await grammyEdit(
         entry.chatId,
         item.messageId,
         grammyFormatQuestionReplied(item.selectedOptions),
       );
     } else if (promptResult.kind === "question-rejected") {
-      if (item.kind !== "question") return;
+      invariant(item.kind === "question", "question result on permission item");
       await grammyEdit(
         entry.chatId,
         item.messageId,
         grammyFormatQuestionRejected(),
       );
     } else {
-      if (item.kind !== "permission") return;
+      invariant(
+        item.kind === "permission",
+        "permission result on question item",
+      );
       await grammyEdit(
         entry.chatId,
         item.messageId,
