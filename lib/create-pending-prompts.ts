@@ -131,17 +131,18 @@ export function createPendingPrompts(
     await Promise.all(promises);
   }
 
-  async function flush() {
-    // Only one prompt at a time — if any item has a messageId, it's active
-    for (const entry of sessions.values()) {
-      if (entry.items.some((item) => item.messageId !== undefined)) return;
+  async function flush(...sessionIds: string[]) {
+    if (sessionIds.length === 0) return;
+    const promises: Promise<void>[] = [];
+    for (const sessionId of sessionIds) {
+      const entry = sessions.get(sessionId);
+      if (!entry) continue;
+      if (entry.items.some((item) => item.messageId !== undefined)) continue;
+      const item = entry.items[0];
+      invariant(item, "entry has no items");
+      promises.push(flushItem(entry, item));
     }
-    // Send the first item of the first session
-    const entry = sessions.values().next().value;
-    if (!entry) return;
-    const item = entry.items[0];
-    invariant(item, "entry has no items");
-    await flushItem(entry, item);
+    await Promise.all(promises);
   }
 
   async function answer({
