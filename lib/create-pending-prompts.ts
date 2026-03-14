@@ -196,7 +196,7 @@ export function createPendingPrompts(
         const select = Number.parseInt(selectStr, 10);
         if (Number.isNaN(select))
           throw new PendingPromptAnswerError("invalid_index");
-        await answerSelect(sessionId, entry, found.item, select);
+        await answerSelect(entry, found.item, select);
         await grammyAnswerCallback(callbackQueryId);
         return;
       }
@@ -430,7 +430,6 @@ export function createPendingPrompts(
   }
 
   async function answerSelect(
-    sessionId: string,
     entry: SessionEntry,
     item: PendingPromptQuestion,
     select: number,
@@ -457,20 +456,10 @@ export function createPendingPrompts(
         question,
         item.selectedOptions,
       );
-      await bot.api
-        .editMessageText(entry.chatId, item.messageId, promptText, {
-          parse_mode: "MarkdownV2",
-          reply_markup: kb,
-        })
-        .catch((error: unknown) => {
-          if (!grammyCheckGoneError(error)) {
-            consola.warn(
-              "pending prompt grammy select failed",
-              { sessionId, chatId: entry.chatId, messageId: item.messageId },
-              error,
-            );
-          }
-        });
+      await bot.api.editMessageText(entry.chatId, item.messageId, promptText, {
+        parse_mode: "MarkdownV2",
+        reply_markup: kb,
+      });
     }
   }
 

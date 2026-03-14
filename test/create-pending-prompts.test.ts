@@ -994,11 +994,10 @@ test("answer toasts invalid for p prefix on question item", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
-test("answer question select multi logs warning on grammy error", async () => {
+test("answer question select multi rethrows on grammy error", async () => {
   const { bot, client } = setup();
-  const error = new Error("edit failed");
   mockEditMessageText = vi.fn(async () => {
-    throw error;
+    throw new Error("edit failed");
   });
   mockQuestionList = vi.fn(async () => ({
     data: [multiSelectQuestionRequest],
@@ -1006,30 +1005,27 @@ test("answer question select multi logs warning on grammy error", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush("sess-1");
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0:0",
+  await expect(
+    prompts.answer({
+      sessionId: "sess-1",
+      callbackQueryId: "cb1",
+      callbackQueryData: "qt:0:0",
+    }),
+  ).rejects.toThrow("edit failed");
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred",
   });
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt grammy select failed",
-      { sessionId: "sess-1", chatId: 123, messageId: 100 },
-      error,
-    ),
-  );
 });
 
-test("answer question select multi silences grammy access error", async () => {
+test("answer question select multi dismisses on grammy gone error", async () => {
   const { bot, client } = setup();
-  const error = new GrammyError(
-    "Call to 'editMessageText' failed! (403: Forbidden)",
-    { ok: false, error_code: 403, description: "Forbidden" },
-    "editMessageText",
-    {},
-  );
   mockEditMessageText = vi.fn(async () => {
-    throw error;
+    throw new GrammyError(
+      "Call to 'editMessageText' failed! (403: Forbidden)",
+      { ok: false, error_code: 403, description: "Forbidden" },
+      "editMessageText",
+      {},
+    );
   });
   mockQuestionList = vi.fn(async () => ({
     data: [multiSelectQuestionRequest],
@@ -1042,13 +1038,7 @@ test("answer question select multi silences grammy access error", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "qt:0:0",
   });
-  await vi.waitFor(() =>
-    expect(consola.warn).not.toHaveBeenCalledWith(
-      "pending prompt grammy select failed",
-      expect.anything(),
-      expect.anything(),
-    ),
-  );
+  expect(prompts.sessionIds).toEqual([]);
 });
 
 test("answer throws when answer callback fails", async () => {
