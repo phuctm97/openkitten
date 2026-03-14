@@ -208,14 +208,18 @@ export function createPendingPrompts(
           callbackQueryId,
           formatCallbackError(error.code),
         );
-      } else {
-        consola.warn(
-          "pending prompt answer failed",
-          { sessionId, callbackQueryId },
-          error,
-        );
-        await grammyAnswerCallback(callbackQueryId, "An error occurred");
+        return;
       }
+      if (grammyCheckGoneError(error)) {
+        await dismiss(sessionId);
+        return;
+      }
+      await grammyAnswerCallback(callbackQueryId, "An error occurred");
+      if (opencodeCheckGoneError(error)) {
+        await dismiss(sessionId);
+        return;
+      }
+      throw error;
     }
   }
 
