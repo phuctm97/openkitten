@@ -406,6 +406,27 @@ test("flush throws when send message fails", async () => {
   await expect(prompts.flush("sess-1")).rejects.toThrow("send failed");
 });
 
+test("flush dismisses session on grammy gone error", async () => {
+  const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  mockSendMessage = vi.fn(async () => {
+    throw new GrammyError(
+      "Call to 'sendMessage' failed! (403: Forbidden: bot was blocked by the user)",
+      {
+        ok: false,
+        error_code: 403,
+        description: "Forbidden: bot was blocked by the user",
+      },
+      "sendMessage",
+      {},
+    );
+  });
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush("sess-1");
+  expect(prompts.sessionIds).toEqual([]);
+});
+
 test("flush includes thread id when present", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({

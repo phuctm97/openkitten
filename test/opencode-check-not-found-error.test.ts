@@ -1,9 +1,9 @@
 import { expect, test } from "vitest";
-import { opencodeCheckGoneError } from "~/lib/opencode-check-gone-error";
+import { opencodeCheckNotFoundError } from "~/lib/opencode-check-not-found-error";
 
 test("returns true for NotFoundError", () => {
   expect(
-    opencodeCheckGoneError({
+    opencodeCheckNotFoundError({
       name: "NotFoundError",
       data: { message: "not found" },
     }),
@@ -12,7 +12,7 @@ test("returns true for NotFoundError", () => {
 
 test("returns false for other named errors", () => {
   expect(
-    opencodeCheckGoneError({
+    opencodeCheckNotFoundError({
       name: "BadRequestError",
       data: {},
     }),
@@ -20,17 +20,17 @@ test("returns false for other named errors", () => {
 });
 
 test("returns false for plain Error", () => {
-  expect(opencodeCheckGoneError(new Error("not found"))).toBe(false);
+  expect(opencodeCheckNotFoundError(new Error("not found"))).toBe(false);
 });
 
 test("returns false for null", () => {
-  expect(opencodeCheckGoneError(null)).toBe(false);
+  expect(opencodeCheckNotFoundError(null)).toBe(false);
 });
 
 test("returns false for undefined", () => {
-  expect(opencodeCheckGoneError(undefined)).toBe(false);
+  expect(opencodeCheckNotFoundError(undefined)).toBe(false);
 });
 
 test("returns false for string", () => {
-  expect(opencodeCheckGoneError("NotFoundError")).toBe(false);
+  expect(opencodeCheckNotFoundError("NotFoundError")).toBe(false);
 });

@@ -16,7 +16,7 @@ import { grammyFormatQuestionPrompt } from "~/lib/grammy-format-question-prompt"
 import { grammyFormatQuestionRejected } from "~/lib/grammy-format-question-rejected";
 import { grammyFormatQuestionReplied } from "~/lib/grammy-format-question-replied";
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
-import { opencodeCheckGoneError } from "~/lib/opencode-check-gone-error";
+import { opencodeCheckNotFoundError } from "~/lib/opencode-check-not-found-error";
 import { PendingPromptAnswerError } from "~/lib/pending-prompt-answer-error";
 import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
 import type { PendingPromptResolveOptions } from "~/lib/pending-prompt-resolve-options";
@@ -141,7 +141,7 @@ export function createPendingPrompts(
       if (entry.items.some((item) => item.messageId)) continue;
       const item = entry.items[0];
       invariant(item, "entry has no items");
-      promises.push(flushItem(entry, item));
+      promises.push(flushItem(sessionId, entry, item));
     }
     const results = await Promise.allSettled(promises);
     const rejected = results.find(
@@ -329,50 +329,62 @@ export function createPendingPrompts(
       .text("Deny", `pr:${key}`);
   }
 
-  async function flushItem(entry: SessionEntry, item: PendingPromptItem) {
-    const sendOpts = {
-      ...(entry.threadId && { message_thread_id: entry.threadId }),
-    };
-    if (item.kind === "permission") {
-      const chunks = grammyFormatPermissionMessage(item.request);
-      await grammySendChunks({
-        bot,
-        chunks,
-        ignoreErrors: false,
-        chatId: entry.chatId,
-        threadId: entry.threadId,
-      });
-      const promptText = grammyFormatPermissionPrompt();
-      const kb = buildPermissionKeyboard(item.key);
-      const sent = await bot.api.sendMessage(entry.chatId, promptText, {
-        parse_mode: "MarkdownV2",
-        reply_markup: kb,
-        ...sendOpts,
-      });
-      item.messageId = sent.message_id;
-    } else {
-      const question = item.request.questions[item.currentIndex];
-      invariant(question, "question index out of bounds");
-      const chunks = grammyFormatQuestionMessage(question);
-      await grammySendChunks({
-        bot,
-        chunks,
-        ignoreErrors: false,
-        chatId: entry.chatId,
-        threadId: entry.threadId,
-      });
-      const promptText = grammyFormatQuestionPrompt(question);
-      const kb = buildQuestionKeyboard(
-        item.key,
-        question,
-        item.selectedOptions,
-      );
-      const sent = await bot.api.sendMessage(entry.chatId, promptText, {
-        parse_mode: "MarkdownV2",
-        reply_markup: kb,
-        ...sendOpts,
-      });
-      item.messageId = sent.message_id;
+  async function flushItem(
+    sessionId: string,
+    entry: SessionEntry,
+    item: PendingPromptItem,
+  ) {
+    try {
+      const sendOpts = {
+        ...(entry.threadId && { message_thread_id: entry.threadId }),
+      };
+      if (item.kind === "permission") {
+        const chunks = grammyFormatPermissionMessage(item.request);
+        await grammySendChunks({
+          bot,
+          chunks,
+          ignoreErrors: false,
+          chatId: entry.chatId,
+          threadId: entry.threadId,
+        });
+        const promptText = grammyFormatPermissionPrompt();
+        const kb = buildPermissionKeyboard(item.key);
+        const sent = await bot.api.sendMessage(entry.chatId, promptText, {
+          parse_mode: "MarkdownV2",
+          reply_markup: kb,
+          ...sendOpts,
+        });
+        item.messageId = sent.message_id;
+      } else {
+        const question = item.request.questions[item.currentIndex];
+        invariant(question, "question index out of bounds");
+        const chunks = grammyFormatQuestionMessage(question);
+        await grammySendChunks({
+          bot,
+          chunks,
+          ignoreErrors: false,
+          chatId: entry.chatId,
+          threadId: entry.threadId,
+        });
+        const promptText = grammyFormatQuestionPrompt(question);
+        const kb = buildQuestionKeyboard(
+          item.key,
+          question,
+          item.selectedOptions,
+        );
+        const sent = await bot.api.sendMessage(entry.chatId, promptText, {
+          parse_mode: "MarkdownV2",
+          reply_markup: kb,
+          ...sendOpts,
+        });
+        item.messageId = sent.message_id;
+      }
+    } catch (error) {
+      if (grammyCheckGoneError(error)) {
+        await dismiss(sessionId);
+        return;
+      }
+      throw error;
     }
   }
 
@@ -492,7 +504,7 @@ export function createPendingPrompts(
             });
       if (result.error) throw result.error;
     } catch (error) {
-      if (!opencodeCheckGoneError(error)) {
+      if (!opencodeCheckNotFoundError(error)) {
         consola.warn(
           "pending prompt opencode dismiss failed",
           { sessionId, kind: item.kind, requestID: item.request.id },
