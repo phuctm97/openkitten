@@ -308,26 +308,28 @@ test("handles undefined question and permission data", async () => {
   expect(prompts.sessionIds).toEqual([]);
 });
 
-test("throws when question list API fails", async () => {
+test.each([
+  {
+    api: "question list",
+    setup: () => {
+      mockQuestionList = vi.fn(async () => ({
+        error: new Error("api down"),
+      }));
+    },
+  },
+  {
+    api: "permission list",
+    setup: () => {
+      mockPermissionList = vi.fn(async () => ({
+        error: new Error("api down"),
+      }));
+    },
+  },
+])("throws when $api API fails", async ({ setup: setupMock }) => {
   const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({
-    error: new Error("question api down"),
-  }));
+  setupMock();
   await using prompts = createPendingPrompts(bot, client);
-  await expect(prompts.invalidate(session)).rejects.toThrow(
-    "question api down",
-  );
-});
-
-test("throws when permission list API fails", async () => {
-  const { bot, client } = setup();
-  mockPermissionList = vi.fn(async () => ({
-    error: new Error("permission api down"),
-  }));
-  await using prompts = createPendingPrompts(bot, client);
-  await expect(prompts.invalidate(session)).rejects.toThrow(
-    "permission api down",
-  );
+  await expect(prompts.invalidate(session)).rejects.toThrow("api down");
 });
 
 // --- flush tests ---
@@ -498,13 +500,29 @@ test("answer permission with reject calls opencode", async () => {
   });
 });
 
-test("answer permission shows error and rethrows on opencode failure", async () => {
+test.each([
+  {
+    desc: "opencode failure",
+    mockFn: () => {
+      mockPermissionReply = vi.fn(async () => {
+        throw new Error("failed");
+      });
+    },
+  },
+  {
+    desc: "opencode result error",
+    mockFn: () => {
+      mockPermissionReply = vi.fn(async () => ({
+        error: new Error("failed"),
+      }));
+    },
+  },
+])("answer permission shows error and rethrows on $desc", async ({
+  mockFn,
+}) => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  const error = new Error("reply failed");
-  mockPermissionReply = vi.fn(async () => {
-    throw error;
-  });
+  mockFn();
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await expect(
@@ -513,26 +531,7 @@ test("answer permission shows error and rethrows on opencode failure", async () 
       callbackQueryId: "cb1",
       callbackQueryData: "po:0",
     }),
-  ).rejects.toThrow("reply failed");
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred",
-  });
-});
-
-test("answer permission shows error and rethrows on opencode result error", async () => {
-  const { bot, client } = setup();
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  const error = new Error("result error");
-  mockPermissionReply = vi.fn(async () => ({ error }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await expect(
-    prompts.answer({
-      sessionId: "sess-1",
-      callbackQueryId: "cb1",
-      callbackQueryData: "po:0",
-    }),
-  ).rejects.toThrow("result error");
+  ).rejects.toThrow("failed");
   expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
     text: "An error occurred",
   });
@@ -554,13 +553,29 @@ test("answer question with reject calls opencode", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
-test("answer question reject shows error and rethrows on opencode failure", async () => {
+test.each([
+  {
+    desc: "opencode failure",
+    mockFn: () => {
+      mockQuestionReject = vi.fn(async () => {
+        throw new Error("failed");
+      });
+    },
+  },
+  {
+    desc: "opencode result error",
+    mockFn: () => {
+      mockQuestionReject = vi.fn(async () => ({
+        error: new Error("failed"),
+      }));
+    },
+  },
+])("answer question reject shows error and rethrows on $desc", async ({
+  mockFn,
+}) => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  const error = new Error("reject failed");
-  mockQuestionReject = vi.fn(async () => {
-    throw error;
-  });
+  mockFn();
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await expect(
@@ -569,26 +584,7 @@ test("answer question reject shows error and rethrows on opencode failure", asyn
       callbackQueryId: "cb1",
       callbackQueryData: "qr:0",
     }),
-  ).rejects.toThrow("reject failed");
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred",
-  });
-});
-
-test("answer question reject shows error and rethrows on opencode result error", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  const error = new Error("result error");
-  mockQuestionReject = vi.fn(async () => ({ error }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await expect(
-    prompts.answer({
-      sessionId: "sess-1",
-      callbackQueryId: "cb1",
-      callbackQueryData: "qr:0",
-    }),
-  ).rejects.toThrow("result error");
+  ).rejects.toThrow("failed");
   expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
     text: "An error occurred",
   });
@@ -765,13 +761,27 @@ test("advance edits current message with answered text", async () => {
   );
 });
 
-test("advance shows error and rethrows on opencode question reply failure", async () => {
+test.each([
+  {
+    desc: "opencode failure",
+    mockFn: () => {
+      mockQuestionReply = vi.fn(async () => {
+        throw new Error("failed");
+      });
+    },
+  },
+  {
+    desc: "opencode result error",
+    mockFn: () => {
+      mockQuestionReply = vi.fn(async () => ({
+        error: new Error("failed"),
+      }));
+    },
+  },
+])("advance shows error and rethrows on $desc", async ({ mockFn }) => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  const error = new Error("reply failed");
-  mockQuestionReply = vi.fn(async () => {
-    throw error;
-  });
+  mockFn();
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush("sess-1");
@@ -781,27 +791,7 @@ test("advance shows error and rethrows on opencode question reply failure", asyn
       callbackQueryId: "cb1",
       callbackQueryData: "qt:0:0",
     }),
-  ).rejects.toThrow("reply failed");
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred",
-  });
-});
-
-test("advance shows error and rethrows on opencode question reply result error", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  const error = new Error("result error");
-  mockQuestionReply = vi.fn(async () => ({ error }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.flush("sess-1");
-  await expect(
-    prompts.answer({
-      sessionId: "sess-1",
-      callbackQueryId: "cb1",
-      callbackQueryData: "qt:0:0",
-    }),
-  ).rejects.toThrow("result error");
+  ).rejects.toThrow("failed");
   expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
     text: "An error occurred",
   });
@@ -869,71 +859,65 @@ test("answer does not remove item from session", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
-test("answer toasts expired for unknown session", async () => {
-  const { bot, client } = setup();
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.answer({
-    sessionId: "unknown",
-    callbackQueryId: "cb1",
-    callbackQueryData: "po:0",
-  });
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: expired_session",
-  });
-  expect(mockPermissionReply).not.toHaveBeenCalled();
-  expect(mockQuestionReject).not.toHaveBeenCalled();
-});
-
-test("answer toasts expired for unknown key", async () => {
-  const { bot, client } = setup();
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "po:999",
-  });
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: expired_prompt",
-  });
-  expect(mockPermissionReply).not.toHaveBeenCalled();
-});
-
-test("answer toasts invalid for bad callback format", async () => {
+test.each([
+  {
+    desc: "expired for unknown session",
+    data: "po:0",
+    code: "expired_session",
+  },
+  { desc: "expired for unknown key", data: "po:999", code: "expired_prompt" },
+  {
+    desc: "invalid for bad callback format",
+    data: "invalid",
+    code: "invalid_format",
+  },
+  {
+    desc: "invalid for wrong prefix on permission",
+    data: "px:0",
+    code: "invalid_prefix",
+  },
+  {
+    desc: "invalid for q prefix on permission item",
+    data: "qt:0:0",
+    code: "invalid_prefix",
+  },
+])("answer toasts $desc (permission item)", async ({ data, code }) => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.answer({
-    sessionId: "sess-1",
+    sessionId: code === "expired_session" ? "unknown" : "sess-1",
     callbackQueryId: "cb1",
-    callbackQueryData: "invalid",
+    callbackQueryData: data,
   });
   expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: invalid_format",
+    text: `An error occurred: ${code}`,
   });
-  expect(mockPermissionReply).not.toHaveBeenCalled();
 });
 
-test("answer toasts invalid for wrong prefix on permission", async () => {
-  const { bot, client } = setup();
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "px:0",
-  });
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: invalid_prefix",
-  });
-  expect(mockPermissionReply).not.toHaveBeenCalled();
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
-});
-
-test("answer toasts invalid for out-of-bounds index", async () => {
+test.each([
+  {
+    desc: "invalid for out-of-bounds index",
+    data: "qt:0:99",
+    code: "invalid_option",
+  },
+  {
+    desc: "invalid for missing index part",
+    data: "qt:0",
+    code: "invalid_index",
+  },
+  {
+    desc: "invalid for non-numeric index",
+    data: "qt:0:abc",
+    code: "invalid_index",
+  },
+  {
+    desc: "invalid for p prefix on question item",
+    data: "po:0",
+    code: "unknown_prefix",
+  },
+])("answer toasts $desc (question item)", async ({ data, code }) => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
@@ -941,79 +925,11 @@ test("answer toasts invalid for out-of-bounds index", async () => {
   await prompts.answer({
     sessionId: "sess-1",
     callbackQueryId: "cb1",
-    callbackQueryData: "qt:0:99",
+    callbackQueryData: data,
   });
   expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: invalid_option",
+    text: `An error occurred: ${code}`,
   });
-  expect(mockQuestionReply).not.toHaveBeenCalled();
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
-});
-
-test("answer toasts invalid for missing index part", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0",
-  });
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: invalid_index",
-  });
-  expect(mockQuestionReply).not.toHaveBeenCalled();
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
-});
-
-test("answer toasts invalid for non-numeric index", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0:abc",
-  });
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: invalid_index",
-  });
-  expect(mockQuestionReply).not.toHaveBeenCalled();
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
-});
-
-test("answer toasts invalid for q prefix on permission item", async () => {
-  const { bot, client } = setup();
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0:0",
-  });
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: invalid_prefix",
-  });
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
-});
-
-test("answer toasts invalid for p prefix on question item", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "po:0",
-  });
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: unknown_prefix",
-  });
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
 test("answer question select multi rethrows on grammy error", async () => {

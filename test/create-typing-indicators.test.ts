@@ -213,43 +213,38 @@ test("handles undefined question and permission data", async () => {
   expect(mockSendChatAction).toHaveBeenCalledWith(123, "typing", {});
 });
 
-test("throws when session status API fails", async () => {
-  mockSessionStatus = vi.fn(async () => ({
-    error: new Error("status api down"),
-  }));
+test.each([
+  {
+    api: "session status",
+    setup: () => {
+      mockSessionStatus = vi.fn(async () => ({
+        error: new Error("api down"),
+      }));
+    },
+  },
+  {
+    api: "question list",
+    setup: () => {
+      mockQuestionList = vi.fn(async () => ({
+        error: new Error("api down"),
+      }));
+    },
+  },
+  {
+    api: "permission list",
+    setup: () => {
+      mockPermissionList = vi.fn(async () => ({
+        error: new Error("api down"),
+      }));
+    },
+  },
+])("throws when $api API fails", async ({ setup: setupMock }) => {
+  setupMock();
   using indicators = createTypingIndicators(
     createMockBot(),
     createMockOpencodeClient(),
   );
-  await expect(indicators.invalidate(session)).rejects.toThrow(
-    "status api down",
-  );
-});
-
-test("throws when question list API fails", async () => {
-  mockQuestionList = vi.fn(async () => ({
-    error: new Error("question api down"),
-  }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await expect(indicators.invalidate(session)).rejects.toThrow(
-    "question api down",
-  );
-});
-
-test("throws when permission list API fails", async () => {
-  mockPermissionList = vi.fn(async () => ({
-    error: new Error("permission api down"),
-  }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await expect(indicators.invalidate(session)).rejects.toThrow(
-    "permission api down",
-  );
+  await expect(indicators.invalidate(session)).rejects.toThrow("api down");
 });
 
 test("stop with no args is a no-op", () => {
