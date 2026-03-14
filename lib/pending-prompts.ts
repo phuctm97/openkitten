@@ -7,6 +7,6 @@ export interface PendingPrompts extends AsyncDisposable {
   invalidate(...sessions: Session[]): Promise<void>;
   flush(): Promise<void>;
   answer(options: PendingPromptAnswerOptions): Promise<void>;
-  resolve(sessionId: string, promptResult: PendingPromptResult): void;
+  resolve(sessionId: string, promptResult: PendingPromptResult): Promise<void>;
   dismiss(...sessionIds: string[]): Promise<void>;
 }

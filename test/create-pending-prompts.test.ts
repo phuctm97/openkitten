@@ -391,8 +391,8 @@ test("dismiss logs warning on question reject failure", async () => {
   await prompts.dismiss("sess-1");
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt opencode dismiss question failed",
-      { sessionId: "sess-1", requestID: "q1" },
+      "pending prompt opencode dismiss failed",
+      { sessionId: "sess-1", kind: "question", requestID: "q1" },
       error,
     ),
   );
@@ -410,8 +410,8 @@ test("dismiss logs warning on permission reply failure", async () => {
   await prompts.dismiss("sess-1");
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt opencode dismiss permission failed",
-      { sessionId: "sess-1", requestID: "p1" },
+      "pending prompt opencode dismiss failed",
+      { sessionId: "sess-1", kind: "permission", requestID: "p1" },
       error,
     ),
   );
@@ -433,7 +433,7 @@ test("dispose dismisses all tracked sessions", async () => {
   expect(mockQuestionReject).toHaveBeenCalledTimes(2);
 });
 
-test("dismiss logs warning on grammy edit non-access error", async () => {
+test("dismiss logs warning on grammy dismiss non-access error", async () => {
   const { bot, client } = setup();
   const error = new Error("network error");
   mockEditMessageText = vi.fn(async () => {
@@ -446,14 +446,14 @@ test("dismiss logs warning on grammy edit non-access error", async () => {
   await prompts.dismiss("sess-1");
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt grammy edit failed",
-      { sessionId: "sess-1", chatId: 123, messageId: 100 },
+      "pending prompt grammy dismiss failed",
+      { sessionId: "sess-1", chatId: 123, kind: "permission" },
       error,
     ),
   );
 });
 
-test("dismiss silences grammy edit access error", async () => {
+test("dismiss silences grammy dismiss access error", async () => {
   const { bot, client } = setup();
   const error = new GrammyError(
     "Call to 'editMessageText' failed! (403: Forbidden: bot was blocked by the user)",
@@ -473,13 +473,7 @@ test("dismiss silences grammy edit access error", async () => {
   await prompts.invalidate(session);
   await prompts.flush();
   await prompts.dismiss("sess-1");
-  await vi.waitFor(() =>
-    expect(consola.warn).not.toHaveBeenCalledWith(
-      "pending prompt grammy edit failed",
-      expect.anything(),
-      expect.anything(),
-    ),
-  );
+  expect(consola.warn).not.toHaveBeenCalled();
 });
 
 // --- flush tests ---
@@ -1165,7 +1159,7 @@ test("resolve permission-replied edits telegram and removes item", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "permission-replied",
     requestId: "p1",
     reply: "once",
@@ -1185,7 +1179,7 @@ test("resolve permission-replied with always", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "permission-replied",
     requestId: "p1",
     reply: "always",
@@ -1204,7 +1198,7 @@ test("resolve permission-replied with reject", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "permission-replied",
     requestId: "p1",
     reply: "reject",
@@ -1229,7 +1223,7 @@ test("resolve question-replied edits telegram and removes item", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "qt:0:1",
   });
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "question-replied",
     requestId: "q1",
   });
@@ -1248,7 +1242,7 @@ test("resolve question-rejected edits telegram and removes item", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "question-rejected",
     requestId: "q1",
   });
@@ -1264,7 +1258,7 @@ test("resolve question-rejected edits telegram and removes item", async () => {
 test("resolve is no-op for unknown session", async () => {
   const { bot, client } = setup();
   await using prompts = createPendingPrompts(bot, client);
-  prompts.resolve("unknown", {
+  await prompts.resolve("unknown", {
     kind: "permission-replied",
     requestId: "p1",
     reply: "once",
@@ -1277,7 +1271,7 @@ test("resolve is no-op for unknown request id", async () => {
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "permission-replied",
     requestId: "unknown",
     reply: "once",
@@ -1292,7 +1286,7 @@ test("resolve skips grammy edit when item has no message id", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   // No flush — no messageId
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "permission-replied",
     requestId: "p1",
     reply: "once",
@@ -1306,7 +1300,7 @@ test("resolve question result on permission item is no-op", async () => {
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "question-replied",
     requestId: "p1",
   });
@@ -1318,7 +1312,7 @@ test("resolve question-rejected on permission item is no-op", async () => {
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "question-rejected",
     requestId: "p1",
   });
@@ -1330,7 +1324,7 @@ test("resolve permission result on question item is no-op", async () => {
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "permission-replied",
     requestId: "q1",
     reply: "once",
@@ -1338,57 +1332,23 @@ test("resolve permission result on question item is no-op", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
-test("resolve logs warning on grammy edit non-access error", async () => {
+test("resolve throws on grammy edit failure", async () => {
   const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush();
   const error = new Error("edit failed");
   mockEditMessageText = vi.fn(async () => {
     throw error;
   });
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.flush();
-  prompts.resolve("sess-1", {
-    kind: "permission-replied",
-    requestId: "p1",
-    reply: "once",
-  });
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt grammy edit failed",
-      { sessionId: "sess-1", chatId: 123, messageId: 100 },
-      error,
-    ),
-  );
-});
-
-test("resolve silences grammy edit access error", async () => {
-  const { bot, client } = setup();
-  const error = new GrammyError(
-    "Call to 'editMessageText' failed! (403: Forbidden)",
-    { ok: false, error_code: 403, description: "Forbidden" },
-    "editMessageText",
-    {},
-  );
-  mockEditMessageText = vi.fn(async () => {
-    throw error;
-  });
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.flush();
-  prompts.resolve("sess-1", {
-    kind: "permission-replied",
-    requestId: "p1",
-    reply: "once",
-  });
-  await vi.waitFor(() =>
-    expect(consola.warn).not.toHaveBeenCalledWith(
-      "pending prompt grammy edit failed",
-      expect.anything(),
-      expect.anything(),
-    ),
-  );
+  await expect(
+    prompts.resolve("sess-1", {
+      kind: "permission-replied",
+      requestId: "p1",
+      reply: "once",
+    }),
+  ).rejects.toThrow("edit failed");
 });
 
 test("resolve keeps session when other items remain", async () => {
@@ -1397,7 +1357,7 @@ test("resolve keeps session when other items remain", async () => {
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  prompts.resolve("sess-1", {
+  await prompts.resolve("sess-1", {
     kind: "question-rejected",
     requestId: "q1",
   });

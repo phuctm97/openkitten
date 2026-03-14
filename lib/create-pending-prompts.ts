@@ -58,48 +58,32 @@ export function createPendingPrompts(
   }
 
   async function grammyEdit(
-    sessionId: string,
     chatId: number,
     messageId: number | undefined,
     text: string,
   ) {
     if (messageId === undefined) return;
-    await bot.api
-      .editMessageText(chatId, messageId, text, {
-        reply_markup: { inline_keyboard: [] },
-      })
-      .catch((error: unknown) => {
-        if (!grammyCheckAccessError(error)) {
-          consola.warn(
-            "pending prompt grammy edit failed",
-            { sessionId, chatId, messageId },
-            error,
-          );
-        }
-      });
+    await bot.api.editMessageText(chatId, messageId, text, {
+      reply_markup: { inline_keyboard: [] },
+    });
   }
 
   async function opencodeDismiss(sessionId: string, item: PendingPromptItem) {
-    if (item.kind === "question") {
-      await opencodeClient.question
-        .reject({ requestID: item.request.id })
-        .catch((error: unknown) => {
-          consola.warn(
-            "pending prompt opencode dismiss question failed",
-            { sessionId, requestID: item.request.id },
-            error,
-          );
+    try {
+      if (item.kind === "question") {
+        await opencodeClient.question.reject({ requestID: item.request.id });
+      } else {
+        await opencodeClient.permission.reply({
+          requestID: item.request.id,
+          reply: "reject",
         });
-    } else {
-      await opencodeClient.permission
-        .reply({ requestID: item.request.id, reply: "reject" })
-        .catch((error: unknown) => {
-          consola.warn(
-            "pending prompt opencode dismiss permission failed",
-            { sessionId, requestID: item.request.id },
-            error,
-          );
-        });
+      }
+    } catch (error) {
+      consola.warn(
+        "pending prompt opencode dismiss failed",
+        { sessionId, kind: item.kind, requestID: item.request.id },
+        error,
+      );
     }
   }
 
@@ -182,7 +166,6 @@ export function createPendingPrompts(
   }
 
   async function advanceOrSubmit(
-    sessionId: string,
     entry: SessionEntry,
     item: PendingPromptQuestion,
   ) {
@@ -191,7 +174,6 @@ export function createPendingPrompts(
     const nextIndex = item.currentIndex + 1;
     if (nextIndex < item.request.questions.length) {
       await grammyEdit(
-        sessionId,
         entry.chatId,
         item.messageId,
         grammyFormatQuestionReplied(currentAnswer),
@@ -209,6 +191,28 @@ export function createPendingPrompts(
     }
   }
 
+  async function grammyDismiss(
+    sessionId: string,
+    chatId: number,
+    item: PendingPromptItem,
+  ) {
+    try {
+      const text =
+        item.kind === "question"
+          ? grammyFormatQuestionRejected()
+          : grammyFormatPermissionReplied("reject");
+      await grammyEdit(chatId, item.messageId, text);
+    } catch (error) {
+      if (!grammyCheckAccessError(error)) {
+        consola.warn(
+          "pending prompt grammy dismiss failed",
+          { sessionId, chatId, kind: item.kind },
+          error,
+        );
+      }
+    }
+  }
+
   async function dismiss(...sessionIds: string[]) {
     if (sessionIds.length === 0) return;
     const promises: Promise<void>[] = [];
@@ -217,13 +221,7 @@ export function createPendingPrompts(
       if (!entry) continue;
       for (const item of entry.items) {
         promises.push(opencodeDismiss(sessionId, item));
-        const text =
-          item.kind === "question"
-            ? grammyFormatQuestionRejected()
-            : grammyFormatPermissionReplied("reject");
-        promises.push(
-          grammyEdit(sessionId, entry.chatId, item.messageId, text),
-        );
+        promises.push(grammyDismiss(sessionId, entry.chatId, item));
       }
       sessions.delete(sessionId);
     }
@@ -261,7 +259,7 @@ export function createPendingPrompts(
             item.kind === "question"
               ? grammyFormatQuestionRejected()
               : grammyFormatPermissionReplied("reject");
-          promises.push(grammyEdit(session.id, chatId, item.messageId, text));
+          promises.push(grammyEdit(chatId, item.messageId, text));
         }
       }
       // Keep items still on server
@@ -393,7 +391,7 @@ export function createPendingPrompts(
       item.selectedOptions = [option.label];
     }
     if (!question.multiple) {
-      await advanceOrSubmit(sessionId, entry, item);
+      await advanceOrSubmit(entry, item);
     } else if (item.messageId !== undefined) {
       const promptText = grammyFormatQuestionPrompt(question);
       const kb = buildQuestionKeyboard(
@@ -476,7 +474,7 @@ export function createPendingPrompts(
     }
 
     if (prefix === "qc") {
-      await advanceOrSubmit(sessionId, entry, found.item);
+      await advanceOrSubmit(entry, found.item);
       await grammyAnswerCallback(callbackQueryId);
       return;
     }
@@ -508,7 +506,7 @@ export function createPendingPrompts(
     );
   }
 
-  function resolve(sessionId: string, promptResult: PendingPromptResult) {
+  async function resolve(sessionId: string, promptResult: PendingPromptResult) {
     const entry = sessions.get(sessionId);
     if (!entry) return;
     const itemIndex = entry.items.findIndex(
@@ -519,24 +517,21 @@ export function createPendingPrompts(
     invariant(item, "item not found at index");
     if (promptResult.kind === "question-replied") {
       if (item.kind !== "question") return;
-      grammyEdit(
-        sessionId,
+      await grammyEdit(
         entry.chatId,
         item.messageId,
         grammyFormatQuestionReplied(item.selectedOptions),
       );
     } else if (promptResult.kind === "question-rejected") {
       if (item.kind !== "question") return;
-      grammyEdit(
-        sessionId,
+      await grammyEdit(
         entry.chatId,
         item.messageId,
         grammyFormatQuestionRejected(),
       );
     } else {
       if (item.kind !== "permission") return;
-      grammyEdit(
-        sessionId,
+      await grammyEdit(
         entry.chatId,
         item.messageId,
         grammyFormatPermissionReplied(promptResult.reply),
