@@ -596,27 +596,21 @@ test("answer permission with reject calls opencode", async () => {
   });
 });
 
-test("answer permission logs warning on opencode failure", async () => {
+test("answer permission throws on opencode failure", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  const error = new Error("reply failed");
   mockPermissionReply = vi.fn(async () => {
-    throw error;
+    throw new Error("reply failed");
   });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "po:0",
-  });
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt opencode permission reply failed",
-      { sessionId: "sess-1", requestID: "p1" },
-      error,
-    ),
-  );
+  await expect(
+    prompts.answer({
+      sessionId: "sess-1",
+      callbackQueryId: "cb1",
+      callbackQueryData: "po:0",
+    }),
+  ).rejects.toThrow("reply failed");
 });
 
 // --- answer question reject tests ---
@@ -637,27 +631,21 @@ test("answer question with reject calls opencode", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
-test("answer question reject logs warning on opencode failure", async () => {
+test("answer question reject throws on opencode failure", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  const error = new Error("reject failed");
   mockQuestionReject = vi.fn(async () => {
-    throw error;
+    throw new Error("reject failed");
   });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qr:0",
-  });
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt opencode question reject failed",
-      { sessionId: "sess-1", requestID: "q1" },
-      error,
-    ),
-  );
+  await expect(
+    prompts.answer({
+      sessionId: "sess-1",
+      callbackQueryId: "cb1",
+      callbackQueryData: "qr:0",
+    }),
+  ).rejects.toThrow("reject failed");
 });
 
 // --- answer question select tests ---
@@ -894,28 +882,22 @@ test("advance edits current message with answered text", async () => {
   );
 });
 
-test("advance logs warning on opencode question reply failure", async () => {
+test("advance throws on opencode question reply failure", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  const error = new Error("reply failed");
   mockQuestionReply = vi.fn(async () => {
-    throw error;
+    throw new Error("reply failed");
   });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush();
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0:0",
-  });
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt opencode question reply failed",
-      { sessionId: "sess-1", requestID: "q1" },
-      error,
-    ),
-  );
+  await expect(
+    prompts.answer({
+      sessionId: "sess-1",
+      callbackQueryId: "cb1",
+      callbackQueryData: "qt:0:0",
+    }),
+  ).rejects.toThrow("reply failed");
 });
 
 // --- answer edge cases ---

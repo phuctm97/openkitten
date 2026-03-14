@@ -190,7 +190,7 @@ export function createPendingPrompts(
     const newAnswers = [...item.currentAnswers, currentAnswer];
     const nextIndex = item.currentIndex + 1;
     if (nextIndex < item.request.questions.length) {
-      grammyEdit(
+      await grammyEdit(
         sessionId,
         entry.chatId,
         item.messageId,
@@ -202,15 +202,10 @@ export function createPendingPrompts(
       item.messageId = undefined;
       await flushItem(entry, item);
     } else {
-      opencodeClient.question
-        .reply({ requestID: item.request.id, answers: newAnswers })
-        .catch((error: unknown) => {
-          consola.warn(
-            "pending prompt opencode question reply failed",
-            { sessionId, requestID: item.request.id },
-            error,
-          );
-        });
+      await opencodeClient.question.reply({
+        requestID: item.request.id,
+        answers: newAnswers,
+      });
     }
   }
 
@@ -335,31 +330,19 @@ export function createPendingPrompts(
     return { item, itemIndex };
   }
 
-  function answerReply(
-    sessionId: string,
+  async function answerReply(
     item: PendingPromptItem,
     reply: "once" | "always" | "reject",
   ) {
     if (item.kind === "permission") {
-      opencodeClient.permission
-        .reply({ requestID: item.request.id, reply })
-        .catch((error: unknown) => {
-          consola.warn(
-            "pending prompt opencode permission reply failed",
-            { sessionId, requestID: item.request.id },
-            error,
-          );
-        });
+      await opencodeClient.permission.reply({
+        requestID: item.request.id,
+        reply,
+      });
     } else {
-      opencodeClient.question
-        .reject({ requestID: item.request.id })
-        .catch((error: unknown) => {
-          consola.warn(
-            "pending prompt opencode question reject failed",
-            { sessionId, requestID: item.request.id },
-            error,
-          );
-        });
+      await opencodeClient.question.reject({
+        requestID: item.request.id,
+      });
     }
   }
 
@@ -367,8 +350,8 @@ export function createPendingPrompts(
     return `An error occurred: ${code}`;
   }
 
-  function grammyAnswerCallback(callbackQueryId: string, text?: string) {
-    bot.api
+  async function grammyAnswerCallback(callbackQueryId: string, text?: string) {
+    await bot.api
       .answerCallbackQuery(callbackQueryId, text ? { text } : undefined)
       .catch((error: unknown) => {
         if (!grammyCheckAccessError(error)) {
@@ -416,7 +399,7 @@ export function createPendingPrompts(
         question,
         item.selectedOptions,
       );
-      bot.api
+      await bot.api
         .editMessageText(entry.chatId, item.messageId, promptText, {
           parse_mode: "MarkdownV2",
           reply_markup: kb,
@@ -431,7 +414,7 @@ export function createPendingPrompts(
           }
         });
     }
-    grammyAnswerCallback(callbackQueryId);
+    await grammyAnswerCallback(callbackQueryId);
   }
 
   async function answer({
@@ -441,7 +424,7 @@ export function createPendingPrompts(
   }: PendingPromptAnswerOptions) {
     const entry = sessions.get(sessionId);
     if (!entry) {
-      grammyAnswerCallback(
+      await grammyAnswerCallback(
         callbackQueryId,
         formatCallbackError("expired_session"),
       );
@@ -451,7 +434,7 @@ export function createPendingPrompts(
     const prefix = parts[0];
     const key = parts[1];
     if (!prefix || !key) {
-      grammyAnswerCallback(
+      await grammyAnswerCallback(
         callbackQueryId,
         formatCallbackError("invalid_format"),
       );
@@ -460,7 +443,7 @@ export function createPendingPrompts(
 
     const found = findItemByKey(entry, key);
     if (!found) {
-      grammyAnswerCallback(
+      await grammyAnswerCallback(
         callbackQueryId,
         formatCallbackError("expired_prompt"),
       );
@@ -470,7 +453,7 @@ export function createPendingPrompts(
     // Permission callbacks: po:{key}, pa:{key}, pr:{key}
     if (found.item.kind === "permission") {
       if (prefix !== "po" && prefix !== "pa" && prefix !== "pr") {
-        grammyAnswerCallback(
+        await grammyAnswerCallback(
           callbackQueryId,
           formatCallbackError("invalid_prefix"),
         );
@@ -478,28 +461,28 @@ export function createPendingPrompts(
       }
       const reply =
         prefix === "po" ? "once" : prefix === "pa" ? "always" : "reject";
-      answerReply(sessionId, found.item, reply);
-      grammyAnswerCallback(callbackQueryId);
+      await answerReply(found.item, reply);
+      await grammyAnswerCallback(callbackQueryId);
       return;
     }
 
     // Question callbacks: qt:{key}:{index}, qc:{key}, qr:{key}
     if (prefix === "qr") {
-      answerReply(sessionId, found.item, "reject");
-      grammyAnswerCallback(callbackQueryId);
+      await answerReply(found.item, "reject");
+      await grammyAnswerCallback(callbackQueryId);
       return;
     }
 
     if (prefix === "qc") {
       await advanceOrSubmit(sessionId, entry, found.item);
-      grammyAnswerCallback(callbackQueryId);
+      await grammyAnswerCallback(callbackQueryId);
       return;
     }
 
     if (prefix === "qt") {
       const selectStr = parts[2];
       if (!selectStr) {
-        grammyAnswerCallback(
+        await grammyAnswerCallback(
           callbackQueryId,
           formatCallbackError("invalid_index"),
         );
@@ -507,7 +490,7 @@ export function createPendingPrompts(
       }
       const select = Number.parseInt(selectStr, 10);
       if (Number.isNaN(select)) {
-        grammyAnswerCallback(
+        await grammyAnswerCallback(
           callbackQueryId,
           formatCallbackError("invalid_index"),
         );
@@ -517,7 +500,7 @@ export function createPendingPrompts(
       return;
     }
 
-    grammyAnswerCallback(
+    await grammyAnswerCallback(
       callbackQueryId,
       formatCallbackError("unknown_prefix"),
     );
