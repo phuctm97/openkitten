@@ -93,6 +93,7 @@ export async function opencodeServe(): Promise<OpencodeServer> {
     {
       stdout: "pipe",
       stderr: "ignore",
+      detached: true,
       env: {
         ...Bun.env,
         OPENCODE_SERVER_USERNAME: username,

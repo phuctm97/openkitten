@@ -25,11 +25,11 @@ interface MockSpawnOptions {
   readonly onExitError?: Error;
 }
 
-let capturedEnv: Record<string, string> | undefined;
+let capturedOptions: Record<string, unknown> | undefined;
 
 function mockSpawn(options?: MockSpawnOptions) {
   const chunks = options?.chunks ?? ["listening on :3000\n"];
-  capturedEnv = undefined;
+  capturedOptions = undefined;
   const kill = vi.fn();
   const stdout = new ReadableStream<Uint8Array>({
     start(controller) {
@@ -46,7 +46,7 @@ function mockSpawn(options?: MockSpawnOptions) {
       readonly onExit?: OnExit;
     },
   ) => {
-    capturedEnv = opts.env;
+    capturedOptions = opts;
     const proc = {
       kill,
       stdout,
@@ -92,10 +92,18 @@ test("logs ready", async () => {
 test("passes credentials to opencode server", async () => {
   mockSpawn();
   await opencodeServe();
-  expect(capturedEnv).toMatchObject({
-    OPENCODE_SERVER_USERNAME: pkg.name,
-    OPENCODE_SERVER_PASSWORD: expect.stringMatching(/^[\w-]{43}$/),
+  expect(capturedOptions).toMatchObject({
+    env: {
+      OPENCODE_SERVER_USERNAME: pkg.name,
+      OPENCODE_SERVER_PASSWORD: expect.stringMatching(/^[\w-]{43}$/),
+    },
   });
+});
+
+test("spawns detached from parent process group", async () => {
+  mockSpawn();
+  await opencodeServe();
+  expect(capturedOptions).toMatchObject({ detached: true });
 });
 
 test("is async disposable", async () => {
