@@ -1,3 +1,4 @@
+import { consola } from "consola";
 import type { Shutdown } from "~/lib/shutdown";
 import { shutdownEvents } from "~/lib/shutdown-events";
 
@@ -10,6 +11,7 @@ export function shutdownListen(): Shutdown {
   }
 
   function onSignal() {
+    consola.info("Shutdown signal received");
     cleanup();
     resolve();
   }

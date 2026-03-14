@@ -88,6 +88,7 @@ const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 export async function opencodeServe(): Promise<OpencodeServer> {
   const username = pkg.name;
   const password = randomBytes(32).toString("base64url");
+  consola.start("OpenCode server is starting");
   const proc = Bun.spawn(
     [bin, "serve", "--hostname", "127.0.0.1", "--port", "0"],
     {
@@ -100,11 +101,11 @@ export async function opencodeServe(): Promise<OpencodeServer> {
         OPENCODE_SERVER_PASSWORD: password,
       },
       onExit(_proc, exitCode, signalCode, error) {
-        consola.debug("opencode server is terminated", {
-          exitCode,
+        consola.debug("OpenCode server stopped", {
           signalCode,
+          exitCode,
+          osError: error,
         });
-        if (error) consola.fatal("opencode server exited abnormally", error);
       },
     },
   );
@@ -133,7 +134,7 @@ export async function opencodeServe(): Promise<OpencodeServer> {
     () => {},
   );
 
-  consola.ready("opencode server is ready");
+  consola.ready("OpenCode server is ready");
 
   return {
     exited,

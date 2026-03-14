@@ -1,3 +1,4 @@
+import { consola } from "consola";
 import { convert } from "telegram-markdown-v2";
 import { assert, expect, test, vi } from "vitest";
 import { grammyFormatMessage } from "~/lib/grammy-format-message";
@@ -131,6 +132,10 @@ test("falls back to plain text when convert throws", () => {
   });
   const result = grammyFormatMessage("Hello world");
   expect(result).toEqual([{ text: "Hello world" }]);
+  expect(consola.debug).toHaveBeenCalledWith(
+    "Failed to convert raw text to MarkdownV2",
+    { error: expect.any(Error) },
+  );
 });
 
 test("falls back to plain text when sub-chunk still overflows", () => {

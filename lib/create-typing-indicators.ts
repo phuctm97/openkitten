@@ -59,11 +59,12 @@ export function createTypingIndicators(
           if (grammyCheckGoneError(error)) {
             stop(session.id);
           } else {
-            consola.warn(
-              "typing indicator failed",
-              { sessionId: session.id, chatId, threadId },
+            consola.warn("Failed to send typing indicator to Telegram", {
+              sessionId: session.id,
+              chatId,
+              threadId,
               error,
-            );
+            });
           }
         });
     timers.set(session.id, undefined);

@@ -1,3 +1,4 @@
+import { consola } from "consola";
 import { inArray } from "drizzle-orm";
 import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
@@ -39,5 +40,9 @@ export async function invalidateSessions(
       ),
     );
   }
+  consola.debug("Sessions invalidated", {
+    reachable: reachable.length,
+    unreachable: unreachable.length,
+  });
   return { reachable, unreachable };
 }

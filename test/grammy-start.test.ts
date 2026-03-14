@@ -44,9 +44,10 @@ beforeEach(() => {
   setupMock();
 });
 
-test("logs ready", async () => {
+test("logs start and ready", async () => {
   await using _grammy = await grammyStart(createMockBot());
-  expect(consola.ready).toHaveBeenCalledWith("grammy is ready");
+  expect(consola.start).toHaveBeenCalledWith("grammY is starting");
+  expect(consola.ready).toHaveBeenCalledWith("grammY is ready");
 });
 
 test("is async disposable", async () => {
@@ -54,7 +55,7 @@ test("is async disposable", async () => {
     await using _grammy = await grammyStart(createMockBot());
   }
   expect(mockStop).toHaveBeenCalledOnce();
-  expect(consola.debug).toHaveBeenCalledWith("grammy is stopped");
+  expect(consola.debug).toHaveBeenCalledWith("grammY stopped");
 });
 
 test("propagates startup error", async () => {
@@ -83,9 +84,8 @@ test("catch handler logs error with chat and thread", async () => {
     error,
   });
   expect(consola.fatal).toHaveBeenCalledWith(
-    "grammy catch error",
-    { chatId: 123, threadId: 456 },
-    error,
+    "grammY caught an unhandled error",
+    { chatId: 123, threadId: 456, error },
   );
 });
 
@@ -100,9 +100,8 @@ test("catch handler handles missing chat and msg", async () => {
   const error = new Error("unexpected");
   handler({ ctx: {}, error });
   expect(consola.fatal).toHaveBeenCalledWith(
-    "grammy catch error",
-    { chatId: undefined, threadId: undefined },
-    error,
+    "grammY caught an unhandled error",
+    { chatId: undefined, threadId: undefined, error },
   );
 });
 

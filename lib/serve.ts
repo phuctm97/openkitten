@@ -1,4 +1,5 @@
 import { defineCommand } from "citty";
+import { consola } from "consola";
 import { Bot } from "grammy";
 import { createDatabase } from "~/lib/create-database";
 import { createPendingPrompts } from "~/lib/create-pending-prompts";
@@ -12,6 +13,7 @@ import { shutdownListen } from "~/lib/shutdown-listen";
 export const serve = defineCommand({
   meta: { description: "Start the OpenKitten server." },
   run: async () => {
+    consola.start("OpenKitten is starting");
     using shutdown = shutdownListen();
     const token = Bun.env["TELEGRAM_BOT_TOKEN"];
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
@@ -43,11 +45,13 @@ export const serve = defineCommand({
       () => {},
     );
     await using grammy = await grammyStart(bot);
+    consola.ready("OpenKitten is ready");
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,
       opencodeEventStream.ended,
       grammy.stopped,
     ]);
+    consola.info("OpenKitten is shutting down");
   },
 });

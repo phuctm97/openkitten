@@ -8,10 +8,15 @@ export async function grammyStart(bot: Bot): Promise<Grammy> {
   bot.catch(({ ctx, error }) => {
     const chatId = ctx.chat?.id;
     const threadId = ctx.msg?.message_thread_id || undefined;
-    consola.fatal("grammy catch error", { chatId, threadId }, error);
+    consola.fatal("grammY caught an unhandled error", {
+      chatId,
+      threadId,
+      error,
+    });
   });
 
   const { resolve, promise: started } = Promise.withResolvers<void>();
+  consola.start("grammY is starting");
   const polling = bot.start({ onStart: () => resolve() });
 
   // bot.start() rejects if polling fails before onStart fires.
@@ -20,6 +25,7 @@ export async function grammyStart(bot: Bot): Promise<Grammy> {
   // Only reject if polling stops on its own, not when we stop it.
   let disposed = false;
   const stopped = polling.then(() => {
+    consola.debug("grammY stopped");
     if (disposed) return;
     throw new Error("grammy stopped unexpectedly");
   });
@@ -31,14 +37,13 @@ export async function grammyStart(bot: Bot): Promise<Grammy> {
     () => {},
   );
 
-  consola.ready("grammy is ready");
+  consola.ready("grammY is ready");
 
   return {
     stopped,
     [Symbol.asyncDispose]: async () => {
       disposed = true;
       await bot.stop();
-      consola.debug("grammy is stopped");
       resolve();
       await Promise.all([started, stopped]);
     },

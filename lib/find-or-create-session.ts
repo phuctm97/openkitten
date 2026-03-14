@@ -3,7 +3,6 @@ import { consola } from "consola";
 import { and, eq } from "drizzle-orm";
 import type { Database } from "~/lib/database";
 import * as schema from "~/lib/schema";
-import pkg from "~/package.json" with { type: "json" };
 
 interface FindOrCreateSessionResult {
   readonly sessionId: string;
@@ -34,7 +33,7 @@ export async function findOrCreateSession(
     await database
       .insert(schema.session)
       .values({ id: sessionId, chatId, threadId: threadId || 0 });
-    consola.info(`${pkg.name} created a new session`);
+    consola.success("New session created", { chatId, threadId });
     return { sessionId, isNew: true };
   } catch (insertError) {
     // Race condition: another concurrent call created the session first.

@@ -21,10 +21,11 @@ export async function grammySendChunks({
             ...sendOpts,
           });
         } catch (error) {
-          consola.debug(
-            "failed to send MarkdownV2 message, falling back to plain text",
-            { error, markdown, text },
-          );
+          consola.debug("Failed to send MarkdownV2, falling back to raw text", {
+            error,
+            markdown,
+            text,
+          });
           await bot.api.sendMessage(chatId, text, sendOpts);
         }
       } else {
@@ -33,7 +34,7 @@ export async function grammySendChunks({
     }
   } catch (error) {
     if (ignoreErrors) {
-      consola.error(error);
+      consola.error("Failed to send message to Telegram", { chatId, error });
     } else {
       throw error;
     }

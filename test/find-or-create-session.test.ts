@@ -3,7 +3,6 @@ import { expect, test, vi } from "vitest";
 import { createDatabase } from "~/lib/create-database";
 import { findOrCreateSession } from "~/lib/find-or-create-session";
 import * as schema from "~/lib/schema";
-import pkg from "~/package.json" with { type: "json" };
 
 function mockOpencodeClient() {
   return {
@@ -28,9 +27,10 @@ test("creates new session when none exists", async () => {
 
   expect(result).toEqual({ sessionId: "s1", isNew: true });
   expect(opencodeClient.session.create).toHaveBeenCalledOnce();
-  expect(consola.info).toHaveBeenCalledWith(
-    `${pkg.name} created a new session`,
-  );
+  expect(consola.success).toHaveBeenCalledWith("New session created", {
+    chatId: 123,
+    threadId: undefined,
+  });
 });
 
 test("returns existing session", async () => {

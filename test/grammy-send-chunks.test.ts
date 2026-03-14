@@ -43,7 +43,7 @@ test("falls back to plain text when MarkdownV2 fails", async () => {
     .mockResolvedValueOnce(undefined);
   await send([{ text: "hello", markdown: "*hello*" }]);
   expect(consola.debug).toHaveBeenCalledWith(
-    "failed to send MarkdownV2 message, falling back to plain text",
+    "Failed to send MarkdownV2, falling back to raw text",
     { error: expect.any(Error), markdown: "*hello*", text: "hello" },
   );
   expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "hello", {});
@@ -69,7 +69,10 @@ test("sends multiple chunks in order", async () => {
 test("ignoreErrors logs and stops on error", async () => {
   bot.api.sendMessage.mockRejectedValueOnce(new Error("network error"));
   await send([{ text: "fail" }, { text: "skipped" }], { ignoreErrors: true });
-  expect(consola.error).toHaveBeenCalledWith(expect.any(Error));
+  expect(consola.error).toHaveBeenCalledWith(
+    "Failed to send message to Telegram",
+    { chatId: 123, error: expect.any(Error) },
+  );
   expect(bot.api.sendMessage).toHaveBeenCalledTimes(1);
 });
 
@@ -83,5 +86,8 @@ test("ignoreErrors catches fallback failure too", async () => {
     .mockRejectedValueOnce(new Error("markdown error"))
     .mockRejectedValueOnce(new Error("fallback error"));
   await send([{ text: "hello", markdown: "*hello*" }], { ignoreErrors: true });
-  expect(consola.error).toHaveBeenCalledWith(expect.any(Error));
+  expect(consola.error).toHaveBeenCalledWith(
+    "Failed to send message to Telegram",
+    { chatId: 123, error: expect.any(Error) },
+  );
 });

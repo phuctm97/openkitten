@@ -1,3 +1,4 @@
+import { consola } from "consola";
 import { beforeEach, expect, test, vi } from "vitest";
 import { shutdownEvents } from "~/lib/shutdown-events";
 import { shutdownListen } from "~/lib/shutdown-listen";
@@ -30,6 +31,7 @@ for (const event of shutdownEvents) {
     using shutdown = shutdownListen();
     handlers.get(event)?.();
     await expect(shutdown.signaled).resolves.toBeUndefined();
+    expect(consola.info).toHaveBeenCalledWith("Shutdown signal received");
   });
 }
 

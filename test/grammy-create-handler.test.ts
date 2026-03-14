@@ -58,11 +58,11 @@ test("logs error with chat context", async () => {
   handler(mockCtx(1));
   await promise;
 
-  expect(consola.error).toHaveBeenCalledWith(
-    "grammy handle error",
-    { chatId: 1, threadId: undefined },
+  expect(consola.error).toHaveBeenCalledWith("grammY failed to process event", {
+    chatId: 1,
+    threadId: undefined,
     error,
-  );
+  });
 });
 
 test("passes undefined threadId when msg has none", async () => {

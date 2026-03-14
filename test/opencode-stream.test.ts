@@ -10,6 +10,31 @@ function mockSleep() {
   return vi.spyOn(Bun, "sleep").mockResolvedValue(undefined as never);
 }
 
+test("logs stop after loop exits", async () => {
+  const onEvent = vi.fn(() => {
+    dispose();
+  });
+  const opencodeClient = {
+    event: {
+      subscribe: vi.fn(async () => ({
+        stream: (async function* () {
+          yield { type: "a" };
+        })(),
+      })),
+    },
+  };
+
+  const subscription = opencodeStream(
+    opencodeClient as never,
+    vi.fn() as never,
+    onEvent as never,
+  );
+  const dispose = () => subscription[Symbol.asyncDispose]();
+
+  await subscription.ended;
+  expect(consola.debug).toHaveBeenCalledWith("OpenCode event stream stopped");
+});
+
 test("calls onEvent for each event", async () => {
   const events = [{ type: "a" }, { type: "b" }];
   const received: unknown[] = [];
@@ -230,11 +255,11 @@ test("logs connecting and connected", async () => {
   const dispose = () => subscription[Symbol.asyncDispose]();
 
   await subscription.ended;
-  expect(consola.debug).toHaveBeenCalledWith(
-    "opencode event stream is connecting",
+  expect(consola.start).toHaveBeenCalledWith(
+    "OpenCode event stream is connecting",
   );
-  expect(consola.debug).toHaveBeenCalledWith(
-    "opencode event stream is connected",
+  expect(consola.ready).toHaveBeenCalledWith(
+    "OpenCode event stream is connected",
   );
 });
 
@@ -261,8 +286,8 @@ test("logs reconnection", async () => {
 
   await subscription.ended;
   expect(consola.warn).toHaveBeenCalledWith(
-    "opencode event stream disconnected, reconnecting",
-    { attempt: 0, delay: "1000ms" },
+    "OpenCode event stream disconnected, reconnecting",
+    { attempt: 0, delay: 1000 },
   );
 });
 
@@ -293,8 +318,8 @@ test("ended resolves when disposed mid-stream", async () => {
   );
 
   // Wait for stream to connect.
-  const debugMock = vi.mocked(consola.debug);
-  while (debugMock.mock.calls.length < 2) await Bun.sleep(1);
+  const readyMock = vi.mocked(consola.ready);
+  while (readyMock.mock.calls.length < 1) await Bun.sleep(1);
 
   await subscription[Symbol.asyncDispose]();
 });

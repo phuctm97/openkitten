@@ -1290,9 +1290,8 @@ test("dismiss logs warning on question reject failure", async () => {
   await prompts.invalidate(session);
   await prompts.dismiss("sess-1");
   expect(consola.warn).toHaveBeenCalledWith(
-    "pending prompt opencode dismiss failed",
-    { sessionId: "sess-1", kind: "question", requestID: "q1" },
-    error,
+    "Failed to dismiss pending prompt in OpenCode",
+    { sessionId: "sess-1", kind: "question", requestID: "q1", error },
   );
 });
 
@@ -1307,9 +1306,8 @@ test("dismiss logs warning on permission reply failure", async () => {
   await prompts.invalidate(session);
   await prompts.dismiss("sess-1");
   expect(consola.warn).toHaveBeenCalledWith(
-    "pending prompt opencode dismiss failed",
-    { sessionId: "sess-1", kind: "permission", requestID: "p1" },
-    error,
+    "Failed to dismiss pending prompt in OpenCode",
+    { sessionId: "sess-1", kind: "permission", requestID: "p1", error },
   );
 });
 
@@ -1350,9 +1348,8 @@ test("dismiss logs warning on grammy dismiss non-gone error", async () => {
   await prompts.dismiss("sess-1");
   await vi.waitFor(() =>
     expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt grammy dismiss failed",
-      { sessionId: "sess-1", chatId: 123, kind: "permission" },
-      error,
+      "Failed to dismiss pending prompt in Telegram",
+      { sessionId: "sess-1", chatId: 123, kind: "permission", error },
     ),
   );
 });

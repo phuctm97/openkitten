@@ -10,14 +10,14 @@ function db() {
 
 test("logs ready", () => {
   using _database = db();
-  expect(consola.ready).toHaveBeenCalledWith("database is ready");
+  expect(consola.ready).toHaveBeenCalledWith("Database is ready");
 });
 
 test("is disposable", () => {
   {
     using _db = db();
   }
-  expect(consola.debug).toHaveBeenCalledWith("database is closed");
+  expect(consola.debug).toHaveBeenCalledWith("Database is closed");
 });
 
 test("inserts session with default timestamps", () => {

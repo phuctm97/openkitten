@@ -14,11 +14,11 @@ export function createDatabase(filename: string): Database {
   sqlite.run("PRAGMA foreign_keys = ON");
   const database = drizzle(sqlite, { schema });
   migrate(database, { migrationsFolder });
-  consola.ready("database is ready");
+  consola.ready("Database is ready");
   return Object.assign(database, {
     [Symbol.dispose]() {
       sqlite.close();
-      consola.debug("database is closed");
+      consola.debug("Database is closed");
     },
   });
 }

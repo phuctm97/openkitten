@@ -86,7 +86,7 @@ test("returns client", async () => {
 test("logs ready", async () => {
   mockSpawn();
   await opencodeServe();
-  expect(consola.ready).toHaveBeenCalledWith("opencode server is ready");
+  expect(consola.ready).toHaveBeenCalledWith("OpenCode server is ready");
 });
 
 test("passes credentials to opencode server", async () => {
@@ -114,25 +114,33 @@ test("is async disposable", async () => {
   expect(kill).toHaveBeenCalledOnce();
 });
 
-test("logs terminated on exit", async () => {
+test("logs start", async () => {
+  mockSpawn();
+  await opencodeServe();
+  expect(consola.start).toHaveBeenCalledWith("OpenCode server is starting");
+});
+
+test("logs stopped on exit", async () => {
   mockSpawn();
   const opencodeServer = await opencodeServe();
   await opencodeServer.exited.catch(() => {});
-  expect(consola.debug).toHaveBeenCalledWith("opencode server is terminated", {
-    exitCode: 0,
+  expect(consola.debug).toHaveBeenCalledWith("OpenCode server stopped", {
     signalCode: null,
+    exitCode: 0,
+    osError: undefined,
   });
 });
 
-test("logs abnormal exit", async () => {
+test("logs stopped with osError on abnormal exit", async () => {
   const error = new Error("waitpid2 failed");
   mockSpawn({ onExitError: error });
   const opencodeServer = await opencodeServe();
   await opencodeServer.exited.catch(() => {});
-  expect(consola.fatal).toHaveBeenCalledWith(
-    "opencode server exited abnormally",
-    error,
-  );
+  expect(consola.debug).toHaveBeenCalledWith("OpenCode server stopped", {
+    signalCode: null,
+    exitCode: null,
+    osError: error,
+  });
 });
 
 test("exited rejects on unexpected exit", async () => {

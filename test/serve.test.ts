@@ -1,4 +1,5 @@
 import { runCommand } from "citty";
+import { consola } from "consola";
 import { afterEach, expect, test, vi } from "vitest";
 import * as createDatabaseModule from "~/lib/create-database";
 import * as createPendingPromptsModule from "~/lib/create-pending-prompts";
@@ -168,6 +169,20 @@ function mockAll() {
     triggerShutdown,
   };
 }
+
+test("logs start, ready, and shutting down", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  const { triggerShutdown } = mockAll();
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() =>
+    expect(shutdownListenModule.shutdownListen).toHaveBeenCalled(),
+  );
+  triggerShutdown();
+  await run;
+  expect(consola.start).toHaveBeenCalledWith("OpenKitten is starting");
+  expect(consola.ready).toHaveBeenCalledWith("OpenKitten is ready");
+  expect(consola.info).toHaveBeenCalledWith("OpenKitten is shutting down");
+});
 
 test("disposes on shutdown", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");

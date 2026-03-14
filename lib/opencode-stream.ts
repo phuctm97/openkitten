@@ -19,7 +19,7 @@ export function opencodeStream(
     for (;;) {
       try {
         if (signal.aborted) break;
-        consola.debug("opencode event stream is connecting");
+        consola.start("OpenCode event stream is connecting");
         const { stream } = await opencodeClient.event.subscribe({}, { signal });
         const iter = stream[Symbol.asyncIterator]();
         const onAbort = () => {
@@ -27,7 +27,7 @@ export function opencodeStream(
         };
         try {
           signal.addEventListener("abort", onAbort, { once: true });
-          consola.debug("opencode event stream is connected");
+          consola.ready("OpenCode event stream is connected");
           attempt = 0;
           // onRestart errors are treated as stream failures and trigger reconnection.
           await onRestart();
@@ -45,9 +45,9 @@ export function opencodeStream(
         if (signal.aborted) break;
         if (attempt >= maxAttempts) throw error;
         const delay = Math.min(1000 * 2 ** attempt, maxDelay);
-        consola.warn("opencode event stream disconnected, reconnecting", {
+        consola.warn("OpenCode event stream disconnected, reconnecting", {
           attempt,
-          delay: `${delay}ms`,
+          delay,
         });
         attempt++;
         const { resolve, promise: aborted } = Promise.withResolvers<void>();
@@ -61,6 +61,7 @@ export function opencodeStream(
         }
       }
     }
+    consola.debug("OpenCode event stream stopped");
   }
 
   // run() rejects before abort (max retries exhausted) and only resolves after

@@ -11,7 +11,11 @@ export function grammyCreateHandler<C extends Context>(
     if (!chatId) throw new Error("grammy handler has no chat");
     const threadId = ctx.msg?.message_thread_id || undefined;
     callback(ctx).catch((error) => {
-      consola.error("grammy handle error", { chatId, threadId }, error);
+      consola.error("grammY failed to process event", {
+        chatId,
+        threadId,
+        error,
+      });
       grammySendError({
         bot,
         error,

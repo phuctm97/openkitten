@@ -500,11 +500,12 @@ export function createPendingPrompts(
       }
     } catch (error) {
       if (!opencodeCheckNotFoundError(error)) {
-        consola.warn(
-          "pending prompt opencode dismiss failed",
-          { sessionId, kind: item.kind, requestID: item.request.id },
+        consola.warn("Failed to dismiss pending prompt in OpenCode", {
+          sessionId,
+          kind: item.kind,
+          requestID: item.request.id,
           error,
-        );
+        });
       }
     }
   }
@@ -522,11 +523,12 @@ export function createPendingPrompts(
       await grammyEdit(chatId, item.messageId, text);
     } catch (error) {
       if (!grammyCheckGoneError(error)) {
-        consola.warn(
-          "pending prompt grammy dismiss failed",
-          { sessionId, chatId, kind: item.kind },
+        consola.warn("Failed to dismiss pending prompt in Telegram", {
+          sessionId,
+          chatId,
+          kind: item.kind,
           error,
-        );
+        });
       }
     }
   }
