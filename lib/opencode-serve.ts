@@ -141,6 +141,7 @@ export async function opencodeServe(): Promise<OpencodeServer> {
       headers: {
         authorization: `Basic ${btoa(`${username}:${password}`)}`,
       },
+      throwOnError: true,
     }),
     [Symbol.asyncDispose]: async () => {
       disposed = true;

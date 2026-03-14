@@ -58,13 +58,11 @@ export function createPendingPrompts(
   async function invalidate(...sessionsArr: Session[]) {
     if (sessionsArr.length === 0) return;
     const [questionResult, permissionResult] = await Promise.all([
-      opencodeClient.question.list({}),
-      opencodeClient.permission.list({}),
+      opencodeClient.question.list({}, { throwOnError: true }),
+      opencodeClient.permission.list({}, { throwOnError: true }),
     ]);
-    if (questionResult.error) throw questionResult.error;
-    if (permissionResult.error) throw permissionResult.error;
-    const questions = questionResult.data ?? [];
-    const permissions = permissionResult.data ?? [];
+    const questions = questionResult.data;
+    const permissions = permissionResult.data;
     const promises: Promise<void>[] = [];
     for (const session of sessionsArr) {
       const serverQuestionIds = new Set(
@@ -411,11 +409,10 @@ export function createPendingPrompts(
       item.selectedOptions = [];
       item.messageId = undefined;
     } else {
-      const result = await opencodeClient.question.reply({
-        requestID: item.request.id,
-        answers: newAnswers,
-      });
-      if (result.error) throw result.error;
+      await opencodeClient.question.reply(
+        { requestID: item.request.id, answers: newAnswers },
+        { throwOnError: true },
+      );
     }
   }
 
@@ -432,16 +429,15 @@ export function createPendingPrompts(
     reply: "once" | "always" | "reject",
   ) {
     if (item.kind === "permission") {
-      const result = await opencodeClient.permission.reply({
-        requestID: item.request.id,
-        reply,
-      });
-      if (result.error) throw result.error;
+      await opencodeClient.permission.reply(
+        { requestID: item.request.id, reply },
+        { throwOnError: true },
+      );
     } else {
-      const result = await opencodeClient.question.reject({
-        requestID: item.request.id,
-      });
-      if (result.error) throw result.error;
+      await opencodeClient.question.reject(
+        { requestID: item.request.id },
+        { throwOnError: true },
+      );
     }
   }
 
@@ -493,16 +489,17 @@ export function createPendingPrompts(
 
   async function opencodeDismiss(sessionId: string, item: PendingPromptItem) {
     try {
-      const result =
-        item.kind === "question"
-          ? await opencodeClient.question.reject({
-              requestID: item.request.id,
-            })
-          : await opencodeClient.permission.reply({
-              requestID: item.request.id,
-              reply: "reject",
-            });
-      if (result.error) throw result.error;
+      if (item.kind === "question") {
+        await opencodeClient.question.reject(
+          { requestID: item.request.id },
+          { throwOnError: true },
+        );
+      } else {
+        await opencodeClient.permission.reply(
+          { requestID: item.request.id, reply: "reject" },
+          { throwOnError: true },
+        );
+      }
     } catch (error) {
       if (!opencodeCheckNotFoundError(error)) {
         consola.warn(

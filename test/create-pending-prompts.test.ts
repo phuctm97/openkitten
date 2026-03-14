@@ -299,30 +299,21 @@ test("invalidate does not grammy edit when stale items have no message id", asyn
   expect(mockEditMessageText).not.toHaveBeenCalled();
 });
 
-test("handles undefined question and permission data", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: undefined }));
-  mockPermissionList = vi.fn(async () => ({ data: undefined }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  expect(prompts.sessionIds).toEqual([]);
-});
-
 test.each([
   {
     api: "question list",
     setup: () => {
-      mockQuestionList = vi.fn(async () => ({
-        error: new Error("api down"),
-      }));
+      mockQuestionList = vi.fn(async () => {
+        throw new Error("api down");
+      });
     },
   },
   {
     api: "permission list",
     setup: () => {
-      mockPermissionList = vi.fn(async () => ({
-        error: new Error("api down"),
-      }));
+      mockPermissionList = vi.fn(async () => {
+        throw new Error("api down");
+      });
     },
   },
 ])("throws when $api API fails", async ({ setup: setupMock }) => {
@@ -457,10 +448,10 @@ test("answer permission with once calls opencode", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "po:0",
   });
-  expect(mockPermissionReply).toHaveBeenCalledWith({
-    requestID: "p1",
-    reply: "once",
-  });
+  expect(mockPermissionReply).toHaveBeenCalledWith(
+    { requestID: "p1", reply: "once" },
+    { throwOnError: true },
+  );
   expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", undefined);
   expect(mockEditMessageText).not.toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
@@ -477,10 +468,10 @@ test("answer permission with always calls opencode", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "pa:0",
   });
-  expect(mockPermissionReply).toHaveBeenCalledWith({
-    requestID: "p1",
-    reply: "always",
-  });
+  expect(mockPermissionReply).toHaveBeenCalledWith(
+    { requestID: "p1", reply: "always" },
+    { throwOnError: true },
+  );
 });
 
 test("answer permission with reject calls opencode", async () => {
@@ -494,35 +485,18 @@ test("answer permission with reject calls opencode", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "pr:0",
   });
-  expect(mockPermissionReply).toHaveBeenCalledWith({
-    requestID: "p1",
-    reply: "reject",
-  });
+  expect(mockPermissionReply).toHaveBeenCalledWith(
+    { requestID: "p1", reply: "reject" },
+    { throwOnError: true },
+  );
 });
 
-test.each([
-  {
-    desc: "opencode failure",
-    mockFn: () => {
-      mockPermissionReply = vi.fn(async () => {
-        throw new Error("failed");
-      });
-    },
-  },
-  {
-    desc: "opencode result error",
-    mockFn: () => {
-      mockPermissionReply = vi.fn(async () => ({
-        error: new Error("failed"),
-      }));
-    },
-  },
-])("answer permission shows error and rethrows on $desc", async ({
-  mockFn,
-}) => {
+test("answer permission shows error and rethrows on opencode failure", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  mockFn();
+  mockPermissionReply = vi.fn(async () => {
+    throw new Error("failed");
+  });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await expect(
@@ -548,34 +522,20 @@ test("answer question with reject calls opencode", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "qr:0",
   });
-  expect(mockQuestionReject).toHaveBeenCalledWith({ requestID: "q1" });
+  expect(mockQuestionReject).toHaveBeenCalledWith(
+    { requestID: "q1" },
+    { throwOnError: true },
+  );
   expect(mockEditMessageText).not.toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
-test.each([
-  {
-    desc: "opencode failure",
-    mockFn: () => {
-      mockQuestionReject = vi.fn(async () => {
-        throw new Error("failed");
-      });
-    },
-  },
-  {
-    desc: "opencode result error",
-    mockFn: () => {
-      mockQuestionReject = vi.fn(async () => ({
-        error: new Error("failed"),
-      }));
-    },
-  },
-])("answer question reject shows error and rethrows on $desc", async ({
-  mockFn,
-}) => {
+test("answer question reject shows error and rethrows on opencode failure", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  mockFn();
+  mockQuestionReject = vi.fn(async () => {
+    throw new Error("failed");
+  });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await expect(
@@ -601,10 +561,10 @@ test("answer question select single auto-submits", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "qt:0:1",
   });
-  expect(mockQuestionReply).toHaveBeenCalledWith({
-    requestID: "q1",
-    answers: [["Claude"]],
-  });
+  expect(mockQuestionReply).toHaveBeenCalledWith(
+    { requestID: "q1", answers: [["Claude"]] },
+    { throwOnError: true },
+  );
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
@@ -659,10 +619,10 @@ test("answer question select multi toggles off", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "qc:0",
   });
-  expect(mockQuestionReply).toHaveBeenCalledWith({
-    requestID: "msq1",
-    answers: [[]],
-  });
+  expect(mockQuestionReply).toHaveBeenCalledWith(
+    { requestID: "msq1", answers: [[]] },
+    { throwOnError: true },
+  );
 });
 
 test("answer question select multi without flush skips grammy edit", async () => {
@@ -704,10 +664,10 @@ test("answer question confirm submits selected options", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "qc:0",
   });
-  expect(mockQuestionReply).toHaveBeenCalledWith({
-    requestID: "msq1",
-    answers: [["Auth", "API"]],
-  });
+  expect(mockQuestionReply).toHaveBeenCalledWith(
+    { requestID: "msq1", answers: [["Auth", "API"]] },
+    { throwOnError: true },
+  );
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
@@ -735,10 +695,10 @@ test("answer advances to next question in multi-question", async () => {
     callbackQueryId: "cb1",
     callbackQueryData: "qt:0:1",
   });
-  expect(mockQuestionReply).toHaveBeenCalledWith({
-    requestID: "mq1",
-    answers: [["GPT-4"], ["Python"]],
-  });
+  expect(mockQuestionReply).toHaveBeenCalledWith(
+    { requestID: "mq1", answers: [["GPT-4"], ["Python"]] },
+    { throwOnError: true },
+  );
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
@@ -761,27 +721,12 @@ test("advance edits current message with answered text", async () => {
   );
 });
 
-test.each([
-  {
-    desc: "opencode failure",
-    mockFn: () => {
-      mockQuestionReply = vi.fn(async () => {
-        throw new Error("failed");
-      });
-    },
-  },
-  {
-    desc: "opencode result error",
-    mockFn: () => {
-      mockQuestionReply = vi.fn(async () => ({
-        error: new Error("failed"),
-      }));
-    },
-  },
-])("advance shows error and rethrows on $desc", async ({ mockFn }) => {
+test("advance shows error and rethrows on opencode failure", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  mockFn();
+  mockQuestionReply = vi.fn(async () => {
+    throw new Error("failed");
+  });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush("sess-1");
@@ -821,14 +766,19 @@ test("answer drops session on grammy gone error", async () => {
     callbackQueryData: "qt:0:0",
   });
   expect(prompts.sessionIds).toEqual([]);
-  expect(mockQuestionReject).toHaveBeenCalledWith({ requestID: "mq1" });
+  expect(mockQuestionReject).toHaveBeenCalledWith(
+    { requestID: "mq1" },
+    { throwOnError: true },
+  );
 });
 
 test("answer rethrows opencode not found error without dismissing session", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   const error = { name: "NotFoundError", data: { message: "not found" } };
-  mockPermissionReply = vi.fn(async () => ({ error }));
+  mockPermissionReply = vi.fn(async () => {
+    throw error;
+  });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await expect(
@@ -1265,11 +1215,14 @@ test("dismiss rejects questions and denies permissions", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.dismiss("sess-1");
-  expect(mockQuestionReject).toHaveBeenCalledWith({ requestID: "q1" });
-  expect(mockPermissionReply).toHaveBeenCalledWith({
-    requestID: "p1",
-    reply: "reject",
-  });
+  expect(mockQuestionReject).toHaveBeenCalledWith(
+    { requestID: "q1" },
+    { throwOnError: true },
+  );
+  expect(mockPermissionReply).toHaveBeenCalledWith(
+    { requestID: "p1", reply: "reject" },
+    { throwOnError: true },
+  );
   expect(prompts.sessionIds).toEqual([]);
 });
 
@@ -1330,7 +1283,9 @@ test("dismiss logs warning on question reject failure", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   const error = new Error("reject failed");
-  mockQuestionReject = vi.fn(async () => ({ error }));
+  mockQuestionReject = vi.fn(async () => {
+    throw error;
+  });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.dismiss("sess-1");
@@ -1345,7 +1300,9 @@ test("dismiss logs warning on permission reply failure", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   const error = new Error("reply failed");
-  mockPermissionReply = vi.fn(async () => ({ error }));
+  mockPermissionReply = vi.fn(async () => {
+    throw error;
+  });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.dismiss("sess-1");
@@ -1359,9 +1316,9 @@ test("dismiss logs warning on permission reply failure", async () => {
 test("dismiss silences question reject not found error", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  mockQuestionReject = vi.fn(async () => ({
-    error: { name: "NotFoundError", data: { message: "not found" } },
-  }));
+  mockQuestionReject = vi.fn(async () => {
+    throw { name: "NotFoundError", data: { message: "not found" } };
+  });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.dismiss("sess-1");
@@ -1371,9 +1328,9 @@ test("dismiss silences question reject not found error", async () => {
 test("dismiss silences permission reply not found error", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  mockPermissionReply = vi.fn(async () => ({
-    error: { name: "NotFoundError", data: { message: "not found" } },
-  }));
+  mockPermissionReply = vi.fn(async () => {
+    throw { name: "NotFoundError", data: { message: "not found" } };
+  });
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.dismiss("sess-1");

@@ -26,8 +26,10 @@ export async function findOrCreateSession(
 
   if (existing) return { sessionId: existing.id, isNew: false };
 
-  const createResult = await opencodeClient.session.create({});
-  if (createResult.error) throw createResult.error;
+  const createResult = await opencodeClient.session.create(
+    {},
+    { throwOnError: true },
+  );
   const sessionId = createResult.data.id;
 
   try {
@@ -39,10 +41,10 @@ export async function findOrCreateSession(
   } catch (insertError) {
     // Race condition: another concurrent call created the session first.
     // Clean up the orphaned opencode session before looking up the winner.
-    const deleteResult = await opencodeClient.session.delete({
-      sessionID: sessionId,
-    });
-    if (deleteResult.error) throw deleteResult.error;
+    await opencodeClient.session.delete(
+      { sessionID: sessionId },
+      { throwOnError: true },
+    );
 
     const raced = await database.query.session.findFirst({
       columns: { id: true },

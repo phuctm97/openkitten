@@ -14,21 +14,18 @@ export function createTypingIndicators(
   async function invalidate(...sessions: Session[]) {
     if (sessions.length === 0) return;
     const [statusResult, questionResult, permissionResult] = await Promise.all([
-      opencodeClient.session.status({}),
-      opencodeClient.question.list({}),
-      opencodeClient.permission.list({}),
+      opencodeClient.session.status({}, { throwOnError: true }),
+      opencodeClient.question.list({}, { throwOnError: true }),
+      opencodeClient.permission.list({}, { throwOnError: true }),
     ]);
-    if (statusResult.error) throw statusResult.error;
-    if (questionResult.error) throw questionResult.error;
-    if (permissionResult.error) throw permissionResult.error;
     const promises: Promise<void>[] = [];
     for (const session of sessions) {
       const status = statusResult.data[session.id];
       const isActive = status?.type === "busy" || status?.type === "retry";
-      const hasQuestion = (questionResult.data ?? []).some(
+      const hasQuestion = questionResult.data.some(
         (q) => q.sessionID === session.id,
       );
-      const hasPermission = (permissionResult.data ?? []).some(
+      const hasPermission = permissionResult.data.some(
         (p) => p.sessionID === session.id,
       );
       // Show typing only when the session is actively working (busy/retry)

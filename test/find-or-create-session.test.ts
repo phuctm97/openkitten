@@ -90,7 +90,7 @@ test("throws on opencode create error", async () => {
   using database = createDatabase(":memory:");
   const opencodeClient = mockOpencodeClient();
   const error = new Error("create failed");
-  opencodeClient.session.create.mockResolvedValue({ error });
+  opencodeClient.session.create.mockRejectedValue(error);
 
   await expect(
     findOrCreateSession(database, opencodeClient as never, 123, undefined),
@@ -119,9 +119,10 @@ test("handles race condition by cleaning up and reusing winner", async () => {
   );
 
   expect(result).toEqual({ sessionId: "s-winner", isNew: false });
-  expect(opencodeClient.session.delete).toHaveBeenCalledWith({
-    sessionID: "s-loser",
-  });
+  expect(opencodeClient.session.delete).toHaveBeenCalledWith(
+    { sessionID: "s-loser" },
+    { throwOnError: true },
+  );
 });
 
 test("rethrows insert error if no raced session found", async () => {
@@ -152,7 +153,7 @@ test("throws on opencode delete error during race recovery", async () => {
     return { data: { id: "s-loser" } };
   });
   const error = new Error("delete failed");
-  opencodeClient.session.delete.mockResolvedValue({ error });
+  opencodeClient.session.delete.mockRejectedValue(error);
 
   await expect(
     findOrCreateSession(database, opencodeClient as never, 123, undefined),

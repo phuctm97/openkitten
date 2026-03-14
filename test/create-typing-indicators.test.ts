@@ -198,44 +198,29 @@ test("stops typing on invalidate when session becomes idle", async () => {
   expect(mockSendChatAction).toHaveBeenCalledTimes(1);
 });
 
-test("handles undefined question and permission data", async () => {
-  mockSessionStatus = vi.fn(async () => ({
-    data: { "sess-1": { type: "busy" } },
-  }));
-  mockQuestionList = vi.fn(async () => ({ data: undefined }));
-  mockPermissionList = vi.fn(async () => ({ data: undefined }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await indicators.invalidate(session);
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mockSendChatAction).toHaveBeenCalledWith(123, "typing", {});
-});
-
 test.each([
   {
     api: "session status",
     setup: () => {
-      mockSessionStatus = vi.fn(async () => ({
-        error: new Error("api down"),
-      }));
+      mockSessionStatus = vi.fn(async () => {
+        throw new Error("api down");
+      });
     },
   },
   {
     api: "question list",
     setup: () => {
-      mockQuestionList = vi.fn(async () => ({
-        error: new Error("api down"),
-      }));
+      mockQuestionList = vi.fn(async () => {
+        throw new Error("api down");
+      });
     },
   },
   {
     api: "permission list",
     setup: () => {
-      mockPermissionList = vi.fn(async () => ({
-        error: new Error("api down"),
-      }));
+      mockPermissionList = vi.fn(async () => {
+        throw new Error("api down");
+      });
     },
   },
 ])("throws when $api API fails", async ({ setup: setupMock }) => {
