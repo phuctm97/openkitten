@@ -92,8 +92,8 @@ test("stops on dispose", async () => {
   );
 
   expect(opencodeClient.event.subscribe).toHaveBeenCalledOnce();
-  // Dispose triggers abort; the subscribe call is still pending but
-  // run() checks signal.aborted after the catch and returns.
+  // Dispose aborts the signal, which cancels the pending subscribe call.
+  // run() checks signal.aborted and breaks out of the loop.
   subscribeResolve?.();
   await subscription[Symbol.asyncDispose]();
 });
@@ -322,6 +322,59 @@ test("reconnects on normal stream end with backoff", async () => {
   await subscription.ended;
   expect(calls).toBe(2);
   expect(sleep).toHaveBeenCalledWith(1000);
+});
+
+test("dispose interrupts backoff sleep", async () => {
+  vi.spyOn(Bun, "sleep").mockReturnValue(new Promise<void>(() => {}));
+  let calls = 0;
+  const opencodeClient = {
+    event: {
+      subscribe: vi.fn(async () => {
+        calls++;
+        throw new Error("fail");
+      }),
+    },
+  };
+
+  const subscription = opencodeStream(
+    opencodeClient as never,
+    vi.fn() as never,
+    vi.fn() as never,
+  );
+
+  const warnMock = vi.mocked(consola.warn);
+  while (warnMock.mock.calls.length < 1)
+    await new Promise((r) => setTimeout(r, 1));
+
+  await subscription[Symbol.asyncDispose]();
+  expect(calls).toBe(1);
+});
+
+test("passes signal to subscribe", async () => {
+  const opencodeClient = {
+    event: {
+      subscribe: vi.fn(async () => ({
+        stream: (async function* () {
+          yield { type: "a" };
+        })(),
+      })),
+    },
+  };
+
+  const subscription = opencodeStream(
+    opencodeClient as never,
+    vi.fn() as never,
+    vi.fn(() => {
+      dispose();
+    }) as never,
+  );
+  const dispose = () => subscription[Symbol.asyncDispose]();
+
+  await subscription.ended;
+  expect(opencodeClient.event.subscribe).toHaveBeenCalledWith(
+    {},
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
 });
 
 test("calls onRestart on each connection", async () => {

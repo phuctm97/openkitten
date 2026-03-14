@@ -16,19 +16,19 @@ export function opencodeStream(
 
   async function run(): Promise<void> {
     let attempt = 0;
-    while (!signal.aborted) {
+    for (;;) {
       try {
+        if (signal.aborted) break;
         consola.debug("opencode event stream is connecting");
-        const { stream } = await opencodeClient.event.subscribe({});
+        const { stream } = await opencodeClient.event.subscribe({}, { signal });
         const iter = stream[Symbol.asyncIterator]();
         const onAbort = () => {
           iter.return?.(undefined);
         };
-        signal.addEventListener("abort", onAbort, { once: true });
-        if (signal.aborted) onAbort();
         try {
-          attempt = 0;
+          signal.addEventListener("abort", onAbort, { once: true });
           consola.debug("opencode event stream is connected");
+          attempt = 0;
           // onRestart errors are treated as stream failures and trigger reconnection.
           await onRestart();
           for (;;) {
@@ -39,10 +39,10 @@ export function opencodeStream(
           }
         } finally {
           signal.removeEventListener("abort", onAbort);
-          iter.return?.(undefined);
+          onAbort();
         }
       } catch (error) {
-        if (signal.aborted) return;
+        if (signal.aborted) break;
         if (attempt >= maxAttempts) throw error;
         const delay = Math.min(1000 * 2 ** attempt, maxDelay);
         consola.warn("opencode event stream disconnected, reconnecting", {
@@ -50,15 +50,22 @@ export function opencodeStream(
           delay: `${delay}ms`,
         });
         attempt++;
-        await Bun.sleep(delay);
+        const { resolve, promise: aborted } = Promise.withResolvers<void>();
+        const onAbort = () => resolve();
+        try {
+          signal.addEventListener("abort", onAbort, { once: true });
+          await Promise.race([Bun.sleep(delay), aborted]);
+        } finally {
+          signal.removeEventListener("abort", onAbort);
+          onAbort();
+        }
       }
     }
   }
 
-  // run() rejects before abort (max retries exhausted — errors from subscribe,
-  // onRestart, or onEvent all flow through the catch block) and only resolves
-  // after abort (signal.aborted check in catch). So ended never rejects after
-  // dispose.
+  // run() rejects before abort (max retries exhausted) and only resolves after
+  // abort (signal.aborted breaks in try and catch). So ended never rejects
+  // after dispose.
   const ended = run();
 
   // ended rejects on max reconnect attempts but may not be awaited immediately
