@@ -325,7 +325,7 @@ test("logs warning on send failure", async () => {
   );
 });
 
-test("self-removes on access error", async () => {
+test("self-removes on gone error", async () => {
   mockSessionStatus = vi.fn(async () => ({
     data: { "sess-1": { type: "busy" } },
   }));

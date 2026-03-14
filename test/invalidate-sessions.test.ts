@@ -32,7 +32,7 @@ function createMockDatabase(sessions: unknown[]) {
   };
 }
 
-function createAccessError() {
+function createGoneError() {
   return new GrammyError(
     "Call to 'sendChatAction' failed! (403: Forbidden: bot was blocked by the user)",
     {
@@ -57,7 +57,7 @@ test("returns all sessions as reachable when accessible", async () => {
 test("returns inaccessible sessions as unreachable and deletes them", async () => {
   const bot = createMockBot(
     vi.fn(async (...args: unknown[]) => {
-      if (args[0] === 200) throw createAccessError();
+      if (args[0] === 200) throw createGoneError();
     }),
   );
   const db = createMockDatabase([session1, session2]);
@@ -71,7 +71,7 @@ test("returns inaccessible sessions as unreachable and deletes them", async () =
 test("returns all sessions as unreachable when all inaccessible", async () => {
   const bot = createMockBot(
     vi.fn(async () => {
-      throw createAccessError();
+      throw createGoneError();
     }),
   );
   const db = createMockDatabase([session1, session2]);
@@ -99,7 +99,7 @@ test("omits thread id when zero", async () => {
   expect(sendChatAction).toHaveBeenCalledWith(100, "typing", {});
 });
 
-test("throws on non-access errors", async () => {
+test("throws on non-gone errors", async () => {
   const bot = createMockBot(
     vi.fn(async () => {
       throw new Error("network error");

@@ -824,7 +824,7 @@ test("answer drops session on grammy gone error", async () => {
   expect(mockQuestionReject).toHaveBeenCalledWith({ requestID: "mq1" });
 });
 
-test("answer rethrows opencode gone error without dismissing session", async () => {
+test("answer rethrows opencode not found error without dismissing session", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   const error = { name: "NotFoundError", data: { message: "not found" } };
@@ -1380,7 +1380,7 @@ test("dismiss silences permission reply not found error", async () => {
   expect(consola.warn).not.toHaveBeenCalled();
 });
 
-test("dismiss logs warning on grammy dismiss non-access error", async () => {
+test("dismiss logs warning on grammy dismiss non-gone error", async () => {
   const { bot, client } = setup();
   const error = new Error("network error");
   mockEditMessageText = vi.fn(async () => {
@@ -1400,7 +1400,7 @@ test("dismiss logs warning on grammy dismiss non-access error", async () => {
   );
 });
 
-test("dismiss silences grammy dismiss access error", async () => {
+test("dismiss silences grammy dismiss gone error", async () => {
   const { bot, client } = setup();
   const error = new GrammyError(
     "Call to 'editMessageText' failed! (403: Forbidden: bot was blocked by the user)",
