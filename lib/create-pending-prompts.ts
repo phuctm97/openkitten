@@ -81,11 +81,7 @@ export function createPendingPrompts(
         const serverIds =
           item.kind === "question" ? serverQuestionIds : serverPermissionIds;
         if (!serverIds.has(item.request.id)) {
-          const text =
-            item.kind === "question"
-              ? grammyFormatQuestionRejected()
-              : grammyFormatPermissionReplied("reject");
-          promises.push(grammyEdit(chatId, item.messageId, text));
+          promises.push(grammyDismiss(session.id, chatId, item));
         }
       }
       // Keep items still on server
