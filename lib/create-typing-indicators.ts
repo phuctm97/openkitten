@@ -38,6 +38,7 @@ export function createTypingIndicators(
   }
 
   function stop(...sessionIds: string[]) {
+    if (sessionIds.length === 0) return;
     for (const sessionId of sessionIds) {
       if (!timers.has(sessionId)) continue;
       const timer = timers.get(sessionId);
@@ -47,6 +48,7 @@ export function createTypingIndicators(
   }
 
   async function invalidate(...sessions: Session[]) {
+    if (sessions.length === 0) return;
     const [statusResult, questionResult, permissionResult] = await Promise.all([
       opencodeClient.session.status({}),
       opencodeClient.question.list({}),

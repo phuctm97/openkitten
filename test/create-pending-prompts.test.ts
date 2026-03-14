@@ -141,6 +141,22 @@ function setup() {
   return { bot, client };
 }
 
+// --- empty args guards ---
+
+test("invalidate with no sessions skips API calls", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate();
+  expect(mockQuestionList).not.toHaveBeenCalled();
+  expect(mockPermissionList).not.toHaveBeenCalled();
+});
+
+test("dismiss with no session ids is a no-op", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.dismiss();
+});
+
 // --- invalidate tests ---
 
 test("tracks sessions with pending questions", async () => {

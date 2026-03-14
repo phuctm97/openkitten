@@ -60,6 +60,25 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+test("stop with no args is a no-op", () => {
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  indicators.stop();
+});
+
+test("invalidate with no sessions skips API calls", async () => {
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  await indicators.invalidate();
+  expect(mockSessionStatus).not.toHaveBeenCalled();
+  expect(mockQuestionList).not.toHaveBeenCalled();
+  expect(mockPermissionList).not.toHaveBeenCalled();
+});
+
 test("starts typing when busy with no questions or permissions", async () => {
   mockSessionStatus = vi.fn(async () => ({
     data: { "sess-1": { type: "busy" } },

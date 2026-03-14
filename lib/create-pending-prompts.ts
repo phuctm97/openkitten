@@ -210,6 +210,7 @@ export function createPendingPrompts(
   }
 
   async function dismiss(...sessionIds: string[]) {
+    if (sessionIds.length === 0) return;
     const promises: Promise<void>[] = [];
     for (const sessionId of sessionIds) {
       const entry = sessions.get(sessionId);
@@ -230,6 +231,7 @@ export function createPendingPrompts(
   }
 
   async function invalidate(...sessionsArr: Session[]) {
+    if (sessionsArr.length === 0) return;
     const [questionResult, permissionResult] = await Promise.all([
       opencodeClient.question.list({}),
       opencodeClient.permission.list({}),
