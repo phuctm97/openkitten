@@ -395,6 +395,17 @@ test("flush does nothing when no items exist", async () => {
   expect(mockSendMessage).not.toHaveBeenCalled();
 });
 
+test("flush throws when send message fails", async () => {
+  const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  mockSendMessage = vi.fn(async () => {
+    throw new Error("send failed");
+  });
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await expect(prompts.flush("sess-1")).rejects.toThrow("send failed");
+});
+
 test("flush includes thread id when present", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({

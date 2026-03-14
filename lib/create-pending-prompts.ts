@@ -142,7 +142,11 @@ export function createPendingPrompts(
       invariant(item, "entry has no items");
       promises.push(flushItem(entry, item));
     }
-    await Promise.all(promises);
+    const results = await Promise.allSettled(promises);
+    const error = results.find(
+      (r): r is PromiseRejectedResult => r.status === "rejected",
+    )?.reason;
+    if (error) throw error;
   }
 
   async function answer({
