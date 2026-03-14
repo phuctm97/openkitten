@@ -382,7 +382,6 @@ export function createPendingPrompts(
       item.currentAnswers = newAnswers;
       item.selectedOptions = [];
       item.messageId = undefined;
-      await flushItem(entry, item);
     } else {
       const result = await opencodeClient.question.reply({
         requestID: item.request.id,

@@ -700,16 +700,17 @@ test("answer advances to next question in multi-question", async () => {
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.flush("sess-1");
-  // Answer first question — should advance, not submit
+  // Answer first question — should advance, not submit or flush
   await prompts.answer({
     sessionId: "sess-1",
     callbackQueryId: "cb1",
     callbackQueryData: "qt:0:0",
   });
   expect(mockQuestionReply).not.toHaveBeenCalled();
-  // Session still tracked
   expect(prompts.sessionIds).toEqual(["sess-1"]);
-  // A new sendMessage for the second question
+  expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  // Flush to show second question
+  await prompts.flush("sess-1");
   expect(mockSendMessage).toHaveBeenCalledTimes(2);
   // Answer second question — should submit
   await prompts.answer({
