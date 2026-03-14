@@ -11,42 +11,6 @@ export function createTypingIndicators(
 ): TypingIndicators {
   const timers = new Map<string, Timer | undefined>();
 
-  async function start(session: Session) {
-    if (timers.has(session.id)) return;
-    const chatId = session.chatId;
-    const threadId = session.threadId || undefined;
-    const send = () =>
-      bot.api
-        .sendChatAction(chatId, "typing", {
-          ...(threadId && { message_thread_id: threadId }),
-        })
-        .catch((error) => {
-          if (grammyCheckAccessError(error)) {
-            stop(session.id);
-          } else {
-            consola.warn(
-              "typing indicator failed",
-              { sessionId: session.id, chatId, threadId },
-              error,
-            );
-          }
-        });
-    timers.set(session.id, undefined);
-    await send();
-    if (!timers.has(session.id)) return;
-    timers.set(session.id, setInterval(send, 4_000));
-  }
-
-  function stop(...sessionIds: string[]) {
-    if (sessionIds.length === 0) return;
-    for (const sessionId of sessionIds) {
-      if (!timers.has(sessionId)) continue;
-      const timer = timers.get(sessionId);
-      if (timer) clearInterval(timer);
-      timers.delete(sessionId);
-    }
-  }
-
   async function invalidate(...sessions: Session[]) {
     if (sessions.length === 0) return;
     const [statusResult, questionResult, permissionResult] = await Promise.all([
@@ -76,6 +40,42 @@ export function createTypingIndicators(
       }
     }
     await Promise.all(promises);
+  }
+
+  function stop(...sessionIds: string[]) {
+    if (sessionIds.length === 0) return;
+    for (const sessionId of sessionIds) {
+      if (!timers.has(sessionId)) continue;
+      const timer = timers.get(sessionId);
+      if (timer) clearInterval(timer);
+      timers.delete(sessionId);
+    }
+  }
+
+  async function start(session: Session) {
+    if (timers.has(session.id)) return;
+    const chatId = session.chatId;
+    const threadId = session.threadId || undefined;
+    const send = () =>
+      bot.api
+        .sendChatAction(chatId, "typing", {
+          ...(threadId && { message_thread_id: threadId }),
+        })
+        .catch((error) => {
+          if (grammyCheckAccessError(error)) {
+            stop(session.id);
+          } else {
+            consola.warn(
+              "typing indicator failed",
+              { sessionId: session.id, chatId, threadId },
+              error,
+            );
+          }
+        });
+    timers.set(session.id, undefined);
+    await send();
+    if (!timers.has(session.id)) return;
+    timers.set(session.id, setInterval(send, 4_000));
   }
 
   return {
