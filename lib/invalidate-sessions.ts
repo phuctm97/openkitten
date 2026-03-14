@@ -1,7 +1,7 @@
 import { inArray } from "drizzle-orm";
 import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
-import { grammyCheckAccessError } from "~/lib/grammy-check-access-error";
+import { grammyCheckGoneError } from "~/lib/grammy-check-gone-error";
 import * as schema from "~/lib/schema";
 import type { Session } from "~/lib/session";
 
@@ -24,7 +24,7 @@ export async function invalidateSessions(
         });
         return true;
       } catch (error) {
-        if (grammyCheckAccessError(error)) return false;
+        if (grammyCheckGoneError(error)) return false;
         throw error;
       }
     }),

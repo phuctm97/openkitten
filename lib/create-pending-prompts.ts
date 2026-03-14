@@ -7,7 +7,7 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { consola } from "consola";
 import { type Bot, InlineKeyboard } from "grammy";
 import invariant from "tiny-invariant";
-import { grammyCheckAccessError } from "~/lib/grammy-check-access-error";
+import { grammyCheckGoneError } from "~/lib/grammy-check-gone-error";
 import { grammyFormatPermissionMessage } from "~/lib/grammy-format-permission-message";
 import { grammyFormatPermissionPrompt } from "~/lib/grammy-format-permission-prompt";
 import { grammyFormatPermissionReplied } from "~/lib/grammy-format-permission-replied";
@@ -16,6 +16,7 @@ import { grammyFormatQuestionPrompt } from "~/lib/grammy-format-question-prompt"
 import { grammyFormatQuestionRejected } from "~/lib/grammy-format-question-rejected";
 import { grammyFormatQuestionReplied } from "~/lib/grammy-format-question-replied";
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
+import { opencodeCheckGoneError } from "~/lib/opencode-check-gone-error";
 import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
 import type { PendingPromptResult } from "~/lib/pending-prompt-result";
 import type { PendingPrompts } from "~/lib/pending-prompts";
@@ -436,7 +437,7 @@ export function createPendingPrompts(
     await bot.api
       .answerCallbackQuery(callbackQueryId, text ? { text } : undefined)
       .catch((error: unknown) => {
-        if (!grammyCheckAccessError(error)) {
+        if (!grammyCheckGoneError(error)) {
           consola.warn(
             "pending prompt grammy answer callback failed",
             { callbackQueryId },
@@ -487,7 +488,7 @@ export function createPendingPrompts(
           reply_markup: kb,
         })
         .catch((error: unknown) => {
-          if (!grammyCheckAccessError(error)) {
+          if (!grammyCheckGoneError(error)) {
             consola.warn(
               "pending prompt grammy select failed",
               { sessionId, chatId: entry.chatId, messageId: item.messageId },
@@ -501,20 +502,24 @@ export function createPendingPrompts(
 
   async function opencodeDismiss(sessionId: string, item: PendingPromptItem) {
     try {
-      if (item.kind === "question") {
-        await opencodeClient.question.reject({ requestID: item.request.id });
-      } else {
-        await opencodeClient.permission.reply({
-          requestID: item.request.id,
-          reply: "reject",
-        });
-      }
+      const result =
+        item.kind === "question"
+          ? await opencodeClient.question.reject({
+              requestID: item.request.id,
+            })
+          : await opencodeClient.permission.reply({
+              requestID: item.request.id,
+              reply: "reject",
+            });
+      if (result.error) throw result.error;
     } catch (error) {
-      consola.warn(
-        "pending prompt opencode dismiss failed",
-        { sessionId, kind: item.kind, requestID: item.request.id },
-        error,
-      );
+      if (!opencodeCheckGoneError(error)) {
+        consola.warn(
+          "pending prompt opencode dismiss failed",
+          { sessionId, kind: item.kind, requestID: item.request.id },
+          error,
+        );
+      }
     }
   }
 
@@ -530,7 +535,7 @@ export function createPendingPrompts(
           : grammyFormatPermissionReplied("reject");
       await grammyEdit(chatId, item.messageId, text);
     } catch (error) {
-      if (!grammyCheckAccessError(error)) {
+      if (!grammyCheckGoneError(error)) {
         consola.warn(
           "pending prompt grammy dismiss failed",
           { sessionId, chatId, kind: item.kind },

@@ -1258,18 +1258,14 @@ test("dismiss logs warning on question reject failure", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
   const error = new Error("reject failed");
-  mockQuestionReject = vi.fn(async () => {
-    throw error;
-  });
+  mockQuestionReject = vi.fn(async () => ({ error }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.dismiss("sess-1");
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt opencode dismiss failed",
-      { sessionId: "sess-1", kind: "question", requestID: "q1" },
-      error,
-    ),
+  expect(consola.warn).toHaveBeenCalledWith(
+    "pending prompt opencode dismiss failed",
+    { sessionId: "sess-1", kind: "question", requestID: "q1" },
+    error,
   );
 });
 
@@ -1277,19 +1273,39 @@ test("dismiss logs warning on permission reply failure", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
   const error = new Error("reply failed");
-  mockPermissionReply = vi.fn(async () => {
-    throw error;
-  });
+  mockPermissionReply = vi.fn(async () => ({ error }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
   await prompts.dismiss("sess-1");
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt opencode dismiss failed",
-      { sessionId: "sess-1", kind: "permission", requestID: "p1" },
-      error,
-    ),
+  expect(consola.warn).toHaveBeenCalledWith(
+    "pending prompt opencode dismiss failed",
+    { sessionId: "sess-1", kind: "permission", requestID: "p1" },
+    error,
   );
+});
+
+test("dismiss silences question reject not found error", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  mockQuestionReject = vi.fn(async () => ({
+    error: { name: "NotFoundError", data: { message: "not found" } },
+  }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.dismiss("sess-1");
+  expect(consola.warn).not.toHaveBeenCalled();
+});
+
+test("dismiss silences permission reply not found error", async () => {
+  const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  mockPermissionReply = vi.fn(async () => ({
+    error: { name: "NotFoundError", data: { message: "not found" } },
+  }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.dismiss("sess-1");
+  expect(consola.warn).not.toHaveBeenCalled();
 });
 
 test("dismiss logs warning on grammy dismiss non-access error", async () => {

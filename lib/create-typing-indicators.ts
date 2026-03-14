@@ -1,7 +1,7 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { consola } from "consola";
 import type { Bot } from "grammy";
-import { grammyCheckAccessError } from "~/lib/grammy-check-access-error";
+import { grammyCheckGoneError } from "~/lib/grammy-check-gone-error";
 import type { Session } from "~/lib/session";
 import type { TypingIndicators } from "~/lib/typing-indicators";
 
@@ -62,7 +62,7 @@ export function createTypingIndicators(
           ...(threadId && { message_thread_id: threadId }),
         })
         .catch((error) => {
-          if (grammyCheckAccessError(error)) {
+          if (grammyCheckGoneError(error)) {
             stop(session.id);
           } else {
             consola.warn(
