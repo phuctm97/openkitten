@@ -813,20 +813,21 @@ test("answer drops session on grammy gone error", async () => {
   expect(mockQuestionReject).toHaveBeenCalledWith({ requestID: "mq1" });
 });
 
-test("answer dismisses session on opencode gone error", async () => {
+test("answer rethrows opencode gone error without dismissing session", async () => {
   const { bot, client } = setup();
   mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  mockPermissionReply = vi.fn(async () => ({
-    error: { name: "NotFoundError", data: { message: "not found" } },
-  }));
+  const error = { name: "NotFoundError", data: { message: "not found" } };
+  mockPermissionReply = vi.fn(async () => ({ error }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "po:0",
-  });
-  expect(prompts.sessionIds).toEqual([]);
+  await expect(
+    prompts.answer({
+      sessionId: "sess-1",
+      callbackQueryId: "cb1",
+      callbackQueryData: "po:0",
+    }),
+  ).rejects.toBe(error);
+  expect(prompts.sessionIds).toEqual(["sess-1"]);
   expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
     text: "An error occurred",
   });

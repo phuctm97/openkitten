@@ -215,10 +215,6 @@ export function createPendingPrompts(
         return;
       }
       await grammyAnswerCallback(callbackQueryId, formatCallbackError());
-      if (opencodeCheckGoneError(error)) {
-        await dismiss(sessionId);
-        return;
-      }
       throw error;
     }
   }
