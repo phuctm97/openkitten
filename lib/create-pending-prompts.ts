@@ -399,10 +399,11 @@ export function createPendingPrompts(
       item.messageId = undefined;
       await flushItem(entry, item);
     } else {
-      await opencodeClient.question.reply({
+      const result = await opencodeClient.question.reply({
         requestID: item.request.id,
         answers: newAnswers,
       });
+      if (result.error) throw result.error;
     }
   }
 
@@ -419,14 +420,16 @@ export function createPendingPrompts(
     reply: "once" | "always" | "reject",
   ) {
     if (item.kind === "permission") {
-      await opencodeClient.permission.reply({
+      const result = await opencodeClient.permission.reply({
         requestID: item.request.id,
         reply,
       });
+      if (result.error) throw result.error;
     } else {
-      await opencodeClient.question.reject({
+      const result = await opencodeClient.question.reject({
         requestID: item.request.id,
       });
+      if (result.error) throw result.error;
     }
   }
 

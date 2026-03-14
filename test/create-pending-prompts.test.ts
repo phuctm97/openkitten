@@ -494,6 +494,22 @@ test("answer permission throws on opencode failure", async () => {
   ).rejects.toThrow("reply failed");
 });
 
+test("answer permission throws on opencode result error", async () => {
+  const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  const error = new Error("result error");
+  mockPermissionReply = vi.fn(async () => ({ error }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await expect(
+    prompts.answer({
+      sessionId: "sess-1",
+      callbackQueryId: "cb1",
+      callbackQueryData: "po:0",
+    }),
+  ).rejects.toThrow("result error");
+});
+
 test("answer question with reject calls opencode", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
@@ -525,6 +541,22 @@ test("answer question reject throws on opencode failure", async () => {
       callbackQueryData: "qr:0",
     }),
   ).rejects.toThrow("reject failed");
+});
+
+test("answer question reject throws on opencode result error", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  const error = new Error("result error");
+  mockQuestionReject = vi.fn(async () => ({ error }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await expect(
+    prompts.answer({
+      sessionId: "sess-1",
+      callbackQueryId: "cb1",
+      callbackQueryData: "qr:0",
+    }),
+  ).rejects.toThrow("result error");
 });
 
 test("answer question select single auto-submits", async () => {
@@ -713,6 +745,23 @@ test("advance throws on opencode question reply failure", async () => {
       callbackQueryData: "qt:0:0",
     }),
   ).rejects.toThrow("reply failed");
+});
+
+test("advance throws on opencode question reply result error", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  const error = new Error("result error");
+  mockQuestionReply = vi.fn(async () => ({ error }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush("sess-1");
+  await expect(
+    prompts.answer({
+      sessionId: "sess-1",
+      callbackQueryId: "cb1",
+      callbackQueryData: "qt:0:0",
+    }),
+  ).rejects.toThrow("result error");
 });
 
 test("answer does not remove item from session", async () => {
