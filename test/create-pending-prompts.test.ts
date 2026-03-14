@@ -122,7 +122,7 @@ const multiSelectQuestionRequest = {
       options: [
         { label: "Auth", description: "Authentication" },
         { label: "DB", description: "Database" },
-        { label: "API", description: "API Layer" },
+        { label: "API", description: "API Gateway" },
       ],
       multiple: true,
     },
@@ -141,23 +141,7 @@ function setup() {
   return { bot, client };
 }
 
-// --- empty args guards ---
-
-test("invalidate with no sessions skips API calls", async () => {
-  const { bot, client } = setup();
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate();
-  expect(mockQuestionList).not.toHaveBeenCalled();
-  expect(mockPermissionList).not.toHaveBeenCalled();
-});
-
-test("dismiss with no session ids is a no-op", async () => {
-  const { bot, client } = setup();
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.dismiss();
-});
-
-// --- invalidate tests ---
+// --- sessionIds tests ---
 
 test("tracks sessions with pending questions", async () => {
   const { bot, client } = setup();
@@ -225,6 +209,16 @@ test("tracks multiple sessions independently", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1", "sess-2"]);
 });
 
+// --- invalidate tests ---
+
+test("invalidate with no sessions skips API calls", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate();
+  expect(mockQuestionList).not.toHaveBeenCalled();
+  expect(mockPermissionList).not.toHaveBeenCalled();
+});
+
 test("keeps existing question items that are still on server", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({
@@ -278,6 +272,42 @@ test("only invalidates given sessions", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
+test("invalidate dismisses stale items on telegram when they have message id", async () => {
+  const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush();
+  // Server no longer has the permission
+  mockPermissionList = vi.fn(async () => ({ data: [] }));
+  await prompts.invalidate(session);
+  expect(mockEditMessageText).toHaveBeenCalledWith(
+    123,
+    100,
+    "✕ Denied",
+    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+  );
+});
+
+test("invalidate does not grammy edit when stale items have no message id", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  mockQuestionList = vi.fn(async () => ({ data: [] }));
+  await prompts.invalidate(session);
+  expect(mockEditMessageText).not.toHaveBeenCalled();
+});
+
+test("handles undefined question and permission data", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: undefined }));
+  mockPermissionList = vi.fn(async () => ({ data: undefined }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  expect(prompts.sessionIds).toEqual([]);
+});
+
 test("throws when question list API fails", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({
@@ -298,182 +328,6 @@ test("throws when permission list API fails", async () => {
   await expect(prompts.invalidate(session)).rejects.toThrow(
     "permission api down",
   );
-});
-
-test("handles undefined question and permission data", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: undefined }));
-  mockPermissionList = vi.fn(async () => ({ data: undefined }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  expect(prompts.sessionIds).toEqual([]);
-});
-
-// --- dismiss tests ---
-
-test("dismiss rejects questions and denies permissions", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.dismiss("sess-1");
-  expect(mockQuestionReject).toHaveBeenCalledWith({ requestID: "q1" });
-  expect(mockPermissionReply).toHaveBeenCalledWith({
-    requestID: "p1",
-    reply: "reject",
-  });
-  expect(prompts.sessionIds).toEqual([]);
-});
-
-test("dismiss handles multiple questions and permissions", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({
-    data: [
-      { ...questionRequest, id: "q1" },
-      { ...questionRequest, id: "q2" },
-    ],
-  }));
-  mockPermissionList = vi.fn(async () => ({
-    data: [
-      { ...permissionRequest, id: "p1" },
-      { ...permissionRequest, id: "p2" },
-    ],
-  }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.dismiss("sess-1");
-  expect(mockQuestionReject).toHaveBeenCalledTimes(2);
-  expect(mockPermissionReply).toHaveBeenCalledTimes(2);
-});
-
-test("dismiss does not edit telegram when items have no message id", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.dismiss("sess-1");
-  expect(mockEditMessageText).not.toHaveBeenCalled();
-});
-
-test("dismiss edits telegram when items have message id", async () => {
-  const { bot, client } = setup();
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.flush();
-  await prompts.dismiss("sess-1");
-  expect(mockEditMessageText).toHaveBeenCalledWith(
-    123,
-    100,
-    "✕ Denied",
-    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
-  );
-});
-
-test("dismiss is no-op for unknown session", async () => {
-  const { bot, client } = setup();
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.dismiss("unknown");
-  expect(mockQuestionReject).not.toHaveBeenCalled();
-  expect(mockPermissionReply).not.toHaveBeenCalled();
-});
-
-test("dismiss logs warning on question reject failure", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  const error = new Error("reject failed");
-  mockQuestionReject = vi.fn(async () => {
-    throw error;
-  });
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.dismiss("sess-1");
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt opencode dismiss failed",
-      { sessionId: "sess-1", kind: "question", requestID: "q1" },
-      error,
-    ),
-  );
-});
-
-test("dismiss logs warning on permission reply failure", async () => {
-  const { bot, client } = setup();
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  const error = new Error("reply failed");
-  mockPermissionReply = vi.fn(async () => {
-    throw error;
-  });
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.dismiss("sess-1");
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt opencode dismiss failed",
-      { sessionId: "sess-1", kind: "permission", requestID: "p1" },
-      error,
-    ),
-  );
-});
-
-test("dispose dismisses all tracked sessions", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({
-    data: [
-      { ...questionRequest, sessionID: "sess-1" },
-      { ...questionRequest, id: "q2", sessionID: "sess-2" },
-    ],
-  }));
-  {
-    await using prompts = createPendingPrompts(bot, client);
-    await prompts.invalidate(session, session2);
-    expect(prompts.sessionIds).toEqual(["sess-1", "sess-2"]);
-  }
-  expect(mockQuestionReject).toHaveBeenCalledTimes(2);
-});
-
-test("dismiss logs warning on grammy dismiss non-access error", async () => {
-  const { bot, client } = setup();
-  const error = new Error("network error");
-  mockEditMessageText = vi.fn(async () => {
-    throw error;
-  });
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.flush();
-  await prompts.dismiss("sess-1");
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt grammy dismiss failed",
-      { sessionId: "sess-1", chatId: 123, kind: "permission" },
-      error,
-    ),
-  );
-});
-
-test("dismiss silences grammy dismiss access error", async () => {
-  const { bot, client } = setup();
-  const error = new GrammyError(
-    "Call to 'editMessageText' failed! (403: Forbidden: bot was blocked by the user)",
-    {
-      ok: false,
-      error_code: 403,
-      description: "Forbidden: bot was blocked by the user",
-    },
-    "editMessageText",
-    {},
-  );
-  mockEditMessageText = vi.fn(async () => {
-    throw error;
-  });
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.flush();
-  await prompts.dismiss("sess-1");
-  expect(consola.warn).not.toHaveBeenCalled();
 });
 
 // --- flush tests ---
@@ -549,8 +403,7 @@ test("flush includes thread id when present", async () => {
   );
 });
 
-// --- answer permission tests ---
-// key for first item is "0"
+// --- answer tests ---
 
 test("answer permission with once calls opencode", async () => {
   const { bot, client } = setup();
@@ -623,8 +476,6 @@ test("answer permission throws on opencode failure", async () => {
   ).rejects.toThrow("reply failed");
 });
 
-// --- answer question reject tests ---
-
 test("answer question with reject calls opencode", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
@@ -657,8 +508,6 @@ test("answer question reject throws on opencode failure", async () => {
     }),
   ).rejects.toThrow("reject failed");
 });
-
-// --- answer question select tests ---
 
 test("answer question select single auto-submits", async () => {
   const { bot, client } = setup();
@@ -735,81 +584,21 @@ test("answer question select multi toggles off", async () => {
   });
 });
 
-test("answer toasts invalid for out-of-bounds index", async () => {
+test("answer question select multi without flush skips grammy edit", async () => {
   const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0:99",
-  });
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: invalid_option",
-  });
-  expect(mockQuestionReply).not.toHaveBeenCalled();
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
-});
-
-test("answer question select multi logs warning on grammy error", async () => {
-  const { bot, client } = setup();
-  const error = new Error("edit failed");
-  mockEditMessageText = vi.fn(async () => {
-    throw error;
-  });
   mockQuestionList = vi.fn(async () => ({
     data: [multiSelectQuestionRequest],
   }));
   await using prompts = createPendingPrompts(bot, client);
   await prompts.invalidate(session);
-  await prompts.flush();
+  // No flush — messageId is undefined
   await prompts.answer({
     sessionId: "sess-1",
     callbackQueryId: "cb1",
     callbackQueryData: "qt:0:0",
   });
-  await vi.waitFor(() =>
-    expect(consola.warn).toHaveBeenCalledWith(
-      "pending prompt grammy select failed",
-      { sessionId: "sess-1", chatId: 123, messageId: 100 },
-      error,
-    ),
-  );
+  expect(mockEditMessageText).not.toHaveBeenCalled();
 });
-
-test("answer question select multi silences grammy access error", async () => {
-  const { bot, client } = setup();
-  const error = new GrammyError(
-    "Call to 'editMessageText' failed! (403: Forbidden)",
-    { ok: false, error_code: 403, description: "Forbidden" },
-    "editMessageText",
-    {},
-  );
-  mockEditMessageText = vi.fn(async () => {
-    throw error;
-  });
-  mockQuestionList = vi.fn(async () => ({
-    data: [multiSelectQuestionRequest],
-  }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.flush();
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0:0",
-  });
-  await vi.waitFor(() =>
-    expect(consola.warn).not.toHaveBeenCalledWith(
-      "pending prompt grammy select failed",
-      expect.anything(),
-      expect.anything(),
-    ),
-  );
-});
-
-// --- answer question confirm tests ---
 
 test("answer question confirm submits selected options", async () => {
   const { bot, client } = setup();
@@ -840,8 +629,6 @@ test("answer question confirm submits selected options", async () => {
   });
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
-
-// --- multi-question advance tests ---
 
 test("answer advances to next question in multi-question", async () => {
   const { bot, client } = setup();
@@ -910,7 +697,20 @@ test("advance throws on opencode question reply failure", async () => {
   ).rejects.toThrow("reply failed");
 });
 
-// --- answer edge cases ---
+test("answer does not remove item from session", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush();
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
+  expect(mockQuestionReply).toHaveBeenCalled();
+  expect(prompts.sessionIds).toEqual(["sess-1"]);
+});
 
 test("answer toasts expired for unknown session", async () => {
   const { bot, client } = setup();
@@ -976,6 +776,40 @@ test("answer toasts invalid for wrong prefix on permission", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
+test("answer toasts invalid for out-of-bounds index", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:99",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: invalid_option",
+  });
+  expect(mockQuestionReply).not.toHaveBeenCalled();
+  expect(prompts.sessionIds).toEqual(["sess-1"]);
+});
+
+test("answer toasts invalid for missing index part", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0",
+  });
+  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
+    text: "An error occurred: invalid_index",
+  });
+  expect(mockQuestionReply).not.toHaveBeenCalled();
+  expect(prompts.sessionIds).toEqual(["sess-1"]);
+});
+
 test("answer toasts invalid for non-numeric index", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
@@ -1025,6 +859,63 @@ test("answer toasts invalid for p prefix on question item", async () => {
   expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
+test("answer question select multi logs warning on grammy error", async () => {
+  const { bot, client } = setup();
+  const error = new Error("edit failed");
+  mockEditMessageText = vi.fn(async () => {
+    throw error;
+  });
+  mockQuestionList = vi.fn(async () => ({
+    data: [multiSelectQuestionRequest],
+  }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush();
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
+  await vi.waitFor(() =>
+    expect(consola.warn).toHaveBeenCalledWith(
+      "pending prompt grammy select failed",
+      { sessionId: "sess-1", chatId: 123, messageId: 100 },
+      error,
+    ),
+  );
+});
+
+test("answer question select multi silences grammy access error", async () => {
+  const { bot, client } = setup();
+  const error = new GrammyError(
+    "Call to 'editMessageText' failed! (403: Forbidden)",
+    { ok: false, error_code: 403, description: "Forbidden" },
+    "editMessageText",
+    {},
+  );
+  mockEditMessageText = vi.fn(async () => {
+    throw error;
+  });
+  mockQuestionList = vi.fn(async () => ({
+    data: [multiSelectQuestionRequest],
+  }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush();
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
+  await vi.waitFor(() =>
+    expect(consola.warn).not.toHaveBeenCalledWith(
+      "pending prompt grammy select failed",
+      expect.anything(),
+      expect.anything(),
+    ),
+  );
+});
+
 test("answer logs warning on answer callback non-access error", async () => {
   const { bot, client } = setup();
   const error = new Error("callback failed");
@@ -1072,83 +963,6 @@ test("answer silences answer callback access error", async () => {
     }),
   );
   expect(consola.warn).not.toHaveBeenCalled();
-});
-
-test("answer does not remove item from session", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.flush();
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0:0",
-  });
-  expect(mockQuestionReply).toHaveBeenCalled();
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
-});
-
-// --- invalidate stale dismiss on telegram ---
-
-test("invalidate dismisses stale items on telegram when they have message id", async () => {
-  const { bot, client } = setup();
-  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.flush();
-  // Server no longer has the permission
-  mockPermissionList = vi.fn(async () => ({ data: [] }));
-  await prompts.invalidate(session);
-  expect(mockEditMessageText).toHaveBeenCalledWith(
-    123,
-    100,
-    "✕ Denied",
-    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
-  );
-});
-
-test("answer select multi without flush skips grammy edit", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({
-    data: [multiSelectQuestionRequest],
-  }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  // No flush — messageId is undefined
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0:0",
-  });
-  expect(mockEditMessageText).not.toHaveBeenCalled();
-});
-
-test("invalidate does not grammy edit when stale items have no message id", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  mockQuestionList = vi.fn(async () => ({ data: [] }));
-  await prompts.invalidate(session);
-  expect(mockEditMessageText).not.toHaveBeenCalled();
-});
-
-test("answer toasts invalid for missing index part", async () => {
-  const { bot, client } = setup();
-  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
-  await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(session);
-  await prompts.answer({
-    sessionId: "sess-1",
-    callbackQueryId: "cb1",
-    callbackQueryData: "qt:0",
-  });
-  expect(mockAnswerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "An error occurred: invalid_index",
-  });
-  expect(mockQuestionReply).not.toHaveBeenCalled();
-  expect(prompts.sessionIds).toEqual(["sess-1"]);
 });
 
 // --- resolve tests ---
@@ -1362,4 +1176,177 @@ test("resolve keeps session when other items remain", async () => {
     requestId: "q1",
   });
   expect(prompts.sessionIds).toEqual(["sess-1"]);
+});
+
+// --- dismiss tests ---
+
+test("dismiss with no session ids is a no-op", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.dismiss();
+});
+
+test("dismiss rejects questions and denies permissions", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.dismiss("sess-1");
+  expect(mockQuestionReject).toHaveBeenCalledWith({ requestID: "q1" });
+  expect(mockPermissionReply).toHaveBeenCalledWith({
+    requestID: "p1",
+    reply: "reject",
+  });
+  expect(prompts.sessionIds).toEqual([]);
+});
+
+test("dismiss handles multiple questions and permissions", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({
+    data: [
+      { ...questionRequest, id: "q1" },
+      { ...questionRequest, id: "q2" },
+    ],
+  }));
+  mockPermissionList = vi.fn(async () => ({
+    data: [
+      { ...permissionRequest, id: "p1" },
+      { ...permissionRequest, id: "p2" },
+    ],
+  }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.dismiss("sess-1");
+  expect(mockQuestionReject).toHaveBeenCalledTimes(2);
+  expect(mockPermissionReply).toHaveBeenCalledTimes(2);
+});
+
+test("dismiss does not edit telegram when items have no message id", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.dismiss("sess-1");
+  expect(mockEditMessageText).not.toHaveBeenCalled();
+});
+
+test("dismiss edits telegram when items have message id", async () => {
+  const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush();
+  await prompts.dismiss("sess-1");
+  expect(mockEditMessageText).toHaveBeenCalledWith(
+    123,
+    100,
+    "✕ Denied",
+    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+  );
+});
+
+test("dismiss is no-op for unknown session", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.dismiss("unknown");
+  expect(mockQuestionReject).not.toHaveBeenCalled();
+  expect(mockPermissionReply).not.toHaveBeenCalled();
+});
+
+test("dismiss logs warning on question reject failure", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));
+  const error = new Error("reject failed");
+  mockQuestionReject = vi.fn(async () => {
+    throw error;
+  });
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.dismiss("sess-1");
+  await vi.waitFor(() =>
+    expect(consola.warn).toHaveBeenCalledWith(
+      "pending prompt opencode dismiss failed",
+      { sessionId: "sess-1", kind: "question", requestID: "q1" },
+      error,
+    ),
+  );
+});
+
+test("dismiss logs warning on permission reply failure", async () => {
+  const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  const error = new Error("reply failed");
+  mockPermissionReply = vi.fn(async () => {
+    throw error;
+  });
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.dismiss("sess-1");
+  await vi.waitFor(() =>
+    expect(consola.warn).toHaveBeenCalledWith(
+      "pending prompt opencode dismiss failed",
+      { sessionId: "sess-1", kind: "permission", requestID: "p1" },
+      error,
+    ),
+  );
+});
+
+test("dismiss logs warning on grammy dismiss non-access error", async () => {
+  const { bot, client } = setup();
+  const error = new Error("network error");
+  mockEditMessageText = vi.fn(async () => {
+    throw error;
+  });
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush();
+  await prompts.dismiss("sess-1");
+  await vi.waitFor(() =>
+    expect(consola.warn).toHaveBeenCalledWith(
+      "pending prompt grammy dismiss failed",
+      { sessionId: "sess-1", chatId: 123, kind: "permission" },
+      error,
+    ),
+  );
+});
+
+test("dismiss silences grammy dismiss access error", async () => {
+  const { bot, client } = setup();
+  const error = new GrammyError(
+    "Call to 'editMessageText' failed! (403: Forbidden: bot was blocked by the user)",
+    {
+      ok: false,
+      error_code: 403,
+      description: "Forbidden: bot was blocked by the user",
+    },
+    "editMessageText",
+    {},
+  );
+  mockEditMessageText = vi.fn(async () => {
+    throw error;
+  });
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush();
+  await prompts.dismiss("sess-1");
+  expect(consola.warn).not.toHaveBeenCalled();
+});
+
+test("dispose dismisses all tracked sessions", async () => {
+  const { bot, client } = setup();
+  mockQuestionList = vi.fn(async () => ({
+    data: [
+      { ...questionRequest, sessionID: "sess-1" },
+      { ...questionRequest, id: "q2", sessionID: "sess-2" },
+    ],
+  }));
+  {
+    await using prompts = createPendingPrompts(bot, client);
+    await prompts.invalidate(session, session2);
+    expect(prompts.sessionIds).toEqual(["sess-1", "sess-2"]);
+  }
+  expect(mockQuestionReject).toHaveBeenCalledTimes(2);
 });

@@ -60,12 +60,19 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-test("stop with no args is a no-op", () => {
+test("exposes active session ids", async () => {
+  mockSessionStatus = vi.fn(async () => ({
+    data: { "sess-1": { type: "busy" }, "sess-2": { type: "busy" } },
+  }));
   using indicators = createTypingIndicators(
     createMockBot(),
     createMockOpencodeClient(),
   );
-  indicators.stop();
+  expect(indicators.sessionIds).toEqual([]);
+  await indicators.invalidate(session, threadSession);
+  expect(indicators.sessionIds).toEqual(["sess-1", "sess-2"]);
+  indicators.stop("sess-1");
+  expect(indicators.sessionIds).toEqual(["sess-2"]);
 });
 
 test("invalidate with no sessions skips API calls", async () => {
@@ -156,38 +163,6 @@ test("stops typing when permission is pending", async () => {
   expect(mockSendChatAction).not.toHaveBeenCalled();
 });
 
-test("sends typing action every 4 seconds", async () => {
-  mockSessionStatus = vi.fn(async () => ({
-    data: { "sess-1": { type: "busy" } },
-  }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await indicators.invalidate(session);
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mockSendChatAction).toHaveBeenCalledTimes(1);
-  await vi.advanceTimersByTimeAsync(4_000);
-  expect(mockSendChatAction).toHaveBeenCalledTimes(2);
-  await vi.advanceTimersByTimeAsync(4_000);
-  expect(mockSendChatAction).toHaveBeenCalledTimes(3);
-});
-
-test("passes thread id when present", async () => {
-  mockSessionStatus = vi.fn(async () => ({
-    data: { "sess-2": { type: "busy" } },
-  }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await indicators.invalidate(threadSession);
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mockSendChatAction).toHaveBeenCalledWith(456, "typing", {
-    message_thread_id: 789,
-  });
-});
-
 test("is idempotent when already typing", async () => {
   mockSessionStatus = vi.fn(async () => ({
     data: { "sess-1": { type: "busy" } },
@@ -223,19 +198,66 @@ test("stops typing on invalidate when session becomes idle", async () => {
   expect(mockSendChatAction).toHaveBeenCalledTimes(1);
 });
 
-test("exposes active session ids", async () => {
+test("handles undefined question and permission data", async () => {
   mockSessionStatus = vi.fn(async () => ({
-    data: { "sess-1": { type: "busy" }, "sess-2": { type: "busy" } },
+    data: { "sess-1": { type: "busy" } },
+  }));
+  mockQuestionList = vi.fn(async () => ({ data: undefined }));
+  mockPermissionList = vi.fn(async () => ({ data: undefined }));
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  await indicators.invalidate(session);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mockSendChatAction).toHaveBeenCalledWith(123, "typing", {});
+});
+
+test("throws when session status API fails", async () => {
+  mockSessionStatus = vi.fn(async () => ({
+    error: new Error("status api down"),
   }));
   using indicators = createTypingIndicators(
     createMockBot(),
     createMockOpencodeClient(),
   );
-  expect(indicators.sessionIds).toEqual([]);
-  await indicators.invalidate(session, threadSession);
-  expect(indicators.sessionIds).toEqual(["sess-1", "sess-2"]);
-  indicators.stop("sess-1");
-  expect(indicators.sessionIds).toEqual(["sess-2"]);
+  await expect(indicators.invalidate(session)).rejects.toThrow(
+    "status api down",
+  );
+});
+
+test("throws when question list API fails", async () => {
+  mockQuestionList = vi.fn(async () => ({
+    error: new Error("question api down"),
+  }));
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  await expect(indicators.invalidate(session)).rejects.toThrow(
+    "question api down",
+  );
+});
+
+test("throws when permission list API fails", async () => {
+  mockPermissionList = vi.fn(async () => ({
+    error: new Error("permission api down"),
+  }));
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  await expect(indicators.invalidate(session)).rejects.toThrow(
+    "permission api down",
+  );
+});
+
+test("stop with no args is a no-op", () => {
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  indicators.stop();
 });
 
 test("disposes all active timers", async () => {
@@ -253,6 +275,38 @@ test("disposes all active timers", async () => {
   const countAfterDispose = mockSendChatAction.mock.calls.length;
   await vi.advanceTimersByTimeAsync(8_000);
   expect(mockSendChatAction).toHaveBeenCalledTimes(countAfterDispose);
+});
+
+test("sends typing action every 4 seconds", async () => {
+  mockSessionStatus = vi.fn(async () => ({
+    data: { "sess-1": { type: "busy" } },
+  }));
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  await indicators.invalidate(session);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mockSendChatAction).toHaveBeenCalledTimes(1);
+  await vi.advanceTimersByTimeAsync(4_000);
+  expect(mockSendChatAction).toHaveBeenCalledTimes(2);
+  await vi.advanceTimersByTimeAsync(4_000);
+  expect(mockSendChatAction).toHaveBeenCalledTimes(3);
+});
+
+test("passes thread id when present", async () => {
+  mockSessionStatus = vi.fn(async () => ({
+    data: { "sess-2": { type: "busy" } },
+  }));
+  using indicators = createTypingIndicators(
+    createMockBot(),
+    createMockOpencodeClient(),
+  );
+  await indicators.invalidate(threadSession);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(mockSendChatAction).toHaveBeenCalledWith(456, "typing", {
+    message_thread_id: 789,
+  });
 });
 
 test("logs warning on send failure", async () => {
@@ -301,58 +355,4 @@ test("self-removes on access error", async () => {
   await vi.advanceTimersByTimeAsync(0);
   expect(indicators.sessionIds).toEqual([]);
   expect(consola.warn).not.toHaveBeenCalled();
-});
-
-test("throws when session status API fails", async () => {
-  mockSessionStatus = vi.fn(async () => ({
-    error: new Error("status api down"),
-  }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await expect(indicators.invalidate(session)).rejects.toThrow(
-    "status api down",
-  );
-});
-
-test("throws when question list API fails", async () => {
-  mockQuestionList = vi.fn(async () => ({
-    error: new Error("question api down"),
-  }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await expect(indicators.invalidate(session)).rejects.toThrow(
-    "question api down",
-  );
-});
-
-test("throws when permission list API fails", async () => {
-  mockPermissionList = vi.fn(async () => ({
-    error: new Error("permission api down"),
-  }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await expect(indicators.invalidate(session)).rejects.toThrow(
-    "permission api down",
-  );
-});
-
-test("handles undefined question and permission data", async () => {
-  mockSessionStatus = vi.fn(async () => ({
-    data: { "sess-1": { type: "busy" } },
-  }));
-  mockQuestionList = vi.fn(async () => ({ data: undefined }));
-  mockPermissionList = vi.fn(async () => ({ data: undefined }));
-  using indicators = createTypingIndicators(
-    createMockBot(),
-    createMockOpencodeClient(),
-  );
-  await indicators.invalidate(session);
-  await vi.advanceTimersByTimeAsync(0);
-  expect(mockSendChatAction).toHaveBeenCalledWith(123, "typing", {});
 });
