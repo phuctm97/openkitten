@@ -1272,6 +1272,33 @@ test("resolve throws on grammy edit failure", async () => {
   ).rejects.toThrow("edit failed");
 });
 
+test("resolve dismisses session on grammy gone error", async () => {
+  const { bot, client } = setup();
+  mockPermissionList = vi.fn(async () => ({ data: [permissionRequest] }));
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(session);
+  await prompts.flush("sess-1");
+  mockEditMessageText = vi.fn(async () => {
+    throw new GrammyError(
+      "Call to 'editMessageText' failed! (403: Forbidden: bot was blocked by the user)",
+      {
+        ok: false,
+        error_code: 403,
+        description: "Forbidden: bot was blocked by the user",
+      },
+      "editMessageText",
+      {},
+    );
+  });
+  await prompts.resolve({
+    sessionId: "sess-1",
+    kind: "permission-replied",
+    requestId: "p1",
+    reply: "once",
+  });
+  expect(prompts.sessionIds).toEqual([]);
+});
+
 test("resolve keeps session when other items remain", async () => {
   const { bot, client } = setup();
   mockQuestionList = vi.fn(async () => ({ data: [questionRequest] }));

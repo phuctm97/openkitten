@@ -231,30 +231,44 @@ export function createPendingPrompts(
     if (itemIndex === -1) return;
     const item = entry.items[itemIndex];
     invariant(item, "item not found at index");
-    if (promptResult.kind === "question-replied") {
-      invariant(item.kind === "question", "question result on permission item");
-      await grammyEdit(
-        entry.chatId,
-        item.messageId,
-        grammyFormatQuestionReplied(item.selectedOptions),
-      );
-    } else if (promptResult.kind === "question-rejected") {
-      invariant(item.kind === "question", "question result on permission item");
-      await grammyEdit(
-        entry.chatId,
-        item.messageId,
-        grammyFormatQuestionRejected(),
-      );
-    } else {
-      invariant(
-        item.kind === "permission",
-        "permission result on question item",
-      );
-      await grammyEdit(
-        entry.chatId,
-        item.messageId,
-        grammyFormatPermissionReplied(promptResult.reply),
-      );
+    try {
+      if (promptResult.kind === "question-replied") {
+        invariant(
+          item.kind === "question",
+          "question result on permission item",
+        );
+        await grammyEdit(
+          entry.chatId,
+          item.messageId,
+          grammyFormatQuestionReplied(item.selectedOptions),
+        );
+      } else if (promptResult.kind === "question-rejected") {
+        invariant(
+          item.kind === "question",
+          "question result on permission item",
+        );
+        await grammyEdit(
+          entry.chatId,
+          item.messageId,
+          grammyFormatQuestionRejected(),
+        );
+      } else {
+        invariant(
+          item.kind === "permission",
+          "permission result on question item",
+        );
+        await grammyEdit(
+          entry.chatId,
+          item.messageId,
+          grammyFormatPermissionReplied(promptResult.reply),
+        );
+      }
+    } catch (error) {
+      if (grammyCheckGoneError(error)) {
+        await dismiss(sessionId);
+        return;
+      }
+      throw error;
     }
     removeItem(sessionId, entry, itemIndex);
   }
