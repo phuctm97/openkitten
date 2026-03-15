@@ -101,7 +101,7 @@ export async function opencodeServe(): Promise<OpencodeServer> {
         OPENCODE_SERVER_PASSWORD: password,
       },
       onExit(_proc, exitCode, signalCode, error) {
-        consola.debug("OpenCode server is stopped", {
+        consola.info("OpenCode server is stopped", {
           signalCode,
           exitCode,
           osError: error,

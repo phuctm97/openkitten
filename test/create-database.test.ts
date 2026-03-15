@@ -18,7 +18,7 @@ test("is disposable", () => {
   {
     using _db = db();
   }
-  expect(consola.debug).toHaveBeenCalledWith("Database is closed");
+  expect(consola.info).toHaveBeenCalledWith("Database is closed");
 });
 
 test("inserts session with default timestamps", () => {

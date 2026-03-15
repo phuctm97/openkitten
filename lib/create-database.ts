@@ -19,7 +19,7 @@ export function createDatabase(filename: string): Database {
   return Object.assign(database, {
     [Symbol.dispose]() {
       sqlite.close();
-      consola.debug("Database is closed");
+      consola.info("Database is closed");
     },
   });
 }

@@ -31,7 +31,7 @@ for (const event of shutdownEvents) {
     using shutdown = shutdownListen();
     handlers.get(event)?.();
     await expect(shutdown.signaled).resolves.toBeUndefined();
-    expect(consola.info).toHaveBeenCalledWith("Shutdown signal received");
+    expect(consola.debug).toHaveBeenCalledWith("Shutdown signal received");
   });
 }
 
@@ -64,7 +64,7 @@ test("logs only once when signal fires before dispose", () => {
     using _shutdown = shutdownListen();
     handlers.get("SIGINT")?.();
   }
-  expect(vi.mocked(consola.info)).toHaveBeenCalledTimes(1);
+  expect(vi.mocked(consola.debug)).toHaveBeenCalledTimes(1);
 });
 
 test("resolves signaled on dispose", async () => {

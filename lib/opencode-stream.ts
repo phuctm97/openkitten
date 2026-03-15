@@ -61,7 +61,7 @@ export function opencodeStream(
         }
       }
     }
-    consola.debug("OpenCode event stream is closed");
+    consola.info("OpenCode event stream is closed");
   }
 
   // run() rejects before abort (max retries exhausted) and only resolves after

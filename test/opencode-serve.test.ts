@@ -124,7 +124,7 @@ test("logs stopped on exit", async () => {
   mockSpawn();
   const opencodeServer = await opencodeServe();
   await opencodeServer.exited.catch(() => {});
-  expect(consola.debug).toHaveBeenCalledWith("OpenCode server is stopped", {
+  expect(consola.info).toHaveBeenCalledWith("OpenCode server is stopped", {
     signalCode: null,
     exitCode: 0,
     osError: undefined,
@@ -136,7 +136,7 @@ test("logs stopped with osError on abnormal exit", async () => {
   mockSpawn({ onExitError: error });
   const opencodeServer = await opencodeServe();
   await opencodeServer.exited.catch(() => {});
-  expect(consola.debug).toHaveBeenCalledWith("OpenCode server is stopped", {
+  expect(consola.info).toHaveBeenCalledWith("OpenCode server is stopped", {
     signalCode: null,
     exitCode: null,
     osError: error,

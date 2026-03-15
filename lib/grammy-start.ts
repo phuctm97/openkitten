@@ -25,7 +25,7 @@ export async function grammyStart(bot: Bot): Promise<Grammy> {
   // Only reject if polling stops on its own, not when we stop it.
   let disposed = false;
   const stopped = polling.then(() => {
-    consola.debug("grammY is stopped");
+    consola.info("grammY is stopped");
     if (disposed) return;
     throw new Error("grammy stopped unexpectedly");
   });
