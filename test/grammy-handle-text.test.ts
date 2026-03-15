@@ -30,9 +30,7 @@ function mockPendingPrompts() {
   return {
     sessionIds: [],
     invalidate: vi.fn(),
-    flush: vi.fn(),
     answer: vi.fn(),
-    resolve: vi.fn(),
     dismiss: vi.fn(),
     [Symbol.asyncDispose]: vi.fn(),
   };

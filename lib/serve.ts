@@ -59,7 +59,6 @@ export const serve = defineCommand({
         );
         await pendingPrompts.dismiss(...stalePendingPromptSessionIds);
         await pendingPrompts.invalidate(snapshot, ...reachable);
-        await pendingPrompts.flush(...reachableSessionIds);
       },
       () => {},
     );

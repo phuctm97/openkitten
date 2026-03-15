@@ -83,19 +83,17 @@ function mockCreateTypingIndicators(sessionIds: string[] = []) {
 
 function mockCreatePendingPrompts(sessionIds: string[] = []) {
   const invalidate = vi.fn();
-  const flush = vi.fn();
   const dismiss = vi.fn();
   const pendingPrompts = {
     sessionIds,
     invalidate,
-    flush,
     dismiss,
     async [Symbol.asyncDispose]() {},
   };
   vi.spyOn(createPendingPromptsModule, "createPendingPrompts").mockReturnValue(
     pendingPrompts as never,
   );
-  return { pendingPrompts, invalidate, flush, dismiss };
+  return { pendingPrompts, invalidate, dismiss };
 }
 
 function mockOpencodeStream() {
