@@ -3,9 +3,18 @@ import { GrammyError } from "grammy";
 import { expect, test, vi } from "vitest";
 import { createPendingPrompts } from "~/lib/create-pending-prompts";
 import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
+import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
 
 vi.mock("~/lib/grammy-send-chunks", () => ({
   grammySendChunks: vi.fn(async () => {}),
+}));
+
+vi.mock("~/lib/grammy-send-question-pending", () => ({
+  grammySendQuestionPending: vi.fn(async () => {}),
+}));
+
+vi.mock("~/lib/grammy-send-permission-pending", () => ({
+  grammySendPermissionPending: vi.fn(async () => {}),
 }));
 
 type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
@@ -113,6 +122,22 @@ const multiQuestionRequest = {
         { label: "TypeScript", description: "TS" },
         { label: "Python", description: "Py" },
       ],
+    },
+  ],
+};
+
+const noCustomQuestionRequest = {
+  id: "ncq1",
+  sessionID: "sess-1",
+  questions: [
+    {
+      question: "Choose a model",
+      header: "Model",
+      options: [
+        { label: "GPT-4", description: "OpenAI GPT-4" },
+        { label: "Claude", description: "Anthropic Claude" },
+      ],
+      custom: false,
     },
   ],
 };
@@ -948,6 +973,156 @@ test("answer throws when answer callback fails", async () => {
       callbackQueryData: "po:0",
     }),
   ).rejects.toThrow("callback failed");
+});
+
+// --- answer custom text tests ---
+
+test("answer custom text submits text as answer for single-select question", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(snapshot({ questions: [questionRequest] }), session);
+  await prompts.flush("sess-1");
+  await prompts.answer({ sessionId: "sess-1", text: "my custom answer" });
+  expect(mockQuestionReply).toHaveBeenCalledWith(
+    { requestID: "q1", answers: [["my custom answer"]] },
+    { throwOnError: true },
+  );
+});
+
+test("answer custom text appends to selected options for multi-select question", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(
+    snapshot({ questions: [multiSelectQuestionRequest] }),
+    session,
+  );
+  await prompts.flush("sess-1");
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "qt:0:0",
+  });
+  await prompts.answer({ sessionId: "sess-1", text: "custom" });
+  expect(mockQuestionReply).toHaveBeenCalledWith(
+    { requestID: "msq1", answers: [["Auth", "custom"]] },
+    { throwOnError: true },
+  );
+});
+
+test("answer custom text sends question pending when custom is false", async () => {
+  const { grammySendQuestionPending } = await import(
+    "~/lib/grammy-send-question-pending"
+  );
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(
+    snapshot({ questions: [noCustomQuestionRequest] }),
+    session,
+  );
+  await prompts.flush("sess-1");
+  await prompts.answer({ sessionId: "sess-1", text: "my text" });
+  expect(grammySendQuestionPending).toHaveBeenCalledWith({
+    bot,
+    ignoreErrors: false,
+    chatId: 123,
+    threadId: undefined,
+  });
+  expect(mockQuestionReply).not.toHaveBeenCalled();
+});
+
+test("answer custom text sends permission pending when permission is active", async () => {
+  const { grammySendPermissionPending } = await import(
+    "~/lib/grammy-send-permission-pending"
+  );
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(
+    snapshot({ permissions: [permissionRequest] }),
+    session,
+  );
+  await prompts.flush("sess-1");
+  await prompts.answer({ sessionId: "sess-1", text: "some text" });
+  expect(grammySendPermissionPending).toHaveBeenCalledWith({
+    bot,
+    ignoreErrors: false,
+    chatId: 123,
+    threadId: undefined,
+  });
+  expect(mockPermissionReply).not.toHaveBeenCalled();
+});
+
+test("answer custom text throws PendingPromptNotFoundError for unknown session", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await expect(
+    prompts.answer({ sessionId: "unknown", text: "hello" }),
+  ).rejects.toThrow(PendingPromptNotFoundError);
+});
+
+test("answer custom text throws PendingPromptNotFoundError when no active item", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(snapshot({ questions: [questionRequest] }), session);
+  // No flush — no messageId set
+  await expect(
+    prompts.answer({ sessionId: "sess-1", text: "hello" }),
+  ).rejects.toThrow(PendingPromptNotFoundError);
+});
+
+test("answer custom text dismisses session on grammy gone error", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(
+    snapshot({ questions: [multiQuestionRequest] }),
+    session,
+  );
+  await prompts.flush("sess-1");
+  mockEditMessageText = vi.fn(async () => {
+    throw new GrammyError(
+      "Call to 'editMessageText' failed! (403: Forbidden: bot was blocked by the user)",
+      {
+        ok: false,
+        error_code: 403,
+        description: "Forbidden: bot was blocked by the user",
+      },
+      "editMessageText",
+      {},
+    );
+  });
+  await prompts.answer({ sessionId: "sess-1", text: "custom" });
+  expect(prompts.sessionIds).toEqual([]);
+});
+
+test("answer custom text rethrows non-gone errors", async () => {
+  const { bot, client } = setup();
+  mockQuestionReply = vi.fn(async () => {
+    throw new Error("network error");
+  });
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(snapshot({ questions: [questionRequest] }), session);
+  await prompts.flush("sess-1");
+  await expect(
+    prompts.answer({ sessionId: "sess-1", text: "custom" }),
+  ).rejects.toThrow("network error");
+});
+
+test("answer custom text advances to next question in multi-question request", async () => {
+  const { bot, client } = setup();
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(
+    snapshot({ questions: [multiQuestionRequest] }),
+    session,
+  );
+  await prompts.flush("sess-1");
+  await prompts.answer({ sessionId: "sess-1", text: "custom first" });
+  expect(mockQuestionReply).not.toHaveBeenCalled();
+  // Flush to show second question
+  await prompts.flush("sess-1");
+  await prompts.answer({ sessionId: "sess-1", text: "custom second" });
+  expect(mockQuestionReply).toHaveBeenCalledWith(
+    { requestID: "mq1", answers: [["custom first"], ["custom second"]] },
+    { throwOnError: true },
+  );
 });
 
 // --- resolve tests ---

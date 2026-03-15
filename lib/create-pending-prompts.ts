@@ -16,10 +16,13 @@ import { grammyFormatQuestionPrompt } from "~/lib/grammy-format-question-prompt"
 import { grammyFormatQuestionRejected } from "~/lib/grammy-format-question-rejected";
 import { grammyFormatQuestionReplied } from "~/lib/grammy-format-question-replied";
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
+import { grammySendPermissionPending } from "~/lib/grammy-send-permission-pending";
+import { grammySendQuestionPending } from "~/lib/grammy-send-question-pending";
 import { opencodeCheckNotFoundError } from "~/lib/opencode-check-not-found-error";
 import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
 import { PendingPromptAnswerError } from "~/lib/pending-prompt-answer-error";
 import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
+import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
 import type { PendingPromptResolveOptions } from "~/lib/pending-prompt-resolve-options";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import type { Session } from "~/lib/session";
@@ -146,11 +149,60 @@ export function createPendingPrompts(
     if (rejected) throw rejected.reason;
   }
 
-  async function answer({
-    sessionId,
-    callbackQueryId,
-    callbackQueryData: callbackData,
-  }: PendingPromptAnswerOptions) {
+  async function answer(options: PendingPromptAnswerOptions) {
+    if ("text" in options) {
+      await answerCustom(options.sessionId, options.text);
+      return;
+    }
+    await answerCallback(
+      options.sessionId,
+      options.callbackQueryId,
+      options.callbackQueryData,
+    );
+  }
+
+  async function answerCustom(sessionId: string, text: string) {
+    try {
+      const entry = sessions.get(sessionId);
+      if (!entry) throw new PendingPromptNotFoundError();
+      const activeItem = entry.items.find((i) => i.messageId !== undefined);
+      if (!activeItem) throw new PendingPromptNotFoundError();
+      if (activeItem.kind === "permission") {
+        await grammySendPermissionPending({
+          bot,
+          ignoreErrors: false,
+          chatId: entry.chatId,
+          threadId: entry.threadId,
+        });
+        return;
+      }
+      const question = activeItem.request.questions[activeItem.currentIndex];
+      invariant(question, "question index out of bounds");
+      if (question.custom === false) {
+        await grammySendQuestionPending({
+          bot,
+          ignoreErrors: false,
+          chatId: entry.chatId,
+          threadId: entry.threadId,
+        });
+        return;
+      }
+      activeItem.selectedOptions = [...activeItem.selectedOptions, text];
+      await advanceOrSubmit(entry, activeItem);
+    } catch (error) {
+      if (grammyCheckGoneError(error)) {
+        await dismiss(sessionId);
+        return;
+      }
+      throw error;
+    }
+  }
+
+  async function answerCallback(
+    sessionId: string,
+    callbackQueryId: string,
+    callbackData: string,
+  ) {
     try {
       const entry = sessions.get(sessionId);
       if (!entry) throw new PendingPromptAnswerError("expired_session");
