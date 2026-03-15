@@ -3,6 +3,7 @@ import { GrammyError } from "grammy";
 import { expect, test, vi } from "vitest";
 import { createPendingPrompts } from "~/lib/create-pending-prompts";
 import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
+import { PendingPromptFlushError } from "~/lib/pending-prompt-flush-error";
 import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
 
 vi.mock("~/lib/grammy-send-chunks", () => ({
@@ -417,16 +418,15 @@ test("invalidate dismisses stale items on telegram when they have message id", a
   );
 });
 
-test("invalidate logs error when flush fails with non-gone error", async () => {
+test("invalidate logs and throws when flush fails with non-gone error", async () => {
   const { bot, client } = setup();
   mockSendMessage = vi.fn(async () => {
     throw new Error("send failed");
   });
   await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(
-    snapshot({ permissions: [permissionRequest] }),
-    session,
-  );
+  await expect(
+    prompts.invalidate(snapshot({ permissions: [permissionRequest] }), session),
+  ).rejects.toThrow(PendingPromptFlushError);
   expect(consola.error).toHaveBeenCalledWith(
     "Failed to flush pending prompt",
     expect.objectContaining({ error: expect.any(Error), sessionId: "sess-1" }),
@@ -924,10 +924,12 @@ test("answer question select multi skips grammy edit after flush failure", async
     throw new Error("send failed");
   });
   await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(
-    snapshot({ questions: [multiSelectQuestionRequest] }),
-    session,
-  );
+  await expect(
+    prompts.invalidate(
+      snapshot({ questions: [multiSelectQuestionRequest] }),
+      session,
+    ),
+  ).rejects.toThrow(PendingPromptFlushError);
   // Flush failed — items have no messageId, toggle should not edit
   await prompts.answer({
     sessionId: "sess-1",
@@ -1081,7 +1083,9 @@ test("answer custom text throws PendingPromptNotFoundError when no active item a
     throw new Error("send failed");
   });
   await using prompts = createPendingPrompts(bot, client);
-  await prompts.invalidate(snapshot({ questions: [questionRequest] }), session);
+  await expect(
+    prompts.invalidate(snapshot({ questions: [questionRequest] }), session),
+  ).rejects.toThrow(PendingPromptFlushError);
   // Flush failed — items have no messageId
   await expect(
     prompts.answer({ sessionId: "sess-1", text: "hello" }),

@@ -22,6 +22,7 @@ import { opencodeCheckNotFoundError } from "~/lib/opencode-check-not-found-error
 import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
 import { PendingPromptAnswerError } from "~/lib/pending-prompt-answer-error";
 import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
+import { PendingPromptFlushError } from "~/lib/pending-prompt-flush-error";
 import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import type { Session } from "~/lib/session";
@@ -63,7 +64,7 @@ export function createPendingPrompts(
     ...sessionsArr: Session[]
   ) {
     if (sessionsArr.length === 0) return;
-    const promises: Promise<void>[] = [];
+    const dismissPromises: Promise<void>[] = [];
     for (const session of sessionsArr) {
       const serverQuestionIds = new Set(
         questions.filter((q) => q.sessionID === session.id).map((q) => q.id),
@@ -80,7 +81,7 @@ export function createPendingPrompts(
         const serverIds =
           item.kind === "question" ? serverQuestionIds : serverPermissionIds;
         if (!serverIds.has(item.request.id)) {
-          promises.push(grammyDismiss(session.id, chatId, item));
+          dismissPromises.push(grammyDismiss(session.id, chatId, item));
         }
       }
       // Keep items still on server
@@ -127,7 +128,7 @@ export function createPendingPrompts(
         sessions.delete(session.id);
       }
     }
-    await Promise.all(promises);
+    await Promise.all(dismissPromises);
     // Auto-flush: send first unsent item to Telegram for each session
     const flushEntries: { sessionId: string; entry: SessionEntry }[] = [];
     const flushPromises: Promise<void>[] = [];
@@ -141,8 +142,10 @@ export function createPendingPrompts(
       flushPromises.push(flushItem(session.id, entry, item));
     }
     const results = await Promise.allSettled(flushPromises);
+    let failCount = 0;
     for (const [i, result] of results.entries()) {
       if (result.status === "rejected") {
+        failCount++;
         const flushEntry = flushEntries[i];
         invariant(flushEntry, "flush entry not found at index");
         const { sessionId, entry } = flushEntry;
@@ -154,6 +157,7 @@ export function createPendingPrompts(
         });
       }
     }
+    if (failCount > 0) throw new PendingPromptFlushError(failCount);
   }
 
   async function answer(options: PendingPromptAnswerOptions) {
@@ -412,10 +416,10 @@ export function createPendingPrompts(
     item: PendingPromptItem,
     resolvedText: string,
   ) {
-    await grammyEdit(entry.chatId, item.messageId, resolvedText);
     const itemIndex = entry.items.indexOf(item);
     invariant(itemIndex !== -1, "resolved item not found in session");
     removeItem(sessionId, entry, itemIndex);
+    await grammyEdit(entry.chatId, item.messageId, resolvedText);
     if (entry.items.length > 0) {
       const nextItem = entry.items.find((i) => !i.messageId);
       invariant(nextItem, "remaining items all have messageId");
@@ -432,15 +436,16 @@ export function createPendingPrompts(
     const newAnswers = [...item.currentAnswers, currentAnswer];
     const nextIndex = item.currentIndex + 1;
     if (nextIndex < item.request.questions.length) {
-      await grammyEdit(
-        entry.chatId,
-        item.messageId,
-        grammyFormatQuestionReplied(currentAnswer),
-      );
+      const previousMessageId = item.messageId;
       item.currentIndex = nextIndex;
       item.currentAnswers = newAnswers;
       item.selectedOptions = [];
       item.messageId = undefined;
+      await grammyEdit(
+        entry.chatId,
+        previousMessageId,
+        grammyFormatQuestionReplied(currentAnswer),
+      );
       await flushItem(sessionId, entry, item);
     } else {
       await opencodeClient.question.reply(
