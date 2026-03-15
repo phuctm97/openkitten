@@ -5,20 +5,23 @@ import type { GrammyHandleContext } from "~/lib/grammy-handle-context";
 import { grammySendError } from "~/lib/grammy-send-error";
 
 export function grammyCreateHandler<C extends Context>(
-  context: GrammyHandleContext,
-  callback: (context: GrammyHandleContext, ctx: C) => Promise<void>,
-): (ctx: C) => void {
-  return (ctx) => {
-    const chatId = ctx.chat?.id;
+  grammyHandleContext: GrammyHandleContext,
+  grammyHandleFn: (
+    grammyHandleContext: GrammyHandleContext,
+    grammyBotContext: C,
+  ) => Promise<void>,
+): (grammyBotContext: C) => void {
+  return (grammyBotContext) => {
+    const chatId = grammyBotContext.chat?.id;
     if (!chatId) {
       consola.fatal("grammY received a non-chat update", {
-        updateId: ctx.update.update_id,
+        updateId: grammyBotContext.update.update_id,
       });
       return;
     }
-    const threadId = ctx.msg?.message_thread_id || undefined;
-    const updateId = ctx.update.update_id;
-    callback(context, ctx).catch((error) => {
+    const threadId = grammyBotContext.msg?.message_thread_id || undefined;
+    const updateId = grammyBotContext.update.update_id;
+    grammyHandleFn(grammyHandleContext, grammyBotContext).catch((error) => {
       consola.error("Failed to process update from Telegram", {
         error,
         chatId,
@@ -27,7 +30,7 @@ export function grammyCreateHandler<C extends Context>(
       });
       if (!grammyCheckGoneError(error)) {
         grammySendError({
-          bot: context.bot,
+          bot: grammyHandleContext.bot,
           error,
           chatId,
           threadId,
