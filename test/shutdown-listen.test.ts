@@ -59,6 +59,14 @@ test("cleans up listeners on signal", () => {
   expect(vi.mocked(process.off).mock.calls.length - offBefore).toBe(9);
 });
 
+test("logs only once when signal fires before dispose", () => {
+  {
+    using _shutdown = shutdownListen();
+    handlers.get("SIGINT")?.();
+  }
+  expect(vi.mocked(consola.info)).toHaveBeenCalledTimes(1);
+});
+
 test("resolves signaled on dispose", async () => {
   let shutdown: ReturnType<typeof shutdownListen>;
   {

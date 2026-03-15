@@ -10,7 +10,10 @@ export function shutdownListen(): Shutdown {
     process.off("message", onMessage);
   }
 
+  let fired = false;
   function onSignal() {
+    if (fired) return;
+    fired = true;
     consola.info("Shutdown signal received");
     cleanup();
     resolve();
