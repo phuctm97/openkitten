@@ -1,8 +1,8 @@
-import type { BusySessions } from "~/lib/busy-sessions";
 import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
 import type { Session } from "~/lib/session";
+import type { WorkingSessions } from "~/lib/working-sessions";
 
-export function createBusySessions(): BusySessions {
+export function createWorkingSessions(): WorkingSessions {
   const sessionSet = new Set<string>();
 
   function invalidate({ statuses }: OpencodeSnapshot, ...sessions: Session[]) {

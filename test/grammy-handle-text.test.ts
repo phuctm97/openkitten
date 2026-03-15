@@ -35,10 +35,10 @@ function mockPendingPrompts() {
   };
 }
 
-function mockBusySessions(busy = false) {
+function mockWorkingSessions(working = false) {
   return {
     sessionIds: [],
-    check: vi.fn(() => busy),
+    check: vi.fn(() => working),
     remove: vi.fn(),
     invalidate: vi.fn(),
   };
@@ -56,7 +56,7 @@ test("answers pending prompt when session has one", async () => {
     opencodeClient: opencodeClient as never,
     typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
-    busySessions: mockBusySessions() as never,
+    workingSessions: mockWorkingSessions() as never,
   } satisfies GrammyHandleContext;
 
   await grammyHandleText(grammyHandleContext, mockCtx(42, "my answer"));
@@ -81,7 +81,7 @@ test("prompts opencode when no pending prompt", async () => {
     opencodeClient: opencodeClient as never,
     typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
-    busySessions: mockBusySessions() as never,
+    workingSessions: mockWorkingSessions() as never,
   } satisfies GrammyHandleContext;
 
   await grammyHandleText(grammyHandleContext, mockCtx(42, "hello"));
@@ -105,7 +105,7 @@ test("creates new session when none exists", async () => {
     opencodeClient: opencodeClient as never,
     typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
-    busySessions: mockBusySessions() as never,
+    workingSessions: mockWorkingSessions() as never,
   } satisfies GrammyHandleContext;
 
   await grammyHandleText(grammyHandleContext, mockCtx(42, "hello"));
@@ -117,7 +117,7 @@ test("creates new session when none exists", async () => {
   );
 });
 
-test("sends busy message when session is busy", async () => {
+test("sends busy message when session is working", async () => {
   using database = createDatabase(":memory:");
   database.insert(schema.session).values({ id: "s1", chatId: 42 }).run();
   const opencodeClient = mockOpencodeClient();
@@ -133,7 +133,7 @@ test("sends busy message when session is busy", async () => {
     opencodeClient: opencodeClient as never,
     typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
-    busySessions: mockBusySessions(true) as never,
+    workingSessions: mockWorkingSessions(true) as never,
   } satisfies GrammyHandleContext;
 
   await grammyHandleText(grammyHandleContext, mockCtx(42, "hello"));
@@ -163,7 +163,7 @@ test("passes threadId through the flow", async () => {
     opencodeClient: opencodeClient as never,
     typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
-    busySessions: mockBusySessions() as never,
+    workingSessions: mockWorkingSessions() as never,
   } satisfies GrammyHandleContext;
 
   await grammyHandleText(grammyHandleContext, mockCtx(42, "hello", 7));
@@ -188,7 +188,7 @@ test("rethrows non-PendingPromptNotFoundError from answer", async () => {
     opencodeClient: opencodeClient as never,
     typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
-    busySessions: mockBusySessions() as never,
+    workingSessions: mockWorkingSessions() as never,
   } satisfies GrammyHandleContext;
 
   await expect(

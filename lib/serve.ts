@@ -1,10 +1,10 @@
 import { defineCommand } from "citty";
 import { consola } from "consola";
 import { Bot } from "grammy";
-import { createBusySessions } from "~/lib/create-busy-sessions";
 import { createDatabase } from "~/lib/create-database";
 import { createPendingPrompts } from "~/lib/create-pending-prompts";
 import { createTypingIndicators } from "~/lib/create-typing-indicators";
+import { createWorkingSessions } from "~/lib/create-working-sessions";
 import { grammyCreateHandler } from "~/lib/grammy-create-handler";
 import { grammyFilterUser } from "~/lib/grammy-filter-user";
 import type { GrammyHandleContext } from "~/lib/grammy-handle-context";
@@ -32,7 +32,7 @@ export const serve = defineCommand({
     bot.use(grammyFilterUser(userId));
     using database = createDatabase(":memory:");
     await using opencodeServer = await opencodeServe();
-    const busySessions = createBusySessions();
+    const workingSessions = createWorkingSessions();
     using typingIndicators = createTypingIndicators(bot);
     await using pendingPrompts = createPendingPrompts(
       bot,
@@ -50,11 +50,11 @@ export const serve = defineCommand({
         const snapshot: OpencodeSnapshot = { statuses, questions, permissions };
         const { reachable } = await invalidateSessions(bot, database, snapshot);
         const reachableSessionIds = new Set(reachable.map((s) => s.id));
-        const staleBusySessionIds = busySessions.sessionIds.filter(
+        const staleWorkingSessionIds = workingSessions.sessionIds.filter(
           (id) => !reachableSessionIds.has(id),
         );
-        busySessions.remove(...staleBusySessionIds);
-        busySessions.invalidate(snapshot, ...reachable);
+        workingSessions.remove(...staleWorkingSessionIds);
+        workingSessions.invalidate(snapshot, ...reachable);
         const staleTypingIndicatorSessionIds =
           typingIndicators.sessionIds.filter(
             (id) => !reachableSessionIds.has(id),
@@ -73,7 +73,7 @@ export const serve = defineCommand({
       bot,
       database,
       opencodeClient: opencodeServer.client,
-      busySessions,
+      workingSessions,
       typingIndicators,
       pendingPrompts,
     };

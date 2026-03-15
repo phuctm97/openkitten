@@ -11,7 +11,7 @@ export async function grammyHandleText(
     bot,
     database,
     opencodeClient,
-    busySessions,
+    workingSessions,
     pendingPrompts,
   }: GrammyHandleContext,
   ctx: TextContext,
@@ -34,8 +34,8 @@ export async function grammyHandleText(
     if (!(error instanceof PendingPromptNotFoundError)) throw error;
   }
 
-  // Check if the session is busy.
-  if (busySessions.check(sessionId)) {
+  // Check if the session is working.
+  if (workingSessions.check(sessionId)) {
     await grammySendBusy({
       bot,
       chatId: ctx.chat.id,
