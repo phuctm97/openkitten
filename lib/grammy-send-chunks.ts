@@ -21,10 +21,10 @@ export async function grammySendChunks({
             ...sendOpts,
           });
         } catch (error) {
-          consola.warn("Failed to send MarkdownV2, falling back to raw text", {
+          consola.warn("Failed to send MarkdownV2, falling back to text", {
             error,
-            text,
             markdown,
+            text,
             chatId,
             threadId,
           });

@@ -43,11 +43,11 @@ test("falls back to plain text when MarkdownV2 fails", async () => {
     .mockResolvedValueOnce(undefined);
   await send([{ text: "hello", markdown: "*hello*" }]);
   expect(consola.warn).toHaveBeenCalledWith(
-    "Failed to send MarkdownV2, falling back to raw text",
+    "Failed to send MarkdownV2, falling back to text",
     {
       error: expect.any(Error),
-      text: "hello",
       markdown: "*hello*",
+      text: "hello",
       chatId: 123,
       threadId: undefined,
     },
