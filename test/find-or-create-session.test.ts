@@ -28,6 +28,7 @@ test("creates new session when none exists", async () => {
   expect(result).toEqual({ sessionId: "s1", isNew: true });
   expect(opencodeClient.session.create).toHaveBeenCalledOnce();
   expect(consola.success).toHaveBeenCalledWith("New session is created", {
+    sessionId: "s1",
     chatId: 123,
     threadId: undefined,
   });

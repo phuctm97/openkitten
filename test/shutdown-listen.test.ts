@@ -3,7 +3,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { shutdownEvents } from "~/lib/shutdown-events";
 import { shutdownListen } from "~/lib/shutdown-listen";
 
-let handlers: Map<string, () => void>;
+let handlers: Map<string, (signal?: string) => void>;
 let messageHandlers: Array<(message: unknown) => void>;
 
 beforeEach(() => {
@@ -29,9 +29,11 @@ beforeEach(() => {
 for (const event of shutdownEvents) {
   test(`resolves on ${event}`, async () => {
     using shutdown = shutdownListen();
-    handlers.get(event)?.();
+    handlers.get(event)?.(event);
     await expect(shutdown.signaled).resolves.toBeUndefined();
-    expect(consola.debug).toHaveBeenCalledWith("Shutdown signal is received");
+    expect(consola.debug).toHaveBeenCalledWith("Shutdown signal is received", {
+      signal: event,
+    });
   });
 }
 
