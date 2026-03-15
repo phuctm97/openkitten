@@ -7,6 +7,7 @@ import { createTypingIndicators } from "~/lib/create-typing-indicators";
 import { grammyStart } from "~/lib/grammy-start";
 import { invalidateSessions } from "~/lib/invalidate-sessions";
 import { opencodeServe } from "~/lib/opencode-serve";
+import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
 import { opencodeStream } from "~/lib/opencode-stream";
 import { shutdownListen } from "~/lib/shutdown-listen";
 
@@ -20,7 +21,7 @@ export const serve = defineCommand({
     const bot = new Bot(token);
     using database = createDatabase(":memory:");
     await using opencodeServer = await opencodeServe();
-    using typingIndicators = createTypingIndicators(bot, opencodeServer.client);
+    using typingIndicators = createTypingIndicators(bot);
     await using pendingPrompts = createPendingPrompts(
       bot,
       opencodeServer.client,
@@ -28,23 +29,26 @@ export const serve = defineCommand({
     await using opencodeEventStream = opencodeStream(
       opencodeServer.client,
       async () => {
-        const { reachable } = await invalidateSessions(
-          bot,
-          database,
-          opencodeServer.client,
-        );
+        const [{ data: statuses }, { data: questions }, { data: permissions }] =
+          await Promise.all([
+            opencodeServer.client.session.status({}, { throwOnError: true }),
+            opencodeServer.client.question.list({}, { throwOnError: true }),
+            opencodeServer.client.permission.list({}, { throwOnError: true }),
+          ]);
+        const snapshot: OpencodeSnapshot = { statuses, questions, permissions };
+        const { reachable } = await invalidateSessions(bot, database, snapshot);
         const reachableSessionIds = new Set(reachable.map((s) => s.id));
         const staleTypingIndicatorSessionIds =
           typingIndicators.sessionIds.filter(
             (id) => !reachableSessionIds.has(id),
           );
         typingIndicators.stop(...staleTypingIndicatorSessionIds);
-        await typingIndicators.invalidate(...reachable);
+        await typingIndicators.invalidate(snapshot, ...reachable);
         const stalePendingPromptSessionIds = pendingPrompts.sessionIds.filter(
           (id) => !reachableSessionIds.has(id),
         );
         await pendingPrompts.dismiss(...stalePendingPromptSessionIds);
-        await pendingPrompts.invalidate(...reachable);
+        await pendingPrompts.invalidate(snapshot, ...reachable);
       },
       () => {},
     );

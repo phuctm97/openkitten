@@ -1,9 +1,9 @@
-import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { consola } from "consola";
 import { inArray } from "drizzle-orm";
 import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
 import { grammyCheckGoneError } from "~/lib/grammy-check-gone-error";
+import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
 import * as schema from "~/lib/schema";
 import type { Session } from "~/lib/session";
 
@@ -15,13 +15,10 @@ interface InvalidateSessionsResult {
 export async function invalidateSessions(
   bot: Bot,
   database: Database,
-  opencodeClient: OpencodeClient,
+  { statuses }: OpencodeSnapshot,
 ): Promise<InvalidateSessionsResult> {
-  const [existingSessions, { data: opencodeSessions }] = await Promise.all([
-    database.query.session.findMany(),
-    opencodeClient.session.list({}, { throwOnError: true }),
-  ]);
-  const opencodeSessionIds = new Set(opencodeSessions.map((s) => s.id));
+  const existingSessions = await database.query.session.findMany();
+  const opencodeSessionIds = new Set(Object.keys(statuses));
   const accessible = await Promise.all(
     existingSessions.map(async (session) => {
       if (!opencodeSessionIds.has(session.id)) return false;

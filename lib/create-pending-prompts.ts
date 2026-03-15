@@ -17,6 +17,7 @@ import { grammyFormatQuestionRejected } from "~/lib/grammy-format-question-rejec
 import { grammyFormatQuestionReplied } from "~/lib/grammy-format-question-replied";
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
 import { opencodeCheckNotFoundError } from "~/lib/opencode-check-not-found-error";
+import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
 import { PendingPromptAnswerError } from "~/lib/pending-prompt-answer-error";
 import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
 import type { PendingPromptResolveOptions } from "~/lib/pending-prompt-resolve-options";
@@ -55,12 +56,11 @@ export function createPendingPrompts(
   const sessions = new Map<string, SessionEntry>();
   let keyCounter = 0;
 
-  async function invalidate(...sessionsArr: Session[]) {
+  async function invalidate(
+    { questions, permissions }: OpencodeSnapshot,
+    ...sessionsArr: Session[]
+  ) {
     if (sessionsArr.length === 0) return;
-    const [{ data: questions }, { data: permissions }] = await Promise.all([
-      opencodeClient.question.list({}, { throwOnError: true }),
-      opencodeClient.permission.list({}, { throwOnError: true }),
-    ]);
     const promises: Promise<void>[] = [];
     for (const session of sessionsArr) {
       const serverQuestionIds = new Set(

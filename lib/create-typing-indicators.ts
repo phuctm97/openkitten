@@ -1,24 +1,18 @@
-import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { consola } from "consola";
 import type { Bot } from "grammy";
 import { grammyCheckGoneError } from "~/lib/grammy-check-gone-error";
+import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
 import type { Session } from "~/lib/session";
 import type { TypingIndicators } from "~/lib/typing-indicators";
 
-export function createTypingIndicators(
-  bot: Bot,
-  opencodeClient: OpencodeClient,
-): TypingIndicators {
+export function createTypingIndicators(bot: Bot): TypingIndicators {
   const timers = new Map<string, Timer | undefined>();
 
-  async function invalidate(...sessions: Session[]) {
+  async function invalidate(
+    { statuses, questions, permissions }: OpencodeSnapshot,
+    ...sessions: Session[]
+  ) {
     if (sessions.length === 0) return;
-    const [{ data: statuses }, { data: questions }, { data: permissions }] =
-      await Promise.all([
-        opencodeClient.session.status({}, { throwOnError: true }),
-        opencodeClient.question.list({}, { throwOnError: true }),
-        opencodeClient.permission.list({}, { throwOnError: true }),
-      ]);
     const promises: Promise<void>[] = [];
     for (const session of sessions) {
       const status = statuses[session.id];

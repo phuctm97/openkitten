@@ -49,9 +49,14 @@ function mockOpencodeServe() {
   const dispose = vi.fn(async () => {
     resolveExited();
   });
+  const client = {
+    session: { status: vi.fn(async () => ({ data: {} })) },
+    question: { list: vi.fn(async () => ({ data: [] })) },
+    permission: { list: vi.fn(async () => ({ data: [] })) },
+  };
   vi.spyOn(opencodeServeModule, "opencodeServe").mockResolvedValue({
     exited,
-    client: {} as never,
+    client: client as never,
     [Symbol.asyncDispose]: dispose,
   });
   return dispose;
@@ -208,7 +213,11 @@ test("exits on unexpected opencode server exit", async () => {
   );
   vi.spyOn(opencodeServeModule, "opencodeServe").mockResolvedValue({
     exited,
-    client: {} as never,
+    client: {
+      session: { status: vi.fn(async () => ({ data: {} })) },
+      question: { list: vi.fn(async () => ({ data: [] })) },
+      permission: { list: vi.fn(async () => ({ data: [] })) },
+    } as never,
     [Symbol.asyncDispose]: async () => {},
   });
   mockCreateTypingIndicators();
@@ -312,7 +321,10 @@ test("reconciles typing indicators on restart", async () => {
   await stream.onRestart()();
 
   expect(invalidate).toHaveBeenCalledOnce();
-  expect(invalidate).toHaveBeenCalledWith(...reachable);
+  expect(invalidate).toHaveBeenCalledWith(
+    expect.objectContaining({ statuses: {}, questions: [], permissions: [] }),
+    ...reachable,
+  );
 
   triggerShutdown();
   await run;
@@ -363,7 +375,10 @@ test("reconciles pending prompts on restart", async () => {
   await stream.onRestart()();
 
   expect(invalidate).toHaveBeenCalledOnce();
-  expect(invalidate).toHaveBeenCalledWith(...reachable);
+  expect(invalidate).toHaveBeenCalledWith(
+    expect.objectContaining({ statuses: {}, questions: [], permissions: [] }),
+    ...reachable,
+  );
 
   triggerShutdown();
   await run;
