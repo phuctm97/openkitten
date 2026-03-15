@@ -21,7 +21,7 @@ export async function grammySendChunks({
             ...sendOpts,
           });
         } catch (error) {
-          consola.fail("Failed to send MarkdownV2, falling back to raw text", {
+          consola.warn("Failed to send MarkdownV2, falling back to raw text", {
             error,
             text,
             markdown,
