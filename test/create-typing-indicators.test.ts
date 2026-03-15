@@ -305,7 +305,7 @@ test("logs warning on send failure", async () => {
   await vi.advanceTimersByTimeAsync(0);
   expect(consola.warn).toHaveBeenCalledWith(
     "Failed to send typing indicator to Telegram",
-    { sessionId: "sess-1", chatId: 123, threadId: undefined, error },
+    { error, sessionId: "sess-1", chatId: 123, threadId: undefined },
   );
 });
 

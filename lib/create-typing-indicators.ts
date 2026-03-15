@@ -60,10 +60,10 @@ export function createTypingIndicators(
             stop(session.id);
           } else {
             consola.warn("Failed to send typing indicator to Telegram", {
+              error,
               sessionId: session.id,
               chatId,
               threadId,
-              error,
             });
           }
         });

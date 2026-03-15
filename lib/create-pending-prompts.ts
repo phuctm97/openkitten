@@ -276,7 +276,7 @@ export function createPendingPrompts(
       const entry = sessions.get(sessionId);
       if (!entry) continue;
       for (const item of entry.items) {
-        promises.push(opencodeDismiss(sessionId, item));
+        promises.push(opencodeDismiss(sessionId, entry.chatId, item));
         promises.push(grammyDismiss(sessionId, entry.chatId, item));
       }
       sessions.delete(sessionId);
@@ -485,7 +485,11 @@ export function createPendingPrompts(
     }
   }
 
-  async function opencodeDismiss(sessionId: string, item: PendingPromptItem) {
+  async function opencodeDismiss(
+    sessionId: string,
+    chatId: number,
+    item: PendingPromptItem,
+  ) {
     try {
       if (item.kind === "question") {
         await opencodeClient.question.reject(
@@ -501,10 +505,11 @@ export function createPendingPrompts(
     } catch (error) {
       if (!opencodeCheckNotFoundError(error)) {
         consola.warn("Failed to dismiss pending prompt in OpenCode", {
-          sessionId,
-          kind: item.kind,
-          requestID: item.request.id,
           error,
+          kind: item.kind,
+          sessionId,
+          chatId,
+          requestId: item.request.id,
         });
       }
     }
@@ -524,10 +529,11 @@ export function createPendingPrompts(
     } catch (error) {
       if (!grammyCheckGoneError(error)) {
         consola.warn("Failed to dismiss pending prompt in Telegram", {
+          error,
+          kind: item.kind,
           sessionId,
           chatId,
-          kind: item.kind,
-          error,
+          messageId: item.messageId,
         });
       }
     }
