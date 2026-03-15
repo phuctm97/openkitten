@@ -8,7 +8,12 @@ export function grammyCreateHandler<C extends Context>(
 ): (ctx: C) => void {
   return (ctx) => {
     const chatId = ctx.chat?.id;
-    if (!chatId) throw new Error("grammY handler has no chat");
+    if (!chatId) {
+      consola.fatal("grammY received an update without a chat", {
+        updateId: ctx.update.update_id,
+      });
+      return;
+    }
     const threadId = ctx.msg?.message_thread_id || undefined;
     callback(ctx).catch((error) => {
       consola.error("grammY failed to process event", {

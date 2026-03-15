@@ -84,11 +84,20 @@ test("passes undefined threadId when msg has none", async () => {
   );
 });
 
-test("throws when chat is missing", () => {
+test("logs fatal and skips callback when chat is missing", () => {
   const callback = vi.fn();
   const handler = grammyCreateHandler({} as never, callback);
-  const ctx = { chat: undefined, msg: undefined } as never;
+  const ctx = {
+    chat: undefined,
+    msg: undefined,
+    update: { update_id: 42 },
+  } as never;
 
-  expect(() => handler(ctx)).toThrow("grammY handler has no chat");
+  handler(ctx);
+
+  expect(consola.fatal).toHaveBeenCalledWith(
+    "grammY received an update without a chat",
+    { updateId: 42 },
+  );
   expect(callback).not.toHaveBeenCalled();
 });
