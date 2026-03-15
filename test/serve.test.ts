@@ -181,7 +181,7 @@ test("logs start, ready, and shutting down", async () => {
   await run;
   expect(consola.start).toHaveBeenCalledWith("OpenKitten is starting");
   expect(consola.ready).toHaveBeenCalledWith("OpenKitten is ready");
-  expect(consola.info).toHaveBeenCalledWith("OpenKitten is shutting down");
+  expect(consola.start).toHaveBeenCalledWith("OpenKitten is shutting down");
 });
 
 test("disposes on shutdown", async () => {
