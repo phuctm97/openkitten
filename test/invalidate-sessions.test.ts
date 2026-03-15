@@ -53,10 +53,13 @@ test("returns all sessions as reachable when accessible", async () => {
   expect(result.reachable).toEqual([session1, session2]);
   expect(result.unreachable).toEqual([]);
   expect(db.delete).not.toHaveBeenCalled();
-  expect(consola.debug).toHaveBeenCalledWith("Sessions are invalidated", {
-    reachable: 2,
-    unreachable: 0,
-  });
+  expect(consola.trace).toHaveBeenCalledWith(
+    "Existing sessions are invalidated",
+    {
+      reachable: 2,
+      unreachable: 0,
+    },
+  );
 });
 
 test("returns inaccessible sessions as unreachable and deletes them", async () => {
@@ -71,6 +74,12 @@ test("returns inaccessible sessions as unreachable and deletes them", async () =
   expect(result.unreachable).toEqual([session2]);
   expect(db.delete).toHaveBeenCalledOnce();
   expect(db._where).toHaveBeenCalledOnce();
+  expect(consola.trace).toHaveBeenCalledWith(
+    "Unreachable sessions are deleted",
+    {
+      sessionIds: ["s2"],
+    },
+  );
 });
 
 test("returns all sessions as unreachable when all inaccessible", async () => {
@@ -122,8 +131,11 @@ test("returns empty arrays when no sessions", async () => {
   const result = await invalidateSessions(bot, db as never);
   expect(result.reachable).toEqual([]);
   expect(result.unreachable).toEqual([]);
-  expect(consola.debug).toHaveBeenCalledWith("Sessions are invalidated", {
-    reachable: 0,
-    unreachable: 0,
-  });
+  expect(consola.trace).toHaveBeenCalledWith(
+    "Existing sessions are invalidated",
+    {
+      reachable: 0,
+      unreachable: 0,
+    },
+  );
 });
