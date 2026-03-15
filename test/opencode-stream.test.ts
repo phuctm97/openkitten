@@ -32,7 +32,9 @@ test("logs stop after loop exits", async () => {
   const dispose = () => subscription[Symbol.asyncDispose]();
 
   await subscription.ended;
-  expect(consola.debug).toHaveBeenCalledWith("OpenCode event stream stopped");
+  expect(consola.debug).toHaveBeenCalledWith(
+    "OpenCode event stream is stopped",
+  );
 });
 
 test("calls onEvent for each event", async () => {

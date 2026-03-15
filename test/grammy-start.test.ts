@@ -55,7 +55,7 @@ test("is async disposable", async () => {
     await using _grammy = await grammyStart(createMockBot());
   }
   expect(mockStop).toHaveBeenCalledOnce();
-  expect(consola.debug).toHaveBeenCalledWith("grammY stopped");
+  expect(consola.debug).toHaveBeenCalledWith("grammY is stopped");
 });
 
 test("propagates startup error", async () => {
