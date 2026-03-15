@@ -1,0 +1,59 @@
+import type { Context, Filter } from "grammy";
+import { findOrCreateSession } from "~/lib/find-or-create-session";
+import type { GrammyHandleTextOptions } from "~/lib/grammy-handle-text-options";
+import { grammySendBusy } from "~/lib/grammy-send-busy";
+import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
+
+type TextContext = Filter<Context, "message:text">;
+
+export function grammyHandleText({
+  bot,
+  database,
+  opencodeClient,
+  pendingPrompts,
+}: GrammyHandleTextOptions): (ctx: TextContext) => Promise<void> {
+  return async (ctx) => {
+    const { sessionId } = await findOrCreateSession(
+      database,
+      opencodeClient,
+      ctx.chat.id,
+      ctx.msg.message_thread_id || undefined,
+    );
+
+    // If there's an active pending prompt for this session, answer it.
+    try {
+      await pendingPrompts.answer({
+        sessionId,
+        text: ctx.message.text,
+      });
+      return;
+    } catch (error) {
+      if (!(error instanceof PendingPromptNotFoundError)) throw error;
+    }
+
+    // Check if the session is busy.
+    const { data: statuses } = await opencodeClient.session.status(
+      {},
+      { throwOnError: true },
+    );
+    const status = statuses[sessionId];
+    if (status && status.type !== "idle") {
+      await grammySendBusy({
+        bot,
+        chatId: ctx.chat.id,
+        threadId: ctx.msg.message_thread_id || undefined,
+        ignoreErrors: false,
+      });
+      return;
+    }
+
+    // Send the message to OpenCode.
+    await opencodeClient.session.promptAsync(
+      {
+        sessionID: sessionId,
+        parts: [{ type: "text", text: ctx.message.text }],
+      },
+      { throwOnError: true },
+    );
+  };
+}

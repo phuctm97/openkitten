@@ -213,7 +213,7 @@ export function createPendingPrompts(
         return;
       }
       activeItem.selectedOptions = [...activeItem.selectedOptions, text];
-      await advanceOrSubmit(entry, activeItem);
+      await advanceOrSubmit(sessionId, entry, activeItem);
     } catch (error) {
       if (grammyCheckGoneError(error)) {
         await dismiss(sessionId);
@@ -258,7 +258,7 @@ export function createPendingPrompts(
       }
 
       if (prefix === "qc") {
-        await advanceOrSubmit(entry, found.item);
+        await advanceOrSubmit(sessionId, entry, found.item);
         await grammyAnswerCallback(callbackQueryId);
         return;
       }
@@ -269,7 +269,7 @@ export function createPendingPrompts(
         const select = Number.parseInt(selectStr, 10);
         if (Number.isNaN(select))
           throw new PendingPromptAnswerError("invalid_index");
-        await answerSelect(entry, found.item, select);
+        await answerSelect(sessionId, entry, found.item, select);
         await grammyAnswerCallback(callbackQueryId);
         return;
       }
@@ -467,6 +467,7 @@ export function createPendingPrompts(
   }
 
   async function advanceOrSubmit(
+    sessionId: string,
     entry: SessionEntry,
     item: PendingPromptQuestion,
   ) {
@@ -483,6 +484,7 @@ export function createPendingPrompts(
       item.currentAnswers = newAnswers;
       item.selectedOptions = [];
       item.messageId = undefined;
+      await flushItem(sessionId, entry, item);
     } else {
       await opencodeClient.question.reply(
         { requestID: item.request.id, answers: newAnswers },
@@ -529,6 +531,7 @@ export function createPendingPrompts(
   }
 
   async function answerSelect(
+    sessionId: string,
     entry: SessionEntry,
     item: PendingPromptQuestion,
     select: number,
@@ -547,7 +550,7 @@ export function createPendingPrompts(
       item.selectedOptions = [option.label];
     }
     if (!question.multiple) {
-      await advanceOrSubmit(entry, item);
+      await advanceOrSubmit(sessionId, entry, item);
     } else if (item.messageId) {
       const promptText = grammyFormatQuestionPrompt(question);
       const kb = buildQuestionKeyboard(

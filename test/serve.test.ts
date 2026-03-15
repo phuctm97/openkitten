@@ -11,9 +11,12 @@ import * as opencodeStreamModule from "~/lib/opencode-stream";
 import { serve } from "~/lib/serve";
 import * as shutdownListenModule from "~/lib/shutdown-listen";
 
-vi.mock("grammy", () => ({
-  Bot: vi.fn(),
-}));
+vi.mock("grammy", () => {
+  const BotMock = vi.fn(function BotMock() {
+    return { on: vi.fn() };
+  });
+  return { Bot: BotMock };
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();

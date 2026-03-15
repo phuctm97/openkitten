@@ -732,7 +732,7 @@ test("answer advances to next question in multi-question", async () => {
     session,
   );
   await prompts.flush("sess-1");
-  // Answer first question — should advance, not submit or flush
+  // Answer first question — should advance and auto-flush next question
   await prompts.answer({
     sessionId: "sess-1",
     callbackQueryId: "cb1",
@@ -740,9 +740,6 @@ test("answer advances to next question in multi-question", async () => {
   });
   expect(mockQuestionReply).not.toHaveBeenCalled();
   expect(prompts.sessionIds).toEqual(["sess-1"]);
-  expect(mockSendMessage).toHaveBeenCalledTimes(1);
-  // Flush to show second question
-  await prompts.flush("sess-1");
   expect(mockSendMessage).toHaveBeenCalledTimes(2);
   // Answer second question — should submit
   await prompts.answer({
@@ -1143,10 +1140,10 @@ test("answer custom text advances to next question in multi-question request", a
     session,
   );
   await prompts.flush("sess-1");
+  // Answer first question — should advance and auto-flush next question
   await prompts.answer({ sessionId: "sess-1", text: "custom first" });
   expect(mockQuestionReply).not.toHaveBeenCalled();
-  // Flush to show second question
-  await prompts.flush("sess-1");
+  // Answer second question — should submit
   await prompts.answer({ sessionId: "sess-1", text: "custom second" });
   expect(mockQuestionReply).toHaveBeenCalledWith(
     { requestID: "mq1", answers: [["custom first"], ["custom second"]] },

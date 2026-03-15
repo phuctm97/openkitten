@@ -4,6 +4,8 @@ import { Bot } from "grammy";
 import { createDatabase } from "~/lib/create-database";
 import { createPendingPrompts } from "~/lib/create-pending-prompts";
 import { createTypingIndicators } from "~/lib/create-typing-indicators";
+import { grammyCreateHandler } from "~/lib/grammy-create-handler";
+import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { grammyStart } from "~/lib/grammy-start";
 import { invalidateSessions } from "~/lib/invalidate-sessions";
 import { opencodeServe } from "~/lib/opencode-serve";
@@ -52,6 +54,18 @@ export const serve = defineCommand({
         await pendingPrompts.flush(...reachableSessionIds);
       },
       () => {},
+    );
+    bot.on(
+      "message:text",
+      grammyCreateHandler(
+        bot,
+        grammyHandleText({
+          bot,
+          database,
+          opencodeClient: opencodeServer.client,
+          pendingPrompts,
+        }),
+      ),
     );
     await using grammy = await grammyStart(bot);
     consola.ready("OpenKitten is ready");
