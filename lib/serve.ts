@@ -28,7 +28,11 @@ export const serve = defineCommand({
     await using opencodeEventStream = opencodeStream(
       opencodeServer.client,
       async () => {
-        const { reachable } = await invalidateSessions(bot, database);
+        const { reachable } = await invalidateSessions(
+          bot,
+          database,
+          opencodeServer.client,
+        );
         const reachableSessionIds = new Set(reachable.map((s) => s.id));
         const staleTypingIndicatorSessionIds =
           typingIndicators.sessionIds.filter(

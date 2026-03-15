@@ -1,3 +1,4 @@
+import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { consola } from "consola";
 import { inArray } from "drizzle-orm";
 import type { Bot } from "grammy";
@@ -14,10 +15,16 @@ interface InvalidateSessionsResult {
 export async function invalidateSessions(
   bot: Bot,
   database: Database,
+  opencodeClient: OpencodeClient,
 ): Promise<InvalidateSessionsResult> {
-  const sessions = await database.query.session.findMany();
+  const [existingSessions, { data: opencodeSessions }] = await Promise.all([
+    database.query.session.findMany(),
+    opencodeClient.session.list({}, { throwOnError: true }),
+  ]);
+  const opencodeSessionIds = new Set(opencodeSessions.map((s) => s.id));
   const accessible = await Promise.all(
-    sessions.map(async (session) => {
+    existingSessions.map(async (session) => {
+      if (!opencodeSessionIds.has(session.id)) return false;
       const threadId = session.threadId || undefined;
       try {
         await bot.api.sendChatAction(session.chatId, "typing", {
@@ -30,8 +37,8 @@ export async function invalidateSessions(
       }
     }),
   );
-  const reachable = sessions.filter((_, i) => accessible[i]);
-  const unreachable = sessions.filter((_, i) => !accessible[i]);
+  const reachable = existingSessions.filter((_, i) => accessible[i]);
+  const unreachable = existingSessions.filter((_, i) => !accessible[i]);
   consola.debug("Existing sessions are invalidated", {
     reachable: reachable.length,
     unreachable: unreachable.length,
