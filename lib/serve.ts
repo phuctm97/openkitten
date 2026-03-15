@@ -6,6 +6,7 @@ import { createPendingPrompts } from "~/lib/create-pending-prompts";
 import { createTypingIndicators } from "~/lib/create-typing-indicators";
 import { grammyCreateHandler } from "~/lib/grammy-create-handler";
 import { grammyFilterUser } from "~/lib/grammy-filter-user";
+import type { GrammyHandleContext } from "~/lib/grammy-handle-context";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { grammyStart } from "~/lib/grammy-start";
 import { invalidateSessions } from "~/lib/invalidate-sessions";
@@ -62,10 +63,11 @@ export const serve = defineCommand({
       },
       () => {},
     );
-    const grammyHandleContext = {
+    const grammyHandleContext: GrammyHandleContext = {
       bot,
       database,
       opencodeClient: opencodeServer.client,
+      typingIndicators,
       pendingPrompts,
     };
     bot.on(

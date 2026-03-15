@@ -48,6 +48,7 @@ test("answers pending prompt when session has one", async () => {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
+    typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
   } satisfies GrammyHandleContext;
 
@@ -74,6 +75,7 @@ test("prompts opencode when no pending prompt", async () => {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
+    typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
   } satisfies GrammyHandleContext;
 
@@ -99,6 +101,7 @@ test("creates new session when none exists", async () => {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
+    typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
   } satisfies GrammyHandleContext;
 
@@ -128,6 +131,7 @@ test("sends busy message when session is busy", async () => {
     bot,
     database,
     opencodeClient: opencodeClient as never,
+    typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
   } satisfies GrammyHandleContext;
 
@@ -158,6 +162,7 @@ test("sends busy message when session is retrying", async () => {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
+    typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
   } satisfies GrammyHandleContext;
 
@@ -184,6 +189,7 @@ test("passes threadId through the flow", async () => {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
+    typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
   } satisfies GrammyHandleContext;
 
@@ -207,6 +213,7 @@ test("rethrows non-PendingPromptNotFoundError from answer", async () => {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
+    typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
   } satisfies GrammyHandleContext;
 
@@ -227,6 +234,7 @@ test("prompts when session status is undefined (new session)", async () => {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
+    typingIndicators: {} as never,
     pendingPrompts: pendingPrompts as never,
   } satisfies GrammyHandleContext;
 
