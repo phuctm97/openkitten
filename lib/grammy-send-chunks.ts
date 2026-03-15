@@ -23,8 +23,10 @@ export async function grammySendChunks({
         } catch (error) {
           consola.debug("Failed to send MarkdownV2, falling back to raw text", {
             error,
-            markdown,
             text,
+            markdown,
+            chatId,
+            threadId,
           });
           await bot.api.sendMessage(chatId, text, sendOpts);
         }

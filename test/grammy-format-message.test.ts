@@ -134,7 +134,7 @@ test("falls back to plain text when convert throws", () => {
   expect(result).toEqual([{ text: "Hello world" }]);
   expect(consola.debug).toHaveBeenCalledWith(
     "Failed to convert raw text to MarkdownV2",
-    { error: expect.any(Error) },
+    { error: expect.any(Error), chunk: "Hello world" },
   );
 });
 

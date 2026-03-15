@@ -144,7 +144,7 @@ function convertSingleChunk(chunk: string): GrammyChunk {
     const markdown = restoreCodeBlockLangs(convert(chunk), langs);
     return { text: chunk, markdown };
   } catch (error) {
-    consola.debug("Failed to convert raw text to MarkdownV2", { error });
+    consola.debug("Failed to convert raw text to MarkdownV2", { error, chunk });
     return { text: chunk };
   }
 }

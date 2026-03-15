@@ -44,7 +44,13 @@ test("falls back to plain text when MarkdownV2 fails", async () => {
   await send([{ text: "hello", markdown: "*hello*" }]);
   expect(consola.debug).toHaveBeenCalledWith(
     "Failed to send MarkdownV2, falling back to raw text",
-    { error: expect.any(Error), markdown: "*hello*", text: "hello" },
+    {
+      error: expect.any(Error),
+      text: "hello",
+      markdown: "*hello*",
+      chatId: 123,
+      threadId: undefined,
+    },
   );
   expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "hello", {});
 });
