@@ -22,6 +22,7 @@ import { opencodeCheckNotFoundError } from "~/lib/opencode-check-not-found-error
 import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
 import { PendingPromptAnswerError } from "~/lib/pending-prompt-answer-error";
 import type { PendingPromptAnswerOptions } from "~/lib/pending-prompt-answer-options";
+import { PendingPromptFlushError } from "~/lib/pending-prompt-flush-error";
 import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
 import type { PendingPromptResolveOptions } from "~/lib/pending-prompt-resolve-options";
 import type { PendingPrompts } from "~/lib/pending-prompts";
@@ -45,6 +46,13 @@ interface PendingPromptPermission {
 }
 
 type PendingPromptItem = PendingPromptQuestion | PendingPromptPermission;
+
+interface FlushAttempt {
+  readonly sessionId: string;
+  readonly chatId: number;
+  readonly threadId: number | undefined;
+  readonly promise: Promise<void>;
+}
 
 interface SessionEntry {
   readonly chatId: number;
@@ -133,20 +141,37 @@ export function createPendingPrompts(
 
   async function flush(...sessionIds: string[]) {
     if (sessionIds.length === 0) return;
-    const promises: Promise<void>[] = [];
+    const attempts: FlushAttempt[] = [];
     for (const sessionId of sessionIds) {
       const entry = sessions.get(sessionId);
       if (!entry) continue;
       if (entry.items.some((item) => item.messageId)) continue;
       const item = entry.items[0];
       invariant(item, "entry has no items");
-      promises.push(flushItem(sessionId, entry, item));
+      attempts.push({
+        sessionId,
+        chatId: entry.chatId,
+        threadId: entry.threadId,
+        promise: flushItem(sessionId, entry, item),
+      });
     }
-    const results = await Promise.allSettled(promises);
-    const rejected = results.find(
-      (r): r is PromiseRejectedResult => r.status === "rejected",
-    );
-    if (rejected) throw rejected.reason;
+    const results = await Promise.allSettled(attempts.map((a) => a.promise));
+    let failCount = 0;
+    for (const [i, result] of results.entries()) {
+      if (result.status === "rejected") {
+        failCount++;
+        const attempt = attempts[i];
+        invariant(attempt, "attempt not found at index");
+        const { sessionId, chatId, threadId } = attempt;
+        consola.error("Failed to flush pending prompt", {
+          error: result.reason,
+          sessionId,
+          chatId,
+          threadId,
+        });
+      }
+    }
+    if (failCount > 0) throw new PendingPromptFlushError(failCount);
   }
 
   async function answer(options: PendingPromptAnswerOptions) {

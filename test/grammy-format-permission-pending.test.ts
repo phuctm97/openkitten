@@ -1,9 +1,12 @@
 import { expect, test } from "vitest";
 import { grammyFormatPermissionPending } from "~/lib/grammy-format-permission-pending";
 
-test("formats pending permission notification", () => {
+test("returns single chunk with permission pending message", () => {
   const chunks = grammyFormatPermissionPending();
-  const text = chunks.map((c) => c.text).join("\n");
-  expect(text).toContain("A permission request needs your response.");
-  expect(text).toContain("Respond to the pending permission request");
+  expect(chunks).toHaveLength(1);
+  const chunk = chunks.at(0);
+  expect(chunk).toBeDefined();
+  expect(chunk?.text).toBe(
+    "> ❗ A permission request needs your response.\n\n```tip\nRespond to the pending permission request before sending a new message.\n```",
+  );
 });

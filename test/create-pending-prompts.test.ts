@@ -3,6 +3,7 @@ import { GrammyError } from "grammy";
 import { expect, test, vi } from "vitest";
 import { createPendingPrompts } from "~/lib/create-pending-prompts";
 import type { OpencodeSnapshot } from "~/lib/opencode-snapshot";
+import { PendingPromptFlushError } from "~/lib/pending-prompt-flush-error";
 import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
 
 vi.mock("~/lib/grammy-send-chunks", () => ({
@@ -413,7 +414,35 @@ test("flush throws when send message fails", async () => {
     snapshot({ permissions: [permissionRequest] }),
     session,
   );
-  await expect(prompts.flush("sess-1")).rejects.toThrow("send failed");
+  await expect(prompts.flush("sess-1")).rejects.toThrow(
+    PendingPromptFlushError,
+  );
+  expect(consola.error).toHaveBeenCalledWith(
+    "Failed to flush pending prompt",
+    expect.objectContaining({ error: expect.any(Error), sessionId: "sess-1" }),
+  );
+});
+
+test("flush logs all failures and throws with correct count", async () => {
+  const { bot, client } = setup();
+  mockSendMessage = vi.fn(async () => {
+    throw new Error("send failed");
+  });
+  const permReq2 = { ...permissionRequest, id: "p2", sessionID: "sess-2" };
+  await using prompts = createPendingPrompts(bot, client);
+  await prompts.invalidate(
+    snapshot({ permissions: [permissionRequest, permReq2] }),
+    session,
+    session2,
+  );
+  const error = await prompts
+    .flush("sess-1", "sess-2")
+    .catch((e: unknown) => e);
+  expect(error).toBeInstanceOf(PendingPromptFlushError);
+  expect((error as Error).message).toBe(
+    "Pending prompt flush failed: 2 sessions",
+  );
+  expect(consola.error).toHaveBeenCalledTimes(2);
 });
 
 test("flush dismisses session on grammy gone error", async () => {
