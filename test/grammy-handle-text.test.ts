@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest";
 import { createDatabase } from "~/lib/create-database";
-import type { GrammyHandleServices } from "~/lib/grammy-handle-services";
+import type { GrammyHandleContext } from "~/lib/grammy-handle-context";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import * as grammySendBusyModule from "~/lib/grammy-send-busy";
 import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
@@ -49,7 +49,7 @@ test("answers pending prompt when session has one", async () => {
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  } satisfies GrammyHandleServices;
+  } satisfies GrammyHandleContext;
 
   await grammyHandleText(services, mockCtx(42, "my answer"));
 
@@ -75,7 +75,7 @@ test("prompts opencode when no pending prompt", async () => {
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  } satisfies GrammyHandleServices;
+  } satisfies GrammyHandleContext;
 
   await grammyHandleText(services, mockCtx(42, "hello"));
 
@@ -100,7 +100,7 @@ test("creates new session when none exists", async () => {
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  } satisfies GrammyHandleServices;
+  } satisfies GrammyHandleContext;
 
   await grammyHandleText(services, mockCtx(42, "hello"));
 
@@ -129,7 +129,7 @@ test("sends busy message when session is busy", async () => {
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  } satisfies GrammyHandleServices;
+  } satisfies GrammyHandleContext;
 
   await grammyHandleText(services, mockCtx(42, "hello"));
 
@@ -159,7 +159,7 @@ test("sends busy message when session is retrying", async () => {
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  } satisfies GrammyHandleServices;
+  } satisfies GrammyHandleContext;
 
   await grammyHandleText(services, mockCtx(42, "hello"));
 
@@ -185,7 +185,7 @@ test("passes threadId through the flow", async () => {
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  } satisfies GrammyHandleServices;
+  } satisfies GrammyHandleContext;
 
   await grammyHandleText(services, mockCtx(42, "hello", 7));
 
@@ -208,7 +208,7 @@ test("rethrows non-PendingPromptNotFoundError from answer", async () => {
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  } satisfies GrammyHandleServices;
+  } satisfies GrammyHandleContext;
 
   await expect(grammyHandleText(services, mockCtx(42, "hello"))).rejects.toBe(
     error,
@@ -228,7 +228,7 @@ test("prompts when session status is undefined (new session)", async () => {
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  } satisfies GrammyHandleServices;
+  } satisfies GrammyHandleContext;
 
   await grammyHandleText(services, mockCtx(42, "hello"));
 

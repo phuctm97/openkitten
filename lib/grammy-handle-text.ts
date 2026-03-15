@@ -1,13 +1,13 @@
 import type { Context, Filter } from "grammy";
 import { findOrCreateSession } from "~/lib/find-or-create-session";
-import type { GrammyHandleServices } from "~/lib/grammy-handle-services";
+import type { GrammyHandleContext } from "~/lib/grammy-handle-context";
 import { grammySendBusy } from "~/lib/grammy-send-busy";
 import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
 
 type TextContext = Filter<Context, "message:text">;
 
 export async function grammyHandleText(
-  { bot, database, opencodeClient, pendingPrompts }: GrammyHandleServices,
+  { bot, database, opencodeClient, pendingPrompts }: GrammyHandleContext,
   ctx: TextContext,
 ): Promise<void> {
   const { sessionId } = await findOrCreateSession(

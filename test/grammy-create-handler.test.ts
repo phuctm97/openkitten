@@ -12,16 +12,16 @@ function mockCtx(chatId: number, threadId?: number, updateId = 1) {
   } as never;
 }
 
-const services = {} as never;
+const context = {} as never;
 
-test("calls callback with services and ctx", () => {
+test("calls callback with context and ctx", () => {
   const callback = vi.fn().mockResolvedValue(undefined);
-  const handler = grammyCreateHandler(services, callback);
+  const handler = grammyCreateHandler(context, callback);
   const ctx = mockCtx(1);
 
   handler(ctx);
 
-  expect(callback).toHaveBeenCalledWith(services, ctx);
+  expect(callback).toHaveBeenCalledWith(context, ctx);
 });
 
 test("catches error and sends to chat", async () => {
@@ -57,7 +57,7 @@ test("logs error with chat context", async () => {
       resolve();
     },
   );
-  const handler = grammyCreateHandler(services, callback);
+  const handler = grammyCreateHandler(context, callback);
 
   handler(mockCtx(1));
   await promise;
@@ -77,7 +77,7 @@ test("passes undefined threadId when msg has none", async () => {
       resolve();
     },
   );
-  const handler = grammyCreateHandler(services, callback);
+  const handler = grammyCreateHandler(context, callback);
 
   handler(mockCtx(10));
   await promise;
@@ -103,7 +103,7 @@ test("skips sending error for gone chat", async () => {
     .spyOn(grammySendErrorModule, "grammySendError")
     .mockResolvedValue(undefined);
   spy.mockClear();
-  const handler = grammyCreateHandler(services, callback);
+  const handler = grammyCreateHandler(context, callback);
 
   handler(mockCtx(99));
   await vi.waitFor(() => expect(consola.error).toHaveBeenCalled());
@@ -113,7 +113,7 @@ test("skips sending error for gone chat", async () => {
 
 test("logs fatal and skips callback when chat is missing", () => {
   const callback = vi.fn();
-  const handler = grammyCreateHandler(services, callback);
+  const handler = grammyCreateHandler(context, callback);
   const ctx = {
     chat: undefined,
     msg: undefined,
