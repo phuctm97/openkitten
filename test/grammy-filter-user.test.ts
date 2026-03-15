@@ -22,8 +22,8 @@ test("skips and warns for non-matching user", () => {
 
   expect(next).not.toHaveBeenCalled();
   expect(consola.warn).toHaveBeenCalledWith(
-    "Ignored update from unauthorized user",
-    { fromId: 456, updateId: 2 },
+    "grammY received an update from unauthorized user",
+    { userId: 456, updateId: 2 },
   );
 });
 
@@ -36,7 +36,7 @@ test("skips and warns when from is undefined", () => {
 
   expect(next).not.toHaveBeenCalled();
   expect(consola.warn).toHaveBeenCalledWith(
-    "Ignored update from unauthorized user",
-    { fromId: undefined, updateId: 3 },
+    "grammY received an update from unauthorized user",
+    { userId: undefined, updateId: 3 },
   );
 });
