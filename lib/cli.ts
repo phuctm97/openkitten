@@ -20,6 +20,9 @@ export const cli = defineCommand({
   setup({ args }) {
     if (args.verbose) consola.level = LogLevels.verbose;
   },
+  cleanup() {
+    consola.level = LogLevels.info;
+  },
   subCommands: {
     serve,
     up,
