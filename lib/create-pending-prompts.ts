@@ -56,23 +56,23 @@ export function createPendingPrompts(
   bot: Bot,
   opencodeClient: OpencodeClient,
 ): PendingPrompts {
-  const sessions = new Map<string, SessionEntry>();
+  const sessionMap = new Map<string, SessionEntry>();
   let keyCounter = 0;
 
   async function invalidate(
     { questions, permissions }: OpencodeSnapshot,
-    ...sessionsArr: Session[]
+    ...sessions: Session[]
   ) {
-    if (sessionsArr.length === 0) return;
+    if (sessions.length === 0) return;
     const dismissPromises: Promise<void>[] = [];
-    for (const session of sessionsArr) {
+    for (const session of sessions) {
       const serverQuestionIds = new Set(
         questions.filter((q) => q.sessionID === session.id).map((q) => q.id),
       );
       const serverPermissionIds = new Set(
         permissions.filter((p) => p.sessionID === session.id).map((p) => p.id),
       );
-      const existing = sessions.get(session.id);
+      const existing = sessionMap.get(session.id);
       const existingItems = existing?.items ?? [];
       const chatId = session.chatId;
       const threadId = session.threadId || undefined;
@@ -123,17 +123,17 @@ export function createPendingPrompts(
         ...newPermissionItems,
       ];
       if (allItems.length > 0) {
-        sessions.set(session.id, { chatId, threadId, items: allItems });
+        sessionMap.set(session.id, { chatId, threadId, items: allItems });
       } else {
-        sessions.delete(session.id);
+        sessionMap.delete(session.id);
       }
     }
     await Promise.all(dismissPromises);
     // Auto-flush: send first unsent item to Telegram for each session
     const flushEntries: { sessionId: string; entry: SessionEntry }[] = [];
     const flushPromises: Promise<void>[] = [];
-    for (const session of sessionsArr) {
-      const entry = sessions.get(session.id);
+    for (const session of sessions) {
+      const entry = sessionMap.get(session.id);
       if (!entry) continue;
       if (entry.items.some((item) => item.messageId)) continue;
       const item = entry.items[0];
@@ -174,7 +174,7 @@ export function createPendingPrompts(
 
   async function answerCustom(sessionId: string, text: string) {
     try {
-      const entry = sessions.get(sessionId);
+      const entry = sessionMap.get(sessionId);
       if (!entry) throw new PendingPromptNotFoundError();
       const activeItem = entry.items.find((i) => i.messageId);
       if (!activeItem) throw new PendingPromptNotFoundError();
@@ -215,7 +215,7 @@ export function createPendingPrompts(
     callbackData: string,
   ) {
     try {
-      const entry = sessions.get(sessionId);
+      const entry = sessionMap.get(sessionId);
       if (!entry) throw new PendingPromptAnswerError("expired_session");
       const parts = callbackData.split(":");
       const prefix = parts[0];
@@ -294,13 +294,13 @@ export function createPendingPrompts(
     if (sessionIds.length === 0) return;
     const promises: Promise<void>[] = [];
     for (const sessionId of sessionIds) {
-      const entry = sessions.get(sessionId);
+      const entry = sessionMap.get(sessionId);
       if (!entry) continue;
       for (const item of entry.items) {
         promises.push(opencodeDismiss(sessionId, entry.chatId, item));
         promises.push(grammyDismiss(sessionId, entry.chatId, item));
       }
-      sessions.delete(sessionId);
+      sessionMap.delete(sessionId);
     }
     await Promise.all(promises);
   }
@@ -407,7 +407,7 @@ export function createPendingPrompts(
 
   function removeItem(sessionId: string, entry: SessionEntry, index: number) {
     entry.items.splice(index, 1);
-    if (entry.items.length === 0) sessions.delete(sessionId);
+    if (entry.items.length === 0) sessionMap.delete(sessionId);
   }
 
   async function resolveItem(
@@ -589,13 +589,13 @@ export function createPendingPrompts(
 
   return {
     get sessionIds() {
-      return [...sessions.keys()];
+      return [...sessionMap.keys()];
     },
     invalidate,
     answer,
     dismiss,
     async [Symbol.asyncDispose]() {
-      await dismiss(...sessions.keys());
+      await dismiss(...sessionMap.keys());
     },
   };
 }
