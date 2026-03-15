@@ -40,7 +40,7 @@ export async function invalidateSessions(
       ),
     );
   }
-  consola.debug("Sessions invalidated", {
+  consola.debug("Sessions are invalidated", {
     reachable: reachable.length,
     unreachable: unreachable.length,
   });

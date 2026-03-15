@@ -286,7 +286,7 @@ test("logs reconnection", async () => {
 
   await subscription.ended;
   expect(consola.warn).toHaveBeenCalledWith(
-    "OpenCode event stream disconnected, reconnecting",
+    "OpenCode event stream is disconnected, reconnecting",
     { attempt: 0, delay: 1000 },
   );
 });

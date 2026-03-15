@@ -31,7 +31,7 @@ for (const event of shutdownEvents) {
     using shutdown = shutdownListen();
     handlers.get(event)?.();
     await expect(shutdown.signaled).resolves.toBeUndefined();
-    expect(consola.debug).toHaveBeenCalledWith("Shutdown signal received");
+    expect(consola.debug).toHaveBeenCalledWith("Shutdown signal is received");
   });
 }
 

@@ -45,7 +45,7 @@ export function opencodeStream(
         if (signal.aborted) break;
         if (attempt >= maxAttempts) throw error;
         const delay = Math.min(1000 * 2 ** attempt, maxDelay);
-        consola.warn("OpenCode event stream disconnected, reconnecting", {
+        consola.warn("OpenCode event stream is disconnected, reconnecting", {
           attempt,
           delay,
         });

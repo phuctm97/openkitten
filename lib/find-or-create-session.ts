@@ -33,7 +33,7 @@ export async function findOrCreateSession(
     await database
       .insert(schema.session)
       .values({ id: sessionId, chatId, threadId: threadId || 0 });
-    consola.success("New session created", { chatId, threadId });
+    consola.success("New session is created", { chatId, threadId });
     return { sessionId, isNew: true };
   } catch (insertError) {
     // Race condition: another concurrent call created the session first.

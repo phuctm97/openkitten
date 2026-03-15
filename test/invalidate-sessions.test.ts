@@ -53,7 +53,7 @@ test("returns all sessions as reachable when accessible", async () => {
   expect(result.reachable).toEqual([session1, session2]);
   expect(result.unreachable).toEqual([]);
   expect(db.delete).not.toHaveBeenCalled();
-  expect(consola.debug).toHaveBeenCalledWith("Sessions invalidated", {
+  expect(consola.debug).toHaveBeenCalledWith("Sessions are invalidated", {
     reachable: 2,
     unreachable: 0,
   });
@@ -122,7 +122,7 @@ test("returns empty arrays when no sessions", async () => {
   const result = await invalidateSessions(bot, db as never);
   expect(result.reachable).toEqual([]);
   expect(result.unreachable).toEqual([]);
-  expect(consola.debug).toHaveBeenCalledWith("Sessions invalidated", {
+  expect(consola.debug).toHaveBeenCalledWith("Sessions are invalidated", {
     reachable: 0,
     unreachable: 0,
   });
