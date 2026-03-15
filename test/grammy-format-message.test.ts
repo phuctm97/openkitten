@@ -132,7 +132,7 @@ test("falls back to plain text when convert throws", () => {
   });
   const result = grammyFormatMessage("Hello world");
   expect(result).toEqual([{ text: "Hello world" }]);
-  expect(consola.debug).toHaveBeenCalledWith(
+  expect(consola.fail).toHaveBeenCalledWith(
     "Failed to convert raw text to MarkdownV2",
     { error: expect.any(Error), chunk: "Hello world" },
   );
