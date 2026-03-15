@@ -9,7 +9,7 @@ export function grammyCreateHandler<C extends Context>(
   return (ctx) => {
     const chatId = ctx.chat?.id;
     if (!chatId) {
-      consola.fatal("grammY received an update without a chat", {
+      consola.fatal("grammY received a non-chat update", {
         updateId: ctx.update.update_id,
       });
       return;

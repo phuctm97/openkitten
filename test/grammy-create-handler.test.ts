@@ -96,7 +96,7 @@ test("logs fatal and skips callback when chat is missing", () => {
   handler(ctx);
 
   expect(consola.fatal).toHaveBeenCalledWith(
-    "grammY received an update without a chat",
+    "grammY received a non-chat update",
     { updateId: 42 },
   );
   expect(callback).not.toHaveBeenCalled();
