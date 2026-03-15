@@ -21,7 +21,7 @@ function portStdout() {
 }
 
 interface MockSpawnOptions {
-  readonly chunks?: string[];
+  readonly chunks?: readonly string[];
   readonly onExitError?: Error;
 }
 

@@ -11,7 +11,7 @@ interface CodeBlockRange {
   readonly lang: string;
 }
 
-function findCodeBlockRanges(text: string): CodeBlockRange[] {
+function findCodeBlockRanges(text: string): readonly CodeBlockRange[] {
   const ranges: CodeBlockRange[] = [];
   const regex = /^```(\w*)/gm;
   let openStart: number | null = null;
@@ -63,7 +63,7 @@ const splitPriorities: readonly SplitPriority[] = [
   { pattern: / /g, offset: 0 },
 ];
 
-function splitMessage(text: string, maxLength: number): string[] {
+function splitMessage(text: string, maxLength: number): readonly string[] {
   if (text.length <= maxLength) return [text];
 
   const chunks: string[] = [];
@@ -124,7 +124,7 @@ function splitMessage(text: string, maxLength: number): string[] {
   return chunks;
 }
 
-function extractCodeBlockLangs(text: string): string[] {
+function extractCodeBlockLangs(text: string): readonly string[] {
   return Array.from(text.matchAll(/^```(\w+)/gm), (m) => m[0].slice(3));
 }
 
@@ -149,7 +149,7 @@ function convertSingleChunk(chunk: string): GrammyChunk {
   }
 }
 
-function tryConvert(chunk: string): GrammyChunk[] {
+function tryConvert(chunk: string): readonly GrammyChunk[] {
   const result = convertSingleChunk(chunk);
   if (result.markdown === undefined) return [result];
   if (result.markdown.length <= telegramMaxLength) return [result];
@@ -174,7 +174,7 @@ function tryConvert(chunk: string): GrammyChunk[] {
 
 const hrPattern = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
 
-export function grammyFormatMessage(text: string): GrammyChunk[] {
+export function grammyFormatMessage(text: string): readonly GrammyChunk[] {
   const sections = text.split(hrPattern);
   const results: GrammyChunk[] = [];
 

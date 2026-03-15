@@ -130,7 +130,7 @@ function jsonMeta(
 function arrayMeta(
   metadata: { readonly [key: string]: unknown },
   key: string,
-): unknown[] | undefined {
+): readonly unknown[] | undefined {
   const value = metadata[key];
   return Array.isArray(value) && value.length > 0 ? value : undefined;
 }

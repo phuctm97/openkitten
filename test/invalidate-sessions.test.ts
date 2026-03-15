@@ -24,7 +24,7 @@ function createMockBot(sendChatAction: (...args: unknown[]) => Promise<void>) {
   return { api: { sendChatAction } } as never;
 }
 
-function createMockDatabase(sessions: unknown[]) {
+function createMockDatabase(sessions: readonly unknown[]) {
   const where = vi.fn();
   const deleteFn = vi.fn(() => ({ where }));
   return {
@@ -34,7 +34,9 @@ function createMockDatabase(sessions: unknown[]) {
   };
 }
 
-function snapshot(sessionIds: string[] = ["s1", "s2"]): OpencodeSnapshot {
+function snapshot(
+  sessionIds: readonly string[] = ["s1", "s2"],
+): OpencodeSnapshot {
   const statuses = Object.fromEntries(
     sessionIds.map((id) => [id, { type: "idle" as const }]),
   );

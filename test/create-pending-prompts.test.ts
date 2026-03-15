@@ -31,8 +31,8 @@ function snapshot({
   questions = [],
   permissions = [],
 }: {
-  questions?: unknown[];
-  permissions?: unknown[];
+  questions?: readonly unknown[];
+  permissions?: readonly unknown[];
 } = {}): OpencodeSnapshot {
   return { statuses: {}, questions, permissions } as never;
 }

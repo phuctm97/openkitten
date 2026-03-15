@@ -31,8 +31,8 @@ function mockCreateDatabase() {
 }
 
 function mockInvalidateSessions(
-  reachable: unknown[] = [],
-  unreachable: unknown[] = [],
+  reachable: readonly unknown[] = [],
+  unreachable: readonly unknown[] = [],
 ) {
   const mock = vi
     .spyOn(invalidateSessionsModule, "invalidateSessions")
@@ -65,7 +65,7 @@ function mockOpencodeServe() {
   return dispose;
 }
 
-function mockCreateTypingIndicators(sessionIds: string[] = []) {
+function mockCreateTypingIndicators(sessionIds: readonly string[] = []) {
   const invalidate = vi.fn();
   const stop = vi.fn();
   const typingIndicators = {
@@ -81,7 +81,7 @@ function mockCreateTypingIndicators(sessionIds: string[] = []) {
   return { typingIndicators, invalidate, stop };
 }
 
-function mockCreatePendingPrompts(sessionIds: string[] = []) {
+function mockCreatePendingPrompts(sessionIds: readonly string[] = []) {
   const invalidate = vi.fn();
   const dismiss = vi.fn();
   const pendingPrompts = {
