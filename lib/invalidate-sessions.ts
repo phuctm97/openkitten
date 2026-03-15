@@ -32,7 +32,7 @@ export async function invalidateSessions(
   );
   const reachable = sessions.filter((_, i) => accessible[i]);
   const unreachable = sessions.filter((_, i) => !accessible[i]);
-  consola.trace("Existing sessions are invalidated", {
+  consola.debug("Existing sessions are invalidated", {
     reachable: reachable.length,
     unreachable: unreachable.length,
   });
@@ -41,7 +41,7 @@ export async function invalidateSessions(
     await database
       .delete(schema.session)
       .where(inArray(schema.session.id, sessionIds));
-    consola.trace("Unreachable sessions are deleted", { sessionIds });
+    consola.debug("Unreachable sessions are deleted", { sessionIds });
   }
   return { reachable, unreachable };
 }

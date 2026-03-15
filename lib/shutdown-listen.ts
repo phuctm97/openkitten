@@ -14,7 +14,7 @@ export function shutdownListen(): Shutdown {
   function onSignal(event?: string) {
     if (fired) return;
     fired = true;
-    consola.debug("Shutdown signal is received", { event });
+    consola.verbose("Shutdown signal is received", { event });
     cleanup();
     resolve();
   }
