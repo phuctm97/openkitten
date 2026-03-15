@@ -176,7 +176,7 @@ export function createPendingPrompts(
     try {
       const entry = sessions.get(sessionId);
       if (!entry) throw new PendingPromptNotFoundError();
-      const activeItem = entry.items.find((i) => i.messageId !== undefined);
+      const activeItem = entry.items.find((i) => i.messageId);
       if (!activeItem) throw new PendingPromptNotFoundError();
       if (activeItem.kind === "permission") {
         await grammySendPermissionPending({
