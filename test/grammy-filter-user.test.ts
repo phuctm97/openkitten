@@ -10,7 +10,7 @@ test("calls next for matching user", async () => {
   await filter(ctx, next);
 
   expect(next).toHaveBeenCalledOnce();
-  expect(consola.warn).not.toHaveBeenCalled();
+  expect(consola.fail).not.toHaveBeenCalled();
 });
 
 test("skips and warns for non-matching user", () => {
@@ -21,8 +21,8 @@ test("skips and warns for non-matching user", () => {
   filter(ctx, next);
 
   expect(next).not.toHaveBeenCalled();
-  expect(consola.warn).toHaveBeenCalledWith(
-    "grammY received an update from unauthorized user",
+  expect(consola.fail).toHaveBeenCalledWith(
+    "grammY rejected an unauthorized update",
     { userId: 456, updateId: 2 },
   );
 });
@@ -35,8 +35,8 @@ test("skips and warns when from is undefined", () => {
   filter(ctx, next);
 
   expect(next).not.toHaveBeenCalled();
-  expect(consola.warn).toHaveBeenCalledWith(
-    "grammY received an update from unauthorized user",
+  expect(consola.fail).toHaveBeenCalledWith(
+    "grammY rejected an unauthorized update",
     { userId: undefined, updateId: 3 },
   );
 });

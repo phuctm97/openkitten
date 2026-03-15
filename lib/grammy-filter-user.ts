@@ -6,7 +6,7 @@ export function grammyFilterUser(
 ): (ctx: Context, next: NextFunction) => Promise<void> | undefined {
   return (ctx, next) => {
     if (ctx.from?.id !== userId) {
-      consola.warn("grammY received an update from unauthorized user", {
+      consola.fail("grammY rejected an unauthorized update", {
         userId: ctx.from?.id,
         updateId: ctx.update.update_id,
       });
