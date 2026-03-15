@@ -7,7 +7,13 @@ import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error
 type TextContext = Filter<Context, "message:text">;
 
 export async function grammyHandleText(
-  { bot, database, opencodeClient, pendingPrompts }: GrammyHandleContext,
+  {
+    bot,
+    database,
+    opencodeClient,
+    busySessions,
+    pendingPrompts,
+  }: GrammyHandleContext,
   ctx: TextContext,
 ): Promise<void> {
   const { sessionId } = await findOrCreateSession(
@@ -29,12 +35,7 @@ export async function grammyHandleText(
   }
 
   // Check if the session is busy.
-  const { data: statuses } = await opencodeClient.session.status(
-    {},
-    { throwOnError: true },
-  );
-  const status = statuses[sessionId];
-  if (status && status.type !== "idle") {
+  if (busySessions.check(sessionId)) {
     await grammySendBusy({
       bot,
       chatId: ctx.chat.id,
