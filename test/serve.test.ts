@@ -13,7 +13,7 @@ import * as shutdownListenModule from "~/lib/shutdown-listen";
 
 vi.mock("grammy", () => {
   const BotMock = vi.fn(function BotMock() {
-    return { on: vi.fn() };
+    return { on: vi.fn(), use: vi.fn() };
   });
   return { Bot: BotMock };
 });
@@ -182,6 +182,7 @@ function mockAll() {
 
 test("logs start and ready", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   const { triggerShutdown } = mockAll();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
@@ -195,6 +196,7 @@ test("logs start and ready", async () => {
 
 test("disposes on shutdown", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   const { disposeOpencodeServer, disposeGrammy, triggerShutdown } = mockAll();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() =>
@@ -208,6 +210,7 @@ test("disposes on shutdown", async () => {
 
 test("exits on unexpected opencode server exit", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   mockCreateDatabase();
   const exited = Promise.reject(
     new Error("OpenCode server exited unexpectedly (1)"),
@@ -237,6 +240,7 @@ test("exits on unexpected opencode server exit", async () => {
 
 test("exits on unexpected grammy stop", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   mockCreateDatabase();
   mockOpencodeServe();
   mockCreateTypingIndicators();
@@ -259,6 +263,7 @@ test("exits on unexpected grammy stop", async () => {
 
 test("exits on event stream failure", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   mockCreateDatabase();
   mockOpencodeServe();
   mockCreateTypingIndicators();
@@ -286,8 +291,25 @@ test("throws if TELEGRAM_BOT_TOKEN is missing", async () => {
   );
 });
 
+test("throws if TELEGRAM_USER_ID is missing", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "");
+  await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
+    "TELEGRAM_USER_ID is required",
+  );
+});
+
+test("throws if TELEGRAM_USER_ID is invalid", async () => {
+  vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "abc");
+  await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
+    'TELEGRAM_USER_ID is invalid: "abc"',
+  );
+});
+
 test("onEvent is a no-op", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   mockCreateDatabase();
   mockOpencodeServe();
   mockCreateTypingIndicators();
@@ -307,6 +329,7 @@ test("onEvent is a no-op", async () => {
 
 test("reconciles typing indicators on restart", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   const reachable = [
     { id: "s1", chatId: 100, threadId: 0 },
     { id: "s2", chatId: 200, threadId: 5 },
@@ -337,6 +360,7 @@ test("reconciles typing indicators on restart", async () => {
 
 test("stops stale typing indicators on restart", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   const reachable = [{ id: "s1", chatId: 100, threadId: 0 }];
   mockCreateDatabase();
   mockOpencodeServe();
@@ -361,6 +385,7 @@ test("stops stale typing indicators on restart", async () => {
 
 test("reconciles pending prompts on restart", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   const reachable = [
     { id: "s1", chatId: 100, threadId: 0 },
     { id: "s2", chatId: 200, threadId: 5 },
@@ -391,6 +416,7 @@ test("reconciles pending prompts on restart", async () => {
 
 test("dismisses stale pending prompts on restart", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
+  vi.stubEnv("TELEGRAM_USER_ID", "123");
   const reachable = [{ id: "s1", chatId: 100, threadId: 0 }];
   mockCreateDatabase();
   mockOpencodeServe();

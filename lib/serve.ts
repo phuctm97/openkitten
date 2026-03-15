@@ -5,6 +5,7 @@ import { createDatabase } from "~/lib/create-database";
 import { createPendingPrompts } from "~/lib/create-pending-prompts";
 import { createTypingIndicators } from "~/lib/create-typing-indicators";
 import { grammyCreateHandler } from "~/lib/grammy-create-handler";
+import { grammyFilterUser } from "~/lib/grammy-filter-user";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { grammyStart } from "~/lib/grammy-start";
 import { invalidateSessions } from "~/lib/invalidate-sessions";
@@ -20,7 +21,13 @@ export const serve = defineCommand({
     using shutdown = shutdownListen();
     const token = Bun.env["TELEGRAM_BOT_TOKEN"];
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");
+    const rawUserId = Bun.env["TELEGRAM_USER_ID"];
+    if (!rawUserId) throw new Error("TELEGRAM_USER_ID is required");
+    const userId = Number(rawUserId);
+    if (!Number.isInteger(userId) || userId <= 0)
+      throw new Error(`TELEGRAM_USER_ID is invalid: "${rawUserId}"`);
     const bot = new Bot(token);
+    bot.use(grammyFilterUser(userId));
     using database = createDatabase(":memory:");
     await using opencodeServer = await opencodeServe();
     using typingIndicators = createTypingIndicators(bot);
