@@ -18,7 +18,7 @@ export async function grammyStart(bot: Bot): Promise<Grammy> {
   });
 
   const { resolve, promise: started } = Promise.withResolvers<void>();
-  consola.start("grammY is starting");
+  consola.start("grammY is starting…");
   const polling = bot.start({ onStart: () => resolve() });
 
   // bot.start() rejects if polling fails before onStart fires.

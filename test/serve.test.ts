@@ -179,7 +179,7 @@ test("logs start and ready", async () => {
   );
   triggerShutdown();
   await run;
-  expect(consola.start).toHaveBeenCalledWith("OpenKitten is starting");
+  expect(consola.start).toHaveBeenCalledWith("OpenKitten is starting…");
   expect(consola.ready).toHaveBeenCalledWith("OpenKitten is ready");
 });
 

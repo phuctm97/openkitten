@@ -10,7 +10,7 @@ function db() {
 
 test("logs start and ready", () => {
   using _database = db();
-  expect(consola.start).toHaveBeenCalledWith("Database is initializing");
+  expect(consola.start).toHaveBeenCalledWith("Database is initializing…");
   expect(consola.ready).toHaveBeenCalledWith("Database is ready");
 });
 

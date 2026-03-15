@@ -19,7 +19,7 @@ export function opencodeStream(
     for (;;) {
       try {
         if (signal.aborted) break;
-        consola.start("OpenCode event stream is connecting");
+        consola.start("OpenCode event stream is connecting…");
         const { stream } = await opencodeClient.event.subscribe({}, { signal });
         const iter = stream[Symbol.asyncIterator]();
         const onAbort = () => {
@@ -45,7 +45,7 @@ export function opencodeStream(
         if (signal.aborted) break;
         if (attempt >= maxAttempts) throw error;
         const delay = Math.min(1000 * 2 ** attempt, maxDelay);
-        consola.warn("OpenCode event stream is disconnected, reconnecting", {
+        consola.warn("OpenCode event stream is disconnected, reconnecting…", {
           attempt,
           delay,
         });

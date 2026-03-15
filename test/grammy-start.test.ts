@@ -46,7 +46,7 @@ beforeEach(() => {
 
 test("logs start and ready", async () => {
   await using _grammy = await grammyStart(createMockBot());
-  expect(consola.start).toHaveBeenCalledWith("grammY is starting");
+  expect(consola.start).toHaveBeenCalledWith("grammY is starting…");
   expect(consola.ready).toHaveBeenCalledWith("grammY is ready");
 });
 

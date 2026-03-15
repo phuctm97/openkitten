@@ -117,7 +117,7 @@ test("is async disposable", async () => {
 test("logs start", async () => {
   mockSpawn();
   await opencodeServe();
-  expect(consola.start).toHaveBeenCalledWith("OpenCode server is starting");
+  expect(consola.start).toHaveBeenCalledWith("OpenCode server is starting…");
 });
 
 test("logs stopped on exit", async () => {

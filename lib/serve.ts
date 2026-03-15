@@ -13,7 +13,7 @@ import { shutdownListen } from "~/lib/shutdown-listen";
 export const serve = defineCommand({
   meta: { description: "Start the OpenKitten server." },
   run: async () => {
-    consola.start("OpenKitten is starting");
+    consola.start("OpenKitten is starting…");
     using shutdown = shutdownListen();
     const token = Bun.env["TELEGRAM_BOT_TOKEN"];
     if (!token) throw new Error("TELEGRAM_BOT_TOKEN is required");

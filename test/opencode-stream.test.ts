@@ -256,7 +256,7 @@ test("logs connecting and connected", async () => {
 
   await subscription.ended;
   expect(consola.start).toHaveBeenCalledWith(
-    "OpenCode event stream is connecting",
+    "OpenCode event stream is connecting…",
   );
   expect(consola.ready).toHaveBeenCalledWith(
     "OpenCode event stream is connected",
@@ -286,7 +286,7 @@ test("logs reconnection", async () => {
 
   await subscription.ended;
   expect(consola.warn).toHaveBeenCalledWith(
-    "OpenCode event stream is disconnected, reconnecting",
+    "OpenCode event stream is disconnected, reconnecting…",
     { attempt: 0, delay: 1000 },
   );
 });
