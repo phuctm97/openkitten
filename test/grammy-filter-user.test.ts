@@ -13,7 +13,7 @@ test("calls next for matching user", async () => {
   expect(consola.fail).not.toHaveBeenCalled();
 });
 
-test("skips and warns for non-matching user", () => {
+test("rejects non-matching user", () => {
   const filter = grammyFilterUser(123);
   const next = vi.fn();
   const ctx = { from: { id: 456 }, update: { update_id: 2 } } as never;
@@ -27,7 +27,7 @@ test("skips and warns for non-matching user", () => {
   );
 });
 
-test("skips and warns when from is undefined", () => {
+test("rejects when from is undefined", () => {
   const filter = grammyFilterUser(123);
   const next = vi.fn();
   const ctx = { from: undefined, update: { update_id: 3 } } as never;
