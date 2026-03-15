@@ -9,6 +9,7 @@ import * as schema from "~/lib/schema";
 const migrationsFolder = resolve(import.meta.dirname, "../drizzle");
 
 export function createDatabase(filename: string): Database {
+  consola.start("Database is initializing");
   const sqlite = new SQLite(filename);
   sqlite.run("PRAGMA journal_mode = WAL");
   sqlite.run("PRAGMA foreign_keys = ON");

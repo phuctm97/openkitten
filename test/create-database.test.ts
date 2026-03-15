@@ -8,8 +8,9 @@ function db() {
   return createDatabase(":memory:");
 }
 
-test("logs ready", () => {
+test("logs start and ready", () => {
   using _database = db();
+  expect(consola.start).toHaveBeenCalledWith("Database is initializing");
   expect(consola.ready).toHaveBeenCalledWith("Database is ready");
 });
 
