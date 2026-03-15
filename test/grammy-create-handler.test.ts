@@ -1,4 +1,5 @@
 import { consola } from "consola";
+import { GrammyError } from "grammy";
 import { expect, test, vi } from "vitest";
 import { grammyCreateHandler } from "~/lib/grammy-create-handler";
 import * as grammySendErrorModule from "~/lib/grammy-send-error";
@@ -39,9 +40,9 @@ test("catches error and sends to chat", async () => {
   expect(grammySendErrorModule.grammySendError).toHaveBeenCalledWith({
     bot,
     error,
-    ignoreErrors: true,
     chatId: 42,
     threadId: 7,
+    ignoreErrors: true,
   });
 });
 
@@ -82,6 +83,30 @@ test("passes undefined threadId when msg has none", async () => {
   expect(grammySendErrorModule.grammySendError).toHaveBeenCalledWith(
     expect.objectContaining({ threadId: undefined }),
   );
+});
+
+test("skips sending error for gone chat", async () => {
+  const error = new GrammyError(
+    "Call to 'sendMessage' failed! (403: Forbidden: bot was blocked by the user)",
+    {
+      ok: false,
+      error_code: 403,
+      description: "Forbidden: bot was blocked by the user",
+    },
+    "sendMessage",
+    {},
+  );
+  const callback = vi.fn().mockRejectedValue(error);
+  const spy = vi
+    .spyOn(grammySendErrorModule, "grammySendError")
+    .mockResolvedValue(undefined);
+  spy.mockClear();
+  const handler = grammyCreateHandler({} as never, callback);
+
+  handler(mockCtx(99));
+  await vi.waitFor(() => expect(consola.error).toHaveBeenCalled());
+
+  expect(spy).not.toHaveBeenCalled();
 });
 
 test("logs fatal and skips callback when chat is missing", () => {

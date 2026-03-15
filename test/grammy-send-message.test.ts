@@ -14,9 +14,9 @@ test("formats text and sends chunks", async () => {
   await grammySendMessage({
     bot: {} as never,
     text: "hello",
-    ignoreErrors: false,
     chatId: 123,
     threadId: undefined,
+    ignoreErrors: false,
   });
   expect(grammyFormatMessageModule.grammyFormatMessage).toHaveBeenCalledWith(
     "hello",
@@ -24,8 +24,8 @@ test("formats text and sends chunks", async () => {
   expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
     bot: {} as never,
     chunks,
-    ignoreErrors: false,
     chatId: 123,
     threadId: undefined,
+    ignoreErrors: false,
   });
 });

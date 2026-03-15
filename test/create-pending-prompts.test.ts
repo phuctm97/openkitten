@@ -1052,9 +1052,9 @@ test("answer custom text sends question pending when custom is false", async () 
   await prompts.answer({ sessionId: "sess-1", text: "my text" });
   expect(grammySendQuestionPending).toHaveBeenCalledWith({
     bot,
-    ignoreErrors: false,
     chatId: 123,
     threadId: undefined,
+    ignoreErrors: false,
   });
   expect(mockQuestionReply).not.toHaveBeenCalled();
 });
@@ -1073,9 +1073,9 @@ test("answer custom text sends permission pending when permission is active", as
   await prompts.answer({ sessionId: "sess-1", text: "some text" });
   expect(grammySendPermissionPending).toHaveBeenCalledWith({
     bot,
-    ignoreErrors: false,
     chatId: 123,
     threadId: undefined,
+    ignoreErrors: false,
   });
   expect(mockPermissionReply).not.toHaveBeenCalled();
 });

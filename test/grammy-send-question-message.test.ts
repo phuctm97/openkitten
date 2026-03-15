@@ -20,9 +20,9 @@ test("formats question message and sends chunks", async () => {
   await grammySendQuestionMessage({
     bot: {} as never,
     question,
-    ignoreErrors: true,
     chatId: 456,
     threadId: 789,
+    ignoreErrors: true,
   });
   expect(
     grammyFormatQuestionMessageModule.grammyFormatQuestionMessage,
@@ -30,8 +30,8 @@ test("formats question message and sends chunks", async () => {
   expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
     bot: {} as never,
     chunks,
-    ignoreErrors: true,
     chatId: 456,
     threadId: 789,
+    ignoreErrors: true,
   });
 });

@@ -14,14 +14,14 @@ beforeEach(() => {
 
 function send(
   chunks: Array<{ text: string; markdown?: string }>,
-  options?: { readonly ignoreErrors?: boolean; readonly threadId?: number },
+  options?: { readonly threadId?: number; readonly ignoreErrors?: boolean },
 ) {
   return grammySendChunks({
     bot: bot as never,
     chunks,
     chatId: 123,
-    ignoreErrors: options?.ignoreErrors ?? false,
     threadId: options?.threadId,
+    ignoreErrors: options?.ignoreErrors ?? false,
   });
 }
 

@@ -15,16 +15,16 @@ test("formats error and sends chunks", async () => {
   await grammySendError({
     bot: {} as never,
     error,
-    ignoreErrors: true,
     chatId: 456,
     threadId: 789,
+    ignoreErrors: true,
   });
   expect(grammyFormatErrorModule.grammyFormatError).toHaveBeenCalledWith(error);
   expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
     bot: {} as never,
     chunks,
-    ignoreErrors: true,
     chatId: 456,
     threadId: 789,
+    ignoreErrors: true,
   });
 });

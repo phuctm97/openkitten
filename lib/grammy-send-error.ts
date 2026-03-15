@@ -5,10 +5,10 @@ import type { GrammySendErrorOptions } from "~/lib/grammy-send-error-options";
 export async function grammySendError({
   bot,
   error,
-  ignoreErrors,
   chatId,
   threadId,
+  ignoreErrors,
 }: GrammySendErrorOptions): Promise<void> {
   const chunks = grammyFormatError(error);
-  await grammySendChunks({ bot, chunks, ignoreErrors, chatId, threadId });
+  await grammySendChunks({ bot, chunks, chatId, threadId, ignoreErrors });
 }

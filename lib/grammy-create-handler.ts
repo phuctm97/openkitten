@@ -1,5 +1,6 @@
 import { consola } from "consola";
 import type { Bot, Context } from "grammy";
+import { grammyCheckGoneError } from "~/lib/grammy-check-gone-error";
 import { grammySendError } from "~/lib/grammy-send-error";
 
 export function grammyCreateHandler<C extends Context>(
@@ -23,13 +24,15 @@ export function grammyCreateHandler<C extends Context>(
         threadId,
         updateId,
       });
-      grammySendError({
-        bot,
-        error,
-        chatId,
-        threadId,
-        ignoreErrors: true,
-      });
+      if (!grammyCheckGoneError(error)) {
+        grammySendError({
+          bot,
+          error,
+          chatId,
+          threadId,
+          ignoreErrors: true,
+        });
+      }
     });
   };
 }

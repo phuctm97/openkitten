@@ -5,10 +5,10 @@ import type { GrammySendQuestionMessageOptions } from "~/lib/grammy-send-questio
 export async function grammySendQuestionMessage({
   bot,
   question,
-  ignoreErrors,
   chatId,
   threadId,
+  ignoreErrors,
 }: GrammySendQuestionMessageOptions): Promise<void> {
   const chunks = grammyFormatQuestionMessage(question);
-  await grammySendChunks({ bot, chunks, ignoreErrors, chatId, threadId });
+  await grammySendChunks({ bot, chunks, chatId, threadId, ignoreErrors });
 }

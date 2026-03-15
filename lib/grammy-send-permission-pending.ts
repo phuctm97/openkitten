@@ -4,10 +4,10 @@ import type { GrammySendOptions } from "~/lib/grammy-send-options";
 
 export async function grammySendPermissionPending({
   bot,
-  ignoreErrors,
   chatId,
   threadId,
+  ignoreErrors,
 }: GrammySendOptions): Promise<void> {
   const chunks = grammyFormatPermissionPending();
-  await grammySendChunks({ bot, chunks, ignoreErrors, chatId, threadId });
+  await grammySendChunks({ bot, chunks, chatId, threadId, ignoreErrors });
 }

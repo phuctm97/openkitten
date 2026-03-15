@@ -23,9 +23,9 @@ test("formats permission message and sends chunks", async () => {
   await grammySendPermissionMessage({
     bot: {} as never,
     request,
-    ignoreErrors: true,
     chatId: 456,
     threadId: 789,
+    ignoreErrors: true,
   });
   expect(
     grammyFormatPermissionMessageModule.grammyFormatPermissionMessage,
@@ -33,8 +33,8 @@ test("formats permission message and sends chunks", async () => {
   expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
     bot: {} as never,
     chunks,
-    ignoreErrors: true,
     chatId: 456,
     threadId: 789,
+    ignoreErrors: true,
   });
 });

@@ -11,16 +11,16 @@ test("formats busy and sends chunks", async () => {
   );
   await grammySendBusy({
     bot: {} as never,
-    ignoreErrors: true,
     chatId: 456,
     threadId: 789,
+    ignoreErrors: true,
   });
   expect(grammyFormatBusyModule.grammyFormatBusy).toHaveBeenCalled();
   expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
     bot: {} as never,
     chunks,
-    ignoreErrors: true,
     chatId: 456,
     threadId: 789,
+    ignoreErrors: true,
   });
 });

@@ -195,9 +195,9 @@ export function createPendingPrompts(
       if (activeItem.kind === "permission") {
         await grammySendPermissionPending({
           bot,
-          ignoreErrors: false,
           chatId: entry.chatId,
           threadId: entry.threadId,
+          ignoreErrors: false,
         });
         return;
       }
@@ -206,9 +206,9 @@ export function createPendingPrompts(
       if (question.custom === false) {
         await grammySendQuestionPending({
           bot,
-          ignoreErrors: false,
           chatId: entry.chatId,
           threadId: entry.threadId,
+          ignoreErrors: false,
         });
         return;
       }
@@ -416,9 +416,9 @@ export function createPendingPrompts(
         await grammySendChunks({
           bot,
           chunks,
-          ignoreErrors: false,
           chatId: entry.chatId,
           threadId: entry.threadId,
+          ignoreErrors: false,
         });
         const promptText = grammyFormatPermissionPrompt();
         const kb = buildPermissionKeyboard(item.key);
@@ -435,9 +435,9 @@ export function createPendingPrompts(
         await grammySendChunks({
           bot,
           chunks,
-          ignoreErrors: false,
           chatId: entry.chatId,
           threadId: entry.threadId,
+          ignoreErrors: false,
         });
         const promptText = grammyFormatQuestionPrompt(question);
         const kb = buildQuestionKeyboard(

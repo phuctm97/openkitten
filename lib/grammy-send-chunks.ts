@@ -4,9 +4,9 @@ import type { GrammySendChunksOptions } from "~/lib/grammy-send-chunks-options";
 export async function grammySendChunks({
   bot,
   chunks,
-  ignoreErrors,
   chatId,
   threadId,
+  ignoreErrors,
 }: GrammySendChunksOptions): Promise<void> {
   const sendOpts = {
     ...(threadId && { message_thread_id: threadId }),
