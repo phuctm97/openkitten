@@ -52,6 +52,5 @@ export const serve = defineCommand({
       opencodeEventStream.ended,
       grammy.stopped,
     ]);
-    consola.start("OpenKitten is shutting down");
   },
 });

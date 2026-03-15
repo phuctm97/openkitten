@@ -170,7 +170,7 @@ function mockAll() {
   };
 }
 
-test("logs start, ready, and shutting down", async () => {
+test("logs start and ready", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
   const { triggerShutdown } = mockAll();
   const run = runCommand(serve, { rawArgs: [] });
@@ -181,7 +181,6 @@ test("logs start, ready, and shutting down", async () => {
   await run;
   expect(consola.start).toHaveBeenCalledWith("OpenKitten is starting");
   expect(consola.ready).toHaveBeenCalledWith("OpenKitten is ready");
-  expect(consola.start).toHaveBeenCalledWith("OpenKitten is shutting down");
 });
 
 test("disposes on shutdown", async () => {
