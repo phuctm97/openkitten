@@ -36,7 +36,12 @@ export async function grammySendChunks({
     }
   } catch (error) {
     if (ignoreErrors) {
-      consola.error("Failed to send message to Telegram", { chatId, error });
+      consola.error("Failed to send message to Telegram", {
+        error,
+        chunks,
+        chatId,
+        threadId,
+      });
     } else {
       throw error;
     }

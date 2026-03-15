@@ -77,7 +77,12 @@ test("ignoreErrors logs and stops on error", async () => {
   await send([{ text: "fail" }, { text: "skipped" }], { ignoreErrors: true });
   expect(consola.error).toHaveBeenCalledWith(
     "Failed to send message to Telegram",
-    { chatId: 123, error: expect.any(Error) },
+    {
+      error: expect.any(Error),
+      chunks: expect.any(Array),
+      chatId: 123,
+      threadId: undefined,
+    },
   );
   expect(bot.api.sendMessage).toHaveBeenCalledTimes(1);
 });
@@ -94,6 +99,11 @@ test("ignoreErrors catches fallback failure too", async () => {
   await send([{ text: "hello", markdown: "*hello*" }], { ignoreErrors: true });
   expect(consola.error).toHaveBeenCalledWith(
     "Failed to send message to Telegram",
-    { chatId: 123, error: expect.any(Error) },
+    {
+      error: expect.any(Error),
+      chunks: expect.any(Array),
+      chatId: 123,
+      threadId: undefined,
+    },
   );
 });
