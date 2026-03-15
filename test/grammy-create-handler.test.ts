@@ -12,14 +12,16 @@ function mockCtx(chatId: number, threadId?: number, updateId = 1) {
   } as never;
 }
 
-test("calls callback", () => {
+const services = {} as never;
+
+test("calls callback with services and ctx", () => {
   const callback = vi.fn().mockResolvedValue(undefined);
-  const handler = grammyCreateHandler({} as never, callback);
+  const handler = grammyCreateHandler(services, callback);
   const ctx = mockCtx(1);
 
   handler(ctx);
 
-  expect(callback).toHaveBeenCalledWith(ctx);
+  expect(callback).toHaveBeenCalledWith(services, ctx);
 });
 
 test("catches error and sends to chat", async () => {
@@ -32,7 +34,7 @@ test("catches error and sends to chat", async () => {
     },
   );
   const bot = {} as never;
-  const handler = grammyCreateHandler(bot, callback);
+  const handler = grammyCreateHandler({ bot } as never, callback);
 
   handler(mockCtx(42, 7));
   await promise;
@@ -55,7 +57,7 @@ test("logs error with chat context", async () => {
       resolve();
     },
   );
-  const handler = grammyCreateHandler({} as never, callback);
+  const handler = grammyCreateHandler(services, callback);
 
   handler(mockCtx(1));
   await promise;
@@ -75,7 +77,7 @@ test("passes undefined threadId when msg has none", async () => {
       resolve();
     },
   );
-  const handler = grammyCreateHandler({} as never, callback);
+  const handler = grammyCreateHandler(services, callback);
 
   handler(mockCtx(10));
   await promise;
@@ -101,7 +103,7 @@ test("skips sending error for gone chat", async () => {
     .spyOn(grammySendErrorModule, "grammySendError")
     .mockResolvedValue(undefined);
   spy.mockClear();
-  const handler = grammyCreateHandler({} as never, callback);
+  const handler = grammyCreateHandler(services, callback);
 
   handler(mockCtx(99));
   await vi.waitFor(() => expect(consola.error).toHaveBeenCalled());
@@ -111,7 +113,7 @@ test("skips sending error for gone chat", async () => {
 
 test("logs fatal and skips callback when chat is missing", () => {
   const callback = vi.fn();
-  const handler = grammyCreateHandler({} as never, callback);
+  const handler = grammyCreateHandler(services, callback);
   const ctx = {
     chat: undefined,
     msg: undefined,

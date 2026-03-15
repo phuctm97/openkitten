@@ -35,6 +35,12 @@ export const serve = defineCommand({
       bot,
       opencodeServer.client,
     );
+    const services = {
+      bot,
+      database,
+      opencodeClient: opencodeServer.client,
+      pendingPrompts,
+    };
     await using opencodeEventStream = opencodeStream(
       opencodeServer.client,
       async () => {
@@ -62,18 +68,7 @@ export const serve = defineCommand({
       },
       () => {},
     );
-    bot.on(
-      "message:text",
-      grammyCreateHandler(
-        bot,
-        grammyHandleText({
-          bot,
-          database,
-          opencodeClient: opencodeServer.client,
-          pendingPrompts,
-        }),
-      ),
-    );
+    bot.on("message:text", grammyCreateHandler(services, grammyHandleText));
     await using grammy = await grammyStart(bot);
     consola.ready("OpenKitten is ready");
     await Promise.race([

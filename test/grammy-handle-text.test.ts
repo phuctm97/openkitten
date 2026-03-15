@@ -1,5 +1,6 @@
 import { expect, test, vi } from "vitest";
 import { createDatabase } from "~/lib/create-database";
+import type { GrammyHandleServices } from "~/lib/grammy-handle-services";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import * as grammySendBusyModule from "~/lib/grammy-send-busy";
 import { PendingPromptNotFoundError } from "~/lib/pending-prompt-not-found-error";
@@ -43,15 +44,14 @@ test("answers pending prompt when session has one", async () => {
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.answer.mockResolvedValue(undefined);
-
-  const handler = grammyHandleText({
+  const services = {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  });
+  } satisfies GrammyHandleServices;
 
-  await handler(mockCtx(42, "my answer"));
+  await grammyHandleText(services, mockCtx(42, "my answer"));
 
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
@@ -70,15 +70,14 @@ test("prompts opencode when no pending prompt", async () => {
     data: { s1: { type: "idle" } },
   });
   opencodeClient.session.promptAsync.mockResolvedValue({});
-
-  const handler = grammyHandleText({
+  const services = {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  });
+  } satisfies GrammyHandleServices;
 
-  await handler(mockCtx(42, "hello"));
+  await grammyHandleText(services, mockCtx(42, "hello"));
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     { sessionID: "s1", parts: [{ type: "text", text: "hello" }] },
@@ -96,15 +95,14 @@ test("creates new session when none exists", async () => {
     data: { s1: { type: "idle" } },
   });
   opencodeClient.session.promptAsync.mockResolvedValue({});
-
-  const handler = grammyHandleText({
+  const services = {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  });
+  } satisfies GrammyHandleServices;
 
-  await handler(mockCtx(42, "hello"));
+  await grammyHandleText(services, mockCtx(42, "hello"));
 
   expect(opencodeClient.session.create).toHaveBeenCalled();
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
@@ -126,15 +124,14 @@ test("sends busy message when session is busy", async () => {
     .spyOn(grammySendBusyModule, "grammySendBusy")
     .mockResolvedValue(undefined);
   const bot = {} as never;
-
-  const handler = grammyHandleText({
+  const services = {
     bot,
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  });
+  } satisfies GrammyHandleServices;
 
-  await handler(mockCtx(42, "hello"));
+  await grammyHandleText(services, mockCtx(42, "hello"));
 
   expect(spy).toHaveBeenCalledWith({
     bot,
@@ -157,15 +154,14 @@ test("sends busy message when session is retrying", async () => {
   const spy = vi
     .spyOn(grammySendBusyModule, "grammySendBusy")
     .mockResolvedValue(undefined);
-
-  const handler = grammyHandleText({
+  const services = {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  });
+  } satisfies GrammyHandleServices;
 
-  await handler(mockCtx(42, "hello"));
+  await grammyHandleText(services, mockCtx(42, "hello"));
 
   expect(spy).toHaveBeenCalled();
   expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
@@ -184,15 +180,14 @@ test("passes threadId through the flow", async () => {
     data: { s1: { type: "idle" } },
   });
   opencodeClient.session.promptAsync.mockResolvedValue({});
-
-  const handler = grammyHandleText({
+  const services = {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  });
+  } satisfies GrammyHandleServices;
 
-  await handler(mockCtx(42, "hello", 7));
+  await grammyHandleText(services, mockCtx(42, "hello", 7));
 
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
@@ -208,15 +203,16 @@ test("rethrows non-PendingPromptNotFoundError from answer", async () => {
   const pendingPrompts = mockPendingPrompts();
   const error = new Error("unexpected");
   pendingPrompts.answer.mockRejectedValue(error);
-
-  const handler = grammyHandleText({
+  const services = {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  });
+  } satisfies GrammyHandleServices;
 
-  await expect(handler(mockCtx(42, "hello"))).rejects.toBe(error);
+  await expect(grammyHandleText(services, mockCtx(42, "hello"))).rejects.toBe(
+    error,
+  );
 });
 
 test("prompts when session status is undefined (new session)", async () => {
@@ -227,15 +223,14 @@ test("prompts when session status is undefined (new session)", async () => {
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
   opencodeClient.session.status.mockResolvedValue({ data: {} });
   opencodeClient.session.promptAsync.mockResolvedValue({});
-
-  const handler = grammyHandleText({
+  const services = {
     bot: {} as never,
     database,
     opencodeClient: opencodeClient as never,
     pendingPrompts: pendingPrompts as never,
-  });
+  } satisfies GrammyHandleServices;
 
-  await handler(mockCtx(42, "hello"));
+  await grammyHandleText(services, mockCtx(42, "hello"));
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalled();
 });
