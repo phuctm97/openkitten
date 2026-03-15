@@ -8,10 +8,12 @@ export async function grammyStart(bot: Bot): Promise<Grammy> {
   bot.catch(({ ctx, error }) => {
     const chatId = ctx.chat?.id;
     const threadId = ctx.msg?.message_thread_id || undefined;
+    const updateId = ctx.update.update_id;
     consola.fatal("grammY caught an unhandled error", {
+      error,
       chatId,
       threadId,
-      error,
+      updateId,
     });
   });
 
