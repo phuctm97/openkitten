@@ -11,10 +11,10 @@ export function shutdownListen(): Shutdown {
   }
 
   let fired = false;
-  function onSignal(signal?: string) {
+  function onSignal(event?: string) {
     if (fired) return;
     fired = true;
-    consola.debug("Shutdown signal is received", { signal });
+    consola.debug("Shutdown signal is received", { event });
     cleanup();
     resolve();
   }
