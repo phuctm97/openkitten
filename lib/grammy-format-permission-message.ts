@@ -19,7 +19,7 @@ interface PermissionType {
   readonly description: string;
 }
 
-const permissionTypes: Record<string, PermissionType> = {
+const permissionTypes: { readonly [key: string]: PermissionType } = {
   bash: {
     emoji: "▶️",
     title: "Run command",
@@ -103,7 +103,7 @@ const permissionTypes: Record<string, PermissionType> = {
 };
 
 function stringMeta(
-  metadata: Record<string, unknown>,
+  metadata: { readonly [key: string]: unknown },
   key: string,
 ): string | undefined {
   const value = metadata[key];
@@ -111,7 +111,7 @@ function stringMeta(
 }
 
 function numberMeta(
-  metadata: Record<string, unknown>,
+  metadata: { readonly [key: string]: unknown },
   key: string,
 ): number | undefined {
   const value = metadata[key];
@@ -119,7 +119,7 @@ function numberMeta(
 }
 
 function jsonMeta(
-  metadata: Record<string, unknown>,
+  metadata: { readonly [key: string]: unknown },
   key: string,
 ): string | undefined {
   const value = metadata[key];
@@ -128,7 +128,7 @@ function jsonMeta(
 }
 
 function arrayMeta(
-  metadata: Record<string, unknown>,
+  metadata: { readonly [key: string]: unknown },
   key: string,
 ): unknown[] | undefined {
   const value = metadata[key];
@@ -442,10 +442,9 @@ function formatTool(lines: string[], request: PermissionRequest) {
   }
 }
 
-const permissionFormatters: Record<
-  string,
-  (lines: string[], request: PermissionRequest) => void
-> = {
+const permissionFormatters: {
+  readonly [key: string]: (lines: string[], request: PermissionRequest) => void;
+} = {
   bash: formatBash,
   read: formatRead,
   edit: formatEdit,

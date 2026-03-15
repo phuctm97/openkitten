@@ -41,7 +41,7 @@ function findCodeBlockRanges(text: string): CodeBlockRange[] {
 
 function isInCodeBlock(
   pos: number,
-  ranges: CodeBlockRange[],
+  ranges: readonly CodeBlockRange[],
 ): CodeBlockRange | null {
   for (const range of ranges) {
     if (pos > range.start && pos < range.end) return range;
@@ -128,7 +128,7 @@ function extractCodeBlockLangs(text: string): string[] {
   return Array.from(text.matchAll(/^```(\w+)/gm), (m) => m[0].slice(3));
 }
 
-function restoreCodeBlockLangs(text: string, langs: string[]): string {
+function restoreCodeBlockLangs(text: string, langs: readonly string[]): string {
   if (langs.length === 0) return text;
   let i = 0;
   let open = false;

@@ -4,7 +4,7 @@ import { GrammyError } from "grammy";
 // unreachable (bot blocked, kicked, user deactivated, chat deleted).
 // When true, the session should be dismissed/stopped — the bot can
 // no longer interact with this chat.
-const goneDescriptions = [
+const goneDescriptions: readonly string[] = [
   "chat not found",
   "CHAT_ID_INVALID",
   "message_thread_not_found",
