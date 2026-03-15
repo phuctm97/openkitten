@@ -15,11 +15,13 @@ export function grammyCreateHandler<C extends Context>(
       return;
     }
     const threadId = ctx.msg?.message_thread_id || undefined;
+    const updateId = ctx.update.update_id;
     callback(ctx).catch((error) => {
-      consola.error("grammY failed to process event", {
+      consola.error("Failed to process update from Telegram", {
+        error,
         chatId,
         threadId,
-        error,
+        updateId,
       });
       grammySendError({
         bot,

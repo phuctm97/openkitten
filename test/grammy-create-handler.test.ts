@@ -3,10 +3,11 @@ import { expect, test, vi } from "vitest";
 import { grammyCreateHandler } from "~/lib/grammy-create-handler";
 import * as grammySendErrorModule from "~/lib/grammy-send-error";
 
-function mockCtx(chatId: number, threadId?: number) {
+function mockCtx(chatId: number, threadId?: number, updateId = 1) {
   return {
     chat: { id: chatId },
     msg: { message_thread_id: threadId },
+    update: { update_id: updateId },
   } as never;
 }
 
@@ -58,11 +59,10 @@ test("logs error with chat context", async () => {
   handler(mockCtx(1));
   await promise;
 
-  expect(consola.error).toHaveBeenCalledWith("grammY failed to process event", {
-    chatId: 1,
-    threadId: undefined,
-    error,
-  });
+  expect(consola.error).toHaveBeenCalledWith(
+    "Failed to process update from Telegram",
+    { error, chatId: 1, threadId: undefined, updateId: 1 },
+  );
 });
 
 test("passes undefined threadId when msg has none", async () => {
