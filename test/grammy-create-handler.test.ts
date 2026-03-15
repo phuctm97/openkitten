@@ -89,6 +89,6 @@ test("throws when chat is missing", () => {
   const handler = grammyCreateHandler({} as never, callback);
   const ctx = { chat: undefined, msg: undefined } as never;
 
-  expect(() => handler(ctx)).toThrow("grammy handler has no chat");
+  expect(() => handler(ctx)).toThrow("grammY handler has no chat");
   expect(callback).not.toHaveBeenCalled();
 });

@@ -45,7 +45,7 @@ async function readPort(proc: Proc): Promise<ReadPortResult> {
         if (match) return { port: Number(match[1]), stdout: proc.stdout };
       }
     }
-    throw new Error("opencode server exited without announcing port");
+    throw new Error("OpenCode server exited without announcing port");
   } catch (error) {
     await killProc(proc);
     throw error;
@@ -124,7 +124,7 @@ export async function opencodeServe(): Promise<OpencodeServer> {
   let disposed = false;
   const exited = proc.exited.then((code) => {
     if (disposed) return;
-    throw new Error(`opencode server exited unexpectedly (${code})`);
+    throw new Error(`OpenCode server exited unexpectedly (${code})`);
   });
 
   // exited rejects on unexpected exit but may not be awaited immediately by

@@ -33,7 +33,7 @@ export function opencodeStream(
           await onRestart();
           for (;;) {
             const result = await iter.next();
-            if (result.done) throw new Error("opencode event stream ended");
+            if (result.done) throw new Error("OpenCode event stream ended");
             // onEvent errors are treated as stream failures and trigger reconnection.
             await onEvent(result.value);
           }

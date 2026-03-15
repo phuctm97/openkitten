@@ -201,7 +201,7 @@ test("exits on unexpected opencode server exit", async () => {
   vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
   mockCreateDatabase();
   const exited = Promise.reject(
-    new Error("opencode server exited unexpectedly (1)"),
+    new Error("OpenCode server exited unexpectedly (1)"),
   );
   exited.then(
     () => {},
@@ -218,7 +218,7 @@ test("exits on unexpected opencode server exit", async () => {
   mockGrammyStart();
   mockShutdownListen();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "opencode server exited unexpectedly (1)",
+    "OpenCode server exited unexpectedly (1)",
   );
 });
 
@@ -229,7 +229,7 @@ test("exits on unexpected grammy stop", async () => {
   mockCreateTypingIndicators();
   mockCreatePendingPrompts();
   mockOpencodeStream();
-  const stopped = Promise.reject(new Error("grammy stopped unexpectedly"));
+  const stopped = Promise.reject(new Error("grammY stopped unexpectedly"));
   stopped.then(
     () => {},
     () => {},
@@ -240,7 +240,7 @@ test("exits on unexpected grammy stop", async () => {
   });
   mockShutdownListen();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "grammy stopped unexpectedly",
+    "grammY stopped unexpectedly",
   );
 });
 

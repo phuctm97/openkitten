@@ -66,7 +66,7 @@ test("propagates startup error", async () => {
 test("stopped rejects on unexpected stop", async () => {
   const grammy = await grammyStart(createMockBot());
   controls.resolveStopped();
-  await expect(grammy.stopped).rejects.toThrow("grammy stopped unexpectedly");
+  await expect(grammy.stopped).rejects.toThrow("grammY stopped unexpectedly");
 });
 
 test("catch handler logs error with chat and thread", async () => {

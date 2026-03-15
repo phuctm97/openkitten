@@ -27,7 +27,7 @@ export async function grammyStart(bot: Bot): Promise<Grammy> {
   const stopped = polling.then(() => {
     consola.info("grammY is stopped");
     if (disposed) return;
-    throw new Error("grammy stopped unexpectedly");
+    throw new Error("grammY stopped unexpectedly");
   });
 
   // stopped rejects on unexpected stop but may not be awaited immediately by

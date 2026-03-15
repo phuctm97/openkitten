@@ -147,7 +147,7 @@ test("exited rejects on unexpected exit", async () => {
   mockSpawn();
   const opencodeServer = await opencodeServe();
   await expect(opencodeServer.exited).rejects.toThrow(
-    "opencode server exited unexpectedly (0)",
+    "OpenCode server exited unexpectedly (0)",
   );
 });
 
@@ -256,13 +256,13 @@ test("tolerates stdout stream error after port", async () => {
 test("throws if port not found", async () => {
   mockSpawn({ chunks: ["no port here\n"] });
   await expect(opencodeServe()).rejects.toThrow(
-    "opencode server exited without announcing port",
+    "OpenCode server exited without announcing port",
   );
 });
 
 test("throws if listening line has no port", async () => {
   mockSpawn({ chunks: ["listening\n"] });
   await expect(opencodeServe()).rejects.toThrow(
-    "opencode server exited without announcing port",
+    "OpenCode server exited without announcing port",
   );
 });
