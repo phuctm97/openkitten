@@ -1,5 +1,10 @@
 # OpenKitten 😼
 
+![TypeScript](https://img.shields.io/badge/TypeScript-language-3178c6?logo=typescript&logoColor=white)
+![Bun](https://img.shields.io/badge/Bun-runtime-fbf0df?logo=bun&logoColor=white)
+![Vitest](https://img.shields.io/badge/Vitest-100%25%20coverage-729b1b?logo=vitest&logoColor=white)
+![Biome](https://img.shields.io/badge/Biome-linted%20%26%20formatted-60a5fa?logo=biome&logoColor=white)
+
 **Telegram-first** 💬 AI agent with **75+ AI providers** 🤖, **extensible plugins** 🧩, **multiple (sub)agents** 🤝, **composable skills** 🧱, and **controlled permissions** 🔒.
 
 ## Motivation
