@@ -1,12 +1,12 @@
 # OpenKitten
 
-Telegram-first AI agent with 75+ AI providers, OS-level sandbox, and built-in capabilities people actually need.
+Telegram-first AI agent powered by OpenCode
 
 ## Vendor
 
-`.vendor/` contains cloned source repos of open-source libraries we depend on. Use them to explore real implementations, understand internals, and verify API behavior.
+`.vendor` contains cloned source repos of open-source libraries we depend on. Use them to explore real implementations, understand internals, and verify API behavior.
 
-When you need to understand how a library works internally, ensure its source is cloned and up to date in `.vendor/<name>/`. Examples: `.vendor/opencode/`, `.vendor/grammy/`.
+When you need to understand how a library works internally, ensure its source is cloned and up to date in `.vendor/<name>`. Examples: `.vendor/opencode`, `.vendor/grammy`.
 
 ## Bun
 
@@ -14,17 +14,17 @@ Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js AP
 
 ## Vitest
 
-100% code coverage across all metrics (statements, branches, functions, lines). Uncovered code is either a potential bug, an indicator of bad code, or naturally unreachable code. Unreachable code should be removed if it can't happen in the real world, or use invariant/assert functions to narrow types and throw.
+100% code coverage across all metrics (statements, branches, functions, lines). Uncovered code is either a potential bug, an indicator of bad code, or naturally unreachable code. Unreachable code should be removed if it can't happen in the real world, or use invariant/assert functions to narrow types.
 
-## Commands
+## Commands & Scripts
 
 - `bun typecheck` — type check
-- `bun --bun biome check` — lint and format check (`--write` to auto-fix)
+- `bun --bun biome check` — lint & format check (`--write` to auto-fix)
 - `bun --bun vitest run` — run tests (`--coverage` for coverage report)
 
-## File Convention
+## Files & Exports
 
-Each file has only 1 export (camelCase/PascalCase for export, kebab-case for file name).
+Each file has only 1 export (camelCase/PascalCase for export name, kebab-case for file name).
 
 ## No Hacks
 
