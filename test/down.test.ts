@@ -122,11 +122,11 @@ test("uninstalls on win32", async () => {
   const { rm } = await import("node:fs/promises");
   await runCommand(down, { rawArgs: [] });
   expect(vi.mocked(rm)).toHaveBeenCalledWith(
-    "C:\\MockLocal\\OpenKitten\\Logs\\default.stdout.log",
+    "C:\\MockLocal\\OpenKitten\\Logs\\profiles.default.stdout.log",
     { force: true },
   );
   expect(vi.mocked(rm)).toHaveBeenCalledWith(
-    "C:\\MockLocal\\OpenKitten\\Logs\\default.stderr.log",
+    "C:\\MockLocal\\OpenKitten\\Logs\\profiles.default.stderr.log",
     { force: true },
   );
   const clack = await import("@clack/prompts");

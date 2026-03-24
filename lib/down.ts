@@ -39,8 +39,8 @@ async function uninstallWin32(profile: string): Promise<void> {
   s.start("Removing service");
   await Bun.$`schtasks /Delete /TN ${taskName} /F`.nothrow().quiet();
   await Promise.all([
-    rm(`${logsDir}\\${profile}.stdout.log`, { force: true }),
-    rm(`${logsDir}\\${profile}.stderr.log`, { force: true }),
+    rm(`${logsDir}\\profiles.${profile}.stdout.log`, { force: true }),
+    rm(`${logsDir}\\profiles.${profile}.stderr.log`, { force: true }),
   ]);
   s.stop("Removed service");
 }

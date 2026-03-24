@@ -192,7 +192,7 @@ test("installs on win32", async () => {
   );
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.note)).toHaveBeenCalledWith(
-    expect.stringContaining("default.stderr.log"),
+    expect.stringContaining("profiles.default.stderr.log"),
     "Next steps",
   );
 });
