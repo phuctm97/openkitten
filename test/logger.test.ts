@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 let originalLogLevel: string | undefined;
-let originalNodeEnv: string | undefined;
 
 beforeEach(() => {
   originalLogLevel = Bun.env["OPENKITTEN_LOG_LEVEL"];
-  originalNodeEnv = Bun.env["NODE_ENV"];
   vi.resetModules();
 });
 
@@ -14,11 +12,6 @@ afterEach(() => {
     delete Bun.env["OPENKITTEN_LOG_LEVEL"];
   } else {
     Bun.env["OPENKITTEN_LOG_LEVEL"] = originalLogLevel;
-  }
-  if (originalNodeEnv === undefined) {
-    delete Bun.env["NODE_ENV"];
-  } else {
-    Bun.env["NODE_ENV"] = originalNodeEnv;
   }
 });
 
@@ -72,16 +65,30 @@ test("parses fatal level", async () => {
 
 test("hides log position in production", async () => {
   delete Bun.env["OPENKITTEN_LOG_LEVEL"];
-  Bun.env["NODE_ENV"] = "production";
+  vi.doMock("~/lib/is-production", () => ({ isProduction: true }));
   const { logger } = await import("~/lib/logger");
   expect(logger.settings.hideLogPositionForProduction).toBe(true);
 });
 
 test("shows log position outside production", async () => {
   delete Bun.env["OPENKITTEN_LOG_LEVEL"];
-  delete Bun.env["NODE_ENV"];
+  vi.doMock("~/lib/is-production", () => ({ isProduction: false }));
   const { logger } = await import("~/lib/logger");
   expect(logger.settings.hideLogPositionForProduction).toBe(false);
+});
+
+test("uses pretty type when TTY", async () => {
+  delete Bun.env["OPENKITTEN_LOG_LEVEL"];
+  vi.doMock("~/lib/is-tty", () => ({ isTTY: true }));
+  const { logger } = await import("~/lib/logger");
+  expect(logger.settings.type).toBe("pretty");
+});
+
+test("uses json type when not TTY", async () => {
+  delete Bun.env["OPENKITTEN_LOG_LEVEL"];
+  vi.doMock("~/lib/is-tty", () => ({ isTTY: false }));
+  const { logger } = await import("~/lib/logger");
+  expect(logger.settings.type).toBe("json");
 });
 
 test("throws on invalid level", async () => {

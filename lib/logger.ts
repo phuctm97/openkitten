@@ -1,4 +1,6 @@
 import { Logger } from "tslog";
+import { isProduction } from "~/lib/is-production";
+import { isTTY } from "~/lib/is-tty";
 
 const logLevels = {
   silly: 0,
@@ -24,6 +26,7 @@ function getMinLevel(): number {
 }
 
 export const logger = new Logger({
+  type: isTTY ? "pretty" : "json",
   minLevel: getMinLevel(),
-  hideLogPositionForProduction: Bun.env["NODE_ENV"] === "production",
+  hideLogPositionForProduction: isProduction,
 });

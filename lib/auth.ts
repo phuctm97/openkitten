@@ -1,5 +1,6 @@
 import * as clack from "@clack/prompts";
 import zod from "zod";
+import { isTTY } from "~/lib/is-tty";
 
 const schema = zod.object({
   telegram: zod.object({
@@ -35,8 +36,7 @@ export namespace Auth {
       const result = schema.safeParse(await file.json());
       if (result.success) return result.data;
     }
-    if (!clack.isTTY(process.stdin) || !clack.isTTY(process.stdout))
-      throw new Auth.NotFoundError();
+    if (!isTTY) throw new Auth.NotFoundError();
     clack.intro("🔐 Auth");
     clack.log.info("Get a bot token from @BotFather: https://t.me/BotFather");
     const botToken = require(
