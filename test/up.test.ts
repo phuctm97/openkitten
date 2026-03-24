@@ -187,12 +187,12 @@ test("installs on win32", async () => {
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
   expect(vi.mocked(mkdir)).toHaveBeenCalledWith(
-    "C:\\MockLocal\\OpenKitten\\Logs",
+    "C:\\MockLocal\\OpenKitten\\Profiles\\default\\Logs",
     { recursive: true },
   );
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.note)).toHaveBeenCalledWith(
-    expect.stringContaining("profiles.default.stderr.log"),
+    expect.stringContaining("stderr.log"),
     "Next steps",
   );
 });
