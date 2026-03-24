@@ -38,6 +38,7 @@ export namespace Auth {
     if (!clack.isTTY(process.stdin) || !clack.isTTY(process.stdout))
       throw new Auth.NotFoundError();
     clack.intro("🔐 Auth");
+    clack.log.info("Get a bot token from @BotFather: https://t.me/BotFather");
     const botToken = require(
       await clack.password({
         message: "Telegram bot token:",
@@ -46,6 +47,9 @@ export namespace Auth {
           return undefined;
         },
       }),
+    );
+    clack.log.info(
+      "Get your user ID from @userinfobot: https://t.me/userinfobot",
     );
     const rawUserId = require(
       await clack.text({
