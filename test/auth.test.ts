@@ -1,11 +1,14 @@
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { isTTY, password, text } from "@clack/prompts";
+import { password, text } from "@clack/prompts";
 import { beforeEach, expect, test, vi } from "vitest";
 import { Auth } from "~/lib/auth";
 
 const cancelSymbol = Symbol("cancel");
+
+const isTTYMock = vi.hoisted(() => ({ isTTY: true }));
+vi.mock("~/lib/is-tty", () => isTTYMock);
 
 vi.mock("@clack/prompts", () => ({
   intro: vi.fn(),
@@ -15,11 +18,11 @@ vi.mock("@clack/prompts", () => ({
   password: vi.fn(),
   text: vi.fn(),
   isCancel: (value: unknown) => value === cancelSymbol,
-  isTTY: vi.fn(() => true),
 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
+  isTTYMock.isTTY = true;
 });
 
 async function tempAuthPath(): Promise<string> {
@@ -102,15 +105,9 @@ test("throws when user ID prompt is cancelled", async () => {
   await expect(Auth.load(path)).rejects.toThrow(Auth.NotFoundError);
 });
 
-test("throws when stdin is not a TTY", async () => {
+test("throws when not a TTY", async () => {
   const path = await tempAuthPath();
-  vi.mocked(isTTY).mockReturnValueOnce(false);
-  await expect(Auth.load(path)).rejects.toThrow(Auth.NotFoundError);
-});
-
-test("throws when stdout is not a TTY", async () => {
-  const path = await tempAuthPath();
-  vi.mocked(isTTY).mockReturnValueOnce(true).mockReturnValueOnce(false);
+  isTTYMock.isTTY = false;
   await expect(Auth.load(path)).rejects.toThrow(Auth.NotFoundError);
 });
 
