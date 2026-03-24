@@ -90,8 +90,12 @@ test("uninstalls on darwin with default profile", async () => {
   const { rm } = await import("node:fs/promises");
   await runCommand(down, { rawArgs: [] });
   expect(vi.mocked(rm)).toHaveBeenCalledWith(
-    "/mock-home/Library/Logs/com.openkitten.profiles.default",
-    { force: true, recursive: true },
+    "/mock-home/Library/Logs/OpenKitten/com.openkitten.profiles.default.stdout.log",
+    { force: true },
+  );
+  expect(vi.mocked(rm)).toHaveBeenCalledWith(
+    "/mock-home/Library/Logs/OpenKitten/com.openkitten.profiles.default.stderr.log",
+    { force: true },
   );
   expect(vi.mocked(rm)).toHaveBeenCalledWith(
     "/mock-home/Library/LaunchAgents/com.openkitten.profiles.default.plist",

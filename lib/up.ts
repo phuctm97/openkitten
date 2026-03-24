@@ -105,7 +105,7 @@ WantedBy=default.target
 async function installDarwin(profile: string): Promise<void> {
   const userId = getUserId();
   const label = `com.openkitten.profiles.${profile}`;
-  const logsDir = `${homedir()}/Library/Logs/${label}`;
+  const logsDir = `${homedir()}/Library/Logs/OpenKitten`;
   const plistDir = `${homedir()}/Library/LaunchAgents`;
   const plistPath = `${plistDir}/${label}.plist`;
   const plistContent = `<?xml version="1.0" encoding="UTF-8"?>
@@ -152,7 +152,7 @@ async function installDarwin(profile: string): Promise<void> {
   await Bun.$`launchctl bootstrap gui/${userId} ${plistPath}`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   clack.note(
-    `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/${label}/*.log\n  or open Console.app and filter by "${label}"`,
+    `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/OpenKitten/${label}.*.log\n  or open Console.app and filter by "${label}"`,
     "Next steps",
   );
 }

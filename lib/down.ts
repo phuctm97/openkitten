@@ -19,13 +19,14 @@ async function uninstallLinux(profile: string): Promise<void> {
 async function uninstallDarwin(profile: string): Promise<void> {
   const userId = getUserId();
   const label = `com.openkitten.profiles.${profile}`;
-  const logsDir = `${homedir()}/Library/Logs/${label}`;
+  const logsDir = `${homedir()}/Library/Logs/OpenKitten`;
   const plistPath = `${homedir()}/Library/LaunchAgents/${label}.plist`;
   const s = clack.spinner({ indicator: "timer" });
   s.start("Removing service");
   await Bun.$`launchctl bootout gui/${userId}/${label}`.nothrow().quiet();
   await Promise.all([
-    rm(logsDir, { force: true, recursive: true }),
+    rm(`${logsDir}/${label}.stdout.log`, { force: true }),
+    rm(`${logsDir}/${label}.stderr.log`, { force: true }),
     rm(plistPath, { force: true }),
   ]);
   s.stop("Removed service");
