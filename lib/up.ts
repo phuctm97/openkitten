@@ -72,6 +72,7 @@ Description=OpenKitten (${profile.name})
 After=network.target
 
 [Service]
+Environment=NODE_ENV=production
 Environment=OPENKITTEN_PROFILE=${profile.name}
 ExecStart=${process.execPath} . serve
 WorkingDirectory=${projectDir}
@@ -116,6 +117,8 @@ async function installDarwin(profile: Profile): Promise<void> {
   <string>${label}</string>
   <key>EnvironmentVariables</key>
   <dict>
+    <key>NODE_ENV</key>
+    <string>production</string>
     <key>OPENKITTEN_PROFILE</key>
     <string>${profile.name}</string>
   </dict>
@@ -167,7 +170,7 @@ async function installWin32(profile: Profile): Promise<void> {
       .exitCode === 0;
   if (wasRunning) s.message("Restarting service");
   await mkdir(logsDir, { recursive: true });
-  const tr = `cmd /C "cd /D \\"${projectDir}\\" && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
+  const tr = `cmd /C "cd /D \\"${projectDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   clack.note(
