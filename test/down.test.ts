@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { down } from "~/lib/down";
 
 vi.mock("node:fs/promises", () => ({
+  mkdir: vi.fn(),
   rm: vi.fn(),
 }));
 

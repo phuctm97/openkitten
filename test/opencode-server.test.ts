@@ -9,7 +9,8 @@ vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),
 }));
 
-const profile = await Profile.create("test");
+Bun.env["OPENKITTEN_PROFILE"] = "test";
+const profile = await Profile.create();
 
 type OnExit = (
   proc: unknown,

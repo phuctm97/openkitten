@@ -4,34 +4,51 @@ import { join } from "node:path";
 import { Errors } from "~/lib/errors";
 
 export class Profile {
-  readonly #dir: string;
+  readonly #name: string;
 
-  private constructor(dir: string) {
-    this.#dir = dir;
+  private constructor(name: string) {
+    this.#name = name;
+  }
+
+  async #prepare(): Promise<void> {
+    const results = await Promise.allSettled([
+      mkdir(this.workspace, { recursive: true }),
+      mkdir(this.opencode, { recursive: true }),
+      mkdir(this.openkitten, { recursive: true }),
+    ]);
+    Errors.throwIfAny(results);
+  }
+
+  get name(): string {
+    return this.#name;
   }
 
   get dir(): string {
-    return this.#dir;
+    return join(homedir(), ".openkitten", "profiles", this.#name);
   }
 
   get system(): string {
-    return join(this.#dir, "system");
+    return join(this.dir, "system");
   }
 
   get workspace(): string {
-    return join(this.#dir, "workspace");
+    return join(this.dir, "workspace");
   }
 
   get auth(): string {
-    return join(this.system, "data", "openkitten", "auth.json");
+    return join(this.openkitten, "auth.json");
   }
 
   get database(): string {
-    return join(this.system, "data", "openkitten", "openkitten.db");
+    return join(this.openkitten, "openkitten.db");
   }
 
   get opencode(): string {
-    return join(this.#dir, ".opencode");
+    return join(this.dir, ".opencode");
+  }
+
+  get openkitten(): string {
+    return join(this.xdgData, "openkitten");
   }
 
   get xdgData(): string {
@@ -50,15 +67,9 @@ export class Profile {
     return join(this.system, "cache");
   }
 
-  static async create(name?: string): Promise<Profile> {
-    const profile = name || "default";
-    const dir = join(homedir(), ".openkitten", "profiles", profile);
-    const results = await Promise.allSettled([
-      mkdir(join(dir, "system", "data", "openkitten"), { recursive: true }),
-      mkdir(join(dir, "workspace"), { recursive: true }),
-      mkdir(join(dir, ".opencode"), { recursive: true }),
-    ]);
-    Errors.throwIfAny(results);
-    return new Profile(dir);
+  static async create(): Promise<Profile> {
+    const profile = new Profile(Bun.env["OPENKITTEN_PROFILE"] || "default");
+    await profile.#prepare();
+    return profile;
   }
 }

@@ -2,11 +2,11 @@ import { rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import * as clack from "@clack/prompts";
 import { defineCommand } from "citty";
-import { getProfile } from "~/lib/get-profile";
 import { getUserId } from "~/lib/get-user-id";
+import { Profile } from "~/lib/profile";
 
-async function uninstallLinux(profile: string): Promise<void> {
-  const label = `openkitten-${profile}-profile`;
+async function uninstallLinux(profile: Profile): Promise<void> {
+  const label = `openkitten-${profile.name}-profile`;
   const unitPath = `${homedir()}/.config/systemd/user/${label}.service`;
   const s = clack.spinner({ indicator: "timer" });
   s.start("Removing service");
@@ -16,9 +16,9 @@ async function uninstallLinux(profile: string): Promise<void> {
   s.stop("Removed service");
 }
 
-async function uninstallDarwin(profile: string): Promise<void> {
+async function uninstallDarwin(profile: Profile): Promise<void> {
   const userId = getUserId();
-  const label = `com.openkitten.profiles.${profile}`;
+  const label = `com.openkitten.profiles.${profile.name}`;
   const logsDir = `${homedir()}/Library/Logs/OpenKitten`;
   const plistPath = `${homedir()}/Library/LaunchAgents/${label}.plist`;
   const s = clack.spinner({ indicator: "timer" });
@@ -32,8 +32,8 @@ async function uninstallDarwin(profile: string): Promise<void> {
   s.stop("Removed service");
 }
 
-async function uninstallWin32(profile: string): Promise<void> {
-  const taskName = `\\OpenKitten\\Profiles\\${profile}`;
+async function uninstallWin32(profile: Profile): Promise<void> {
+  const taskName = `\\OpenKitten\\Profiles\\${profile.name}`;
   const s = clack.spinner({ indicator: "timer" });
   s.start("Removing service");
   await Bun.$`schtasks /Delete /TN ${taskName} /F`.nothrow().quiet();
@@ -51,7 +51,7 @@ export const down = defineCommand({
       clack.cancel("Phew! Your kitten lives another day. 😸");
       return;
     }
-    const profile = getProfile();
+    const profile = await Profile.create();
     switch (process.platform) {
       case "linux":
         await uninstallLinux(profile);
