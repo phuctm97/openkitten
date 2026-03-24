@@ -4,8 +4,8 @@ import { resolve } from "node:path";
 import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
 import { defineCommand } from "citty";
-import { getProfile } from "~/lib/get-profile";
 import { getUserId } from "~/lib/get-user-id";
+import { Profile } from "~/lib/profile";
 
 const projectDir = resolve(import.meta.dirname, "..");
 
@@ -63,16 +63,16 @@ async function updateProjectDir(): Promise<void> {
   ]);
 }
 
-async function installLinux(profile: string): Promise<void> {
-  const label = `openkitten-${profile}-profile`;
+async function installLinux(profile: Profile): Promise<void> {
+  const label = `openkitten-${profile.name}-profile`;
   const unitDir = `${homedir()}/.config/systemd/user`;
   const unitPath = `${unitDir}/${label}.service`;
   const unitContent = `[Unit]
-Description=OpenKitten (${profile})
+Description=OpenKitten (${profile.name})
 After=network.target
 
 [Service]
-Environment=OPENKITTEN_PROFILE=${profile}
+Environment=OPENKITTEN_PROFILE=${profile.name}
 ExecStart=${process.execPath} . serve
 WorkingDirectory=${projectDir}
 Restart=always
@@ -102,9 +102,9 @@ WantedBy=default.target
   );
 }
 
-async function installDarwin(profile: string): Promise<void> {
+async function installDarwin(profile: Profile): Promise<void> {
   const userId = getUserId();
-  const label = `com.openkitten.profiles.${profile}`;
+  const label = `com.openkitten.profiles.${profile.name}`;
   const logsDir = `${homedir()}/Library/Logs/OpenKitten`;
   const plistDir = `${homedir()}/Library/LaunchAgents`;
   const plistPath = `${plistDir}/${label}.plist`;
@@ -117,7 +117,7 @@ async function installDarwin(profile: string): Promise<void> {
   <key>EnvironmentVariables</key>
   <dict>
     <key>OPENKITTEN_PROFILE</key>
-    <string>${profile}</string>
+    <string>${profile.name}</string>
   </dict>
   <key>ProgramArguments</key>
   <array>
@@ -157,9 +157,9 @@ async function installDarwin(profile: string): Promise<void> {
   );
 }
 
-async function installWin32(profile: string): Promise<void> {
-  const taskName = `\\OpenKitten\\Profiles\\${profile}`;
-  const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Profiles\\${profile}\\Logs`;
+async function installWin32(profile: Profile): Promise<void> {
+  const taskName = `\\OpenKitten\\Profiles\\${profile.name}`;
+  const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Profiles\\${profile.name}\\Logs`;
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -167,7 +167,7 @@ async function installWin32(profile: string): Promise<void> {
       .exitCode === 0;
   if (wasRunning) s.message("Restarting service");
   await mkdir(logsDir, { recursive: true });
-  const tr = `cmd /C "cd /D \\"${projectDir}\\" && set OPENKITTEN_PROFILE=${profile} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
+  const tr = `cmd /C "cd /D \\"${projectDir}\\" && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   clack.note(
@@ -181,7 +181,7 @@ export const up = defineCommand({
   run: async () => {
     clack.intro("😼 OpenKitten");
     await updateProjectDir();
-    const profile = getProfile();
+    const profile = await Profile.create();
     switch (process.platform) {
       case "linux":
         await installLinux(profile);

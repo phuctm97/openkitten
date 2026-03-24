@@ -26,7 +26,7 @@ export const serve = defineCommand({
   meta: { description: "Start the OpenKitten server." },
   run: async () => {
     using shutdown = Shutdown.create();
-    const profile = await Profile.create(Bun.env["OPENKITTEN_PROFILE"]);
+    const profile = await Profile.create();
     await bootstrapOpencode(profile.opencode);
     const auth = await Auth.load(profile.auth);
     const bot = new Bot(auth.telegram.botToken);
