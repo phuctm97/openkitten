@@ -45,3 +45,25 @@ bun install
 # Start OpenKitten
 bun . serve
 ```
+
+## Configuration
+
+### Profile
+
+Set via `OPENKITTEN_PROFILE` (defaults to `default`):
+
+```bash
+OPENKITTEN_PROFILE=work bun . serve
+```
+
+Each profile isolates its data at `~/.openkitten/profiles/<profile>`.
+
+### Log level
+
+Set via `OPENKITTEN_LOG_LEVEL` (defaults to `silly`):
+
+```bash
+OPENKITTEN_LOG_LEVEL=info bun . serve
+```
+
+Levels: `silly`, `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
