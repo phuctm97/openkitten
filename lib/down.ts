@@ -34,9 +34,14 @@ async function uninstallDarwin(profile: string): Promise<void> {
 
 async function uninstallWin32(profile: string): Promise<void> {
   const taskName = `\\OpenKitten\\Profiles\\${profile}`;
+  const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Logs`;
   const s = clack.spinner({ indicator: "timer" });
   s.start("Removing service");
   await Bun.$`schtasks /Delete /TN ${taskName} /F`.nothrow().quiet();
+  await Promise.all([
+    rm(`${logsDir}\\${profile}.stdout.log`, { force: true }),
+    rm(`${logsDir}\\${profile}.stderr.log`, { force: true }),
+  ]);
   s.stop("Removed service");
 }
 

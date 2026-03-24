@@ -159,17 +159,19 @@ async function installDarwin(profile: string): Promise<void> {
 
 async function installWin32(profile: string): Promise<void> {
   const taskName = `\\OpenKitten\\Profiles\\${profile}`;
+  const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Logs`;
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
     (await Bun.$`schtasks /Query /TN ${taskName}`.nothrow().quiet())
       .exitCode === 0;
   if (wasRunning) s.message("Restarting service");
-  const tr = `cmd /C "cd /D \\"${projectDir}\\" && set OPENKITTEN_PROFILE=${profile} && \\"${process.execPath}\\" . serve"`;
+  await mkdir(logsDir, { recursive: true });
+  const tr = `cmd /C "cd /D \\"${projectDir}\\" && set OPENKITTEN_PROFILE=${profile} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\${profile}.stdout.log\\" 2>> \\"${logsDir}\\${profile}.stderr.log\\""`;
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   clack.note(
-    `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  Open Task Scheduler and look for "${taskName}"`,
+    `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  type "${logsDir}\\${profile}.stderr.log"`,
     "Next steps",
   );
 }
