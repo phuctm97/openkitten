@@ -119,7 +119,13 @@ test("uninstalls on darwin with custom profile", async () => {
 test("uninstalls on win32", async () => {
   Object.defineProperty(process, "platform", { value: "win32" });
   Object.defineProperty(process, "getuid", { value: undefined });
+  process.env["LOCALAPPDATA"] = "C:\\MockLocal";
+  const { rm } = await import("node:fs/promises");
   await runCommand(down, { rawArgs: [] });
+  expect(vi.mocked(rm)).toHaveBeenCalledWith(
+    "C:\\MockLocal\\OpenKitten\\Profiles\\default\\Logs",
+    { recursive: true, force: true },
+  );
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.note)).toHaveBeenCalledWith(
     "To reinstall:\n  bun . up",

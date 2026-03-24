@@ -178,21 +178,28 @@ test("restarts on darwin when already running", async () => {
 
 test("installs on win32", async () => {
   Object.defineProperty(process, "platform", { value: "win32" });
+  process.env["LOCALAPPDATA"] = "C:\\MockLocal";
+  const { mkdir } = await import("node:fs/promises");
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
     .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
+  expect(vi.mocked(mkdir)).toHaveBeenCalledWith(
+    "C:\\MockLocal\\OpenKitten\\Profiles\\default\\Logs",
+    { recursive: true },
+  );
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.note)).toHaveBeenCalledWith(
-    expect.stringContaining("\\OpenKitten\\Profiles\\default"),
+    expect.stringContaining("stderr.log"),
     "Next steps",
   );
 });
 
 test("restarts on win32 when already running", async () => {
   Object.defineProperty(process, "platform", { value: "win32" });
+  process.env["LOCALAPPDATA"] = "C:\\MockLocal";
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
