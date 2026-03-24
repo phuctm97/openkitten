@@ -42,5 +42,5 @@ cd openkitten
 bun install
 
 # Start OpenKitten
-bun . serve --verbose
+bun . serve
 ```
