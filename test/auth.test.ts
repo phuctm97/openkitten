@@ -11,6 +11,7 @@ vi.mock("@clack/prompts", () => ({
   intro: vi.fn(),
   outro: vi.fn(),
   cancel: vi.fn(),
+  log: { info: vi.fn() },
   password: vi.fn(),
   text: vi.fn(),
   isCancel: (value: unknown) => value === cancelSymbol,
