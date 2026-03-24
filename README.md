@@ -17,7 +17,7 @@ NanoClaw took the right approach by going minimal at ~500 lines of code, but it'
 
 - **Built for Telegram** — the best chatbot experience on the best messaging platform
 - **Powered by OpenCode** — 75+ AI providers with rich plugin & skill ecosystem
-- **Opinionated by design** — fewer choices, more capability, zero bloat
+- **Opinionated on purpose** — fewer choices, more capability, zero bloat
 
 > [!NOTE]
 > OpenKitten is in early development. Things may break between releases.
