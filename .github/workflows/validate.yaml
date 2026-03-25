@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
       - run: bun ci
-      - run: echo "::add-matcher::.github/tsc.json"
+      - run: echo "::add-matcher::.github/matchers/tsc.json"
       - run: bun --bun tsc --build --pretty false
       - run: bun --bun biome ci
       - run: bun --bun vitest run --coverage
