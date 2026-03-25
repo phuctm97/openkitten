@@ -2,9 +2,12 @@ import * as clack from "@clack/prompts";
 import zod from "zod";
 import { isTTY } from "~/lib/is-tty";
 
+const botTokenPattern = /^\d+:[A-Za-z0-9_-]{35}$/;
+const botTokenError = "Telegram bot token must match <bot_id>:<secret> format";
+
 const schema = zod.object({
   telegram: zod.object({
-    botToken: zod.string().min(1),
+    botToken: zod.string().regex(botTokenPattern, botTokenError),
     userId: zod.int().positive(),
   }),
 });
@@ -43,7 +46,7 @@ export namespace Auth {
       await clack.password({
         message: "Telegram bot token:",
         validate: (value) => {
-          if (!value) return "Bot token is required";
+          if (!value || !botTokenPattern.test(value)) return botTokenError;
           return undefined;
         },
       }),
