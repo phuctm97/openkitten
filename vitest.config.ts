@@ -9,6 +9,7 @@ export default defineConfig({
     coverage: {
       provider: "istanbul",
       include: ["lib/**/*.{ts,tsx}"],
+      thresholds: { 100: true },
     },
   },
 });

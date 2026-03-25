@@ -15,4 +15,4 @@ jobs:
       - run: bun ci
       - run: bun --bun tsc --build
       - run: bun --bun biome ci
-      - run: bun --bun vitest run --coverage --coverage.thresholds.100
+      - run: bun --bun vitest run --coverage
