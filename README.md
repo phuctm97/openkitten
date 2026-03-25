@@ -70,12 +70,12 @@ Levels: `silly`, `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
 
 ### OpenCode
 
-OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode/`. On first run, it generates:
+OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode`. On first run, it generates:
 
 ```
-.opencode/
+.opencode
 ├── opencode.json       # OpenCode configuration
-└── agents/
+└── agents
     ├── assist.md       # Main assistant agent
     ├── build.md        # Build-focused agent
     └── plan.md         # Planning-focused agent
