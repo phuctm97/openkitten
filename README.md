@@ -68,17 +68,20 @@ OPENKITTEN_PROFILE=work bun . serve
 
 Each profile isolates its config & data at `~/.openkitten/profiles/<profile>`.
 
+### Telegram
+
+OpenKitten prompts for your Telegram bot token and user ID if not already configured, then saves them to `~/.openkitten/profiles/<profile>/system/config/openkitten/telegram-auth.json`. To re-authenticate, delete the file and restart the server.
+
 ### OpenCode
 
-OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode`. On first run, it generates:
+OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode`:
 
 ```
-.opencode/
-├── opencode.json       # OpenCode configuration
-└── agents/
-    ├── assist.md       # General purpose agent (default)
-    ├── build.md        # Software engineering agent
-    └── plan.md         # Read-only research & planning agent
+opencode.json       # OpenCode configuration
+agents/             # OpenCode agents
+├── assist.md       # General purpose agent (default)
+├── build.md        # Software engineering agent
+└── plan.md         # Read-only research & planning agent
 ```
 
 Edit `opencode.json` to configure providers, models, agents, commands, permissions, MCP servers, and more. See [OpenCode config docs](https://opencode.ai/docs/config) for all available options.
