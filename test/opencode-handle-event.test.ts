@@ -148,7 +148,7 @@ test("ignores session.error without sessionID", async () => {
   expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();
 });
 
-test("sends compact on session.compacted for known session", async () => {
+test("sends compacted on session.compacted for known session", async () => {
   const { scope, bot } = mockScope();
   await opencodeHandleEvent(
     scope,
