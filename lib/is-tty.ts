@@ -1,1 +1,2 @@
-export const isTTY = !!(process.stdin.isTTY && process.stdout.isTTY);
+var isTTY = !!(process.stdin.isTTY && process.stdout.isTTY);
+export { isTTY };
