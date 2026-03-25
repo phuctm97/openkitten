@@ -1,6 +1,7 @@
 import type { Event } from "@opencode-ai/sdk/v2";
 import { grammySendCompacted } from "~/lib/grammy-send-compacted";
 import { grammySendError } from "~/lib/grammy-send-error";
+import { logger } from "~/lib/logger";
 import type { Scope } from "~/lib/scope";
 
 export async function opencodeHandleEvent(
@@ -28,6 +29,7 @@ export async function opencodeHandleEvent(
     case "session.error": {
       const { sessionID, error } = event.properties;
       if (sessionID) {
+        logger.error("Session error", { sessionID, error });
         const location = existingSessions.resolve(sessionID);
         await grammySendError({ bot, error, ...location });
       }
