@@ -66,7 +66,7 @@ Set via `OPENKITTEN_PROFILE` (defaults to `default`):
 OPENKITTEN_PROFILE=work bun . serve
 ```
 
-Each profile isolates its config and data at `~/.openkitten/profiles/<profile>`.
+Each profile isolates its config & data at `~/.openkitten/profiles/<profile>`.
 
 ### OpenCode
 
