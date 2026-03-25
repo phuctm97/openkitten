@@ -76,9 +76,9 @@ OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten
 .opencode/
 ├── opencode.json       # OpenCode configuration
 └── agents/
-    ├── assist.md       # Main assistant agent
-    ├── build.md        # Build-focused agent
-    └── plan.md         # Planning-focused agent
+    ├── assist.md       # General-purpose agent
+    ├── build.md        # Software engineering agent
+    └── plan.md         # Research and planning agent
 ```
 
 Edit `opencode.json` to configure providers, models, agents, MCP servers, permissions, and more. See the [OpenCode config schema](https://opencode.ai/config.json) for all available options.
