@@ -1,3 +1,4 @@
+import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
 import zod from "zod";
 import { isTTY } from "~/lib/is-tty";
@@ -38,7 +39,12 @@ export namespace Auth {
     }
     if (!isTTY) throw new Auth.NotFoundError();
     clack.intro("🔐 Auth");
-    clack.log.info("Get a bot token from @BotFather: https://t.me/BotFather");
+    clack.log.message(
+      "Get a bot token from @BotFather: https://t.me/BotFather",
+      {
+        symbol: styleText("cyan", "ℹ"),
+      },
+    );
     const botToken = require(
       await clack.password({
         message: "Telegram bot token:",
@@ -48,8 +54,9 @@ export namespace Auth {
         },
       }),
     );
-    clack.log.info(
+    clack.log.message(
       "Get your user ID from @userinfobot: https://t.me/userinfobot",
+      { symbol: styleText("cyan", "ℹ") },
     );
     const rawUserId = require(
       await clack.text({
