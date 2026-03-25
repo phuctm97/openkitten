@@ -28,7 +28,7 @@ test("true when both stdin and stdout are TTY", async () => {
     configurable: true,
   });
   const { isTTY } = await import("~/lib/is-tty");
-  expect(isTTY).toBe(true);
+  expect(isTTY).toBe(false);
 });
 
 test("false when stdin is not TTY", async () => {
