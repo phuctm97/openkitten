@@ -4,8 +4,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   plugins: [tsconfigPaths({ projects: ["tsconfig.json"] })],
   test: {
-    setupFiles: ["test/setup.ts"],
     include: ["test/**/*.test.{ts,tsx}"],
+    setupFiles: ["test/setup.ts"],
     coverage: {
       provider: "istanbul",
       include: ["lib/**/*.{ts,tsx}"],
