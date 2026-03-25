@@ -78,7 +78,7 @@ OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten
 
 ```
 opencode.json       # OpenCode configuration
-agents/
+agents/             # OpenCode agents
 ├── assist.md       # General purpose agent (default)
 ├── build.md        # Software engineering agent
 └── plan.md         # Read-only research & planning agent
