@@ -273,10 +273,10 @@ test("shows spinner during bot token verification", async () => {
 
 test("rethrows non-GrammyError from getMe", async () => {
   const path = await tempAuthPath();
-  const stopFn = vi.fn();
-  vi.mocked(spinner).mockReturnValueOnce(mockSpinner(stopFn));
+  const s = mockSpinner();
+  vi.mocked(spinner).mockReturnValueOnce(s);
   vi.mocked(password).mockResolvedValueOnce(validToken);
   getMeMock.mockRejectedValueOnce(new Error("network failure"));
   await expect(Auth.load(path)).rejects.toThrow("network failure");
-  expect(stopFn).toHaveBeenCalledWith("Failed to verify bot token");
+  expect(s.error).toHaveBeenCalledWith("Failed to verify bot token");
 });

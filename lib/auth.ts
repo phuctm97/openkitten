@@ -47,10 +47,10 @@ async function promptBotToken(): Promise<string> {
       return botToken;
     } catch (e) {
       if (e instanceof GrammyError) {
-        s.stop("Bot token is invalid");
+        s.error("Bot token is invalid, please try again");
         continue;
       }
-      s.stop("Failed to verify bot token");
+      s.error("Failed to verify bot token");
       throw e;
     }
   }
