@@ -10,7 +10,6 @@ vi.mock("~/lib/grammy-send-compacted");
 function mockScope() {
   const bot = {} as never;
   const existingSessions = {
-    check: vi.fn().mockReturnValue(true),
     resolve: vi.fn().mockReturnValue({ chatId: 123, threadId: 456 }),
   };
   const workingSessions = { update: vi.fn() };
@@ -102,7 +101,7 @@ test("processes message on message.updated event", async () => {
   expect(processingMessages.update).toHaveBeenCalledWith(event);
 });
 
-test("sends error on session.error for known session", async () => {
+test("sends error on session.error", async () => {
   const { scope, bot } = mockScope();
   const error = { type: "unknown_error" as const, message: "boom" };
   await opencodeHandleEvent(
@@ -121,20 +120,6 @@ test("sends error on session.error for known session", async () => {
   });
 });
 
-test("ignores session.error for unknown session", async () => {
-  const { scope, existingSessions } = mockScope();
-  existingSessions.check.mockReturnValue(false);
-  await opencodeHandleEvent(
-    scope,
-    {
-      type: "session.error" as const,
-      properties: { sessionID: "s1", error: undefined },
-    } as never,
-    new AbortController().signal,
-  );
-  expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();
-});
-
 test("ignores session.error without sessionID", async () => {
   const { scope } = mockScope();
   await opencodeHandleEvent(
@@ -148,7 +133,7 @@ test("ignores session.error without sessionID", async () => {
   expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();
 });
 
-test("sends compacted on session.compacted for known session", async () => {
+test("sends compacted on session.compacted", async () => {
   const { scope, bot } = mockScope();
   await opencodeHandleEvent(
     scope,
@@ -163,20 +148,6 @@ test("sends compacted on session.compacted for known session", async () => {
     chatId: 123,
     threadId: 456,
   });
-});
-
-test("ignores session.compacted for unknown session", async () => {
-  const { scope, existingSessions } = mockScope();
-  existingSessions.check.mockReturnValue(false);
-  await opencodeHandleEvent(
-    scope,
-    {
-      type: "session.compacted" as const,
-      properties: { sessionID: "s1" },
-    } as never,
-    new AbortController().signal,
-  );
-  expect(grammySendCompactedModule.grammySendCompacted).not.toHaveBeenCalled();
 });
 
 test("ignores unrelated event types", async () => {
