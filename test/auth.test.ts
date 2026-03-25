@@ -6,6 +6,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { Auth } from "~/lib/auth";
 
 const cancelSymbol = Symbol("cancel");
+const validToken = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
 
 const isTTYMock = vi.hoisted(() => ({ isTTY: true }));
 vi.mock("~/lib/is-tty", () => isTTYMock);
@@ -35,46 +36,49 @@ test("loads valid auth from file", async () => {
   await Bun.write(
     path,
     JSON.stringify({
-      telegram: { botToken: "test-token", userId: 123 },
+      telegram: { botToken: validToken, userId: 123 },
     }),
   );
   const auth = await Auth.load(path);
-  expect(auth.telegram.botToken).toBe("test-token");
+  expect(auth.telegram.botToken).toBe(validToken);
   expect(auth.telegram.userId).toBe(123);
 });
 
 test("prompts when auth file does not exist", async () => {
   const path = await tempAuthPath();
-  vi.mocked(password).mockResolvedValueOnce("prompted-token");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockResolvedValueOnce("456");
   const auth = await Auth.load(path);
-  expect(auth.telegram.botToken).toBe("prompted-token");
+  expect(auth.telegram.botToken).toBe(validToken);
   expect(auth.telegram.userId).toBe(456);
 });
 
 test("saves auth after prompting", async () => {
   const path = await tempAuthPath();
-  vi.mocked(password).mockResolvedValueOnce("prompted-token");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockResolvedValueOnce("456");
   await Auth.load(path);
   const saved = await Auth.load(path);
-  expect(saved.telegram.botToken).toBe("prompted-token");
+  expect(saved.telegram.botToken).toBe(validToken);
   expect(saved.telegram.userId).toBe(456);
 });
 
 test("prompts when auth file has invalid data", async () => {
   const path = await tempAuthPath();
-  await Bun.write(path, JSON.stringify({ telegram: { botToken: "" } }));
-  vi.mocked(password).mockResolvedValueOnce("fixed-token");
+  await Bun.write(
+    path,
+    JSON.stringify({ telegram: { botToken: "bad-format", userId: 123 } }),
+  );
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockResolvedValueOnce("789");
   const auth = await Auth.load(path);
-  expect(auth.telegram.botToken).toBe("fixed-token");
+  expect(auth.telegram.botToken).toBe(validToken);
   expect(auth.telegram.userId).toBe(789);
 });
 
 test("prompts with password type for bot token", async () => {
   const path = await tempAuthPath();
-  vi.mocked(password).mockResolvedValueOnce("token");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockResolvedValueOnce("123");
   await Auth.load(path);
   expect(password).toHaveBeenCalledWith(
@@ -84,7 +88,7 @@ test("prompts with password type for bot token", async () => {
 
 test("prompts with text type for user ID", async () => {
   const path = await tempAuthPath();
-  vi.mocked(password).mockResolvedValueOnce("token");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockResolvedValueOnce("123");
   await Auth.load(path);
   expect(text).toHaveBeenCalledWith(
@@ -100,7 +104,7 @@ test("throws when bot token prompt is cancelled", async () => {
 
 test("throws when user ID prompt is cancelled", async () => {
   const path = await tempAuthPath();
-  vi.mocked(password).mockResolvedValueOnce("token");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockResolvedValueOnce(cancelSymbol as never);
   await expect(Auth.load(path)).rejects.toThrow(Auth.NotFoundError);
 });
@@ -114,18 +118,32 @@ test("throws when not a TTY", async () => {
 test("bot token validate rejects empty value", async () => {
   const path = await tempAuthPath();
   vi.mocked(password).mockImplementationOnce(({ validate }) => {
-    expect(validate?.("")).toBe("Bot token is required");
-    return Promise.resolve("token");
+    expect(validate?.("")).toBe(
+      "Bot token must match <bot_id>:<secret> format",
+    );
+    return Promise.resolve(validToken);
   });
   vi.mocked(text).mockResolvedValueOnce("123");
   await Auth.load(path);
 });
 
-test("bot token validate accepts non-empty value", async () => {
+test("bot token validate rejects invalid format", async () => {
   const path = await tempAuthPath();
   vi.mocked(password).mockImplementationOnce(({ validate }) => {
-    expect(validate?.("valid-token")).toBeUndefined();
-    return Promise.resolve("token");
+    expect(validate?.("not-a-token")).toBe(
+      "Bot token must match <bot_id>:<secret> format",
+    );
+    return Promise.resolve(validToken);
+  });
+  vi.mocked(text).mockResolvedValueOnce("123");
+  await Auth.load(path);
+});
+
+test("bot token validate accepts valid format", async () => {
+  const path = await tempAuthPath();
+  vi.mocked(password).mockImplementationOnce(({ validate }) => {
+    expect(validate?.(validToken)).toBeUndefined();
+    return Promise.resolve(validToken);
   });
   vi.mocked(text).mockResolvedValueOnce("123");
   await Auth.load(path);
@@ -133,7 +151,7 @@ test("bot token validate accepts non-empty value", async () => {
 
 test("user ID validate rejects non-integer", async () => {
   const path = await tempAuthPath();
-  vi.mocked(password).mockResolvedValueOnce("token");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockImplementationOnce(({ validate }) => {
     expect(validate?.("abc")).toBe("User ID must be a positive integer");
     return Promise.resolve("123");
@@ -143,7 +161,7 @@ test("user ID validate rejects non-integer", async () => {
 
 test("user ID validate rejects zero", async () => {
   const path = await tempAuthPath();
-  vi.mocked(password).mockResolvedValueOnce("token");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockImplementationOnce(({ validate }) => {
     expect(validate?.("0")).toBe("User ID must be a positive integer");
     return Promise.resolve("123");
@@ -153,7 +171,7 @@ test("user ID validate rejects zero", async () => {
 
 test("user ID validate rejects negative number", async () => {
   const path = await tempAuthPath();
-  vi.mocked(password).mockResolvedValueOnce("token");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockImplementationOnce(({ validate }) => {
     expect(validate?.("-1")).toBe("User ID must be a positive integer");
     return Promise.resolve("123");
@@ -163,7 +181,7 @@ test("user ID validate rejects negative number", async () => {
 
 test("user ID validate accepts positive integer", async () => {
   const path = await tempAuthPath();
-  vi.mocked(password).mockResolvedValueOnce("token");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
   vi.mocked(text).mockImplementationOnce(({ validate }) => {
     expect(validate?.("42")).toBeUndefined();
     return Promise.resolve("123");
