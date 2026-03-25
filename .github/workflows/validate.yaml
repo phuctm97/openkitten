@@ -14,10 +14,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-      - run: bun ci
       - name: Add matchers
         run: echo "::add-matcher::.github/matchers/tsc.json"
+      - uses: oven-sh/setup-bun@v2
+      - run: bun ci
       - run: bun --bun tsc --build --pretty false
       - run: bun --bun biome ci
       - run: bun --bun vitest run --coverage
