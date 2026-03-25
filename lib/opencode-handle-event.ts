@@ -29,7 +29,9 @@ export async function opencodeHandleEvent(
     case "session.error": {
       const { sessionID, error } = event.properties;
       if (sessionID) {
-        logger.error("Session error", { sessionID, error });
+        logger.error("OpenCode session encountered an error", error, {
+          sessionID,
+        });
         const location = existingSessions.resolve(sessionID);
         await grammySendError({ bot, error, ...location });
       }
