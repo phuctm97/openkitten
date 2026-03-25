@@ -142,8 +142,8 @@ export class OpencodeServer implements AsyncDisposable {
           OPENCODE_SERVER_PASSWORD: password,
           OPENCODE_CONFIG_DIR: profile.opencode,
           OPENCODE_CONFIG_CONTENT: JSON.stringify({
-            share: "disabled",
             autoupdate: false,
+            share: "disabled",
             server: {
               port: 0,
               hostname: "127.0.0.1",
