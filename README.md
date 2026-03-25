@@ -48,16 +48,6 @@ bun . serve
 
 ## Configuration
 
-### Profile
-
-Set via `OPENKITTEN_PROFILE` (defaults to `default`):
-
-```bash
-OPENKITTEN_PROFILE=work bun . serve
-```
-
-Each profile isolates its data at `~/.openkitten/profiles/<profile>`.
-
 ### Log level
 
 Set via `OPENKITTEN_LOG_LEVEL` (defaults to `silly`):
@@ -67,3 +57,28 @@ OPENKITTEN_LOG_LEVEL=info bun . serve
 ```
 
 Levels: `silly`, `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
+
+### Profile
+
+Set via `OPENKITTEN_PROFILE` (defaults to `default`):
+
+```bash
+OPENKITTEN_PROFILE=work bun . serve
+```
+
+Each profile isolates its config & data at `~/.openkitten/profiles/<profile>`.
+
+### OpenCode
+
+OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode`. On first run, it generates:
+
+```
+.opencode/
+├── opencode.json       # OpenCode configuration
+└── agents/
+    ├── assist.md       # General purpose agent (default)
+    ├── build.md        # Software engineering agent
+    └── plan.md         # Read-only research & planning agent
+```
+
+Edit `opencode.json` to configure providers, models, agents, commands, permissions, MCP servers, and more. See [OpenCode config docs](https://opencode.ai/docs/config) for all available options.
