@@ -44,9 +44,7 @@ export namespace Auth {
     clack.intro("🔐 Auth");
     clack.log.message(
       "Get a bot token from @BotFather: https://t.me/BotFather",
-      {
-        symbol: styleText("cyan", "ℹ"),
-      },
+      { symbol: styleText("cyan", "ℹ") },
     );
     const botToken = require(
       await clack.password({
