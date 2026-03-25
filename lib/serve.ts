@@ -1,7 +1,7 @@
+import { join } from "node:path";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { Auth } from "~/lib/auth";
-import { bootstrapOpencode } from "~/lib/bootstrap-opencode";
 import { Database } from "~/lib/database";
 import { Errors } from "~/lib/errors";
 import { ExistingSessions } from "~/lib/existing-sessions";
@@ -27,11 +27,14 @@ export const serve = defineCommand({
   run: async () => {
     using shutdown = Shutdown.create();
     const profile = await Profile.create();
-    await bootstrapOpencode(profile.opencode);
-    const auth = await Auth.load(profile.auth);
+    const auth = await Auth.load(
+      join(profile.xdgConfig, "openkitten", "auth.json"),
+    );
     const bot = new Bot(auth.telegram.botToken);
     bot.use(grammyFilterUser(auth.telegram.userId));
-    using database = Database.create(profile.database);
+    using database = Database.create(
+      join(profile.xdgData, "openkitten", "openkitten.db"),
+    );
     await using opencodeServer = await OpencodeServer.create(profile);
     await using floatingPromises = FloatingPromises.create();
     const existingSessions = ExistingSessions.create(

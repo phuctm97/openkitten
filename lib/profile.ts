@@ -13,8 +13,8 @@ export class Profile {
   async #prepare(): Promise<void> {
     const results = await Promise.allSettled([
       mkdir(this.workspace, { recursive: true }),
-      mkdir(this.opencode, { recursive: true }),
-      mkdir(this.openkitten, { recursive: true }),
+      mkdir(join(this.xdgData, "openkitten"), { recursive: true }),
+      mkdir(join(this.xdgConfig, "openkitten"), { recursive: true }),
     ]);
     Errors.throwIfAny(results);
   }
@@ -33,22 +33,6 @@ export class Profile {
 
   get workspace(): string {
     return join(this.dir, "workspace");
-  }
-
-  get auth(): string {
-    return join(this.openkitten, "auth.json");
-  }
-
-  get database(): string {
-    return join(this.openkitten, "openkitten.db");
-  }
-
-  get opencode(): string {
-    return join(this.dir, ".opencode");
-  }
-
-  get openkitten(): string {
-    return join(this.xdgData, "openkitten");
   }
 
   get xdgData(): string {

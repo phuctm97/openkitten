@@ -1,7 +1,8 @@
 import { randomBytes } from "node:crypto";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
+import { bootstrapOpencode } from "~/lib/bootstrap-opencode";
 import { logger } from "~/lib/logger";
 import type { Profile } from "~/lib/profile";
 import { textDecoder } from "~/lib/text-decoder";
@@ -121,6 +122,10 @@ export class OpencodeServer implements AsyncDisposable {
 
   static async create(profile: Profile): Promise<OpencodeServer> {
     logger.debug("OpenCode server is starting…");
+
+    const configDir = join(profile.dir, ".opencode");
+    await bootstrapOpencode(configDir);
+
     const username = pkg.name;
     const password = randomBytes(32).toString("base64url");
     const proc = Bun.spawn(
@@ -138,9 +143,7 @@ export class OpencodeServer implements AsyncDisposable {
           XDG_CONFIG_HOME: profile.xdgConfig,
           XDG_STATE_HOME: profile.xdgState,
           XDG_CACHE_HOME: profile.xdgCache,
-          OPENCODE_SERVER_USERNAME: username,
-          OPENCODE_SERVER_PASSWORD: password,
-          OPENCODE_CONFIG_DIR: profile.opencode,
+          OPENCODE_CONFIG_DIR: configDir,
           OPENCODE_CONFIG_CONTENT: JSON.stringify({
             autoupdate: false,
             share: "disabled",
@@ -150,6 +153,8 @@ export class OpencodeServer implements AsyncDisposable {
               cors: ["https://opencode.local"],
             },
           }),
+          OPENCODE_SERVER_USERNAME: username,
+          OPENCODE_SERVER_PASSWORD: password,
           OPENCODE_DISABLE_AUTOUPDATE: "true",
           OPENCODE_DISABLE_TERMINAL_TITLE: "true",
           OPENCODE_ENABLE_EXA: "true",

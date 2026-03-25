@@ -1,4 +1,6 @@
+import { join } from "node:path";
 import { expect, test, vi } from "vitest";
+import { bootstrapOpencode } from "~/lib/bootstrap-opencode";
 import { logger } from "~/lib/logger";
 import { OpencodeServer } from "~/lib/opencode-server";
 import { Profile } from "~/lib/profile";
@@ -7,6 +9,10 @@ import pkg from "~/package.json" with { type: "json" };
 
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),
+}));
+
+vi.mock("~/lib/bootstrap-opencode", () => ({
+  bootstrapOpencode: vi.fn(),
 }));
 
 Bun.env["OPENKITTEN_PROFILE"] = "test";
@@ -140,11 +146,19 @@ test("passes credentials to opencode server", async () => {
   });
 });
 
+test("bootstraps opencode config dir", async () => {
+  mockSpawn();
+  await OpencodeServer.create(profile);
+  expect(bootstrapOpencode).toHaveBeenCalledWith(
+    join(profile.dir, ".opencode"),
+  );
+});
+
 test("passes opencode config dir to opencode server", async () => {
   mockSpawn();
   await OpencodeServer.create(profile);
   expect(capturedOptions).toMatchObject({
-    env: { OPENCODE_CONFIG_DIR: profile.opencode },
+    env: { OPENCODE_CONFIG_DIR: join(profile.dir, ".opencode") },
   });
 });
 

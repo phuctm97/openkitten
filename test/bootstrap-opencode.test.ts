@@ -10,6 +10,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { bootstrapOpencode } from "~/lib/bootstrap-opencode";
+import { Errors } from "~/lib/errors";
 
 let configDir: string;
 
@@ -72,13 +73,26 @@ test("copies new agents while preserving existing ones", async () => {
   expect(planContent).not.toBe("custom content");
 });
 
-test("throws on non-EEXIST errors", async () => {
-  const agentsPath = join(configDir, "agents");
-  await mkdir(agentsPath, { recursive: true });
-  await chmod(agentsPath, 0o444);
+test("throws on single non-EEXIST error", async () => {
+  await bootstrapOpencode(configDir);
+  await rm(join(configDir, "opencode.json"));
+  await chmod(configDir, 0o555);
   try {
     await expect(bootstrapOpencode(configDir)).rejects.toThrow();
   } finally {
+    await chmod(configDir, 0o755);
+  }
+});
+
+test("throws Errors on multiple non-EEXIST errors", async () => {
+  const agentsPath = join(configDir, "agents");
+  await mkdir(agentsPath, { recursive: true });
+  await chmod(agentsPath, 0o444);
+  await chmod(configDir, 0o555);
+  try {
+    await expect(bootstrapOpencode(configDir)).rejects.toBeInstanceOf(Errors);
+  } finally {
+    await chmod(configDir, 0o755);
     await chmod(agentsPath, 0o755);
   }
 });
