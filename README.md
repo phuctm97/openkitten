@@ -74,7 +74,7 @@ OpenKitten prompts for your Telegram bot token and user ID if not already config
 
 ### OpenCode
 
-OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode`. On first run, it generates:
+OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode`:
 
 ```
 .opencode/
