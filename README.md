@@ -81,4 +81,4 @@ OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten
     └── plan.md         # Read-only research & planning agent
 ```
 
-Edit `opencode.json` to configure providers, models, agents, MCP servers, permissions, and more. See the [OpenCode config schema](https://opencode.ai/config.json) for all available options.
+Edit `opencode.json` to configure providers, models, agents, commands, permissions, MCP servers, and more. See [OpenCode configuration](https://opencode.ai/docs/config/) for all available options.
