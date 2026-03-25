@@ -67,3 +67,18 @@ OPENKITTEN_LOG_LEVEL=info bun . serve
 ```
 
 Levels: `silly`, `trace`, `debug`, `info`, `warn`, `error`, `fatal`.
+
+### OpenCode
+
+OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode/`. On first run, it generates:
+
+```
+.opencode/
+├── opencode.json       # OpenCode configuration
+└── agents/
+    ├── assist.md       # Main assistant agent
+    ├── build.md        # Build-focused agent
+    └── plan.md         # Planning-focused agent
+```
+
+Edit `opencode.json` to configure providers, models, agents, MCP servers, permissions, and more. See the [OpenCode config schema](https://opencode.ai/config.json) for all available options.
