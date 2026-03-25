@@ -145,11 +145,9 @@ export class OpencodeServer implements AsyncDisposable {
             autoupdate: false,
             share: "disabled",
             server: {
-              port: 0,
-              hostname: "127.0.0.1",
               mdns: false,
               mdnsDomain: "opencode.local",
-              cors: [],
+              cors: ["https://opencode.local"],
             },
           }),
           OPENCODE_DISABLE_AUTOUPDATE: "true",
