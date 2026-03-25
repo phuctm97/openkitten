@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Add matchers
+        run: echo "::add-matcher::.github/matchers/tsc.json"
       - uses: oven-sh/setup-bun@v2
       - run: bun ci
       - run: bun --bun tsc --build
