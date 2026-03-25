@@ -40,7 +40,7 @@ async function promptBotToken(): Promise<string> {
       }),
     );
     const s = clack.spinner();
-    s.start("Verifying bot token…");
+    s.start("Verifying bot token");
     try {
       const me = await new Api(botToken).getMe();
       s.stop(`Verified bot: ${me.first_name} (@${me.username})`);
