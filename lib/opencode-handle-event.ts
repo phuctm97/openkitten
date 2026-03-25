@@ -27,9 +27,10 @@ export async function opencodeHandleEvent(
       break;
     case "session.error": {
       const { sessionID, error } = event.properties;
-      if (!sessionID) break;
-      const location = existingSessions.resolve(sessionID);
-      await grammySendError({ bot, error, ...location });
+      if (sessionID) {
+        const location = existingSessions.resolve(sessionID);
+        await grammySendError({ bot, error, ...location });
+      }
       break;
     }
     case "session.compacted": {
