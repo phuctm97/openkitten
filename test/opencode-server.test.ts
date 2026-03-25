@@ -97,6 +97,38 @@ test("logs ready", async () => {
   expect(logger.info).toHaveBeenCalledWith("OpenCode server is ready");
 });
 
+test("disables autoupdate", async () => {
+  mockSpawn();
+  await OpencodeServer.create(profile);
+  expect(capturedOptions).toMatchObject({
+    env: { OPENCODE_DISABLE_AUTOUPDATE: "true" },
+  });
+});
+
+test("disables terminal title", async () => {
+  mockSpawn();
+  await OpencodeServer.create(profile);
+  expect(capturedOptions).toMatchObject({
+    env: { OPENCODE_DISABLE_TERMINAL_TITLE: "true" },
+  });
+});
+
+test("enables experimental models", async () => {
+  mockSpawn();
+  await OpencodeServer.create(profile);
+  expect(capturedOptions).toMatchObject({
+    env: { OPENCODE_ENABLE_EXPERIMENTAL_MODELS: "true" },
+  });
+});
+
+test("enables exa web search", async () => {
+  mockSpawn();
+  await OpencodeServer.create(profile);
+  expect(capturedOptions).toMatchObject({
+    env: { OPENCODE_ENABLE_EXA: "true" },
+  });
+});
+
 test("passes credentials to opencode server", async () => {
   mockSpawn();
   await OpencodeServer.create(profile);
