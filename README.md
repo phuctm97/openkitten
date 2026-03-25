@@ -73,9 +73,9 @@ Each profile isolates its data at `~/.openkitten/profiles/<profile>`.
 OpenKitten bootstraps an OpenCode config directory per profile at `~/.openkitten/profiles/<profile>/.opencode`. On first run, it generates:
 
 ```
-.opencode
+.opencode/
 ├── opencode.json       # OpenCode configuration
-└── agents
+└── agents/
     ├── assist.md       # Main assistant agent
     ├── build.md        # Build-focused agent
     └── plan.md         # Planning-focused agent
