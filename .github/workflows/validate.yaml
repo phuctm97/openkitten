@@ -1,10 +1,13 @@
 name: Validate
+
 on:
   pull_request:
     branches: [main]
+
 concurrency:
   group: ${{ github.workflow }} ${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   validate:
     name: ${{ github.workflow }}
