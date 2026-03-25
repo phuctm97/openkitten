@@ -10,16 +10,14 @@ const botTokenError = "Bot token must match <bot_id>:<secret> format";
 const hintOptions = { symbol: styleText("cyan", "ℹ") };
 
 const schema = zod.object({
-  telegram: zod.object({
-    botToken: zod.string().regex(botTokenPattern, botTokenError),
-    userId: zod.int().positive(),
-  }),
+  botToken: zod.string().regex(botTokenPattern, botTokenError),
+  userId: zod.int().positive(),
 });
 
 function require<T>(value: T | symbol): T {
   if (clack.isCancel(value)) {
-    clack.cancel("Auth is cancelled");
-    throw new Auth.NotFoundError();
+    clack.cancel("Telegram auth is cancelled");
+    throw new TelegramAuth.NotFoundError();
   }
   return value;
 }
@@ -75,32 +73,32 @@ async function promptUserId(): Promise<number> {
   return Number(raw);
 }
 
-async function save(path: string, auth: Auth): Promise<void> {
+async function save(path: string, auth: TelegramAuth): Promise<void> {
   await Bun.write(path, JSON.stringify(auth), { mode: 0o600 });
 }
 
-export type Auth = zod.output<typeof schema>;
+export type TelegramAuth = zod.output<typeof schema>;
 
-export namespace Auth {
+export namespace TelegramAuth {
   export class NotFoundError extends Error {
     constructor() {
-      super("No valid auth found");
+      super("No valid Telegram auth found");
     }
   }
 
-  export async function load(path: string): Promise<Auth> {
+  export async function load(path: string): Promise<TelegramAuth> {
     const file = Bun.file(path);
     if (await file.exists()) {
       const result = schema.safeParse(await file.json());
       if (result.success) return result.data;
     }
-    if (!isTTY) throw new Auth.NotFoundError();
-    clack.intro("🔐 Auth");
+    if (!isTTY) throw new TelegramAuth.NotFoundError();
+    clack.intro("🔐 Telegram Auth");
     const botToken = await promptBotToken();
     const userId = await promptUserId();
-    const auth = schema.parse({ telegram: { botToken, userId } });
+    const auth = schema.parse({ botToken, userId });
     await save(path, auth);
-    clack.outro("Auth is saved");
+    clack.outro("Telegram auth is saved");
     return auth;
   }
 }

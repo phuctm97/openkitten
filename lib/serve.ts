@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
-import { Auth } from "~/lib/auth";
 import { Database } from "~/lib/database";
 import { Errors } from "~/lib/errors";
 import { ExistingSessions } from "~/lib/existing-sessions";
@@ -19,6 +18,7 @@ import { ProcessingMessages } from "~/lib/processing-messages";
 import { Profile } from "~/lib/profile";
 import type { Scope } from "~/lib/scope";
 import { Shutdown } from "~/lib/shutdown";
+import { TelegramAuth } from "~/lib/telegram-auth";
 import { TypingIndicators } from "~/lib/typing-indicators";
 import { WorkingSessions } from "~/lib/working-sessions";
 
@@ -27,11 +27,11 @@ export const serve = defineCommand({
   run: async () => {
     using shutdown = Shutdown.create();
     const profile = await Profile.create();
-    const auth = await Auth.load(
-      join(profile.xdgConfig, "openkitten", "auth.json"),
+    const telegramAuth = await TelegramAuth.load(
+      join(profile.xdgConfig, "openkitten", "telegram-auth.json"),
     );
-    const bot = new Bot(auth.telegram.botToken);
-    bot.use(grammyFilterUser(auth.telegram.userId));
+    const bot = new Bot(telegramAuth.botToken);
+    bot.use(grammyFilterUser(telegramAuth.userId));
     using database = Database.create(
       join(profile.xdgData, "openkitten", "openkitten.db"),
     );
