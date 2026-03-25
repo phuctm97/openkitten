@@ -1,1 +1,1 @@
-await Bun.$`bun --bun lefthook install --force`;
+await Bun.$`bun --bun lefthook install --force`.quiet();
