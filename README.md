@@ -70,7 +70,7 @@ Each profile isolates its config & data at `~/.openkitten/profiles/<profile>`.
 
 ### Telegram
 
-OpenKitten prompts for your Telegram bot token and user ID if not already configured, then saves them to `~/.openkitten/profiles/<profile>/system/config/openkitten/telegram-auth.json`. To re-authenticate, delete the file and restart.
+OpenKitten prompts for your Telegram bot token and user ID if not already configured, then saves them to `~/.openkitten/profiles/<profile>/system/config/openkitten/telegram-auth.json`. To re-authenticate, delete the file and restart the server.
 
 ### OpenCode
 
