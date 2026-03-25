@@ -1,5 +1,5 @@
 import type { Event } from "@opencode-ai/sdk/v2";
-import { grammySendCompact } from "~/lib/grammy-send-compact";
+import { grammySendCompacted } from "~/lib/grammy-send-compacted";
 import { grammySendError } from "~/lib/grammy-send-error";
 import { logger } from "~/lib/logger";
 import type { Scope } from "~/lib/scope";
@@ -47,7 +47,7 @@ export async function opencodeHandleEvent(
         break;
       }
       const { chatId, threadId } = existingSessions.resolve(sessionID);
-      await grammySendCompact({ bot, chatId, threadId });
+      await grammySendCompacted({ bot, chatId, threadId });
       break;
     }
   }

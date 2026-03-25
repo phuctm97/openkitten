@@ -1,11 +1,11 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import * as grammySendCompactModule from "~/lib/grammy-send-compact";
+import * as grammySendCompactedModule from "~/lib/grammy-send-compacted";
 import * as grammySendErrorModule from "~/lib/grammy-send-error";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
 import type { Scope } from "~/lib/scope";
 
 vi.mock("~/lib/grammy-send-error");
-vi.mock("~/lib/grammy-send-compact");
+vi.mock("~/lib/grammy-send-compacted");
 
 function mockScope() {
   const bot = {} as never;
@@ -158,7 +158,7 @@ test("sends compact on session.compacted for known session", async () => {
     } as never,
     new AbortController().signal,
   );
-  expect(grammySendCompactModule.grammySendCompact).toHaveBeenCalledWith({
+  expect(grammySendCompactedModule.grammySendCompacted).toHaveBeenCalledWith({
     bot,
     chatId: 123,
     threadId: 456,
@@ -176,7 +176,7 @@ test("ignores session.compacted for unknown session", async () => {
     } as never,
     new AbortController().signal,
   );
-  expect(grammySendCompactModule.grammySendCompact).not.toHaveBeenCalled();
+  expect(grammySendCompactedModule.grammySendCompacted).not.toHaveBeenCalled();
 });
 
 test("ignores unrelated event types", async () => {
