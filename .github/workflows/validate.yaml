@@ -7,6 +7,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   validate:
+    name: ${{ github.workflow }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
