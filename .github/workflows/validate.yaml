@@ -14,5 +14,5 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun ci
       - run: bun typecheck
-      - run: bun --bun biome check
+      - run: bun --bun biome ci
       - run: bun --bun vitest run --coverage
