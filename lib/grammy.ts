@@ -20,6 +20,8 @@ export class Grammy implements AsyncDisposable {
   }
 
   static async create(shutdown: Shutdown, bot: Bot): Promise<Grammy> {
+    logger.debug("grammY is starting…");
+
     // Fatal: errors should never reach here — all event handlers will have
     // their own error boundaries.
     bot.catch(({ ctx, error }) => {
@@ -30,7 +32,6 @@ export class Grammy implements AsyncDisposable {
     });
 
     const { resolve, promise: started } = Promise.withResolvers<void>();
-    logger.debug("grammY is starting…");
     const polling = bot.start({ onStart: () => resolve() });
 
     // bot.start() rejects if polling fails before onStart fires.
