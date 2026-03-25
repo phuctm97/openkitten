@@ -3,7 +3,7 @@ import zod from "zod";
 import { isTTY } from "~/lib/is-tty";
 
 const botTokenPattern = /^\d+:[A-Za-z0-9_-]{35}$/;
-const botTokenError = "Bot token must match <bot_id>:<secret> format";
+const botTokenError = "Telegram bot token must match <bot_id>:<secret> format";
 
 const schema = zod.object({
   telegram: zod.object({

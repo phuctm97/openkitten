@@ -119,7 +119,7 @@ test("bot token validate rejects empty value", async () => {
   const path = await tempAuthPath();
   vi.mocked(password).mockImplementationOnce(({ validate }) => {
     expect(validate?.("")).toBe(
-      "Bot token must match <bot_id>:<secret> format",
+      "Telegram bot token must match <bot_id>:<secret> format",
     );
     return Promise.resolve(validToken);
   });
@@ -131,7 +131,7 @@ test("bot token validate rejects invalid format", async () => {
   const path = await tempAuthPath();
   vi.mocked(password).mockImplementationOnce(({ validate }) => {
     expect(validate?.("not-a-token")).toBe(
-      "Bot token must match <bot_id>:<secret> format",
+      "Telegram bot token must match <bot_id>:<secret> format",
     );
     return Promise.resolve(validToken);
   });
