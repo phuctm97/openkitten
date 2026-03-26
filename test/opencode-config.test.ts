@@ -20,8 +20,10 @@ vi.mock("@clack/prompts");
 
 let profileDir: string;
 let profile: Profile;
+let stderrSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(async () => {
+  stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   profileDir = await mkdtemp(join(tmpdir(), "opencode-"));
   profile = {
     dir: profileDir,
@@ -34,6 +36,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  stderrSpy.mockRestore();
   await rm(profileDir, { recursive: true });
 });
 
@@ -234,6 +237,62 @@ test("runs providers login when user confirms", async () => {
   }
 });
 
+test("throws CancelledError when quiet list fails", async () => {
+  const isTTYModule = await import("~/lib/is-tty");
+  Object.defineProperty(isTTYModule, "isTTY", { value: true, writable: true });
+  const spawn = vi.spyOn(Bun, "spawn").mockImplementation((() => ({
+    exited: Promise.resolve(1),
+  })) as never);
+  try {
+    await expect(OpencodeConfig.create(profile)).rejects.toBeInstanceOf(
+      OpencodeConfig.CancelledError,
+    );
+    expect(vi.mocked(cancel)).toHaveBeenCalledWith("Cancelled");
+  } finally {
+    spawn.mockRestore();
+    Object.defineProperty(isTTYModule, "isTTY", { value: false });
+  }
+});
+
+test("throws CancelledError when interactive list fails", async () => {
+  const isTTYModule = await import("~/lib/is-tty");
+  Object.defineProperty(isTTYModule, "isTTY", { value: true, writable: true });
+  const spawn = vi
+    .spyOn(Bun, "spawn")
+    .mockImplementationOnce((() => ({ exited: Promise.resolve(0) })) as never)
+    .mockImplementationOnce((() => ({ exited: Promise.resolve(1) })) as never);
+  try {
+    await expect(OpencodeConfig.create(profile)).rejects.toBeInstanceOf(
+      OpencodeConfig.CancelledError,
+    );
+    expect(vi.mocked(cancel)).toHaveBeenCalledWith("Cancelled");
+  } finally {
+    spawn.mockRestore();
+    Object.defineProperty(isTTYModule, "isTTY", { value: false });
+  }
+});
+
+test("throws CancelledError when login fails", async () => {
+  const isTTYModule = await import("~/lib/is-tty");
+  Object.defineProperty(isTTYModule, "isTTY", { value: true, writable: true });
+  vi.mocked(confirm).mockResolvedValue(true);
+  const spawn = vi
+    .spyOn(Bun, "spawn")
+    .mockImplementationOnce((() => ({ exited: Promise.resolve(0) })) as never)
+    .mockImplementationOnce((() => ({ exited: Promise.resolve(0) })) as never)
+    .mockImplementationOnce((() => ({ exited: Promise.resolve(1) })) as never);
+  try {
+    await expect(OpencodeConfig.create(profile)).rejects.toBeInstanceOf(
+      OpencodeConfig.CancelledError,
+    );
+    expect(vi.mocked(cancel)).toHaveBeenCalledWith("Cancelled");
+  } finally {
+    spawn.mockRestore();
+    vi.mocked(confirm).mockReset();
+    Object.defineProperty(isTTYModule, "isTTY", { value: false });
+  }
+});
+
 test("throws CancelledError when user cancels", async () => {
   const isTTYModule = await import("~/lib/is-tty");
   Object.defineProperty(isTTYModule, "isTTY", { value: true, writable: true });
@@ -247,7 +306,7 @@ test("throws CancelledError when user cancels", async () => {
     await expect(OpencodeConfig.create(profile)).rejects.toBeInstanceOf(
       OpencodeConfig.CancelledError,
     );
-    expect(vi.mocked(cancel)).toHaveBeenCalledWith("Auth is cancelled");
+    expect(vi.mocked(cancel)).toHaveBeenCalledWith("Cancelled");
   } finally {
     spawn.mockRestore();
     vi.mocked(confirm).mockReset();
