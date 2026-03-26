@@ -3,6 +3,7 @@ import { constants } from "node:fs";
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { styleText } from "node:util";
+import * as clack from "@clack/prompts";
 import boxen from "boxen";
 import { Errors } from "~/lib/errors";
 import { isTTY } from "~/lib/is-tty";
@@ -26,6 +27,12 @@ export interface OpencodeConfig {
 }
 
 export namespace OpencodeConfig {
+  export class CancelledError extends Error {
+    constructor() {
+      super("OpenCode config is cancelled");
+    }
+  }
+
   export async function create(profile: Profile): Promise<OpencodeConfig> {
     const writes: Promise<unknown>[] = [];
     const configDir = join(profile.dir, ".opencode");
@@ -105,6 +112,21 @@ export namespace OpencodeConfig {
         stdio: ["inherit", "inherit", "inherit"],
       });
       await interactive.exited;
+      const shouldLogin = await clack.confirm({
+        message: "Would you like to add a provider?",
+      });
+      if (clack.isCancel(shouldLogin)) {
+        clack.cancel("Auth is cancelled");
+        throw new OpencodeConfig.CancelledError();
+      }
+      if (shouldLogin) {
+        const interactiveLogin = Bun.spawn([bin, "providers", "login"], {
+          cwd: config.cwd,
+          env: config.env,
+          stdio: ["inherit", "inherit", "inherit"],
+        });
+        await interactiveLogin.exited;
+      }
     }
     return config;
   }

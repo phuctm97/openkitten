@@ -21,7 +21,7 @@ const schema = zod.object({
 function require<T>(value: T | symbol): T {
   if (clack.isCancel(value)) {
     clack.cancel("Config is cancelled");
-    throw new TelegramConfig.NotFoundError();
+    throw new TelegramConfig.CancelledError();
   }
   return value;
 }
@@ -81,8 +81,14 @@ export interface TelegramConfig extends zod.output<typeof schema> {}
 
 export namespace TelegramConfig {
   export class NotFoundError extends Error {
+    constructor(path: string) {
+      super(`No valid Telegram config found at ${formatPath(path)}`);
+    }
+  }
+
+  export class CancelledError extends Error {
     constructor() {
-      super("No valid Telegram config found");
+      super("Telegram config is cancelled");
     }
   }
 
@@ -104,7 +110,7 @@ export namespace TelegramConfig {
         return result.data;
       }
     }
-    if (!isTTY) throw new TelegramConfig.NotFoundError();
+    if (!isTTY) throw new TelegramConfig.NotFoundError(path);
     clack.intro(`Config ${styleText("dim", formatPath(path))}`);
     const botToken = await promptBotToken();
     const userId = await promptUserId();

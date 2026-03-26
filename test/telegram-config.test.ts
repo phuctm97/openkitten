@@ -155,7 +155,7 @@ test("prompts with text type for user ID", async () => {
 test("throws when bot token prompt is cancelled", async () => {
   vi.mocked(password).mockResolvedValueOnce(cancelSymbol as never);
   await expect(TelegramConfig.create(profile)).rejects.toThrow(
-    TelegramConfig.NotFoundError,
+    TelegramConfig.CancelledError,
   );
 });
 
@@ -164,7 +164,7 @@ test("throws when user ID prompt is cancelled", async () => {
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce(cancelSymbol as never);
   await expect(TelegramConfig.create(profile)).rejects.toThrow(
-    TelegramConfig.NotFoundError,
+    TelegramConfig.CancelledError,
   );
 });
 
