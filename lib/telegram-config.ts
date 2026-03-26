@@ -9,7 +9,7 @@ import { isTTY } from "~/lib/is-tty";
 import type { Profile } from "~/lib/profile";
 
 const botTokenPattern = /^\d+:[A-Za-z0-9_-]{35}$/;
-const botTokenError = "Bot token must match <bot_id>:<secret> format";
+const botTokenError = "Bot token must match <bot_id>:<bot_secret> format";
 
 const hintOptions = { symbol: styleText("cyan", "ℹ") };
 
@@ -18,23 +18,25 @@ const schema = zod.object({
   userId: zod.int().positive(),
 });
 
+function cancel(): never {
+  clack.cancel("Cancelled");
+  throw new TelegramConfig.CancelledError();
+}
+
 function require<T>(value: T | symbol): T {
-  if (clack.isCancel(value)) {
-    clack.cancel("Config is cancelled");
-    throw new TelegramConfig.CancelledError();
-  }
+  if (clack.isCancel(value)) cancel();
   return value;
 }
 
 async function promptBotToken(): Promise<string> {
   clack.log.message(
-    "Get a bot token from @BotFather: https://t.me/BotFather",
+    "Create a bot with @BotFather: https://t.me/BotFather",
     hintOptions,
   );
   for (;;) {
     const botToken = require(
       await clack.password({
-        message: "Telegram bot token:",
+        message: "Enter your bot token",
         validate: (value) => {
           if (!value || !botTokenPattern.test(value)) return botTokenError;
           return undefined;
@@ -45,11 +47,11 @@ async function promptBotToken(): Promise<string> {
     s.start("Verifying bot token");
     try {
       const me = await new Api(botToken).getMe();
-      s.stop(`Verified bot: ${me.first_name} (@${me.username})`);
+      s.stop(`Verified bot token: ${me.first_name} (@${me.username})`);
       return botToken;
     } catch (e) {
       if (e instanceof GrammyError) {
-        s.error("Bot token is invalid, please try again");
+        s.error("Invalid bot token, please try again");
         continue;
       }
       s.error("Failed to verify bot token");
@@ -65,7 +67,7 @@ async function promptUserId(): Promise<number> {
   );
   const raw = require(
     await clack.text({
-      message: "Telegram user ID:",
+      message: "Enter your user ID",
       validate: (value) => {
         const n = Number(value);
         if (!Number.isInteger(n) || n <= 0)
@@ -105,7 +107,7 @@ export namespace TelegramConfig {
       if (result.success) {
         if (isTTY) {
           clack.intro(`Config ${styleText("dim", formatPath(path))}`);
-          clack.outro("Valid config");
+          clack.outro("Verified config");
         }
         return result.data;
       }
@@ -116,7 +118,7 @@ export namespace TelegramConfig {
     const userId = await promptUserId();
     const config = schema.parse({ botToken, userId });
     await Bun.write(path, JSON.stringify(config), { mode: 0o600 });
-    clack.outro("Config is saved");
+    clack.outro("Saved config");
     return config;
   }
 }

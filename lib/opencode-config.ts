@@ -19,6 +19,11 @@ const defaultConfigJson = {
   default_agent: "assist",
 };
 
+function cancel(): never {
+  clack.cancel("Cancelled");
+  throw new OpencodeConfig.CancelledError();
+}
+
 export interface OpencodeConfig {
   readonly bin: string;
   readonly cwd: string;
@@ -97,35 +102,33 @@ export namespace OpencodeConfig {
       authorization: `Basic ${btoa(`${username}:${password}`)}`,
     };
     if (isTTY) {
-      const quiet = Bun.spawn([bin, "providers", "list"], {
+      const quietListProc = Bun.spawn([bin, "providers", "list"], {
         cwd: config.cwd,
         env: config.env,
         stdio: ["ignore", "ignore", "ignore"],
       });
-      await quiet.exited;
+      if ((await quietListProc.exited) !== 0) cancel();
       process.stderr.write(
         boxen(styleText("bold", "OpenCode"), { padding: 1 }),
       );
-      const interactive = Bun.spawn([bin, "providers", "list"], {
+      const interactiveListProc = Bun.spawn([bin, "providers", "list"], {
         cwd: config.cwd,
         env: config.env,
         stdio: ["inherit", "inherit", "inherit"],
       });
-      await interactive.exited;
+      if ((await interactiveListProc.exited) !== 0) cancel();
       const shouldLogin = await clack.confirm({
         message: "Would you like to add a provider?",
       });
-      if (clack.isCancel(shouldLogin)) {
-        clack.cancel("Auth is cancelled");
-        throw new OpencodeConfig.CancelledError();
-      }
+      if (clack.isCancel(shouldLogin)) cancel();
       if (shouldLogin) {
-        const interactiveLogin = Bun.spawn([bin, "providers", "login"], {
+        const loginProc = Bun.spawn([bin, "providers", "login"], {
           cwd: config.cwd,
           env: config.env,
           stdio: ["inherit", "inherit", "inherit"],
         });
-        await interactiveLogin.exited;
+        const loginExitCode = await loginProc.exited;
+        if (loginExitCode !== 0) cancel();
       }
     }
     return config;

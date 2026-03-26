@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { password, spinner, text } from "@clack/prompts";
 import { GrammyError } from "grammy";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
 
@@ -52,13 +52,20 @@ vi.mock("grammy", async (importOriginal) => {
 let profile: Profile;
 let configPath: string;
 
+let stderrSpy: ReturnType<typeof vi.spyOn>;
+
 beforeEach(async () => {
   vi.clearAllMocks();
+  stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   isTTYMock.isTTY = true;
   const dir = await mkdtemp(join(tmpdir(), "openkitten-auth-test-"));
   profile = { xdgConfig: dir } as Profile;
   configPath = join(dir, "openkitten", "telegram.json");
   await mkdir(join(dir, "openkitten"), { recursive: true });
+});
+
+afterEach(() => {
+  stderrSpy.mockRestore();
 });
 
 function mockGetMe(
@@ -138,7 +145,7 @@ test("prompts with password type for bot token", async () => {
   vi.mocked(text).mockResolvedValueOnce("123");
   await TelegramConfig.create(profile);
   expect(password).toHaveBeenCalledWith(
-    expect.objectContaining({ message: "Telegram bot token:" }),
+    expect.objectContaining({ message: "Enter your bot token" }),
   );
 });
 
@@ -148,7 +155,7 @@ test("prompts with text type for user ID", async () => {
   vi.mocked(text).mockResolvedValueOnce("123");
   await TelegramConfig.create(profile);
   expect(text).toHaveBeenCalledWith(
-    expect.objectContaining({ message: "Telegram user ID:" }),
+    expect.objectContaining({ message: "Enter your user ID" }),
   );
 });
 
@@ -178,7 +185,7 @@ test("throws when not a TTY", async () => {
 test("bot token validate rejects empty value", async () => {
   vi.mocked(password).mockImplementationOnce(({ validate }) => {
     expect(validate?.("")).toBe(
-      "Bot token must match <bot_id>:<secret> format",
+      "Bot token must match <bot_id>:<bot_secret> format",
     );
     return Promise.resolve(validToken);
   });
@@ -190,7 +197,7 @@ test("bot token validate rejects empty value", async () => {
 test("bot token validate rejects invalid format", async () => {
   vi.mocked(password).mockImplementationOnce(({ validate }) => {
     expect(validate?.("not-a-token")).toBe(
-      "Bot token must match <bot_id>:<secret> format",
+      "Bot token must match <bot_id>:<bot_secret> format",
     );
     return Promise.resolve(validToken);
   });
@@ -268,7 +275,9 @@ test("shows spinner during bot token verification", async () => {
   mockGetMe(true, { first_name: "TestBot", username: "test_bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
   await TelegramConfig.create(profile);
-  expect(stopFn).toHaveBeenCalledWith("Verified bot: TestBot (@test_bot)");
+  expect(stopFn).toHaveBeenCalledWith(
+    "Verified bot token: TestBot (@test_bot)",
+  );
 });
 
 test("rethrows non-GrammyError from getMe", async () => {
