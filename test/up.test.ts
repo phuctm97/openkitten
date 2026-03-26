@@ -2,6 +2,14 @@ import { runCommand } from "citty";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { up } from "~/lib/up";
 
+vi.mock("~/lib/telegram-config", () => ({
+  TelegramConfig: { create: vi.fn() },
+}));
+
+vi.mock("~/lib/opencode-config", () => ({
+  OpencodeConfig: { create: vi.fn() },
+}));
+
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),
 }));

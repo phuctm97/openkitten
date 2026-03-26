@@ -5,7 +5,9 @@ import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
 import { defineCommand } from "citty";
 import { getUserId } from "~/lib/get-user-id";
+import { OpencodeConfig } from "~/lib/opencode-config";
 import { Profile } from "~/lib/profile";
+import { TelegramConfig } from "~/lib/telegram-config";
 
 const projectDir = resolve(import.meta.dirname, "..");
 
@@ -185,6 +187,8 @@ export const up = defineCommand({
     clack.intro("😼 OpenKitten");
     await updateProjectDir();
     const profile = await Profile.create();
+    await TelegramConfig.create(profile);
+    await OpencodeConfig.create(profile);
     switch (process.platform) {
       case "linux":
         await installLinux(profile);
