@@ -79,6 +79,17 @@ function mockGetMe(
   }
 }
 
+test("loads valid config without TTY output", async () => {
+  isTTYMock.isTTY = false;
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  const config = await TelegramConfig.create(profile);
+  expect(config.botToken).toBe(validToken);
+  expect(config.userId).toBe(123);
+});
+
 test("loads valid config from file", async () => {
   await Bun.write(
     configPath,

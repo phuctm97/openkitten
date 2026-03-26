@@ -88,20 +88,28 @@ export namespace TelegramConfig {
 
   export async function create(profile: Profile): Promise<TelegramConfig> {
     const path = join(profile.xdgConfig, "openkitten", "telegram.json");
+    if (isTTY) {
+      process.stderr.write(
+        `${boxen(styleText("bold", "Telegram"), { padding: 1 })}\n`,
+      );
+    }
     const file = Bun.file(path);
     if (await file.exists()) {
       const result = schema.safeParse(await file.json());
-      if (result.success) return result.data;
+      if (result.success) {
+        if (isTTY) {
+          clack.intro(`Config ${styleText("dim", formatPath(path))}`);
+          clack.outro("Valid config");
+        }
+        return result.data;
+      }
     }
     if (!isTTY) throw new TelegramConfig.NotFoundError();
-    process.stderr.write(
-      `${boxen(styleText("bold", "Telegram"), { padding: 1 })}\n`,
-    );
     clack.intro(`Config ${styleText("dim", formatPath(path))}`);
     const botToken = await promptBotToken();
     const userId = await promptUserId();
     const config = schema.parse({ botToken, userId });
-    await Bun.write(file, JSON.stringify(config), { mode: 0o600 });
+    await Bun.write(path, JSON.stringify(config), { mode: 0o600 });
     clack.outro("Config is saved");
     return config;
   }
