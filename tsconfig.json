@@ -8,6 +8,7 @@
   ],
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
+    "types": ["bun"],
     "incremental": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
