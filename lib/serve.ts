@@ -1,4 +1,3 @@
-import { join } from "node:path";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { Database } from "~/lib/database";
@@ -9,6 +8,7 @@ import { Grammy } from "~/lib/grammy";
 import { grammyCreateHandler } from "~/lib/grammy-create-handler";
 import { grammyFilterUser } from "~/lib/grammy-filter-user";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
+import { OpencodeConfig } from "~/lib/opencode-config";
 import { opencodeCreateHandler } from "~/lib/opencode-create-handler";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
@@ -18,24 +18,21 @@ import { ProcessingMessages } from "~/lib/processing-messages";
 import { Profile } from "~/lib/profile";
 import type { Scope } from "~/lib/scope";
 import { Shutdown } from "~/lib/shutdown";
-import { TelegramAuth } from "~/lib/telegram-auth";
+import { TelegramConfig } from "~/lib/telegram-config";
 import { TypingIndicators } from "~/lib/typing-indicators";
 import { WorkingSessions } from "~/lib/working-sessions";
 
 export const serve = defineCommand({
   meta: { description: "Start the OpenKitten server." },
   run: async () => {
-    using shutdown = Shutdown.create();
     const profile = await Profile.create();
-    const telegramAuth = await TelegramAuth.load(
-      join(profile.xdgConfig, "openkitten", "telegram-auth.json"),
-    );
-    const bot = new Bot(telegramAuth.botToken);
-    bot.use(grammyFilterUser(telegramAuth.userId));
-    using database = Database.create(
-      join(profile.xdgData, "openkitten", "openkitten.db"),
-    );
-    await using opencodeServer = await OpencodeServer.create(profile);
+    const telegramConfig = await TelegramConfig.create(profile);
+    const opencodeConfig = await OpencodeConfig.create(profile);
+    const bot = new Bot(telegramConfig.botToken);
+    bot.use(grammyFilterUser(telegramConfig.userId));
+    using shutdown = Shutdown.create();
+    using database = Database.create(profile);
+    await using opencodeServer = await OpencodeServer.create(opencodeConfig);
     await using floatingPromises = FloatingPromises.create();
     const existingSessions = ExistingSessions.create(
       bot,

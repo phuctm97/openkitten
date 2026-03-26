@@ -1,22 +1,20 @@
-import { join } from "node:path";
+import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { expect, test, vi } from "vitest";
-import { bootstrapOpencode } from "~/lib/bootstrap-opencode";
 import { logger } from "~/lib/logger";
+import type { OpencodeConfig } from "~/lib/opencode-config";
 import { OpencodeServer } from "~/lib/opencode-server";
-import { Profile } from "~/lib/profile";
 import { textEncoder } from "~/lib/text-encoder";
-import pkg from "~/package.json" with { type: "json" };
 
-vi.mock("node:fs/promises", () => ({
-  mkdir: vi.fn(),
+vi.mock("@opencode-ai/sdk/v2/client", () => ({
+  createOpencodeClient: vi.fn().mockReturnValue({ mock: true }),
 }));
 
-vi.mock("~/lib/bootstrap-opencode", () => ({
-  bootstrapOpencode: vi.fn(),
-}));
-
-Bun.env["OPENKITTEN_PROFILE"] = "test";
-const profile = await Profile.create();
+const config: OpencodeConfig = {
+  bin: "/mock/opencode",
+  cwd: "/mock/workspace",
+  env: { MOCK: "true" },
+  authorization: "Basic mock",
+};
 
 type OnExit = (
   proc: unknown,
@@ -93,117 +91,53 @@ function mockSpawnPending(stdout = portStdout()) {
 
 test("returns client", async () => {
   mockSpawn();
-  const opencodeServer = await OpencodeServer.create(profile);
+  const opencodeServer = await OpencodeServer.create(config);
   expect(opencodeServer.client).toBeDefined();
 });
 
 test("logs ready", async () => {
   mockSpawn();
-  await OpencodeServer.create(profile);
+  await OpencodeServer.create(config);
   expect(logger.info).toHaveBeenCalledWith("OpenCode server is ready");
 });
 
-test("disables autoupdate", async () => {
+test("passes authorization to client", async () => {
   mockSpawn();
-  await OpencodeServer.create(profile);
-  expect(capturedOptions).toMatchObject({
-    env: { OPENCODE_DISABLE_AUTOUPDATE: "true" },
-  });
-});
-
-test("disables terminal title", async () => {
-  mockSpawn();
-  await OpencodeServer.create(profile);
-  expect(capturedOptions).toMatchObject({
-    env: { OPENCODE_DISABLE_TERMINAL_TITLE: "true" },
-  });
-});
-
-test("enables experimental models", async () => {
-  mockSpawn();
-  await OpencodeServer.create(profile);
-  expect(capturedOptions).toMatchObject({
-    env: { OPENCODE_ENABLE_EXPERIMENTAL_MODELS: "true" },
-  });
-});
-
-test("enables exa web search", async () => {
-  mockSpawn();
-  await OpencodeServer.create(profile);
-  expect(capturedOptions).toMatchObject({
-    env: { OPENCODE_ENABLE_EXA: "true" },
-  });
-});
-
-test("passes credentials to opencode server", async () => {
-  mockSpawn();
-  await OpencodeServer.create(profile);
-  expect(capturedOptions).toMatchObject({
-    env: {
-      OPENCODE_SERVER_USERNAME: pkg.name,
-      OPENCODE_SERVER_PASSWORD: expect.stringMatching(/^[\w-]{43}$/),
-    },
-  });
-});
-
-test("bootstraps opencode config dir", async () => {
-  mockSpawn();
-  await OpencodeServer.create(profile);
-  expect(bootstrapOpencode).toHaveBeenCalledWith(
-    join(profile.dir, ".opencode"),
+  await OpencodeServer.create(config);
+  expect(createOpencodeClient).toHaveBeenCalledWith(
+    expect.objectContaining({
+      headers: { authorization: "Basic mock" },
+    }),
   );
 });
 
-test("passes opencode config dir to opencode server", async () => {
+test("passes config to spawn", async () => {
   mockSpawn();
-  await OpencodeServer.create(profile);
+  await OpencodeServer.create(config);
   expect(capturedOptions).toMatchObject({
-    env: { OPENCODE_CONFIG_DIR: join(profile.dir, ".opencode") },
+    cwd: "/mock/workspace",
+    env: { MOCK: "true" },
+    detached: true,
   });
-});
-
-test("passes profile xdg paths to opencode server", async () => {
-  mockSpawn();
-  await OpencodeServer.create(profile);
-  expect(capturedOptions).toMatchObject({
-    env: {
-      XDG_DATA_HOME: profile.xdgData,
-      XDG_CONFIG_HOME: profile.xdgConfig,
-      XDG_STATE_HOME: profile.xdgState,
-      XDG_CACHE_HOME: profile.xdgCache,
-    },
-  });
-});
-
-test("spawns in profile workspace directory", async () => {
-  mockSpawn();
-  await OpencodeServer.create(profile);
-  expect(capturedOptions).toMatchObject({ cwd: profile.workspace });
-});
-
-test("spawns detached from parent process group", async () => {
-  mockSpawn();
-  await OpencodeServer.create(profile);
-  expect(capturedOptions).toMatchObject({ detached: true });
 });
 
 test("is async disposable", async () => {
   const kill = mockSpawnPending();
   {
-    await using _opencodeServer = await OpencodeServer.create(profile);
+    await using _opencodeServer = await OpencodeServer.create(config);
   }
   expect(kill).toHaveBeenCalledOnce();
 });
 
 test("logs start", async () => {
   mockSpawn();
-  await OpencodeServer.create(profile);
+  await OpencodeServer.create(config);
   expect(logger.debug).toHaveBeenCalledWith("OpenCode server is starting…");
 });
 
 test("logs stopped on exit", async () => {
   mockSpawn();
-  const opencodeServer = await OpencodeServer.create(profile);
+  const opencodeServer = await OpencodeServer.create(config);
   await opencodeServer.exited.catch(() => {});
   expect(logger.info).toHaveBeenCalledWith("OpenCode server is stopped", {
     signalCode: null,
@@ -215,7 +149,7 @@ test("logs stopped on exit", async () => {
 test("logs stopped with osError on abnormal exit", async () => {
   const error = new Error("waitpid2 failed");
   mockSpawn({ onExitError: error });
-  const opencodeServer = await OpencodeServer.create(profile);
+  const opencodeServer = await OpencodeServer.create(config);
   await opencodeServer.exited.catch(() => {});
   expect(logger.info).toHaveBeenCalledWith("OpenCode server is stopped", {
     signalCode: null,
@@ -226,7 +160,7 @@ test("logs stopped with osError on abnormal exit", async () => {
 
 test("exited rejects on unexpected exit", async () => {
   mockSpawn();
-  const opencodeServer = await OpencodeServer.create(profile);
+  const opencodeServer = await OpencodeServer.create(config);
   await expect(opencodeServer.exited).rejects.toThrow(
     "OpenCode server exited unexpectedly (0)",
   );
@@ -249,7 +183,7 @@ test("force kills after timeout", async () => {
       stdout: portStdout(),
       exited,
     })) as never);
-    const opencodeServer = await OpencodeServer.create(profile);
+    const opencodeServer = await OpencodeServer.create(config);
     const disposePromise = opencodeServer[Symbol.asyncDispose]();
     await vi.advanceTimersByTimeAsync(10_000);
     await disposePromise;
@@ -280,7 +214,7 @@ test("exited does not reject after dispose", async () => {
   }) as never);
   let processExited: Promise<void>;
   {
-    await using opencodeServer = await OpencodeServer.create(profile);
+    await using opencodeServer = await OpencodeServer.create(config);
     processExited = opencodeServer.exited;
   }
   await expect(processExited).resolves.toBeUndefined();
@@ -288,7 +222,7 @@ test("exited does not reject after dispose", async () => {
 
 test("parses port split across chunks", async () => {
   mockSpawn({ chunks: ["listening on", " :3000\n"] });
-  const opencodeServer = await OpencodeServer.create(profile);
+  const opencodeServer = await OpencodeServer.create(config);
   expect(opencodeServer.client).toBeDefined();
 });
 
@@ -308,7 +242,7 @@ test("drains stdout until dispose", async () => {
     }),
   );
   {
-    await using _opencodeServer = await OpencodeServer.create(profile);
+    await using _opencodeServer = await OpencodeServer.create(config);
     await vi.waitFor(() => expect(chunks).toBeGreaterThan(1));
   }
   expect(kill).toHaveBeenCalledOnce();
@@ -329,21 +263,21 @@ test("tolerates stdout stream error after port", async () => {
     }),
   );
   {
-    await using _opencodeServer = await OpencodeServer.create(profile);
+    await using _opencodeServer = await OpencodeServer.create(config);
   }
   expect(kill).toHaveBeenCalledOnce();
 });
 
 test("throws if port not found", async () => {
   mockSpawn({ chunks: ["no port here\n"] });
-  await expect(OpencodeServer.create(profile)).rejects.toThrow(
+  await expect(OpencodeServer.create(config)).rejects.toThrow(
     "OpenCode server exited without announcing port",
   );
 });
 
 test("throws if listening line has no port", async () => {
   mockSpawn({ chunks: ["listening\n"] });
-  await expect(OpencodeServer.create(profile)).rejects.toThrow(
+  await expect(OpencodeServer.create(config)).rejects.toThrow(
     "OpenCode server exited without announcing port",
   );
 });

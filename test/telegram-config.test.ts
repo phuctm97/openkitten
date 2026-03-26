@@ -1,10 +1,11 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { password, spinner, text } from "@clack/prompts";
 import { GrammyError } from "grammy";
 import { beforeEach, expect, test, vi } from "vitest";
-import { TelegramAuth } from "~/lib/telegram-auth";
+import type { Profile } from "~/lib/profile";
+import { TelegramConfig } from "~/lib/telegram-config";
 
 const cancelSymbol = Symbol("cancel");
 const validToken = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
@@ -48,9 +49,16 @@ vi.mock("grammy", async (importOriginal) => {
   return { ...grammy, Api: MockApi };
 });
 
-beforeEach(() => {
+let profile: Profile;
+let configPath: string;
+
+beforeEach(async () => {
   vi.clearAllMocks();
   isTTYMock.isTTY = true;
+  const dir = await mkdtemp(join(tmpdir(), "openkitten-auth-test-"));
+  profile = { xdgConfig: dir } as Profile;
+  configPath = join(dir, "openkitten", "telegram.json");
+  await mkdir(join(dir, "openkitten"), { recursive: true });
 });
 
 function mockGetMe(
@@ -71,104 +79,103 @@ function mockGetMe(
   }
 }
 
-async function tempTelegramAuthPath(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), "openkitten-auth-test-"));
-  return join(dir, "telegram-auth.json");
-}
-
-test("loads valid auth from file", async () => {
-  const path = await tempTelegramAuthPath();
-  await Bun.write(path, JSON.stringify({ botToken: validToken, userId: 123 }));
-  const auth = await TelegramAuth.load(path);
-  expect(auth.botToken).toBe(validToken);
-  expect(auth.userId).toBe(123);
+test("loads valid config without TTY output", async () => {
+  isTTYMock.isTTY = false;
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  const config = await TelegramConfig.create(profile);
+  expect(config.botToken).toBe(validToken);
+  expect(config.userId).toBe(123);
 });
 
-test("prompts when auth file does not exist", async () => {
-  const path = await tempTelegramAuthPath();
+test("loads valid config from file", async () => {
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  const config = await TelegramConfig.create(profile);
+  expect(config.botToken).toBe(validToken);
+  expect(config.userId).toBe(123);
+});
+
+test("prompts when config file does not exist", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("456");
-  const auth = await TelegramAuth.load(path);
-  expect(auth.botToken).toBe(validToken);
-  expect(auth.userId).toBe(456);
+  const config = await TelegramConfig.create(profile);
+  expect(config.botToken).toBe(validToken);
+  expect(config.userId).toBe(456);
 });
 
-test("saves auth after prompting", async () => {
-  const path = await tempTelegramAuthPath();
+test("saves config after prompting", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("456");
-  await TelegramAuth.load(path);
-  const saved = await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
+  const saved = await TelegramConfig.create(profile);
   expect(saved.botToken).toBe(validToken);
   expect(saved.userId).toBe(456);
 });
 
-test("prompts when auth file has invalid data", async () => {
-  const path = await tempTelegramAuthPath();
+test("prompts when config file has invalid data", async () => {
   await Bun.write(
-    path,
+    configPath,
     JSON.stringify({ botToken: "bad-format", userId: 123 }),
   );
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("789");
-  const auth = await TelegramAuth.load(path);
-  expect(auth.botToken).toBe(validToken);
-  expect(auth.userId).toBe(789);
+  const config = await TelegramConfig.create(profile);
+  expect(config.botToken).toBe(validToken);
+  expect(config.userId).toBe(789);
 });
 
 test("prompts with password type for bot token", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
   expect(password).toHaveBeenCalledWith(
     expect.objectContaining({ message: "Telegram bot token:" }),
   );
 });
 
 test("prompts with text type for user ID", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
   expect(text).toHaveBeenCalledWith(
     expect.objectContaining({ message: "Telegram user ID:" }),
   );
 });
 
 test("throws when bot token prompt is cancelled", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockResolvedValueOnce(cancelSymbol as never);
-  await expect(TelegramAuth.load(path)).rejects.toThrow(
-    TelegramAuth.NotFoundError,
+  await expect(TelegramConfig.create(profile)).rejects.toThrow(
+    TelegramConfig.NotFoundError,
   );
 });
 
 test("throws when user ID prompt is cancelled", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce(cancelSymbol as never);
-  await expect(TelegramAuth.load(path)).rejects.toThrow(
-    TelegramAuth.NotFoundError,
+  await expect(TelegramConfig.create(profile)).rejects.toThrow(
+    TelegramConfig.NotFoundError,
   );
 });
 
 test("throws when not a TTY", async () => {
-  const path = await tempTelegramAuthPath();
   isTTYMock.isTTY = false;
-  await expect(TelegramAuth.load(path)).rejects.toThrow(
-    TelegramAuth.NotFoundError,
+  await expect(TelegramConfig.create(profile)).rejects.toThrow(
+    TelegramConfig.NotFoundError,
   );
 });
 
 test("bot token validate rejects empty value", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockImplementationOnce(({ validate }) => {
     expect(validate?.("")).toBe(
       "Bot token must match <bot_id>:<secret> format",
@@ -177,11 +184,10 @@ test("bot token validate rejects empty value", async () => {
   });
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
 });
 
 test("bot token validate rejects invalid format", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockImplementationOnce(({ validate }) => {
     expect(validate?.("not-a-token")).toBe(
       "Bot token must match <bot_id>:<secret> format",
@@ -190,94 +196,88 @@ test("bot token validate rejects invalid format", async () => {
   });
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
 });
 
 test("bot token validate accepts valid format", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockImplementationOnce(({ validate }) => {
     expect(validate?.(validToken)).toBeUndefined();
     return Promise.resolve(validToken);
   });
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
 });
 
 test("user ID validate rejects non-integer", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockImplementationOnce(({ validate }) => {
     expect(validate?.("abc")).toBe("User ID must be a positive integer");
     return Promise.resolve("123");
   });
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
 });
 
 test("user ID validate rejects zero", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockImplementationOnce(({ validate }) => {
     expect(validate?.("0")).toBe("User ID must be a positive integer");
     return Promise.resolve("123");
   });
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
 });
 
 test("user ID validate rejects negative number", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockImplementationOnce(({ validate }) => {
     expect(validate?.("-1")).toBe("User ID must be a positive integer");
     return Promise.resolve("123");
   });
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
 });
 
 test("user ID validate accepts positive integer", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockImplementationOnce(({ validate }) => {
     expect(validate?.("42")).toBeUndefined();
     return Promise.resolve("123");
   });
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
 });
 
 test("re-prompts bot token when API rejects it", async () => {
-  const path = await tempTelegramAuthPath();
   vi.mocked(password)
     .mockResolvedValueOnce(validToken)
     .mockResolvedValueOnce(validToken);
   mockGetMe(false);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  const auth = await TelegramAuth.load(path);
+  const config = await TelegramConfig.create(profile);
   expect(password).toHaveBeenCalledTimes(2);
-  expect(auth.botToken).toBe(validToken);
+  expect(config.botToken).toBe(validToken);
 });
 
 test("shows spinner during bot token verification", async () => {
-  const path = await tempTelegramAuthPath();
   const stopFn = vi.fn();
   vi.mocked(spinner).mockReturnValueOnce(mockSpinner(stopFn));
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "TestBot", username: "test_bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  await TelegramAuth.load(path);
+  await TelegramConfig.create(profile);
   expect(stopFn).toHaveBeenCalledWith("Verified bot: TestBot (@test_bot)");
 });
 
 test("rethrows non-GrammyError from getMe", async () => {
-  const path = await tempTelegramAuthPath();
   const s = mockSpinner();
   vi.mocked(spinner).mockReturnValueOnce(s);
   vi.mocked(password).mockResolvedValueOnce(validToken);
   getMeMock.mockRejectedValueOnce(new Error("network failure"));
-  await expect(TelegramAuth.load(path)).rejects.toThrow("network failure");
+  await expect(TelegramConfig.create(profile)).rejects.toThrow(
+    "network failure",
+  );
   expect(s.error).toHaveBeenCalledWith("Failed to verify bot token");
 });

@@ -37,7 +37,7 @@ function createMockExistingSessions(
 }
 
 function setup() {
-  const database = Database.create(":memory:");
+  const database = Database.create();
   database
     .insert(schema.session)
     .values({ id: "sess-1", chatId: 123, threadId: 0 })
@@ -334,7 +334,7 @@ test("invalidate skips user messages", async () => {
 });
 
 test("invalidate with no sessions skips processing", async () => {
-  const database = Database.create(":memory:");
+  const database = Database.create();
   const bot = {} as never;
   const client = createMockOpencodeClient();
   const es = createMockExistingSessions([]);
