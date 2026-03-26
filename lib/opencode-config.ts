@@ -90,15 +90,21 @@ export namespace OpencodeConfig {
       authorization: `Basic ${btoa(`${username}:${password}`)}`,
     };
     if (isTTY) {
+      const quiet = Bun.spawn([bin, "providers", "list"], {
+        cwd: config.cwd,
+        env: config.env,
+        stdio: ["ignore", "ignore", "ignore"],
+      });
+      await quiet.exited;
       process.stderr.write(
         boxen(styleText("bold", "OpenCode"), { padding: 1 }),
       );
-      const proc = Bun.spawn([bin, "providers", "list"], {
+      const interactive = Bun.spawn([bin, "providers", "list"], {
         cwd: config.cwd,
         env: config.env,
         stdio: ["inherit", "inherit", "inherit"],
       });
-      await proc.exited;
+      await interactive.exited;
     }
     return config;
   }
