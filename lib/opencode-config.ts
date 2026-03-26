@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { constants } from "node:fs";
-import { copyFile, mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
@@ -102,34 +102,79 @@ export namespace OpencodeConfig {
       authorization: `Basic ${btoa(`${username}:${password}`)}`,
     };
     if (isTTY) {
-      const quietListProc = Bun.spawn([bin, "providers", "list"], {
+      const quiet = Bun.spawn([bin, "providers", "list"], {
         cwd: config.cwd,
         env: config.env,
         stdio: ["ignore", "ignore", "ignore"],
       });
-      if ((await quietListProc.exited) !== 0) cancel();
+      if ((await quiet.exited) !== 0) cancel();
       process.stderr.write(
         boxen(styleText("bold", "OpenCode"), { padding: 1 }),
       );
-      const interactiveListProc = Bun.spawn([bin, "providers", "list"], {
+      const interactive = Bun.spawn([bin, "providers", "list"], {
         cwd: config.cwd,
         env: config.env,
         stdio: ["inherit", "inherit", "inherit"],
       });
-      if ((await interactiveListProc.exited) !== 0) cancel();
-      const shouldLogin = await clack.confirm({
-        message: "Would you like to add a provider?",
-      });
-      if (clack.isCancel(shouldLogin)) cancel();
-      if (shouldLogin) {
-        const loginProc = Bun.spawn([bin, "providers", "login"], {
-          cwd: config.cwd,
-          env: config.env,
-          stdio: ["inherit", "inherit", "inherit"],
+      if ((await interactive.exited) !== 0) cancel();
+      let nextStep: string | symbol;
+      do {
+        clack.intro("Next steps");
+        nextStep = await clack.select({
+          message: "What would you like to do?",
+          initialValue: "continue",
+          options: [
+            {
+              value: "add",
+              label: "Add credential",
+              hint: "ChatGPT, Claude, OpenAI, Anthropic, OpenRouter, etc.",
+            },
+            { value: "remove", label: "Remove credential" },
+            { value: "model", label: "Change model" },
+            { value: "continue", label: "Continue" },
+          ],
         });
-        const loginExitCode = await loginProc.exited;
-        if (loginExitCode !== 0) cancel();
-      }
+        if (clack.isCancel(nextStep)) cancel();
+        clack.outro("Done");
+        if (nextStep === "add") {
+          const proc = Bun.spawn([bin, "providers", "login"], {
+            cwd: config.cwd,
+            env: config.env,
+            stdio: ["inherit", "inherit", "inherit"],
+          });
+          if ((await proc.exited) !== 0) cancel();
+        } else if (nextStep === "remove") {
+          const proc = Bun.spawn([bin, "providers", "logout"], {
+            cwd: config.cwd,
+            env: config.env,
+            stdio: ["inherit", "inherit", "inherit"],
+          });
+          if ((await proc.exited) !== 0) cancel();
+        } else if (nextStep === "model") {
+          clack.intro("Change model");
+          const modelsProc = Bun.spawn([bin, "models"], {
+            cwd: config.cwd,
+            env: config.env,
+            stdio: ["ignore", "pipe", "ignore"],
+          });
+          if ((await modelsProc.exited) !== 0) cancel();
+          const models = (await new Response(modelsProc.stdout).text())
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean);
+          const configPath = join(configDir, "opencode.json");
+          const configJson = JSON.parse(await readFile(configPath, "utf-8"));
+          const model = await clack.autocomplete({
+            message: "Select a model",
+            initialValue: configJson.model as string | undefined,
+            options: models.map((m) => ({ value: m, label: m })),
+          });
+          if (clack.isCancel(model)) cancel();
+          configJson.model = model;
+          await writeFile(configPath, JSON.stringify(configJson, null, 2));
+          clack.outro("Done");
+        }
+      } while (nextStep !== "continue");
     }
     return config;
   }
