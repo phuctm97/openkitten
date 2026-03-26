@@ -1,8 +1,10 @@
 import { join } from "node:path";
 import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
+import boxen from "boxen";
 import { Api, GrammyError } from "grammy";
 import zod from "zod";
+import { formatPath } from "~/lib/format-path";
 import { isTTY } from "~/lib/is-tty";
 import type { Profile } from "~/lib/profile";
 
@@ -18,7 +20,7 @@ const schema = zod.object({
 
 function require<T>(value: T | symbol): T {
   if (clack.isCancel(value)) {
-    clack.cancel("Telegram auth is cancelled");
+    clack.cancel("Config is cancelled");
     throw new TelegramConfig.NotFoundError();
   }
   return value;
@@ -85,20 +87,22 @@ export namespace TelegramConfig {
   }
 
   export async function create(profile: Profile): Promise<TelegramConfig> {
-    const file = Bun.file(
-      join(profile.xdgConfig, "openkitten", "telegram.json"),
-    );
+    const path = join(profile.xdgConfig, "openkitten", "telegram.json");
+    const file = Bun.file(path);
     if (await file.exists()) {
       const result = schema.safeParse(await file.json());
       if (result.success) return result.data;
     }
     if (!isTTY) throw new TelegramConfig.NotFoundError();
-    clack.intro("🔐 Telegram Auth");
+    process.stderr.write(
+      `${boxen(styleText("bold", "Telegram"), { padding: 1 })}\n`,
+    );
+    clack.intro(`Config ${styleText("dim", formatPath(path))}`);
     const botToken = await promptBotToken();
     const userId = await promptUserId();
     const config = schema.parse({ botToken, userId });
     await Bun.write(file, JSON.stringify(config), { mode: 0o600 });
-    clack.outro("Telegram auth is saved");
+    clack.outro("Config is saved");
     return config;
   }
 }

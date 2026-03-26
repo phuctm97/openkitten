@@ -2,6 +2,8 @@ import { randomBytes } from "node:crypto";
 import { constants } from "node:fs";
 import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { styleText } from "node:util";
+import boxen from "boxen";
 import { Errors } from "~/lib/errors";
 import { isTTY } from "~/lib/is-tty";
 import type { Profile } from "~/lib/profile";
@@ -88,6 +90,9 @@ export namespace OpencodeConfig {
       authorization: `Basic ${btoa(`${username}:${password}`)}`,
     };
     if (isTTY) {
+      process.stderr.write(
+        boxen(styleText("bold", "OpenCode"), { padding: 1 }),
+      );
       const proc = Bun.spawn([bin, "providers", "list"], {
         cwd: config.cwd,
         env: config.env,
