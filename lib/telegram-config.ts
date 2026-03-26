@@ -1,8 +1,10 @@
+import { join } from "node:path";
 import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
 import { Api, GrammyError } from "grammy";
 import zod from "zod";
 import { isTTY } from "~/lib/is-tty";
+import type { Profile } from "~/lib/profile";
 
 const botTokenPattern = /^\d+:[A-Za-z0-9_-]{35}$/;
 const botTokenError = "Bot token must match <bot_id>:<secret> format";
@@ -17,7 +19,7 @@ const schema = zod.object({
 function require<T>(value: T | symbol): T {
   if (clack.isCancel(value)) {
     clack.cancel("Telegram auth is cancelled");
-    throw new TelegramAuth.NotFoundError();
+    throw new TelegramConfig.NotFoundError();
   }
   return value;
 }
@@ -73,32 +75,30 @@ async function promptUserId(): Promise<number> {
   return Number(raw);
 }
 
-async function save(path: string, auth: TelegramAuth): Promise<void> {
-  await Bun.write(path, JSON.stringify(auth), { mode: 0o600 });
-}
+export interface TelegramConfig extends zod.output<typeof schema> {}
 
-export type TelegramAuth = zod.output<typeof schema>;
-
-export namespace TelegramAuth {
+export namespace TelegramConfig {
   export class NotFoundError extends Error {
     constructor() {
-      super("No valid Telegram auth found");
+      super("No valid Telegram config found");
     }
   }
 
-  export async function load(path: string): Promise<TelegramAuth> {
-    const file = Bun.file(path);
+  export async function create(profile: Profile): Promise<TelegramConfig> {
+    const file = Bun.file(
+      join(profile.xdgConfig, "openkitten", "telegram.json"),
+    );
     if (await file.exists()) {
       const result = schema.safeParse(await file.json());
       if (result.success) return result.data;
     }
-    if (!isTTY) throw new TelegramAuth.NotFoundError();
+    if (!isTTY) throw new TelegramConfig.NotFoundError();
     clack.intro("🔐 Telegram Auth");
     const botToken = await promptBotToken();
     const userId = await promptUserId();
-    const auth = schema.parse({ botToken, userId });
-    await save(path, auth);
+    const config = schema.parse({ botToken, userId });
+    await Bun.write(file, JSON.stringify(config), { mode: 0o600 });
     clack.outro("Telegram auth is saved");
-    return auth;
+    return config;
   }
 }

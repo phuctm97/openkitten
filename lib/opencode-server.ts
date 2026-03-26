@@ -1,12 +1,8 @@
-import { randomBytes } from "node:crypto";
-import { join, resolve } from "node:path";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { createOpencodeClient } from "@opencode-ai/sdk/v2/client";
-import { bootstrapOpencode } from "~/lib/bootstrap-opencode";
 import { logger } from "~/lib/logger";
-import type { Profile } from "~/lib/profile";
+import type { OpencodeConfig } from "~/lib/opencode-config";
 import { textDecoder } from "~/lib/text-decoder";
-import pkg from "~/package.json" with { type: "json" };
 
 interface Proc {
   kill(signal?: number): void;
@@ -115,51 +111,21 @@ export class OpencodeServer implements AsyncDisposable {
     await this.#dispose();
   }
 
-  static readonly bin = resolve(
-    import.meta.dirname,
-    "../node_modules/.bin/opencode",
-  );
-
-  static async create(profile: Profile): Promise<OpencodeServer> {
+  static async create({
+    bin,
+    cwd,
+    env,
+    authorization,
+  }: OpencodeConfig): Promise<OpencodeServer> {
     logger.debug("OpenCode server is starting…");
-
-    const configDir = join(profile.dir, ".opencode");
-    await bootstrapOpencode(configDir);
-
-    const username = pkg.name;
-    const password = randomBytes(32).toString("base64url");
     const proc = Bun.spawn(
-      [OpencodeServer.bin, "serve", "--hostname", "127.0.0.1", "--port", "0"],
+      [bin, "serve", "--hostname", "127.0.0.1", "--port", "0"],
       {
-        detached: true,
+        cwd,
+        env,
         stdout: "pipe",
         stderr: "ignore",
-        cwd: profile.workspace,
-        env: {
-          HOME: Bun.env["HOME"],
-          PATH: Bun.env["PATH"],
-          NODE_ENV: Bun.env["NODE_ENV"],
-          XDG_DATA_HOME: profile.xdgData,
-          XDG_CONFIG_HOME: profile.xdgConfig,
-          XDG_STATE_HOME: profile.xdgState,
-          XDG_CACHE_HOME: profile.xdgCache,
-          OPENCODE_CONFIG_DIR: configDir,
-          OPENCODE_CONFIG_CONTENT: JSON.stringify({
-            autoupdate: false,
-            share: "disabled",
-            server: {
-              mdns: false,
-              mdnsDomain: "opencode.local",
-              cors: ["https://opencode.local"],
-            },
-          }),
-          OPENCODE_SERVER_USERNAME: username,
-          OPENCODE_SERVER_PASSWORD: password,
-          OPENCODE_DISABLE_AUTOUPDATE: "true",
-          OPENCODE_DISABLE_TERMINAL_TITLE: "true",
-          OPENCODE_ENABLE_EXA: "true",
-          OPENCODE_ENABLE_EXPERIMENTAL_MODELS: "true",
-        },
+        detached: true,
         onExit(_proc, exitCode, signalCode, osError) {
           logger.info("OpenCode server is stopped", {
             signalCode,
@@ -199,9 +165,7 @@ export class OpencodeServer implements AsyncDisposable {
 
     const client = createOpencodeClient({
       baseUrl: `http://127.0.0.1:${port}`,
-      headers: {
-        authorization: `Basic ${btoa(`${username}:${password}`)}`,
-      },
+      headers: { authorization },
       throwOnError: true,
     });
 

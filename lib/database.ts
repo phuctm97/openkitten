@@ -1,9 +1,10 @@
 import { Database as SQLite } from "bun:sqlite";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import type { BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { logger } from "~/lib/logger";
+import type { Profile } from "~/lib/profile";
 import * as schema from "~/lib/schema";
 
 export type Database = BunSQLiteDatabase<typeof schema> & Disposable;
@@ -11,8 +12,11 @@ export type Database = BunSQLiteDatabase<typeof schema> & Disposable;
 export namespace Database {
   export const migrationsFolder = resolve(import.meta.dirname, "../drizzle");
 
-  export function create(filename?: string): Database {
+  export function create(profile?: Profile): Database {
     logger.debug("Database is initializing…");
+    const filename = profile
+      ? join(profile.xdgData, "openkitten", "openkitten.db")
+      : undefined;
     const sqlite = new SQLite(filename);
     try {
       sqlite.run("PRAGMA journal_mode = WAL");

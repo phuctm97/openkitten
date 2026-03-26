@@ -1,7 +1,11 @@
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { expect, test } from "vitest";
 import { Database } from "~/lib/database";
 import { logger } from "~/lib/logger";
+import type { Profile } from "~/lib/profile";
 import * as schema from "~/lib/schema";
 
 function db() {
@@ -61,6 +65,19 @@ test("closes connection and logs fatal on migration failure", () => {
       value: original,
       writable: false,
     });
+  }
+});
+
+test("creates database at profile path", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "openkitten-db-test-"));
+  const dataDir = join(dir, "openkitten");
+  await Bun.write(join(dataDir, ".keep"), "");
+  const profile = { xdgData: dir } as Profile;
+  try {
+    using _database = Database.create(profile);
+    expect(Bun.file(join(dataDir, "openkitten.db")).size).toBeGreaterThan(0);
+  } finally {
+    await rm(dir, { recursive: true });
   }
 });
 

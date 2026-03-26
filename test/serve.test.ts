@@ -9,7 +9,7 @@ import { PendingPrompts } from "~/lib/pending-prompts";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import { serve } from "~/lib/serve";
 import { Shutdown } from "~/lib/shutdown";
-import { TelegramAuth } from "~/lib/telegram-auth";
+import { TelegramConfig } from "~/lib/telegram-config";
 import { TypingIndicators } from "~/lib/typing-indicators";
 import { WorkingSessions } from "~/lib/working-sessions";
 
@@ -26,8 +26,8 @@ vi.mock("node:fs/promises", () => ({
   writeFile: vi.fn(),
 }));
 
-function mockTelegramAuth() {
-  vi.spyOn(TelegramAuth, "load").mockResolvedValue({
+function mockTelegramConfig() {
+  vi.spyOn(TelegramConfig, "create").mockResolvedValue({
     botToken: "test-token",
     userId: 123,
   } as never);
@@ -213,7 +213,7 @@ function mockShutdown() {
 }
 
 function mockAll() {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   const disposeOpencodeServer = mockOpencodeServer();
   const es = mockExistingSessions();
@@ -244,7 +244,7 @@ test("disposes on shutdown", async () => {
 });
 
 test("exits on unexpected opencode server exit", async () => {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   const exited = Promise.reject(
     new Error("OpenCode server exited unexpectedly (1)"),
@@ -274,7 +274,7 @@ test("exits on unexpected opencode server exit", async () => {
 });
 
 test("exits on unexpected grammy stop", async () => {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockExistingSessions();
@@ -297,7 +297,7 @@ test("exits on unexpected grammy stop", async () => {
 });
 
 test("exits on event stream failure", async () => {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockExistingSessions();
@@ -320,7 +320,7 @@ test("exits on event stream failure", async () => {
 });
 
 test("onEvent is fire-and-forget", async () => {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockExistingSessions();
@@ -342,7 +342,7 @@ test("onEvent is fire-and-forget", async () => {
 });
 
 test("reconciles typing indicators on restart", async () => {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   const { existingSessions } = mockExistingSessions(["s1", "s2"]);
@@ -367,7 +367,7 @@ test("reconciles typing indicators on restart", async () => {
 });
 
 test("reconciles pending prompts on restart", async () => {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockExistingSessions(["s1", "s2"]);
@@ -391,7 +391,7 @@ test("reconciles pending prompts on restart", async () => {
 });
 
 test("updates working sessions on session.status event", async () => {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockExistingSessions(["s1"], {
@@ -420,7 +420,7 @@ test("updates working sessions on session.status event", async () => {
 });
 
 test("updates pending prompts on question.asked event", async () => {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockExistingSessions(["s1"], {
@@ -448,7 +448,7 @@ test("updates pending prompts on question.asked event", async () => {
 });
 
 test("updates pending prompts on permission.asked event", async () => {
-  mockTelegramAuth();
+  mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockExistingSessions(["s1"], {
