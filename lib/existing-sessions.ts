@@ -86,16 +86,10 @@ export class ExistingSessions {
   }
 
   async findOrCreate(location: ExistingSessions.Location): Promise<string> {
-    const { chatId, threadId } = location;
-    const threadKey = threadId || undefined;
+    const threadId = location.threadId || undefined;
+    const key = this.#locationKey({ chatId: location.chatId, threadId });
 
-    const locationObject: ExistingSessions.Location = {
-      chatId,
-      threadId: threadKey,
-    };
-    const locationKey = this.#locationKey(locationObject);
-
-    const existing = this.#locationMap.get(locationKey);
+    const existing = this.#locationMap.get(key);
     if (existing) return existing;
 
     const {
@@ -105,13 +99,18 @@ export class ExistingSessions {
     try {
       this.#database
         .insert(schema.session)
-        .values({ id: sessionId, chatId, threadId: threadKey || 0 })
+        .values({
+          id: sessionId,
+          chatId: location.chatId,
+          threadId: threadId || 0,
+        })
         .run();
-      this.#sessionMap.set(sessionId, locationObject);
-      this.#locationMap.set(locationKey, sessionId);
+      this.#sessionMap.set(sessionId, { chatId: location.chatId, threadId });
+      this.#locationMap.set(key, sessionId);
       logger.info("New session is created", {
         sessionId,
-        ...locationObject,
+        chatId: location.chatId,
+        threadId,
       });
       return sessionId;
     } catch (error) {
@@ -122,7 +121,7 @@ export class ExistingSessions {
         { throwOnError: true },
       );
       // Return the raced winner from maps.
-      const raced = this.#locationMap.get(locationKey);
+      const raced = this.#locationMap.get(key);
       // No winner in maps — insert failed for a reason other than a race condition.
       if (!raced) throw error;
       return raced;
