@@ -1,6 +1,9 @@
 import type {
   EventPermissionAsked,
+  EventPermissionReplied,
   EventQuestionAsked,
+  EventQuestionRejected,
+  EventQuestionReplied,
   PermissionRequest,
   QuestionInfo,
   QuestionRequest,
@@ -427,7 +430,50 @@ export class PendingPrompts implements AsyncDisposable {
     );
   }
 
-  async update(event: EventQuestionAsked | EventPermissionAsked) {
+  async update(
+    event:
+      | EventQuestionAsked
+      | EventPermissionAsked
+      | EventPermissionReplied
+      | EventQuestionReplied
+      | EventQuestionRejected,
+  ) {
+    if (
+      event.type === "permission.replied" ||
+      event.type === "question.replied" ||
+      event.type === "question.rejected"
+    ) {
+      const { sessionID, requestID } = event.properties;
+      const items = this.#sessionMap.get(sessionID);
+      if (!items) return;
+      const item = items.find((i) => i.request.id === requestID);
+      if (!item) return;
+      // Item was queued but never shown to the user — just remove it.
+      if (!item.messageId) {
+        this.#removeItem(items, item);
+        if (items.length === 0) {
+          const results = await this.#hooks.callHookWith(
+            (hooks, args) =>
+              Promise.allSettled(hooks.map((hook) => hook(...args))),
+            "change",
+            [{ sessionId: sessionID, pending: false }],
+          );
+          Errors.throwIfAny(results);
+        }
+        return;
+      }
+      let resolvedText: string;
+      if (event.type === "permission.replied") {
+        resolvedText = grammyFormatPermissionReplied(event.properties.reply);
+      } else if (event.type === "question.rejected") {
+        resolvedText = grammyFormatQuestionRejected();
+      } else {
+        const lastAnswer = event.properties.answers.at(-1) ?? [];
+        resolvedText = grammyFormatQuestionReplied(lastAnswer);
+      }
+      await this.#resolveItem(items, item, resolvedText);
+      return;
+    }
     const sessionId = event.properties.sessionID;
     let items = this.#sessionMap.get(sessionId);
     if (items?.some((i) => i.request.id === event.properties.id)) return;

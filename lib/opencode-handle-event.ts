@@ -21,6 +21,9 @@ export async function opencodeHandleEvent(
       break;
     case "question.asked":
     case "permission.asked":
+    case "permission.replied":
+    case "question.replied":
+    case "question.rejected":
       await pendingPrompts.update(event);
       break;
     case "message.updated":

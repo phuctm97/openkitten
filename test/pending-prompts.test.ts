@@ -1770,6 +1770,411 @@ test("invalidate collects multiple flush errors", async () => {
   ).rejects.toThrow(Errors);
 });
 
+// --- update replied/rejected tests ---
+
+test("update permission.replied removes item and edits telegram", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.invalidate(noQuestions, [permissionRequest] as never);
+  await prompts.update({
+    type: "permission.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "p1",
+      reply: "always",
+    },
+  });
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockEditMessageText).toHaveBeenCalledWith(
+    123,
+    100,
+    "✓ Allowed (always)",
+    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+  );
+});
+
+test("update permission.replied with reject shows denied", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.invalidate(noQuestions, [permissionRequest] as never);
+  await prompts.update({
+    type: "permission.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "p1",
+      reply: "reject",
+    },
+  });
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockEditMessageText).toHaveBeenCalledWith(
+    123,
+    100,
+    "✕ Denied",
+    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+  );
+});
+
+test("update question.replied removes item and shows last answer", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.invalidate([questionRequest] as never, noPermissions);
+  await prompts.update({
+    type: "question.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "q1",
+      answers: [["Claude"]],
+    },
+  } as never);
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockEditMessageText).toHaveBeenCalledWith(
+    123,
+    100,
+    "✓ Claude",
+    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+  );
+});
+
+test("update question.replied with multiple answers shows last answer", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.invalidate([multiQuestionRequest] as never, noPermissions);
+  await prompts.update({
+    type: "question.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "mq1",
+      answers: [["GPT-4"], ["TypeScript"]],
+    },
+  } as never);
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockEditMessageText).toHaveBeenCalledWith(
+    123,
+    100,
+    "✓ TypeScript",
+    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+  );
+});
+
+test("update question.rejected removes item and shows dismissed", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.invalidate([questionRequest] as never, noPermissions);
+  await prompts.update({
+    type: "question.rejected",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "q1",
+    },
+  });
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockEditMessageText).toHaveBeenCalledWith(
+    123,
+    100,
+    "✕ Dismissed",
+    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+  );
+});
+
+test("update replied is no-op for unknown session", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.update({
+    type: "permission.replied",
+    properties: {
+      sessionID: "unknown",
+      requestID: "p1",
+      reply: "once",
+    },
+  });
+  expect(mockEditMessageText).not.toHaveBeenCalled();
+});
+
+test("update replied is no-op for unknown request ID (deduplication)", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.invalidate(noQuestions, [permissionRequest] as never);
+  await prompts.update({
+    type: "permission.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "unknown-request",
+      reply: "once",
+    },
+  });
+  expect(prompts.check("sess-1")).toBe(true);
+  // Only the sendMessage from invalidate, no editMessageText
+  expect(mockEditMessageText).not.toHaveBeenCalled();
+});
+
+test("update replied after user answer is no-op (race condition)", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.invalidate(noQuestions, [permissionRequest] as never);
+  // User answers first
+  await prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "po:0",
+  });
+  expect(prompts.check("sess-1")).toBe(false);
+  mockEditMessageText.mockClear();
+  // Then the replied event arrives — should be no-op
+  await prompts.update({
+    type: "permission.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "p1",
+      reply: "once",
+    },
+  });
+  expect(mockEditMessageText).not.toHaveBeenCalled();
+});
+
+test("update replied flushes next queued item", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.invalidate(
+    [questionRequest] as never,
+    [permissionRequest] as never,
+  );
+  // Only first item is flushed
+  expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  // Replied event resolves the first item (question)
+  await prompts.update({
+    type: "question.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "q1",
+      answers: [["Claude"]],
+    },
+  } as never);
+  // Should flush the next item (permission)
+  expect(mockSendMessage).toHaveBeenCalledTimes(2);
+  expect(prompts.check("sess-1")).toBe(true);
+});
+
+test("update replied removes queued item without messageId", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  // Question is flushed (gets messageId), permission is queued (no messageId)
+  await prompts.invalidate(
+    [questionRequest] as never,
+    [permissionRequest] as never,
+  );
+  expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  // Permission auto-resolved while still queued
+  await prompts.update({
+    type: "permission.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "p1",
+      reply: "always",
+    },
+  });
+  // No editMessageText — permission was never shown
+  expect(mockEditMessageText).not.toHaveBeenCalled();
+  // Question is still pending
+  expect(prompts.check("sess-1")).toBe(true);
+});
+
+test("update replied removes only queued item and fires change hook", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  const onChange = vi.fn();
+  prompts.hook("change", onChange);
+  // Only a single permission — flushed immediately (gets messageId)
+  await prompts.invalidate(noQuestions, [permissionRequest] as never);
+  onChange.mockClear();
+  // Add a queued question (no messageId since permission is active)
+  await prompts.update({
+    type: "question.asked",
+    properties: questionRequest as never,
+  });
+  // Auto-resolve the queued question
+  await prompts.update({
+    type: "question.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "q1",
+      answers: [["Claude"]],
+    },
+  } as never);
+  // Question removed silently, permission still pending
+  expect(prompts.check("sess-1")).toBe(true);
+  expect(onChange).not.toHaveBeenCalled();
+  // No editMessageText for the question (it was never shown)
+  expect(mockEditMessageText).not.toHaveBeenCalled();
+});
+
+test("update replied removes only queued item as last item and fires change hook", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  mockSendMessage = vi.fn(async () => {
+    throw new Error("send failed");
+  });
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  const onChange = vi.fn();
+  prompts.hook("change", onChange);
+  // Flush fails — item has no messageId but is in the map
+  await expect(
+    prompts.invalidate(noQuestions, [permissionRequest] as never),
+  ).rejects.toThrow();
+  onChange.mockClear();
+  // Auto-resolve the unflushed item
+  await prompts.update({
+    type: "permission.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "p1",
+      reply: "once",
+    },
+  });
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockEditMessageText).not.toHaveBeenCalled();
+  expect(onChange).toHaveBeenCalledWith({
+    sessionId: "sess-1",
+    pending: false,
+  });
+});
+
+test("update replied fires change hook with pending=false for last item", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  const onChange = vi.fn();
+  prompts.hook("change", onChange);
+  await prompts.invalidate(noQuestions, [permissionRequest] as never);
+  onChange.mockClear();
+  await prompts.update({
+    type: "permission.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "p1",
+      reply: "once",
+    },
+  });
+  expect(onChange).toHaveBeenCalledWith({
+    sessionId: "sess-1",
+    pending: false,
+  });
+});
+
+test("update replied does not fire change hook when items remain", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  const onChange = vi.fn();
+  prompts.hook("change", onChange);
+  await prompts.invalidate(
+    [questionRequest] as never,
+    [permissionRequest] as never,
+  );
+  onChange.mockClear();
+  await prompts.update({
+    type: "question.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "q1",
+      answers: [["Claude"]],
+    },
+  } as never);
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test("update question.replied with empty answers shows empty text", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.invalidate([questionRequest] as never, noPermissions);
+  await prompts.update({
+    type: "question.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "q1",
+      answers: [],
+    },
+  } as never);
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockEditMessageText).toHaveBeenCalledWith(
+    123,
+    100,
+    "✓ ",
+    expect.objectContaining({ reply_markup: { inline_keyboard: [] } }),
+  );
+});
+
 // --- change hook tests ---
 
 test("update fires change hook with pending=true for new session", async () => {

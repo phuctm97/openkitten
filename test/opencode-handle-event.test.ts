@@ -150,6 +150,51 @@ test("sends compacted on session.compacted", async () => {
   });
 });
 
+test("updates pending prompts on permission.replied event", async () => {
+  const { scope, pendingPrompts } = mockScope();
+  const event = {
+    type: "permission.replied" as const,
+    properties: {
+      sessionID: "s1",
+      requestID: "p1",
+      reply: "once" as const,
+    },
+  };
+  await opencodeHandleEvent(scope, event, new AbortController().signal);
+  expect(pendingPrompts.update).toHaveBeenCalledWith(event);
+});
+
+test("updates pending prompts on question.replied event", async () => {
+  const { scope, pendingPrompts } = mockScope();
+  const event = {
+    type: "question.replied" as const,
+    properties: {
+      sessionID: "s1",
+      requestID: "q1",
+      answers: [["option1"]],
+    },
+  };
+  await opencodeHandleEvent(
+    scope,
+    event as never,
+    new AbortController().signal,
+  );
+  expect(pendingPrompts.update).toHaveBeenCalledWith(event);
+});
+
+test("updates pending prompts on question.rejected event", async () => {
+  const { scope, pendingPrompts } = mockScope();
+  const event = {
+    type: "question.rejected" as const,
+    properties: {
+      sessionID: "s1",
+      requestID: "q1",
+    },
+  };
+  await opencodeHandleEvent(scope, event, new AbortController().signal);
+  expect(pendingPrompts.update).toHaveBeenCalledWith(event);
+});
+
 test("ignores unrelated event types", async () => {
   const { scope, workingSessions, pendingPrompts, processingMessages } =
     mockScope();
