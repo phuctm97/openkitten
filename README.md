@@ -17,7 +17,7 @@ NanoClaw took the right approach by going minimal at ~500 lines of code, but it'
 
 - **Built for Telegram** — the best chatbot experience on the best messaging platform
 - **Powered by OpenCode** — 75+ AI providers with rich plugin & skill ecosystem
-- **Opinionated on purpose** — fewer choices, more capability, zero bloat
+- **Opinionated by design** — fewer choices, more capability, zero bloat
 
 > [!NOTE]
 > OpenKitten is in early development. Things may break between releases.
@@ -26,23 +26,33 @@ NanoClaw took the right approach by going minimal at ~500 lines of code, but it'
 
 ### Prepare
 
-- A Telegram bot token from [@BotFather](https://t.me/BotFather)
-- Your Telegram user ID (send `/start` to [@userinfobot](https://t.me/userinfobot))
+- Install Bun runtime ([Bun installation](https://bun.com/docs/installation))
+- Create a bot with [@BotFather](https://t.me/BotFather)
+- Get your user ID from [@userinfobot](https://t.me/userinfobot)
 
 ### Install
 
 ```bash
-# Install Bun
-curl -fsSL https://bun.sh/install | bash
-
-# Clone OpenKitten
 git clone https://github.com/phuctm97/openkitten.git
 cd openkitten
-
-# Install dependencies
 bun install
+```
 
-# Start OpenKitten
+To update and install as a system service:
+
+```bash
+bun . up
+```
+
+To stop and remove the system service:
+
+```bash
+bun . down
+```
+
+To run directly in the foreground:
+
+```bash
 bun . serve
 ```
 
