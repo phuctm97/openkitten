@@ -47,7 +47,7 @@ export const down = defineCommand({
   run: async () => {
     clack.intro("Uninstallation");
     const shouldContinue = await clack.confirm({
-      message: "Are you sure you want to uninstall OpenKitten?",
+      message: "Are you absolutely sure that you want to uninstall OpenKitten?",
     });
     if (clack.isCancel(shouldContinue) || !shouldContinue) {
       clack.cancel("Phew! Your kitten lives another day. 😸");
