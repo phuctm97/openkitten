@@ -236,7 +236,7 @@ test("skips update when worktree is dirty", async () => {
   await runCommand(up, { rawArgs: [] });
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.log.warn)).toHaveBeenCalledWith(
-    expect.stringContaining("Worktree is dirty"),
+    expect.stringContaining("Dirty worktree"),
   );
 });
 

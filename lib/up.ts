@@ -53,7 +53,7 @@ async function updateSource(): Promise<void> {
     await Bun.$`git status --porcelain`.cwd(projectDir).text()
   ).trim();
   if (status !== "") {
-    clack.log.warn(`Skipped update\n${styleText("dim", "Worktree is dirty")}`);
+    clack.log.warn(`Skipped update\n${styleText("dim", "Dirty worktree")}`);
     return;
   }
   await runTask("Pulling latest changes", "Pulled latest changes", [
