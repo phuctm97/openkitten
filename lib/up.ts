@@ -188,9 +188,9 @@ export const up = defineCommand({
     process.stderr.write(
       `${boxen(styleText("bold", "OpenKitten 😼"), { padding: 1 })}\n`,
     );
-    clack.intro("Update");
+    clack.intro("Source");
     await updateProjectDir();
-    clack.outro("Completed update");
+    clack.outro("Updated source");
     const profile = await Profile.create();
     await TelegramConfig.create(profile);
     await OpencodeConfig.create(profile);
