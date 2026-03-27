@@ -190,7 +190,7 @@ export const up = defineCommand({
     );
     clack.intro("Update");
     await updateProjectDir();
-    clack.outro("Up to date");
+    clack.outro("Completed update");
     const profile = await Profile.create();
     await TelegramConfig.create(profile);
     await OpencodeConfig.create(profile);
