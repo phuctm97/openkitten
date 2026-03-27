@@ -463,6 +463,21 @@ const permissionFormatters: {
   lsp: formatPattern,
 };
 
+function formatAlwaysAllow(lines: string[], request: PermissionRequest) {
+  if (request.always.length === 0) return;
+  const wildcard = request.always.length === 1 && request.always[0] === "*";
+  lines.push(
+    `⚠️ **Allow (always)** will allow ${wildcard ? "_all_" : "_matched_"} \`${request.permission}\` requests until the session restarts.`,
+  );
+  if (!wildcard) {
+    lines.push("```match");
+    for (const pattern of request.always) {
+      lines.push(pattern);
+    }
+    lines.push("```");
+  }
+}
+
 export function grammyFormatPermissionMessage(request: PermissionRequest) {
   const known = permissionTypes[request.permission];
   const { emoji, title, description } = known ?? {
@@ -481,5 +496,6 @@ export function grammyFormatPermissionMessage(request: PermissionRequest) {
     lines.push(`_${description}_`);
     formatTool(lines, request);
   }
+  formatAlwaysAllow(lines, request);
   return grammyFormatMessage(lines.join("\n"));
 }

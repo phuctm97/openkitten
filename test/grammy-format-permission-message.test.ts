@@ -735,3 +735,55 @@ describe("unknown permission", () => {
     expect(text).not.toContain("```pattern");
   });
 });
+
+describe("always allow", () => {
+  test("omitted when always is empty", () => {
+    const chunks = grammyFormatPermissionMessage(
+      makeRequest({ permission: "bash", patterns: ["git status"], always: [] }),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).not.toContain("Allow (always)");
+  });
+
+  test("wildcard shows all requests allowed", () => {
+    const chunks = grammyFormatPermissionMessage(
+      makeRequest({
+        permission: "edit",
+        patterns: [],
+        always: ["*"],
+      }),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Allow (always)");
+    expect(text).toContain("_all_ `edit` requests");
+    expect(text).toContain("until the session restarts");
+  });
+
+  test("specific patterns listed in codeblock", () => {
+    const chunks = grammyFormatPermissionMessage(
+      makeRequest({
+        permission: "bash",
+        patterns: ["git commit -m test"],
+        always: ["git commit *"],
+      }),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("Allow (always)");
+    expect(text).toContain("_matched_");
+    expect(text).toContain("```match");
+    expect(text).toContain("git commit");
+  });
+
+  test("multiple specific patterns each on own line", () => {
+    const chunks = grammyFormatPermissionMessage(
+      makeRequest({
+        permission: "bash",
+        patterns: ["git commit -m test"],
+        always: ["git commit *", "git push *"],
+      }),
+    );
+    const text = chunks.map((c) => c.text).join("\n");
+    expect(text).toContain("git commit");
+    expect(text).toContain("git push");
+  });
+});
