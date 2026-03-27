@@ -65,9 +65,10 @@ test("aborts session and reacts with like", async () => {
     chatId: 42,
     threadId: undefined,
   });
-  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
-    sessionID: "s1",
-  });
+  expect(opencodeClient.session.abort).toHaveBeenCalledWith(
+    { sessionID: "s1" },
+    { throwOnError: true },
+  );
   expect(react).toHaveBeenCalledWith("👍");
 });
 
