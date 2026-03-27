@@ -433,10 +433,10 @@ export class PendingPrompts implements AsyncDisposable {
   async update(
     event:
       | EventQuestionAsked
-      | EventPermissionAsked
-      | EventPermissionReplied
       | EventQuestionReplied
-      | EventQuestionRejected,
+      | EventQuestionRejected
+      | EventPermissionAsked
+      | EventPermissionReplied,
   ) {
     if (
       event.type === "permission.replied" ||
