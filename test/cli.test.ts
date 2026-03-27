@@ -5,15 +5,11 @@ import { logger } from "~/lib/logger";
 import * as serveModule from "~/lib/serve";
 
 test("prints welcome box", async () => {
-  const stderrSpy = vi
-    .spyOn(process.stderr, "write")
-    .mockImplementation(() => true);
   vi.spyOn(serveModule.serve, "run").mockImplementation(async () => {});
   await runCommand(cli, { rawArgs: ["serve"] });
-  expect(stderrSpy).toHaveBeenCalledWith(
+  expect(process.stderr.write).toHaveBeenCalledWith(
     expect.stringContaining("The kitten says hi"),
   );
-  stderrSpy.mockRestore();
 });
 
 test("runs subcommand with default log level", async () => {

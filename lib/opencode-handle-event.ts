@@ -20,7 +20,10 @@ export async function opencodeHandleEvent(
       await workingSessions.update(event);
       break;
     case "question.asked":
+    case "question.replied":
+    case "question.rejected":
     case "permission.asked":
+    case "permission.replied":
       await pendingPrompts.update(event);
       break;
     case "message.updated":

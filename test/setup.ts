@@ -13,4 +13,6 @@ beforeEach(() => {
   vi.spyOn(logger, "warn").mockReturnValue(undefined);
   vi.spyOn(logger, "error").mockReturnValue(undefined);
   vi.spyOn(logger, "fatal").mockReturnValue(undefined);
+  vi.spyOn(process.stderr, "write").mockReturnValue(true);
+  vi.spyOn(process.stdout, "write").mockReturnValue(true);
 });
