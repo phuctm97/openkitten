@@ -85,7 +85,7 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 `;
-  const s = clack.spinner({ indicator: "timer" });
+  const s = clack.spinner();
   s.start("Installing service");
   const wasRunning =
     (await Bun.$`systemctl --user is-active ${label}`.nothrow().quiet())
@@ -144,7 +144,7 @@ async function installDarwin(profile: Profile): Promise<void> {
 </dict>
 </plist>
 `;
-  const s = clack.spinner({ indicator: "timer" });
+  const s = clack.spinner();
   s.start("Installing service");
   const wasRunning =
     (await Bun.$`launchctl bootout gui/${userId}/${label}`.nothrow().quiet())
@@ -166,7 +166,7 @@ async function installDarwin(profile: Profile): Promise<void> {
 async function installWin32(profile: Profile): Promise<void> {
   const taskName = `\\OpenKitten\\Profiles\\${profile.name}`;
   const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Profiles\\${profile.name}\\Logs`;
-  const s = clack.spinner({ indicator: "timer" });
+  const s = clack.spinner();
   s.start("Installing service");
   const wasRunning =
     (await Bun.$`schtasks /Query /TN ${taskName}`.nothrow().quiet())
