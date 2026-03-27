@@ -474,11 +474,11 @@ export function grammyFormatPermissionMessage(request: PermissionRequest) {
     description: "Use a custom tool from your config.",
   };
   const lines: string[] = ["> 🔒 The agent needs permission.\n", "\u2800"];
-  const formatter = permissionFormatters[request.permission];
-  if (formatter) {
+  const formatPermission = permissionFormatters[request.permission];
+  if (formatPermission) {
     lines.push(`${emoji} **${title}** (\`${request.permission}\`)`);
     lines.push(`_${description}_`);
-    formatter(lines, request);
+    formatPermission(lines, request);
   } else {
     lines.push(`${emoji} **${title}**`);
     lines.push(`_${description}_`);
