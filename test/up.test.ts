@@ -111,10 +111,8 @@ test("installs on linux", async () => {
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
-  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("😼 OpenKitten");
-  expect(vi.mocked(clack.outro)).toHaveBeenCalledWith(
-    "Meow! Your kitten is up and running. 😻",
-  );
+  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("Install");
+  expect(vi.mocked(clack.outro)).toHaveBeenCalledWith("Done");
   expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
     "/mock-home/.config/systemd/user/openkitten-default-profile.service",
     expect.stringContaining("OPENKITTEN_PROFILE=default"),

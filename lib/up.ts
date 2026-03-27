@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { resolve } from "node:path";
 import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
+import boxen from "boxen";
 import { defineCommand } from "citty";
 import { getUserId } from "~/lib/get-user-id";
 import { OpencodeConfig } from "~/lib/opencode-config";
@@ -84,6 +85,7 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 `;
+  clack.intro("Install");
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -99,6 +101,7 @@ WantedBy=default.target
     await Bun.$`systemctl --user enable --now ${label}`;
   }
   s.stop(wasRunning ? "Restarted service" : "Installed service");
+  clack.outro("Done");
   clack.note(
     `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  journalctl --user -u ${label} -f`,
     "Next steps",
@@ -143,6 +146,7 @@ async function installDarwin(profile: Profile): Promise<void> {
 </dict>
 </plist>
 `;
+  clack.intro("Install");
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -156,6 +160,7 @@ async function installDarwin(profile: Profile): Promise<void> {
   await Bun.write(plistPath, plistContent);
   await Bun.$`launchctl bootstrap gui/${userId} ${plistPath}`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
+  clack.outro("Done");
   clack.note(
     `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/OpenKitten/${label}.*.log\n  or open Console.app and filter by "${label}"`,
     "Next steps",
@@ -165,6 +170,7 @@ async function installDarwin(profile: Profile): Promise<void> {
 async function installWin32(profile: Profile): Promise<void> {
   const taskName = `\\OpenKitten\\Profiles\\${profile.name}`;
   const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Profiles\\${profile.name}\\Logs`;
+  clack.intro("Install");
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -175,6 +181,7 @@ async function installWin32(profile: Profile): Promise<void> {
   const tr = `cmd /C "cd /D \\"${projectDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
+  clack.outro("Done");
   clack.note(
     `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  type "${logsDir}\\stderr.log"`,
     "Next steps",
@@ -184,11 +191,16 @@ async function installWin32(profile: Profile): Promise<void> {
 export const up = defineCommand({
   meta: { description: "Install and update OpenKitten as a system service." },
   run: async () => {
-    clack.intro("😼 OpenKitten");
+    process.stderr.write(
+      `${boxen(styleText("bold", "OpenKitten 😼"), { padding: 1 })}\n`,
+    );
     await updateProjectDir();
     const profile = await Profile.create();
     await TelegramConfig.create(profile);
     await OpencodeConfig.create(profile);
+    process.stderr.write(
+      `${boxen(styleText("bold", "Service"), { padding: 1 })}\n`,
+    );
     switch (process.platform) {
       case "linux":
         await installLinux(profile);
@@ -202,6 +214,5 @@ export const up = defineCommand({
       default:
         throw new Error(`${process.platform} is not supported yet`);
     }
-    clack.outro("Meow! Your kitten is up and running. 😻");
   },
 });
