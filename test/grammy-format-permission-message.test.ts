@@ -693,11 +693,11 @@ describe("unknown permission", () => {
       makeRequest({ permission: "custom_tool", patterns: ["pattern1"] }),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Use tool");
-    expect(text).not.toContain("(`custom_tool`)");
-    expect(text).toContain("The agent wants to use an unrecognized tool.");
-    expect(text).toContain("```tool");
-    expect(text).toContain("custom_tool");
+    expect(text).toContain("Use `custom_tool`");
+    expect(text).toContain(
+      "Use a custom tool provided by a third-party plugin.",
+    );
+    expect(text).not.toContain("```tool");
     expect(text).toContain("```pattern");
     expect(text).toContain("pattern1");
   });
@@ -721,8 +721,8 @@ describe("unknown permission", () => {
       makeRequest({ permission: "custom_tool", patterns: [] }),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("```tool");
-    expect(text).toContain("custom_tool");
+    expect(text).toContain("Use `custom_tool`");
+    expect(text).not.toContain("```tool");
     expect(text).not.toContain("```pattern");
   });
 
@@ -731,7 +731,7 @@ describe("unknown permission", () => {
       makeRequest({ permission: "custom_tool", patterns: ["*"] }),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("```tool");
+    expect(text).not.toContain("```tool");
     expect(text).not.toContain("```pattern");
   });
 });
