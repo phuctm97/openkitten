@@ -290,11 +290,11 @@ export class PendingPrompts implements AsyncDisposable {
     });
   }
 
-  async #answerCustom(
-    sessionId: string,
-    replyToMessageId: number | undefined,
-    text: string,
-  ) {
+  async #answerCustom({
+    sessionId,
+    messageId: replyToMessageId,
+    text,
+  }: PendingPrompts.AnswerCustomOptions) {
     const items = this.#sessionMap.get(sessionId);
     if (!items) throw new PendingPrompts.NotFoundError();
     const activeItem = items.find((i) => i.messageId);
@@ -325,11 +325,11 @@ export class PendingPrompts implements AsyncDisposable {
     await this.#advanceOrSubmit(items, activeItem);
   }
 
-  async #answerCallback(
-    sessionId: string,
-    callbackQueryId: string,
-    callbackData: string,
-  ) {
+  async #answerCallback({
+    sessionId,
+    callbackQueryId,
+    callbackQueryData: callbackData,
+  }: PendingPrompts.AnswerCallbackOptions) {
     try {
       const items = this.#sessionMap.get(sessionId);
       if (!items) throw new PendingPrompts.AnswerError("expired_session");
@@ -423,18 +423,10 @@ export class PendingPrompts implements AsyncDisposable {
 
   async answer(options: PendingPrompts.AnswerOptions) {
     if ("text" in options) {
-      await this.#answerCustom(
-        options.sessionId,
-        options.messageId,
-        options.text,
-      );
+      await this.#answerCustom(options);
       return;
     }
-    await this.#answerCallback(
-      options.sessionId,
-      options.callbackQueryId,
-      options.callbackQueryData,
-    );
+    await this.#answerCallback(options);
   }
 
   async update(event: EventQuestionAsked | EventPermissionAsked) {
