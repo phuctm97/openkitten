@@ -11,6 +11,7 @@ export async function grammyHandleCallback(
   const message = ctx.callbackQuery.message;
   invariant(message, "Expected callback query to have a message");
 
+  // Find the session for this chat — don't create one for stale buttons.
   const sessionId = existingSessions.find({
     chatId: message.chat.id,
     threadId: message.message_thread_id || undefined,
@@ -22,6 +23,7 @@ export async function grammyHandleCallback(
     return;
   }
 
+  // Forward the callback to the active pending prompt.
   await pendingPrompts.answer({
     sessionId,
     callbackQueryId: ctx.callbackQuery.id,
