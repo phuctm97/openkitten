@@ -665,17 +665,6 @@ describe("todowrite", () => {
   });
 });
 
-describe("todoread", () => {
-  test("formats todoread", () => {
-    const chunks = grammyFormatPermissionMessage(
-      makeRequest({ permission: "todoread", patterns: ["*"] }),
-    );
-    const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Read todos");
-    expect(text).not.toContain("```pattern");
-  });
-});
-
 describe("lsp", () => {
   test("formats lsp", () => {
     const chunks = grammyFormatPermissionMessage(
@@ -694,7 +683,7 @@ describe("unknown permission", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Use `custom_tool`");
-    expect(text).toContain("Use a custom tool from your config.");
+    expect(text).toContain("Use an unrecognized tool.");
     expect(text).not.toContain("```tool");
     expect(text).toContain("```pattern");
     expect(text).toContain("pattern1");
