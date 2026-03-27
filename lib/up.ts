@@ -186,11 +186,11 @@ export const up = defineCommand({
   meta: { description: "Install and update OpenKitten as a system service." },
   run: async () => {
     process.stderr.write(
-      `${boxen(styleText("bold", "Update"), { padding: 1 })}\n`,
+      `${boxen(styleText("bold", "Project"), { padding: 1 })}\n`,
     );
-    clack.intro("Source");
+    clack.intro("Update");
     await updateProjectDir();
-    clack.outro("Updated source");
+    clack.outro("Processed update");
     const profile = await Profile.create();
     await TelegramConfig.create(profile);
     await OpencodeConfig.create(profile);
