@@ -1,13 +1,14 @@
 import type { QuestionInfo } from "@opencode-ai/sdk/v2";
+import { convert } from "telegram-markdown-v2";
 
 export function grammyFormatQuestionPrompt(question: QuestionInfo) {
   const multi = question.multiple === true;
   const custom = question.custom !== false;
   let text = multi
-    ? "Select all that apply and press *Confirm*"
+    ? "Select all that apply and press **Confirm**"
     : "Choose one of the following options";
   if (custom) {
     text += ", or reply with your own answer";
   }
-  return `_${text}_`;
+  return convert(`_${text}_`);
 }

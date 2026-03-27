@@ -473,7 +473,7 @@ export function grammyFormatPermissionMessage(request: PermissionRequest) {
   const lines: string[] = [
     "> 🔒 The agent needs permission.\n",
     "\u2800",
-    `${emoji} **${title}**`,
+    `${emoji} **${title}** (\`${request.permission}\`)`,
     `_${description}_`,
   ];
 
