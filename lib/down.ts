@@ -45,7 +45,7 @@ async function uninstallWin32(profile: Profile): Promise<void> {
 export const down = defineCommand({
   meta: { description: "Stop and remove OpenKitten from system services." },
   run: async () => {
-    clack.intro("😼 OpenKitten");
+    clack.intro("Uninstallation");
     const shouldContinue = await clack.confirm({
       message: "Are you sure you want to uninstall OpenKitten?",
     });
