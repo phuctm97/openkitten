@@ -19,7 +19,7 @@ NanoClaw took the right approach by going minimal at ~500 lines of code, but it'
 - **Powered by OpenCode** — 75+ AI providers with rich plugin & skill ecosystem
 - **Opinionated by design** — fewer choices, more capability, zero bloat
 
-> [!NOTE]
+> [!WARNING]
 > OpenKitten is in early development. Things may break between releases.
 
 ## Setup
@@ -58,6 +58,9 @@ To run directly in the foreground:
 ```bash
 bun . serve
 ```
+
+> [!NOTE]
+> The system service may appear as "Jarred Sumner" — this is the name of the Bun creator used to sign the runtime, not malware.
 
 ## Configuration
 
