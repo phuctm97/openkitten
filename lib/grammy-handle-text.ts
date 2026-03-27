@@ -17,6 +17,7 @@ export async function grammyHandleText(
   try {
     await pendingPrompts.answer({
       sessionId,
+      messageId: ctx.message.message_id,
       text: ctx.message.text,
     });
     return;
