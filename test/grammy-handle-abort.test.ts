@@ -1,0 +1,88 @@
+import { expect, test, vi } from "vitest";
+import type { ExistingSessions } from "~/lib/existing-sessions";
+import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
+import type { Scope } from "~/lib/scope";
+
+function mockCtx(chatId: number, threadId?: number) {
+  return {
+    chat: { id: chatId },
+    msg: { message_thread_id: threadId },
+    update: { update_id: 1 },
+  } as never;
+}
+
+function mockExistingSessions(sessionId: string | undefined): ExistingSessions {
+  return {
+    sessionIds: sessionId ? [sessionId] : [],
+    find: vi.fn(() => sessionId),
+    findOrCreate: vi.fn(),
+    invalidate: vi.fn(),
+    check: vi.fn(() => !!sessionId),
+    resolve: vi.fn(() => ({ chatId: 42, threadId: undefined })),
+  } as never;
+}
+
+function mockOpencodeClient() {
+  return {
+    session: {
+      abort: vi.fn(async () => ({ data: undefined })),
+    },
+  };
+}
+
+function mockScope(overrides: {
+  existingSessions: ExistingSessions;
+  opencodeClient: ReturnType<typeof mockOpencodeClient>;
+}): Scope {
+  return {
+    shutdown: {} as never,
+    bot: {} as never,
+    database: {} as never,
+    opencodeClient: overrides.opencodeClient as never,
+    floatingPromises: {} as never,
+    existingSessions: overrides.existingSessions,
+    workingSessions: {} as never,
+    pendingPrompts: {} as never,
+    processingMessages: {} as never,
+    typingIndicators: {} as never,
+  };
+}
+
+test("aborts session", async () => {
+  const existingSessions = mockExistingSessions("s1");
+  const opencodeClient = mockOpencodeClient();
+  const scope = mockScope({ existingSessions, opencodeClient });
+
+  await grammyHandleAbort(scope, mockCtx(42));
+
+  expect(existingSessions.find).toHaveBeenCalledWith({
+    chatId: 42,
+    threadId: undefined,
+  });
+  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
+    sessionID: "s1",
+  });
+});
+
+test("passes threadId when present", async () => {
+  const existingSessions = mockExistingSessions("s1");
+  const opencodeClient = mockOpencodeClient();
+  const scope = mockScope({ existingSessions, opencodeClient });
+
+  await grammyHandleAbort(scope, mockCtx(42, 7));
+
+  expect(existingSessions.find).toHaveBeenCalledWith({
+    chatId: 42,
+    threadId: 7,
+  });
+});
+
+test("does nothing when no session exists", async () => {
+  const existingSessions = mockExistingSessions(undefined);
+  const opencodeClient = mockOpencodeClient();
+  const scope = mockScope({ existingSessions, opencodeClient });
+
+  await grammyHandleAbort(scope, mockCtx(42));
+
+  expect(opencodeClient.session.abort).not.toHaveBeenCalled();
+});
