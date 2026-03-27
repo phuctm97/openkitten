@@ -90,11 +90,6 @@ const permissionTypes: { readonly [key: string]: PermissionType } = {
     title: "Update todos",
     description: "Update the todo list.",
   },
-  todoread: {
-    emoji: "📋",
-    title: "Read todos",
-    description: "Read the todo list.",
-  },
   lsp: {
     emoji: "🔗",
     title: "Query LSP",
@@ -447,7 +442,6 @@ const permissionFormatters: {
   doom_loop: formatDoomLoop,
   skill: formatSkill,
   todowrite: formatPattern,
-  todoread: formatPattern,
   lsp: formatPattern,
 };
 
@@ -471,7 +465,7 @@ export function grammyFormatPermissionMessage(request: PermissionRequest) {
   const { emoji, title, description } = known ?? {
     emoji: "🔧",
     title: `Use \`${request.permission}\``,
-    description: "Use a custom tool from your config.",
+    description: "Use an unrecognized tool.",
   };
   const lines: string[] = ["> 🔒 The agent needs permission.\n", "\u2800"];
   const formatPermission =
