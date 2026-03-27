@@ -480,7 +480,7 @@ export function grammyFormatPermissionMessage(request: PermissionRequest) {
   const { emoji, title, description } = known ?? {
     emoji: "🔧",
     title: `Use \`${request.permission}\``,
-    description: "Use a tool from your custom config.",
+    description: "Use a custom tool from your config.",
   };
   const lines: string[] = ["> 🔒 The agent needs permission.\n", "\u2800"];
   const formatter = permissionFormatters[request.permission];
