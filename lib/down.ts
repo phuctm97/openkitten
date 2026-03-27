@@ -50,7 +50,7 @@ export const down = defineCommand({
       message: "Are you absolutely sure that you want to uninstall OpenKitten?",
     });
     if (clack.isCancel(shouldContinue) || !shouldContinue) {
-      clack.cancel("Phew! Your kitten lives another day. 😸");
+      clack.cancel("Phew! Your kitten lives another day. 🙀");
       return;
     }
     const profile = await Profile.create();
