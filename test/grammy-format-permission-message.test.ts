@@ -693,16 +693,14 @@ describe("unknown permission", () => {
       makeRequest({ permission: "custom_tool", patterns: ["pattern1"] }),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("Use tool");
-    expect(text).not.toContain("(`custom_tool`)");
-    expect(text).toContain("The agent wants to use an unrecognized tool.");
-    expect(text).toContain("```tool");
-    expect(text).toContain("custom_tool");
+    expect(text).toContain("Use `custom_tool`");
+    expect(text).toContain("Use a custom tool from your config.");
+    expect(text).not.toContain("```tool");
     expect(text).toContain("```pattern");
     expect(text).toContain("pattern1");
   });
 
-  test("formats with metadata", () => {
+  test("ignores metadata", () => {
     const chunks = grammyFormatPermissionMessage(
       makeRequest({
         permission: "custom_tool",
@@ -711,9 +709,7 @@ describe("unknown permission", () => {
       }),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("```json");
-    expect(text).toContain('"foo": "bar"');
-    expect(text).toContain('"count": 42');
+    expect(text).not.toContain("```json");
   });
 
   test("formats without patterns", () => {
@@ -721,9 +717,10 @@ describe("unknown permission", () => {
       makeRequest({ permission: "custom_tool", patterns: [] }),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("```tool");
-    expect(text).toContain("custom_tool");
+    expect(text).toContain("Use `custom_tool`");
+    expect(text).not.toContain("```tool");
     expect(text).not.toContain("```pattern");
+    expect(text).not.toContain("```json");
   });
 
   test("formats with wildcard pattern as no patterns", () => {
@@ -731,8 +728,9 @@ describe("unknown permission", () => {
       makeRequest({ permission: "custom_tool", patterns: ["*"] }),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("```tool");
+    expect(text).not.toContain("```tool");
     expect(text).not.toContain("```pattern");
+    expect(text).not.toContain("```json");
   });
 });
 

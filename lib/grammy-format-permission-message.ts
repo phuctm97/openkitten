@@ -430,18 +430,6 @@ function formatPattern(lines: string[], request: PermissionRequest) {
   }
 }
 
-function formatTool(lines: string[], request: PermissionRequest) {
-  lines.push("```tool");
-  lines.push(request.permission);
-  lines.push("```");
-  formatPattern(lines, request);
-  if (Object.keys(request.metadata).length > 0) {
-    lines.push("```json");
-    lines.push(JSON.stringify(request.metadata, null, 2));
-    lines.push("```");
-  }
-}
-
 const permissionFormatters: {
   readonly [key: string]: (lines: string[], request: PermissionRequest) => void;
 } = {
@@ -482,20 +470,19 @@ export function grammyFormatPermissionMessage(request: PermissionRequest) {
   const known = permissionTypes[request.permission];
   const { emoji, title, description } = known ?? {
     emoji: "🔧",
-    title: "Use tool",
-    description: "The agent wants to use an unrecognized tool.",
+    title: `Use \`${request.permission}\``,
+    description: "Use a custom tool from your config.",
   };
   const lines: string[] = ["> 🔒 The agent needs permission.\n", "\u2800"];
-  const formatter = permissionFormatters[request.permission];
-  if (formatter) {
+  const formatPermission =
+    permissionFormatters[request.permission] || formatPattern;
+  if (known) {
     lines.push(`${emoji} **${title}** (\`${request.permission}\`)`);
-    lines.push(`_${description}_`);
-    formatter(lines, request);
   } else {
     lines.push(`${emoji} **${title}**`);
-    lines.push(`_${description}_`);
-    formatTool(lines, request);
   }
+  lines.push(`_${description}_`);
+  formatPermission(lines, request);
   formatAlwaysAllow(lines, request);
   return grammyFormatMessage(lines.join("\n"));
 }
