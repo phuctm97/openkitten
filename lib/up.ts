@@ -101,7 +101,7 @@ WantedBy=default.target
   }
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   clack.note(
-    `Just open Telegram and say hi to your kitten.\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  journalctl --user -u ${label} -f`,
+    `Just open Telegram and say hi to your kitten\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  journalctl --user -u ${label} -f`,
     "Next steps",
   );
 }
@@ -158,7 +158,7 @@ async function installDarwin(profile: Profile): Promise<void> {
   await Bun.$`launchctl bootstrap gui/${userId} ${plistPath}`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   clack.note(
-    `Just open Telegram and say hi to your kitten.\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/OpenKitten/${label}.*.log\n  or open Console.app and filter by "${label}"`,
+    `Just open Telegram and say hi to your kitten\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/OpenKitten/${label}.*.log\n  or open Console.app and filter by "${label}"`,
     "Next steps",
   );
 }
@@ -177,7 +177,7 @@ async function installWin32(profile: Profile): Promise<void> {
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
   s.stop(wasRunning ? "Restarted service" : "Installed service");
   clack.note(
-    `Just open Telegram and say hi to your kitten.\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  type "${logsDir}\\stderr.log"`,
+    `Just open Telegram and say hi to your kitten\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  type "${logsDir}\\stderr.log"`,
     "Next steps",
   );
 }
