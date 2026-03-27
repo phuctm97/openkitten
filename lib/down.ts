@@ -8,7 +8,7 @@ import { Profile } from "~/lib/profile";
 async function uninstallLinux(profile: Profile): Promise<void> {
   const label = `openkitten-${profile.name}-profile`;
   const unitPath = `${homedir()}/.config/systemd/user/${label}.service`;
-  const s = clack.spinner({ indicator: "timer" });
+  const s = clack.spinner();
   s.start("Removing service");
   await Bun.$`systemctl --user disable --now ${label}`.nothrow().quiet();
   await rm(unitPath, { force: true });
@@ -21,7 +21,7 @@ async function uninstallDarwin(profile: Profile): Promise<void> {
   const label = `com.openkitten.profiles.${profile.name}`;
   const logsDir = `${homedir()}/Library/Logs/OpenKitten`;
   const plistPath = `${homedir()}/Library/LaunchAgents/${label}.plist`;
-  const s = clack.spinner({ indicator: "timer" });
+  const s = clack.spinner();
   s.start("Removing service");
   await Bun.$`launchctl bootout gui/${userId}/${label}`.nothrow().quiet();
   await Promise.all([
@@ -35,7 +35,7 @@ async function uninstallDarwin(profile: Profile): Promise<void> {
 async function uninstallWin32(profile: Profile): Promise<void> {
   const taskName = `\\OpenKitten\\Profiles\\${profile.name}`;
   const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Profiles\\${profile.name}\\Logs`;
-  const s = clack.spinner({ indicator: "timer" });
+  const s = clack.spinner();
   s.start("Removing service");
   await Bun.$`schtasks /Delete /TN ${taskName} /F`.nothrow().quiet();
   await rm(logsDir, { recursive: true, force: true });
@@ -45,12 +45,12 @@ async function uninstallWin32(profile: Profile): Promise<void> {
 export const down = defineCommand({
   meta: { description: "Stop and remove OpenKitten from system services." },
   run: async () => {
-    clack.intro("😼 OpenKitten");
+    clack.intro("Uninstallation");
     const shouldContinue = await clack.confirm({
-      message: "Are you sure you want to uninstall OpenKitten?",
+      message: "Are you absolutely sure that you want to uninstall OpenKitten?",
     });
     if (clack.isCancel(shouldContinue) || !shouldContinue) {
-      clack.cancel("Phew! Your kitten lives another day. 😸");
+      clack.cancel("Phew! Your kitten lives another day. 🙀");
       return;
     }
     const profile = await Profile.create();

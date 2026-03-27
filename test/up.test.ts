@@ -111,7 +111,7 @@ test("installs on linux", async () => {
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
-  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("😼 OpenKitten");
+  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("Service");
   expect(vi.mocked(clack.outro)).toHaveBeenCalledWith(
     "Meow! Your kitten is up and running. 😻",
   );
@@ -225,7 +225,7 @@ test("skips update when not on main branch", async () => {
   await runCommand(up, { rawArgs: [] });
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.log.warn)).toHaveBeenCalledWith(
-    expect.stringContaining("Not on main branch"),
+    expect.stringContaining("Non-main branch"),
   );
 });
 
@@ -236,7 +236,7 @@ test("skips update when worktree is dirty", async () => {
   await runCommand(up, { rawArgs: [] });
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.log.warn)).toHaveBeenCalledWith(
-    expect.stringContaining("Worktree is dirty"),
+    expect.stringContaining("Dirty worktree"),
   );
 });
 

@@ -75,7 +75,7 @@ test("uninstalls on linux", async () => {
   const { rm } = await import("node:fs/promises");
   const clack = await import("@clack/prompts");
   await runCommand(down, { rawArgs: [] });
-  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("😼 OpenKitten");
+  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("Uninstallation");
   expect(vi.mocked(rm)).toHaveBeenCalledWith(
     "/mock-home/.config/systemd/user/openkitten-default-profile.service",
     { force: true },
@@ -138,7 +138,7 @@ test("cancels when user declines", async () => {
   await runCommand(down, { rawArgs: [] });
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.cancel)).toHaveBeenCalledWith(
-    "Phew! Your kitten lives another day. 😸",
+    "Phew! Your kitten lives another day. 🙀",
   );
   expect(vi.mocked(clack.outro)).not.toHaveBeenCalled();
 });
@@ -148,7 +148,7 @@ test("cancels when user presses ctrl+c", async () => {
   await runCommand(down, { rawArgs: [] });
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.cancel)).toHaveBeenCalledWith(
-    "Phew! Your kitten lives another day. 😸",
+    "Phew! Your kitten lives another day. 🙀",
   );
   expect(vi.mocked(clack.outro)).not.toHaveBeenCalled();
 });

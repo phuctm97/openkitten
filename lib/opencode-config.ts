@@ -117,10 +117,10 @@ export namespace OpencodeConfig {
         stdio: ["inherit", "inherit", "inherit"],
       });
       if ((await interactive.exited) !== 0) cancel();
-      let nextStep: string | symbol;
+      let action: string | symbol;
       do {
-        clack.intro("Next steps");
-        nextStep = await clack.select({
+        clack.intro("Actions");
+        action = await clack.select({
           message: "What would you like to do?",
           initialValue: "continue",
           options: [
@@ -134,23 +134,25 @@ export namespace OpencodeConfig {
             { value: "continue", label: "Continue" },
           ],
         });
-        if (clack.isCancel(nextStep)) cancel();
+        if (clack.isCancel(action)) cancel();
         clack.outro("Done");
-        if (nextStep === "add") {
+        if (action === "add") {
+          process.stderr.write("\x1b[1A");
           const proc = Bun.spawn([bin, "providers", "login"], {
             cwd: config.cwd,
             env: config.env,
             stdio: ["inherit", "inherit", "inherit"],
           });
           if ((await proc.exited) !== 0) cancel();
-        } else if (nextStep === "remove") {
+        } else if (action === "remove") {
+          process.stderr.write("\x1b[1A");
           const proc = Bun.spawn([bin, "providers", "logout"], {
             cwd: config.cwd,
             env: config.env,
             stdio: ["inherit", "inherit", "inherit"],
           });
           if ((await proc.exited) !== 0) cancel();
-        } else if (nextStep === "model") {
+        } else if (action === "model") {
           clack.intro("Change model");
           const modelsProc = Bun.spawn([bin, "models"], {
             cwd: config.cwd,
@@ -165,7 +167,7 @@ export namespace OpencodeConfig {
           const configPath = join(configDir, "opencode.json");
           const configJson = JSON.parse(await readFile(configPath, "utf-8"));
           const model = await clack.autocomplete({
-            message: "Select a model",
+            message: "Select model",
             initialValue: configJson.model as string | undefined,
             options: models.map((m) => ({ value: m, label: m })),
           });
@@ -174,7 +176,7 @@ export namespace OpencodeConfig {
           await writeFile(configPath, JSON.stringify(configJson, null, 2));
           clack.outro("Done");
         }
-      } while (nextStep !== "continue");
+      } while (action !== "continue");
     }
     return config;
   }
