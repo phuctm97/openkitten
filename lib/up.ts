@@ -41,7 +41,7 @@ async function runTask(
   }
 }
 
-async function updateProjectDir(): Promise<void> {
+async function updateSource(): Promise<void> {
   const branch = (
     await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(projectDir).text()
   ).trim();
@@ -186,10 +186,10 @@ export const up = defineCommand({
   meta: { description: "Install and update OpenKitten as a system service." },
   run: async () => {
     process.stderr.write(
-      `${boxen(styleText("bold", "Project"), { padding: 1 })}\n`,
+      `${boxen(styleText("bold", "Source"), { padding: 1 })}\n`,
     );
     clack.intro("Update");
-    await updateProjectDir();
+    await updateSource();
     clack.outro("Processed update");
     const profile = await Profile.create();
     await TelegramConfig.create(profile);
