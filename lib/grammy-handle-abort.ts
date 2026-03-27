@@ -5,11 +5,10 @@ export async function grammyHandleAbort(
   { opencodeClient, existingSessions }: Scope,
   ctx: CommandContext<Context>,
 ): Promise<void> {
-  const sessionId = existingSessions.find({
+  const sessionId = await existingSessions.findOrCreate({
     chatId: ctx.chat.id,
     threadId: ctx.msg.message_thread_id || undefined,
   });
-  if (!sessionId) return;
 
   await opencodeClient.session.abort({ sessionID: sessionId });
 }

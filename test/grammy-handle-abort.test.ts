@@ -11,13 +11,13 @@ function mockCtx(chatId: number, threadId?: number) {
   } as never;
 }
 
-function mockExistingSessions(sessionId: string | undefined): ExistingSessions {
+function mockExistingSessions(): ExistingSessions {
   return {
-    sessionIds: sessionId ? [sessionId] : [],
-    find: vi.fn(() => sessionId),
-    findOrCreate: vi.fn(),
+    sessionIds: ["s1"],
+    find: vi.fn(() => "s1"),
+    findOrCreate: vi.fn(async () => "s1"),
     invalidate: vi.fn(),
-    check: vi.fn(() => !!sessionId),
+    check: vi.fn(() => true),
     resolve: vi.fn(() => ({ chatId: 42, threadId: undefined })),
   } as never;
 }
@@ -49,13 +49,13 @@ function mockScope(overrides: {
 }
 
 test("aborts session", async () => {
-  const existingSessions = mockExistingSessions("s1");
+  const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const scope = mockScope({ existingSessions, opencodeClient });
 
   await grammyHandleAbort(scope, mockCtx(42));
 
-  expect(existingSessions.find).toHaveBeenCalledWith({
+  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
     chatId: 42,
     threadId: undefined,
   });
@@ -65,24 +65,14 @@ test("aborts session", async () => {
 });
 
 test("passes threadId when present", async () => {
-  const existingSessions = mockExistingSessions("s1");
+  const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const scope = mockScope({ existingSessions, opencodeClient });
 
   await grammyHandleAbort(scope, mockCtx(42, 7));
 
-  expect(existingSessions.find).toHaveBeenCalledWith({
+  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
     chatId: 42,
     threadId: 7,
   });
-});
-
-test("does nothing when no session exists", async () => {
-  const existingSessions = mockExistingSessions(undefined);
-  const opencodeClient = mockOpencodeClient();
-  const scope = mockScope({ existingSessions, opencodeClient });
-
-  await grammyHandleAbort(scope, mockCtx(42));
-
-  expect(opencodeClient.session.abort).not.toHaveBeenCalled();
 });
