@@ -119,7 +119,7 @@ export namespace OpencodeConfig {
       if ((await interactive.exited) !== 0) cancel();
       let nextStep: string | symbol;
       do {
-        clack.intro("Next steps");
+        clack.intro("Actions");
         nextStep = await clack.select({
           message: "What would you like to do?",
           initialValue: "continue",
