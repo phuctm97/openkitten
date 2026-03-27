@@ -694,6 +694,7 @@ describe("unknown permission", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Use tool");
+    expect(text).not.toContain("(`custom_tool`)");
     expect(text).toContain("The agent wants to use an unrecognized tool.");
     expect(text).toContain("```tool");
     expect(text).toContain("custom_tool");

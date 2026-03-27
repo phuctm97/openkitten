@@ -470,19 +470,16 @@ export function grammyFormatPermissionMessage(request: PermissionRequest) {
     title: "Use tool",
     description: "The agent wants to use an unrecognized tool.",
   };
-  const lines: string[] = [
-    "> 🔒 The agent needs permission.\n",
-    "\u2800",
-    `${emoji} **${title}** (\`${request.permission}\`)`,
-    `_${description}_`,
-  ];
-
+  const lines: string[] = ["> 🔒 The agent needs permission.\n", "\u2800"];
   const formatter = permissionFormatters[request.permission];
   if (formatter) {
+    lines.push(`${emoji} **${title}** (\`${request.permission}\`)`);
+    lines.push(`_${description}_`);
     formatter(lines, request);
   } else {
+    lines.push(`${emoji} **${title}**`);
+    lines.push(`_${description}_`);
     formatTool(lines, request);
   }
-
   return grammyFormatMessage(lines.join("\n"));
 }

@@ -15,47 +15,45 @@ function makeRequest(
   };
 }
 
-test("returns how to proceed prompt", () => {
+test("returns how to proceed prompt at end", () => {
   const result = grammyFormatPermissionPrompt(
     makeRequest({ permission: "edit", always: ["*"] }),
   );
-  expect(result).toContain("How would you like to proceed");
+  const trimmed = result.trimEnd();
+  expect(trimmed).toContain("How would you like to proceed");
+  expect(trimmed.endsWith("_How would you like to proceed?_")).toBe(true);
 });
 
 test("omitted when always is empty", () => {
   const result = grammyFormatPermissionPrompt(
     makeRequest({ permission: "edit", always: [] }),
   );
-  expect(result).not.toContain("Allow (always)");
+  expect(result).not.toContain("Allow \\(always\\)");
 });
 
-test("wildcard shows all requests for known permission", () => {
+test("wildcard shows all requests allowed", () => {
   const result = grammyFormatPermissionPrompt(
     makeRequest({ permission: "edit", always: ["*"] }),
   );
-  expect(result).toContain("Allow");
-  expect(result).toContain("edit");
-  expect(result).toContain("automatically allowed");
+  expect(result).toContain("Allow \\(always\\)");
+  expect(result).toContain("all");
+  expect(result).toContain("requests");
+  expect(result).toContain("allowed");
   expect(result).toContain("until the session is restarted");
+  expect(result).not.toContain("```");
 });
 
-test("wildcard shows permission key for unknown permission", () => {
-  const result = grammyFormatPermissionPrompt(
-    makeRequest({ permission: "custom_mcp", always: ["*"] }),
-  );
-  expect(result).toContain("custom_mcp");
-});
-
-test("specific patterns listed for bash", () => {
+test("specific patterns listed in codeblock", () => {
   const result = grammyFormatPermissionPrompt(
     makeRequest({ permission: "bash", always: ["git commit *"] }),
   );
-  expect(result).toContain("Allow");
-  expect(result).toContain("bash");
+  expect(result).toContain("Allow \\(always\\)");
+  expect(result).toContain("matched");
+  expect(result).toContain("```");
   expect(result).toContain("git commit");
 });
 
-test("multiple specific patterns joined", () => {
+test("multiple specific patterns each on own line", () => {
   const result = grammyFormatPermissionPrompt(
     makeRequest({
       permission: "bash",
@@ -64,4 +62,23 @@ test("multiple specific patterns joined", () => {
   );
   expect(result).toContain("git commit");
   expect(result).toContain("git push");
+});
+
+test("question appears after always-allow section", () => {
+  const result = grammyFormatPermissionPrompt(
+    makeRequest({ permission: "edit", always: ["*"] }),
+  );
+  const alwaysIdx = result.indexOf("Allow \\(always\\)");
+  const questionIdx = result.indexOf("How would you like to proceed");
+  expect(alwaysIdx).toBeGreaterThan(-1);
+  expect(questionIdx).toBeGreaterThan(alwaysIdx);
+});
+
+test("only question when always is empty", () => {
+  const result = grammyFormatPermissionPrompt(
+    makeRequest({ permission: "bash", always: [] }),
+  );
+  expect(result).toContain("How would you like to proceed");
+  expect(result).not.toContain("Allow \\(always\\)");
+  expect(result).not.toContain("allowed");
 });
