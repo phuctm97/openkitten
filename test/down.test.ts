@@ -75,7 +75,7 @@ test("uninstalls on linux", async () => {
   const { rm } = await import("node:fs/promises");
   const clack = await import("@clack/prompts");
   await runCommand(down, { rawArgs: [] });
-  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("Uninstallation");
+  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("Removal");
   expect(vi.mocked(rm)).toHaveBeenCalledWith(
     "/mock-home/.config/systemd/user/openkitten-default-profile.service",
     { force: true },
