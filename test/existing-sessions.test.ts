@@ -45,7 +45,7 @@ function setup(bot = createMockBot(), opencodeClient = mockOpencodeClient()) {
 test("check returns true for existing session", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
-  await es.findOrCreate(123, undefined);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
   expect(es.check("s1")).toBe(true);
 });
 
@@ -60,7 +60,7 @@ test("findOrCreate creates new session", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  const sessionId = await es.findOrCreate(123, undefined);
+  const sessionId = await es.findOrCreate({ chatId: 123, threadId: undefined });
 
   expect(sessionId).toBe("s1");
   expect(opencodeClient.session.create).toHaveBeenCalledOnce();
@@ -77,8 +77,8 @@ test("findOrCreate returns cached session without creating again", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  await es.findOrCreate(123, undefined);
-  const sessionId = await es.findOrCreate(123, undefined);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
+  const sessionId = await es.findOrCreate({ chatId: 123, threadId: undefined });
 
   expect(sessionId).toBe("s1");
   expect(opencodeClient.session.create).toHaveBeenCalledTimes(1);
@@ -88,8 +88,8 @@ test("findOrCreate normalizes threadId 0 to undefined", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  await es.findOrCreate(123, undefined);
-  const sessionId = await es.findOrCreate(123, 0);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
+  const sessionId = await es.findOrCreate({ chatId: 123, threadId: 0 });
 
   expect(sessionId).toBe("s1");
   expect(opencodeClient.session.create).toHaveBeenCalledTimes(1);
@@ -101,8 +101,8 @@ test("findOrCreate distinguishes sessions by threadId", async () => {
     .mockResolvedValueOnce({ data: { id: "s1" } })
     .mockResolvedValueOnce({ data: { id: "s2" } });
 
-  await es.findOrCreate(123, 5);
-  const sessionId = await es.findOrCreate(123, 10);
+  await es.findOrCreate({ chatId: 123, threadId: 5 });
+  const sessionId = await es.findOrCreate({ chatId: 123, threadId: 10 });
 
   expect(sessionId).toBe("s2");
 });
@@ -112,7 +112,9 @@ test("findOrCreate throws on opencode create error", async () => {
   const error = new Error("create failed");
   opencodeClient.session.create.mockRejectedValue(error);
 
-  await expect(es.findOrCreate(123, undefined)).rejects.toBe(error);
+  await expect(
+    es.findOrCreate({ chatId: 123, threadId: undefined }),
+  ).rejects.toBe(error);
 });
 
 test("findOrCreate handles race condition by cleaning up and reusing winner", async () => {
@@ -126,8 +128,8 @@ test("findOrCreate handles race condition by cleaning up and reusing winner", as
   opencodeClient.session.delete.mockResolvedValue({});
 
   const [first, second] = await Promise.all([
-    es.findOrCreate(123, undefined),
-    es.findOrCreate(123, undefined),
+    es.findOrCreate({ chatId: 123, threadId: undefined }),
+    es.findOrCreate({ chatId: 123, threadId: undefined }),
   ]);
 
   expect(first).toBe("s-winner");
@@ -148,7 +150,9 @@ test("findOrCreate rethrows insert error if no raced session found", async () =>
     throw error;
   });
 
-  await expect(es.findOrCreate(456, undefined)).rejects.toBe(error);
+  await expect(
+    es.findOrCreate({ chatId: 456, threadId: undefined }),
+  ).rejects.toBe(error);
 });
 
 test("findOrCreate throws on OpenCode delete error during race recovery", async () => {
@@ -163,8 +167,8 @@ test("findOrCreate throws on OpenCode delete error during race recovery", async 
   opencodeClient.session.delete.mockRejectedValue(error);
 
   const results = await Promise.allSettled([
-    es.findOrCreate(123, undefined),
-    es.findOrCreate(123, undefined),
+    es.findOrCreate({ chatId: 123, threadId: undefined }),
+    es.findOrCreate({ chatId: 123, threadId: undefined }),
   ]);
 
   // Winner succeeds, loser throws on orphan cleanup
@@ -286,7 +290,7 @@ test("invalidate restores from DB only on first run", async () => {
 test("invalidate skips DB sessions already in memory", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
-  await es.findOrCreate(123, undefined);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
   await es.invalidate();
   expect(es.sessionIds).toEqual(["s1"]);
 });
@@ -295,7 +299,7 @@ test("invalidate checks in-memory sessions not in DB", async () => {
   const { es, database, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  await es.findOrCreate(123, undefined);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
   database.delete(schema.session).where(eq(schema.session.id, "s1")).run();
 
   await es.invalidate();
@@ -314,7 +318,7 @@ test("resolve returns location after findOrCreate", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  await es.findOrCreate(123, 7);
+  await es.findOrCreate({ chatId: 123, threadId: 7 });
 
   expect(es.resolve("s1")).toEqual({ chatId: 123, threadId: 7 });
 });
@@ -344,9 +348,43 @@ test("resolve returns location after findOrCreate", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  await es.findOrCreate(123, 7);
+  await es.findOrCreate({ chatId: 123, threadId: 7 });
 
   expect(es.resolve("s1")).toEqual({ chatId: 123, threadId: 7 });
+});
+
+// --- find ---
+
+test("find returns sessionId for existing session", async () => {
+  const { es, opencodeClient } = setup();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
+  expect(es.find({ chatId: 123, threadId: undefined })).toBe("s1");
+});
+
+test("find returns undefined for non-existing location", () => {
+  const { es } = setup();
+  expect(es.find({ chatId: 123, threadId: undefined })).toBeUndefined();
+});
+
+test("find distinguishes by threadId", async () => {
+  const { es, opencodeClient } = setup();
+  opencodeClient.session.create
+    .mockResolvedValueOnce({ data: { id: "s1" } })
+    .mockResolvedValueOnce({ data: { id: "s2" } });
+  await es.findOrCreate({ chatId: 123, threadId: 5 });
+  await es.findOrCreate({ chatId: 123, threadId: 10 });
+  expect(es.find({ chatId: 123, threadId: 5 })).toBe("s1");
+  expect(es.find({ chatId: 123, threadId: 10 })).toBe("s2");
+  expect(es.find({ chatId: 123, threadId: undefined })).toBeUndefined();
+});
+
+test("find returns undefined after session is removed", async () => {
+  const { es, opencodeClient } = setup();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
+  await es.remove("s1");
+  expect(es.find({ chatId: 123, threadId: undefined })).toBeUndefined();
 });
 
 // --- remove ---
@@ -355,7 +393,7 @@ test("remove deletes from maps and database", async () => {
   const { es, database, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  await es.findOrCreate(123, undefined);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
   await es.remove("s1");
 
   expect(es.check("s1")).toBe(false);
@@ -380,7 +418,7 @@ test("remove throws and cleans state on DB error", async () => {
   const { es, database, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  await es.findOrCreate(123, undefined);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
   database[Symbol.dispose]();
   await expect(es.remove("s1")).rejects.toThrow();
   expect(es.sessionIds).toEqual([]);
@@ -392,7 +430,7 @@ test("beforeRemove hook is called with session data", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  await es.findOrCreate(123, undefined);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
   const beforeRemove = vi.fn();
   es.hook("beforeRemove", beforeRemove);
   await es.remove("s1");
@@ -408,7 +446,7 @@ test("beforeRemove hook awaits async hooks", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
-  await es.findOrCreate(123, undefined);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
   const order: string[] = [];
   es.hook("beforeRemove", async () => {
     await Promise.resolve();
@@ -428,10 +466,10 @@ test("hook returns unregister function", async () => {
 
   const beforeRemove = vi.fn();
   const unregister = es.hook("beforeRemove", beforeRemove);
-  await es.findOrCreate(123, undefined);
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
   await es.remove("s1");
   unregister();
-  await es.findOrCreate(456, undefined);
+  await es.findOrCreate({ chatId: 456, threadId: undefined });
   await es.remove("s2");
 
   expect(beforeRemove).toHaveBeenCalledTimes(1);
@@ -450,8 +488,8 @@ test("sessionIds reflects findOrCreate additions", async () => {
     .mockResolvedValueOnce({ data: { id: "s1" } })
     .mockResolvedValueOnce({ data: { id: "s2" } });
 
-  await es.findOrCreate(100, undefined);
-  await es.findOrCreate(200, 5);
+  await es.findOrCreate({ chatId: 100, threadId: undefined });
+  await es.findOrCreate({ chatId: 200, threadId: 5 });
 
   expect(es.sessionIds).toEqual(["s1", "s2"]);
 });

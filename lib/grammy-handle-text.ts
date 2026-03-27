@@ -8,10 +8,10 @@ export async function grammyHandleText(
   { opencodeClient, existingSessions, workingSessions, pendingPrompts }: Scope,
   ctx: TextContext,
 ): Promise<void> {
-  const sessionId = await existingSessions.findOrCreate(
-    ctx.chat.id,
-    ctx.msg.message_thread_id || undefined,
-  );
+  const sessionId = await existingSessions.findOrCreate({
+    chatId: ctx.chat.id,
+    threadId: ctx.msg.message_thread_id || undefined,
+  });
 
   // If the session has an active pending prompt, answer it.
   try {

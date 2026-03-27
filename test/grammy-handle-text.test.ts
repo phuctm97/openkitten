@@ -131,7 +131,10 @@ test("creates new session when none exists", async () => {
 
   await grammyHandleText(scope, mockCtx(42, "hello"));
 
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith(42, undefined);
+  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
+    chatId: 42,
+    threadId: undefined,
+  });
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     { sessionID: "s1", parts: [{ type: "text", text: "hello" }] },
     { throwOnError: true },
@@ -185,7 +188,10 @@ test("passes threadId through the flow", async () => {
 
   await grammyHandleText(scope, mockCtx(42, "hello", 7));
 
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith(42, 7);
+  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
+    chatId: 42,
+    threadId: 7,
+  });
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
     text: "hello",

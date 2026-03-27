@@ -49,6 +49,11 @@ export class ExistingSessions {
     return location;
   }
 
+  find(location: ExistingSessions.Location): string | undefined {
+    const key = this.#locationKey(location);
+    return this.#locationMap.get(key);
+  }
+
   async remove(sessionId: string): Promise<void> {
     const location = this.#sessionMap.get(sessionId);
     if (!location || this.#removing.has(sessionId)) return;
@@ -80,36 +85,33 @@ export class ExistingSessions {
     }
   }
 
-  async findOrCreate(
-    chatId: number,
-    threadId: number | undefined,
-  ): Promise<string> {
-    const threadKey = threadId || undefined;
+  async findOrCreate(location: ExistingSessions.Location): Promise<string> {
+    const key = this.#locationKey(location);
 
-    const locationObject: ExistingSessions.Location = {
-      chatId,
-      threadId: threadKey,
-    };
-    const locationKey = this.#locationKey(locationObject);
-
-    const existing = this.#locationMap.get(locationKey);
+    const existing = this.#locationMap.get(key);
     if (existing) return existing;
 
     const {
       data: { id: sessionId },
     } = await this.#opencodeClient.session.create({}, { throwOnError: true });
 
+    const normalized: ExistingSessions.Location = {
+      chatId: location.chatId,
+      threadId: location.threadId || undefined,
+    };
+
     try {
       this.#database
         .insert(schema.session)
-        .values({ id: sessionId, chatId, threadId: threadKey || 0 })
+        .values({
+          id: sessionId,
+          chatId: normalized.chatId,
+          threadId: normalized.threadId || 0,
+        })
         .run();
-      this.#sessionMap.set(sessionId, locationObject);
-      this.#locationMap.set(locationKey, sessionId);
-      logger.info("New session is created", {
-        sessionId,
-        ...locationObject,
-      });
+      this.#sessionMap.set(sessionId, normalized);
+      this.#locationMap.set(key, sessionId);
+      logger.info("New session is created", { sessionId, ...normalized });
       return sessionId;
     } catch (error) {
       // Race condition: another concurrent call created the session first.
@@ -119,7 +121,7 @@ export class ExistingSessions {
         { throwOnError: true },
       );
       // Return the raced winner from maps.
-      const raced = this.#locationMap.get(locationKey);
+      const raced = this.#locationMap.get(key);
       // No winner in maps — insert failed for a reason other than a race condition.
       if (!raced) throw error;
       return raced;
