@@ -54,40 +54,6 @@ test("check returns false for non-existing session", () => {
   expect(es.check("s1")).toBe(false);
 });
 
-// --- find ---
-
-test("find returns sessionId for existing session", async () => {
-  const { es, opencodeClient } = setup();
-  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
-  await es.findOrCreate(123, undefined);
-  expect(es.find(123, undefined)).toBe("s1");
-});
-
-test("find returns undefined for non-existing location", () => {
-  const { es } = setup();
-  expect(es.find(123, undefined)).toBeUndefined();
-});
-
-test("find distinguishes by threadId", async () => {
-  const { es, opencodeClient } = setup();
-  opencodeClient.session.create
-    .mockResolvedValueOnce({ data: { id: "s1" } })
-    .mockResolvedValueOnce({ data: { id: "s2" } });
-  await es.findOrCreate(123, 5);
-  await es.findOrCreate(123, 10);
-  expect(es.find(123, 5)).toBe("s1");
-  expect(es.find(123, 10)).toBe("s2");
-  expect(es.find(123, undefined)).toBeUndefined();
-});
-
-test("find returns undefined after session is removed", async () => {
-  const { es, opencodeClient } = setup();
-  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
-  await es.findOrCreate(123, undefined);
-  await es.remove("s1");
-  expect(es.find(123, undefined)).toBeUndefined();
-});
-
 // --- findOrCreate ---
 
 test("findOrCreate creates new session", async () => {
@@ -381,6 +347,40 @@ test("resolve returns location after findOrCreate", async () => {
   await es.findOrCreate(123, 7);
 
   expect(es.resolve("s1")).toEqual({ chatId: 123, threadId: 7 });
+});
+
+// --- find ---
+
+test("find returns sessionId for existing session", async () => {
+  const { es, opencodeClient } = setup();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+  await es.findOrCreate(123, undefined);
+  expect(es.find({ chatId: 123, threadId: undefined })).toBe("s1");
+});
+
+test("find returns undefined for non-existing location", () => {
+  const { es } = setup();
+  expect(es.find({ chatId: 123, threadId: undefined })).toBeUndefined();
+});
+
+test("find distinguishes by threadId", async () => {
+  const { es, opencodeClient } = setup();
+  opencodeClient.session.create
+    .mockResolvedValueOnce({ data: { id: "s1" } })
+    .mockResolvedValueOnce({ data: { id: "s2" } });
+  await es.findOrCreate(123, 5);
+  await es.findOrCreate(123, 10);
+  expect(es.find({ chatId: 123, threadId: 5 })).toBe("s1");
+  expect(es.find({ chatId: 123, threadId: 10 })).toBe("s2");
+  expect(es.find({ chatId: 123, threadId: undefined })).toBeUndefined();
+});
+
+test("find returns undefined after session is removed", async () => {
+  const { es, opencodeClient } = setup();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+  await es.findOrCreate(123, undefined);
+  await es.remove("s1");
+  expect(es.find({ chatId: 123, threadId: undefined })).toBeUndefined();
 });
 
 // --- remove ---

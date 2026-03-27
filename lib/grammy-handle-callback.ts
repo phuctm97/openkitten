@@ -11,10 +11,10 @@ export async function grammyHandleCallback(
   const message = ctx.callbackQuery.message;
   invariant(message, "Expected callback query to have a message");
 
-  const sessionId = existingSessions.find(
-    message.chat.id,
-    message.message_thread_id || undefined,
-  );
+  const sessionId = existingSessions.find({
+    chatId: message.chat.id,
+    threadId: message.message_thread_id || undefined,
+  });
   if (!sessionId) {
     await bot.api.answerCallbackQuery(ctx.callbackQuery.id, {
       text: "An error occurred: expired_session",

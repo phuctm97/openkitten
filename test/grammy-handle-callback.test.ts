@@ -76,7 +76,10 @@ test("resolves session and forwards callback to pending prompts", async () => {
 
   await grammyHandleCallback(scope, mockCtx(42, "cb1", "po:0"));
 
-  expect(existingSessions.find).toHaveBeenCalledWith(42, undefined);
+  expect(existingSessions.find).toHaveBeenCalledWith({
+    chatId: 42,
+    threadId: undefined,
+  });
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
     callbackQueryId: "cb1",
@@ -93,7 +96,10 @@ test("passes threadId when present", async () => {
 
   await grammyHandleCallback(scope, mockCtx(42, "cb2", "pa:1", 7));
 
-  expect(existingSessions.find).toHaveBeenCalledWith(42, 7);
+  expect(existingSessions.find).toHaveBeenCalledWith({
+    chatId: 42,
+    threadId: 7,
+  });
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
     callbackQueryId: "cb2",

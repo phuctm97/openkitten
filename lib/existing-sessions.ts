@@ -43,15 +43,15 @@ export class ExistingSessions {
     return this.#sessionMap.has(sessionId);
   }
 
-  find(chatId: number, threadId: number | undefined): string | undefined {
-    const key = this.#locationKey({ chatId, threadId });
-    return this.#locationMap.get(key);
-  }
-
   resolve(sessionId: string): ExistingSessions.Location {
     const location = this.#sessionMap.get(sessionId);
     if (!location) throw new ExistingSessions.NotFoundError(sessionId);
     return location;
+  }
+
+  find(location: ExistingSessions.Location): string | undefined {
+    const key = this.#locationKey(location);
+    return this.#locationMap.get(key);
   }
 
   async remove(sessionId: string): Promise<void> {
