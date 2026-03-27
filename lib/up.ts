@@ -46,7 +46,7 @@ async function updateSource(): Promise<void> {
     await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(projectDir).text()
   ).trim();
   if (branch !== "main") {
-    clack.log.warn(`Skipped update\n${styleText("dim", "Not on main branch")}`);
+    clack.log.warn(`Skipped update\n${styleText("dim", "Non-main branch")}`);
     return;
   }
   const status = (

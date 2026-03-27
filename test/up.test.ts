@@ -225,7 +225,7 @@ test("skips update when not on main branch", async () => {
   await runCommand(up, { rawArgs: [] });
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.log.warn)).toHaveBeenCalledWith(
-    expect.stringContaining("Not on main branch"),
+    expect.stringContaining("Non-main branch"),
   );
 });
 
