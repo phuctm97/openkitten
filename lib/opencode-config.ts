@@ -137,6 +137,7 @@ export namespace OpencodeConfig {
         if (clack.isCancel(action)) cancel();
         clack.outro("Done");
         if (action === "add") {
+          process.stderr.write("\x1b[1A");
           const proc = Bun.spawn([bin, "providers", "login"], {
             cwd: config.cwd,
             env: config.env,
@@ -144,6 +145,7 @@ export namespace OpencodeConfig {
           });
           if ((await proc.exited) !== 0) cancel();
         } else if (action === "remove") {
+          process.stderr.write("\x1b[1A");
           const proc = Bun.spawn([bin, "providers", "logout"], {
             cwd: config.cwd,
             env: config.env,
