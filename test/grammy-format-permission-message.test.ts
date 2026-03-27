@@ -755,7 +755,7 @@ describe("always allow", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Allow (always)");
-    expect(text).toContain("all `edit` requests");
+    expect(text).toContain("_all_ `edit` requests");
     expect(text).toContain("until the session restarts");
   });
 
@@ -769,7 +769,7 @@ describe("always allow", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Allow (always)");
-    expect(text).toContain("matched");
+    expect(text).toContain("_matched_");
     expect(text).toContain("```match");
     expect(text).toContain("git commit");
   });

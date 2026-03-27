@@ -467,7 +467,7 @@ function formatAlwaysAllow(lines: string[], request: PermissionRequest) {
   if (request.always.length === 0) return;
   const wildcard = request.always.length === 1 && request.always[0] === "*";
   lines.push(
-    `**Allow (always)** will allow ${wildcard ? "all" : "matched"} \`${request.permission}\` requests until the session restarts.`,
+    `⚠️ **Allow (always)** will allow ${wildcard ? "_all_" : "_matched_"} \`${request.permission}\` requests until the session restarts.`,
   );
   if (!wildcard) {
     lines.push("```match");
