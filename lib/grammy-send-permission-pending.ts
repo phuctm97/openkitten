@@ -6,8 +6,8 @@ export async function grammySendPermissionPending({
   bot,
   chatId,
   threadId,
-  replyToMessageId,
+  replyTo,
 }: GrammySendOptions): Promise<void> {
   const chunks = grammyFormatPermissionPending();
-  await grammySendChunks({ bot, chunks, chatId, threadId, replyToMessageId });
+  await grammySendChunks({ bot, chunks, chatId, threadId, replyTo });
 }

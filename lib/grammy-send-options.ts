@@ -4,5 +4,5 @@ export interface GrammySendOptions {
   readonly bot: Bot;
   readonly chatId: number;
   readonly threadId: number | undefined;
-  readonly replyToMessageId?: number | undefined;
+  readonly replyTo?: number | undefined;
 }

@@ -84,7 +84,7 @@ test("answers pending prompt when session has one", async () => {
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
     text: "my answer",
-    replyToMessageId: 55,
+    replyTo: 55,
   });
   expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
 });
@@ -201,7 +201,7 @@ test("passes threadId through the flow", async () => {
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
     text: "hello",
-    replyToMessageId: 100,
+    replyTo: 100,
   });
   expect(opencodeClient.session.promptAsync).toHaveBeenCalled();
 });

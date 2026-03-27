@@ -6,13 +6,13 @@ export async function grammySendChunks({
   chunks,
   chatId,
   threadId,
-  replyToMessageId,
+  replyTo,
 }: GrammySendChunksOptions): Promise<void> {
   const sendOpts = {
     link_preview_options: { is_disabled: true } as const,
     ...(threadId && { message_thread_id: threadId }),
-    ...(replyToMessageId && {
-      reply_parameters: { message_id: replyToMessageId },
+    ...(replyTo && {
+      reply_parameters: { message_id: replyTo },
     }),
   };
 
