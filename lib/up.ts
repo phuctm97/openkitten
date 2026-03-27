@@ -85,7 +85,6 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 `;
-  clack.intro("Install");
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -105,7 +104,6 @@ WantedBy=default.target
     `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  journalctl --user -u ${label} -f`,
     "Next steps",
   );
-  clack.outro("Done");
 }
 
 async function installDarwin(profile: Profile): Promise<void> {
@@ -146,7 +144,6 @@ async function installDarwin(profile: Profile): Promise<void> {
 </dict>
 </plist>
 `;
-  clack.intro("Install");
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -164,13 +161,11 @@ async function installDarwin(profile: Profile): Promise<void> {
     `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/OpenKitten/${label}.*.log\n  or open Console.app and filter by "${label}"`,
     "Next steps",
   );
-  clack.outro("Done");
 }
 
 async function installWin32(profile: Profile): Promise<void> {
   const taskName = `\\OpenKitten\\Profiles\\${profile.name}`;
   const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Profiles\\${profile.name}\\Logs`;
-  clack.intro("Install");
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -185,7 +180,6 @@ async function installWin32(profile: Profile): Promise<void> {
     `Open Telegram and say hi to your kitten!\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  type "${logsDir}\\stderr.log"`,
     "Next steps",
   );
-  clack.outro("Done");
 }
 
 export const up = defineCommand({
@@ -201,6 +195,7 @@ export const up = defineCommand({
     process.stderr.write(
       `${boxen(styleText("bold", "Service"), { padding: 1 })}\n`,
     );
+    clack.intro("Install");
     switch (process.platform) {
       case "linux":
         await installLinux(profile);
@@ -214,5 +209,6 @@ export const up = defineCommand({
       default:
         throw new Error(`${process.platform} is not supported yet`);
     }
+    clack.outro("Meow! Your kitten is up and running. 😻");
   },
 });
