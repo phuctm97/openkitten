@@ -186,7 +186,7 @@ export const up = defineCommand({
   meta: { description: "Install and update OpenKitten as a system service." },
   run: async () => {
     process.stderr.write(
-      `${boxen(styleText("bold", "OpenKitten 😼"), { padding: 1 })}\n`,
+      `${boxen(styleText("bold", "Update"), { padding: 1 })}\n`,
     );
     clack.intro("Source");
     await updateProjectDir();
@@ -195,9 +195,9 @@ export const up = defineCommand({
     await TelegramConfig.create(profile);
     await OpencodeConfig.create(profile);
     process.stderr.write(
-      `${boxen(styleText("bold", "Service"), { padding: 1 })}\n`,
+      `${boxen(styleText("bold", "OpenKitten"), { padding: 1 })}\n`,
     );
-    clack.intro("Install");
+    clack.intro("Service");
     switch (process.platform) {
       case "linux":
         await installLinux(profile);

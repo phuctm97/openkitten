@@ -111,7 +111,7 @@ test("installs on linux", async () => {
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
-  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("Install");
+  expect(vi.mocked(clack.intro)).toHaveBeenCalledWith("Service");
   expect(vi.mocked(clack.outro)).toHaveBeenCalledWith(
     "Meow! Your kitten is up and running. 😻",
   );
