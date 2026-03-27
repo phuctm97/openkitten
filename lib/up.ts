@@ -85,7 +85,6 @@ RestartSec=3
 [Install]
 WantedBy=default.target
 `;
-  clack.intro("Install");
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -146,7 +145,6 @@ async function installDarwin(profile: Profile): Promise<void> {
 </dict>
 </plist>
 `;
-  clack.intro("Install");
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -170,7 +168,6 @@ async function installDarwin(profile: Profile): Promise<void> {
 async function installWin32(profile: Profile): Promise<void> {
   const taskName = `\\OpenKitten\\Profiles\\${profile.name}`;
   const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Profiles\\${profile.name}\\Logs`;
-  clack.intro("Install");
   const s = clack.spinner({ indicator: "timer" });
   s.start("Installing service");
   const wasRunning =
@@ -198,9 +195,6 @@ export const up = defineCommand({
     const profile = await Profile.create();
     await TelegramConfig.create(profile);
     await OpencodeConfig.create(profile);
-    process.stderr.write(
-      `${boxen(styleText("bold", "Service"), { padding: 1 })}\n`,
-    );
     switch (process.platform) {
       case "linux":
         await installLinux(profile);
