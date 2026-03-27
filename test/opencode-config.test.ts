@@ -20,10 +20,7 @@ vi.mock("@clack/prompts");
 
 let profileDir: string;
 let profile: Profile;
-let stderrSpy: ReturnType<typeof vi.spyOn>;
-
 beforeEach(async () => {
-  stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   profileDir = await mkdtemp(join(tmpdir(), "opencode-"));
   profile = {
     dir: profileDir,
@@ -36,7 +33,6 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  stderrSpy.mockRestore();
   await rm(profileDir, { recursive: true });
 });
 
