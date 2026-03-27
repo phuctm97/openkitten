@@ -4,11 +4,16 @@ import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import type { Scope } from "~/lib/scope";
 
 function mockCtx(chatId: number, threadId?: number) {
+  const react = vi.fn(async () => true);
   return {
-    chat: { id: chatId },
-    msg: { message_thread_id: threadId },
-    update: { update_id: 1 },
-  } as never;
+    ctx: {
+      chat: { id: chatId },
+      msg: { message_thread_id: threadId },
+      update: { update_id: 1 },
+      react,
+    } as never,
+    react,
+  };
 }
 
 function mockExistingSessions(): ExistingSessions {
@@ -48,12 +53,13 @@ function mockScope(overrides: {
   };
 }
 
-test("aborts session", async () => {
+test("aborts session and reacts with like", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const scope = mockScope({ existingSessions, opencodeClient });
+  const { ctx, react } = mockCtx(42);
 
-  await grammyHandleAbort(scope, mockCtx(42));
+  await grammyHandleAbort(scope, ctx);
 
   expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
     chatId: 42,
@@ -62,14 +68,16 @@ test("aborts session", async () => {
   expect(opencodeClient.session.abort).toHaveBeenCalledWith({
     sessionID: "s1",
   });
+  expect(react).toHaveBeenCalledWith("👍");
 });
 
 test("passes threadId when present", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const scope = mockScope({ existingSessions, opencodeClient });
+  const { ctx } = mockCtx(42, 7);
 
-  await grammyHandleAbort(scope, mockCtx(42, 7));
+  await grammyHandleAbort(scope, ctx);
 
   expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
     chatId: 42,

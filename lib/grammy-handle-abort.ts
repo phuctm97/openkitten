@@ -10,5 +10,8 @@ export async function grammyHandleAbort(
     threadId: ctx.msg.message_thread_id || undefined,
   });
 
-  await opencodeClient.session.abort({ sessionID: sessionId });
+  await Promise.all([
+    opencodeClient.session.abort({ sessionID: sessionId }),
+    ctx.react("👍"),
+  ]);
 }
