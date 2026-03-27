@@ -292,8 +292,8 @@ export class PendingPrompts implements AsyncDisposable {
 
   async #answerCustom(
     sessionId: string,
+    replyToMessageId: number | undefined,
     text: string,
-    replyTo: number | undefined,
   ) {
     const items = this.#sessionMap.get(sessionId);
     if (!items) throw new PendingPrompts.NotFoundError();
@@ -305,7 +305,7 @@ export class PendingPrompts implements AsyncDisposable {
         bot: this.#bot,
         chatId,
         threadId,
-        replyTo,
+        replyToMessageId,
       });
       return;
     }
@@ -317,7 +317,7 @@ export class PendingPrompts implements AsyncDisposable {
         bot: this.#bot,
         chatId,
         threadId,
-        replyTo,
+        replyToMessageId,
       });
       return;
     }
@@ -425,8 +425,8 @@ export class PendingPrompts implements AsyncDisposable {
     if ("text" in options) {
       await this.#answerCustom(
         options.sessionId,
+        options.messageId,
         options.text,
-        options.replyTo,
       );
       return;
     }
@@ -645,8 +645,8 @@ export namespace PendingPrompts {
 
   export interface AnswerCustomOptions {
     readonly sessionId: string;
+    readonly messageId?: number | undefined;
     readonly text: string;
-    readonly replyTo?: number | undefined;
   }
 
   export type AnswerOptions = AnswerCallbackOptions | AnswerCustomOptions;

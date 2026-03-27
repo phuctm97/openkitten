@@ -1204,14 +1204,14 @@ test("answer custom text sends question pending when custom is false", async () 
 
   await prompts.answer({
     sessionId: "sess-1",
+    messageId: 42,
     text: "my text",
-    replyTo: 42,
   });
   expect(grammySendQuestionPending).toHaveBeenCalledWith({
     bot,
     chatId: 123,
     threadId: undefined,
-    replyTo: 42,
+    replyToMessageId: 42,
   });
   expect(mockQuestionReply).not.toHaveBeenCalled();
 });
@@ -1231,14 +1231,14 @@ test("answer custom text sends permission pending when permission is active", as
 
   await prompts.answer({
     sessionId: "sess-1",
+    messageId: 99,
     text: "some text",
-    replyTo: 99,
   });
   expect(grammySendPermissionPending).toHaveBeenCalledWith({
     bot,
     chatId: 123,
     threadId: undefined,
-    replyTo: 99,
+    replyToMessageId: 99,
   });
   expect(mockPermissionReply).not.toHaveBeenCalled();
 });

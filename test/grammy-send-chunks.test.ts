@@ -16,7 +16,7 @@ function send(
   chunks: Array<{ text: string; markdown?: string }>,
   options?: {
     readonly threadId?: number;
-    readonly replyTo?: number;
+    readonly replyToMessageId?: number;
   },
 ) {
   return grammySendChunks({
@@ -24,7 +24,7 @@ function send(
     chunks,
     chatId: 123,
     threadId: options?.threadId,
-    replyTo: options?.replyTo,
+    replyToMessageId: options?.replyToMessageId,
   });
 }
 
@@ -84,7 +84,7 @@ test("sends multiple chunks in order", async () => {
 });
 
 test("includes reply parameters in send options", async () => {
-  await send([{ text: "hello" }], { replyTo: 789 });
+  await send([{ text: "hello" }], { replyToMessageId: 789 });
   expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "hello", {
     link_preview_options: noPreview,
     reply_parameters: { message_id: 789 },
