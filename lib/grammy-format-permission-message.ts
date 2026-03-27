@@ -430,15 +430,6 @@ function formatPattern(lines: string[], request: PermissionRequest) {
   }
 }
 
-function formatTool(lines: string[], request: PermissionRequest) {
-  formatPattern(lines, request);
-  if (Object.keys(request.metadata).length > 0) {
-    lines.push("```json");
-    lines.push(JSON.stringify(request.metadata, null, 2));
-    lines.push("```");
-  }
-}
-
 const permissionFormatters: {
   readonly [key: string]: (lines: string[], request: PermissionRequest) => void;
 } = {
@@ -491,7 +482,7 @@ export function grammyFormatPermissionMessage(request: PermissionRequest) {
   } else {
     lines.push(`${emoji} **${title}**`);
     lines.push(`_${description}_`);
-    formatTool(lines, request);
+    formatPattern(lines, request);
   }
   formatAlwaysAllow(lines, request);
   return grammyFormatMessage(lines.join("\n"));

@@ -700,7 +700,7 @@ describe("unknown permission", () => {
     expect(text).toContain("pattern1");
   });
 
-  test("formats with metadata", () => {
+  test("ignores metadata", () => {
     const chunks = grammyFormatPermissionMessage(
       makeRequest({
         permission: "custom_tool",
@@ -709,9 +709,7 @@ describe("unknown permission", () => {
       }),
     );
     const text = chunks.map((c) => c.text).join("\n");
-    expect(text).toContain("```json");
-    expect(text).toContain('"foo": "bar"');
-    expect(text).toContain('"count": 42');
+    expect(text).not.toContain("```json");
   });
 
   test("formats without patterns", () => {
@@ -722,6 +720,7 @@ describe("unknown permission", () => {
     expect(text).toContain("Use `custom_tool`");
     expect(text).not.toContain("```tool");
     expect(text).not.toContain("```pattern");
+    expect(text).not.toContain("```json");
   });
 
   test("formats with wildcard pattern as no patterns", () => {
@@ -731,6 +730,7 @@ describe("unknown permission", () => {
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).not.toContain("```tool");
     expect(text).not.toContain("```pattern");
+    expect(text).not.toContain("```json");
   });
 });
 
