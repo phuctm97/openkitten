@@ -15,7 +15,7 @@ import { WorkingSessions } from "~/lib/working-sessions";
 
 vi.mock("grammy", () => {
   const BotMock = vi.fn(function BotMock() {
-    return { on: vi.fn(), use: vi.fn() };
+    return { command: vi.fn(), on: vi.fn(), use: vi.fn() };
   });
   return { Bot: BotMock };
 });

@@ -7,6 +7,7 @@ import { FloatingPromises } from "~/lib/floating-promises";
 import { Grammy } from "~/lib/grammy";
 import { grammyCreateHandler } from "~/lib/grammy-create-handler";
 import { grammyFilterUser } from "~/lib/grammy-filter-user";
+import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { OpencodeConfig } from "~/lib/opencode-config";
@@ -95,6 +96,7 @@ export const serve = defineCommand({
       },
       opencodeCreateHandler(scope, opencodeHandleEvent),
     );
+    bot.command("abort", grammyCreateHandler(scope, grammyHandleAbort));
     bot.on(
       "callback_query:data",
       grammyCreateHandler(scope, grammyHandleCallback),
