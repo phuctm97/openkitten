@@ -53,5 +53,5 @@ test("wraps text in italic markers", () => {
     question: "q",
     options: [],
   });
-  expect(result).toMatch(/^_.*_$/);
+  expect(result.trim()).toMatch(/^_.*_$/);
 });

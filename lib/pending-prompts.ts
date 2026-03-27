@@ -97,7 +97,7 @@ export class PendingPrompts implements AsyncDisposable {
         chatId,
         threadId,
       });
-      const promptText = grammyFormatPermissionPrompt();
+      const promptText = grammyFormatPermissionPrompt(item.request);
       const kb = this.#buildPermissionKeyboard(item.key);
       const sent = await this.#bot.api.sendMessage(chatId, promptText, {
         reply_markup: kb,
