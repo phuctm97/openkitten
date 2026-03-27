@@ -11,7 +11,10 @@ export async function grammyHandleCompact(
   });
 
   await Promise.all([
-    opencodeClient.session.summarize({ sessionID: sessionId }),
+    opencodeClient.session.summarize(
+      { sessionID: sessionId },
+      { throwOnError: true },
+    ),
     ctx.react("👍"),
   ]);
 }

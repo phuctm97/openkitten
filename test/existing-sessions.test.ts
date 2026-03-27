@@ -9,6 +9,7 @@ import * as schema from "~/lib/schema";
 function mockOpencodeClient() {
   return {
     session: {
+      abort: vi.fn(async () => ({ data: undefined })),
       create: vi.fn(),
       delete: vi.fn(),
     },
@@ -412,6 +413,17 @@ test("remove deletes from maps and database", async () => {
 test("remove is no-op for unknown session", async () => {
   const { es } = setup();
   await expect(es.remove("nonexistent")).resolves.toBeUndefined();
+});
+
+test("remove throws and cleans state on abort error", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+  opencodeClient.session.abort.mockRejectedValue(new Error("abort failed"));
+  const { es } = setup(undefined, opencodeClient);
+
+  await es.findOrCreate({ chatId: 123, threadId: undefined });
+  await expect(es.remove("s1")).rejects.toThrow("abort failed");
+  expect(es.sessionIds).toEqual([]);
 });
 
 test("remove throws and cleans state on DB error", async () => {

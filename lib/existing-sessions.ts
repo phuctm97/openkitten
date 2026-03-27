@@ -59,6 +59,12 @@ export class ExistingSessions {
     if (!location || this.#removing.has(sessionId)) return;
     try {
       this.#removing.add(sessionId);
+      const abortResults = await Promise.allSettled([
+        this.#opencodeClient.session.abort(
+          { sessionID: sessionId },
+          { throwOnError: true },
+        ),
+      ]);
       const hookResults = await this.#hooks.callHookWith(
         (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
         "beforeRemove",
@@ -74,7 +80,11 @@ export class ExistingSessions {
       } catch (error) {
         databaseResult = { status: "rejected", reason: error };
       }
-      Errors.throwIfAny([...hookResults, databaseResult]);
+      Errors.throwIfAny<unknown>([
+        ...abortResults,
+        ...hookResults,
+        databaseResult,
+      ]);
     } finally {
       // Always evict from maps: once removal starts, the session is gone
       // regardless of hook/DB errors.
