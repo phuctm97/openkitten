@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { password, spinner, text } from "@clack/prompts";
 import { GrammyError } from "grammy";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 import type { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
 
@@ -52,20 +52,13 @@ vi.mock("grammy", async (importOriginal) => {
 let profile: Profile;
 let configPath: string;
 
-let stderrSpy: ReturnType<typeof vi.spyOn>;
-
 beforeEach(async () => {
   vi.clearAllMocks();
-  stderrSpy = vi.spyOn(process.stderr, "write").mockReturnValue(true);
   isTTYMock.isTTY = true;
   const dir = await mkdtemp(join(tmpdir(), "openkitten-auth-test-"));
   profile = { xdgConfig: dir } as Profile;
   configPath = join(dir, "openkitten", "telegram.json");
   await mkdir(join(dir, "openkitten"), { recursive: true });
-});
-
-afterEach(() => {
-  stderrSpy.mockRestore();
 });
 
 function mockGetMe(
