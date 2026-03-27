@@ -8,6 +8,7 @@ export async function grammySendChunks({
   threadId,
 }: GrammySendChunksOptions): Promise<void> {
   const sendOpts = {
+    link_preview_options: { is_disabled: true } as const,
     ...(threadId && { message_thread_id: threadId }),
   };
 

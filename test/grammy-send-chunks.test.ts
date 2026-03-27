@@ -24,15 +24,20 @@ function send(
   });
 }
 
+const noPreview = { is_disabled: true };
+
 test("sends plain text chunk", async () => {
   await send([{ text: "hello" }]);
-  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "hello", {});
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "hello", {
+    link_preview_options: noPreview,
+  });
 });
 
 test("sends MarkdownV2 chunk", async () => {
   await send([{ text: "hello", markdown: "*hello*" }]);
   expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "*hello*", {
     parse_mode: "MarkdownV2",
+    link_preview_options: noPreview,
   });
 });
 
@@ -51,12 +56,15 @@ test("falls back to plain text when MarkdownV2 fails", async () => {
       threadId: undefined,
     },
   );
-  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "hello", {});
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "hello", {
+    link_preview_options: noPreview,
+  });
 });
 
 test("includes thread id in send options", async () => {
   await send([{ text: "hello" }], { threadId: 456 });
   expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "hello", {
+    link_preview_options: noPreview,
     message_thread_id: 456,
   });
 });

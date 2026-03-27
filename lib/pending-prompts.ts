@@ -86,6 +86,8 @@ export class PendingPrompts implements AsyncDisposable {
       item.request.sessionID,
     );
     const sendOpts = {
+      parse_mode: "MarkdownV2" as const,
+      link_preview_options: { is_disabled: true } as const,
       ...(threadId && { message_thread_id: threadId }),
     };
     if (item.kind === "permission") {
@@ -98,7 +100,6 @@ export class PendingPrompts implements AsyncDisposable {
       const promptText = grammyFormatPermissionPrompt();
       const kb = this.#buildPermissionKeyboard(item.key);
       const sent = await this.#bot.api.sendMessage(chatId, promptText, {
-        parse_mode: "MarkdownV2",
         reply_markup: kb,
         ...sendOpts,
       });
@@ -119,7 +120,6 @@ export class PendingPrompts implements AsyncDisposable {
         item.selectedOptions,
       );
       const sent = await this.#bot.api.sendMessage(chatId, promptText, {
-        parse_mode: "MarkdownV2",
         reply_markup: kb,
         ...sendOpts,
       });
@@ -149,6 +149,7 @@ export class PendingPrompts implements AsyncDisposable {
       "Expected item to have a messageId when resolving",
     );
     await this.#bot.api.editMessageText(chatId, item.messageId, resolvedText, {
+      link_preview_options: { is_disabled: true },
       reply_markup: { inline_keyboard: [] },
     });
     if (items.length > 0) {
@@ -190,7 +191,10 @@ export class PendingPrompts implements AsyncDisposable {
         chatId,
         previousMessageId,
         grammyFormatQuestionReplied(currentAnswer),
-        { reply_markup: { inline_keyboard: [] } },
+        {
+          link_preview_options: { is_disabled: true },
+          reply_markup: { inline_keyboard: [] },
+        },
       );
       await this.#flushItem(item);
     } else {
@@ -253,6 +257,7 @@ export class PendingPrompts implements AsyncDisposable {
       );
       await this.#bot.api.editMessageText(chatId, item.messageId, promptText, {
         parse_mode: "MarkdownV2",
+        link_preview_options: { is_disabled: true },
         reply_markup: kb,
       });
     }
@@ -280,6 +285,7 @@ export class PendingPrompts implements AsyncDisposable {
         ? grammyFormatQuestionRejected()
         : grammyFormatPermissionReplied("reject");
     await this.#bot.api.editMessageText(chatId, item.messageId, text, {
+      link_preview_options: { is_disabled: true },
       reply_markup: { inline_keyboard: [] },
     });
   }
