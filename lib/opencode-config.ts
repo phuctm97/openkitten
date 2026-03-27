@@ -117,10 +117,10 @@ export namespace OpencodeConfig {
         stdio: ["inherit", "inherit", "inherit"],
       });
       if ((await interactive.exited) !== 0) cancel();
-      let nextStep: string | symbol;
+      let action: string | symbol;
       do {
         clack.intro("Actions");
-        nextStep = await clack.select({
+        action = await clack.select({
           message: "What would you like to do?",
           initialValue: "continue",
           options: [
@@ -134,23 +134,23 @@ export namespace OpencodeConfig {
             { value: "continue", label: "Continue" },
           ],
         });
-        if (clack.isCancel(nextStep)) cancel();
+        if (clack.isCancel(action)) cancel();
         clack.outro("Done");
-        if (nextStep === "add") {
+        if (action === "add") {
           const proc = Bun.spawn([bin, "providers", "login"], {
             cwd: config.cwd,
             env: config.env,
             stdio: ["inherit", "inherit", "inherit"],
           });
           if ((await proc.exited) !== 0) cancel();
-        } else if (nextStep === "remove") {
+        } else if (action === "remove") {
           const proc = Bun.spawn([bin, "providers", "logout"], {
             cwd: config.cwd,
             env: config.env,
             stdio: ["inherit", "inherit", "inherit"],
           });
           if ((await proc.exited) !== 0) cancel();
-        } else if (nextStep === "model") {
+        } else if (action === "model") {
           clack.intro("Change model");
           const modelsProc = Bun.spawn([bin, "models"], {
             cwd: config.cwd,
@@ -174,7 +174,7 @@ export namespace OpencodeConfig {
           await writeFile(configPath, JSON.stringify(configJson, null, 2));
           clack.outro("Done");
         }
-      } while (nextStep !== "continue");
+      } while (action !== "continue");
     }
     return config;
   }
