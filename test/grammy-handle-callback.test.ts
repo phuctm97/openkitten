@@ -116,7 +116,7 @@ test("answers with expired_session when no session exists", async () => {
   await grammyHandleCallback(scope, mockCtx(42, "cb1", "po:0"));
 
   expect(bot.api.answerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "This session has expired.",
+    text: "This session has expired",
   });
   expect(pendingPrompts.answer).not.toHaveBeenCalled();
 });

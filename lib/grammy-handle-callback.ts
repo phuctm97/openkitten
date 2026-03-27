@@ -17,7 +17,7 @@ export async function grammyHandleCallback(
   });
   if (!sessionId) {
     await bot.api.answerCallbackQuery(ctx.callbackQuery.id, {
-      text: "This session has expired.",
+      text: "This session has expired",
     });
     return;
   }
