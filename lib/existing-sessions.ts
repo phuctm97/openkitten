@@ -85,10 +85,8 @@ export class ExistingSessions {
     }
   }
 
-  async findOrCreate(
-    chatId: number,
-    threadId: number | undefined,
-  ): Promise<string> {
+  async findOrCreate(location: ExistingSessions.Location): Promise<string> {
+    const { chatId, threadId } = location;
     const threadKey = threadId || undefined;
 
     const locationObject: ExistingSessions.Location = {
