@@ -694,9 +694,7 @@ describe("unknown permission", () => {
     );
     const text = chunks.map((c) => c.text).join("\n");
     expect(text).toContain("Use `custom_tool`");
-    expect(text).toContain(
-      "Use a custom tool provided by a third-party plugin.",
-    );
+    expect(text).toContain("Use a custom tool provided by your custom config.");
     expect(text).not.toContain("```tool");
     expect(text).toContain("```pattern");
     expect(text).toContain("pattern1");
