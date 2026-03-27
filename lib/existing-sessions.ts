@@ -86,8 +86,7 @@ export class ExistingSessions {
   }
 
   async findOrCreate(location: ExistingSessions.Location): Promise<string> {
-    const threadId = location.threadId || undefined;
-    const key = this.#locationKey({ chatId: location.chatId, threadId });
+    const key = this.#locationKey(location);
 
     const existing = this.#locationMap.get(key);
     if (existing) return existing;
@@ -96,22 +95,23 @@ export class ExistingSessions {
       data: { id: sessionId },
     } = await this.#opencodeClient.session.create({}, { throwOnError: true });
 
+    const normalized: ExistingSessions.Location = {
+      chatId: location.chatId,
+      threadId: location.threadId || undefined,
+    };
+
     try {
       this.#database
         .insert(schema.session)
         .values({
           id: sessionId,
-          chatId: location.chatId,
-          threadId: threadId || 0,
+          chatId: normalized.chatId,
+          threadId: normalized.threadId || 0,
         })
         .run();
-      this.#sessionMap.set(sessionId, { chatId: location.chatId, threadId });
+      this.#sessionMap.set(sessionId, normalized);
       this.#locationMap.set(key, sessionId);
-      logger.info("New session is created", {
-        sessionId,
-        chatId: location.chatId,
-        threadId,
-      });
+      logger.info("New session is created", { sessionId, ...normalized });
       return sessionId;
     } catch (error) {
       // Race condition: another concurrent call created the session first.
