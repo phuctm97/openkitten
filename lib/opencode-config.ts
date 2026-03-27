@@ -165,7 +165,7 @@ export namespace OpencodeConfig {
           const configPath = join(configDir, "opencode.json");
           const configJson = JSON.parse(await readFile(configPath, "utf-8"));
           const model = await clack.autocomplete({
-            message: "Select a model",
+            message: "Select model",
             initialValue: configJson.model as string | undefined,
             options: models.map((m) => ({ value: m, label: m })),
           });
