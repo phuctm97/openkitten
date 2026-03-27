@@ -4,11 +4,16 @@ import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
 
-function mockCtx(chatId: number, text: string, threadId?: number) {
+function mockCtx(
+  chatId: number,
+  text: string,
+  threadId?: number,
+  messageId = 100,
+) {
   return {
     chat: { id: chatId },
     msg: { message_thread_id: threadId },
-    message: { text },
+    message: { text, message_id: messageId },
     update: { update_id: 1 },
   } as never;
 }
@@ -74,11 +79,12 @@ test("answers pending prompt when session has one", async () => {
     typingIndicators: {} as never,
   } satisfies Scope;
 
-  await grammyHandleText(scope, mockCtx(42, "my answer"));
+  await grammyHandleText(scope, mockCtx(42, "my answer", undefined, 55));
 
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
     text: "my answer",
+    replyToMessageId: 55,
   });
   expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
 });
@@ -195,6 +201,7 @@ test("passes threadId through the flow", async () => {
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
     text: "hello",
+    replyToMessageId: 100,
   });
   expect(opencodeClient.session.promptAsync).toHaveBeenCalled();
 });

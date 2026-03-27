@@ -290,7 +290,11 @@ export class PendingPrompts implements AsyncDisposable {
     });
   }
 
-  async #answerCustom(sessionId: string, text: string) {
+  async #answerCustom(
+    sessionId: string,
+    text: string,
+    replyToMessageId: number | undefined,
+  ) {
     const items = this.#sessionMap.get(sessionId);
     if (!items) throw new PendingPrompts.NotFoundError();
     const activeItem = items.find((i) => i.messageId);
@@ -301,6 +305,7 @@ export class PendingPrompts implements AsyncDisposable {
         bot: this.#bot,
         chatId,
         threadId,
+        replyToMessageId,
       });
       return;
     }
@@ -312,6 +317,7 @@ export class PendingPrompts implements AsyncDisposable {
         bot: this.#bot,
         chatId,
         threadId,
+        replyToMessageId,
       });
       return;
     }
@@ -417,7 +423,11 @@ export class PendingPrompts implements AsyncDisposable {
 
   async answer(options: PendingPrompts.AnswerOptions) {
     if ("text" in options) {
-      await this.#answerCustom(options.sessionId, options.text);
+      await this.#answerCustom(
+        options.sessionId,
+        options.text,
+        options.replyToMessageId,
+      );
       return;
     }
     await this.#answerCallback(
@@ -636,6 +646,7 @@ export namespace PendingPrompts {
   export interface AnswerCustomOptions {
     readonly sessionId: string;
     readonly text: string;
+    readonly replyToMessageId?: number | undefined;
   }
 
   export type AnswerOptions = AnswerCallbackOptions | AnswerCustomOptions;

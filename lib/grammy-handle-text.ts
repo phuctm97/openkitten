@@ -18,6 +18,7 @@ export async function grammyHandleText(
     await pendingPrompts.answer({
       sessionId,
       text: ctx.message.text,
+      replyToMessageId: ctx.message.message_id,
     });
     return;
   } catch (error) {

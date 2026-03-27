@@ -1202,11 +1202,16 @@ test("answer custom text sends question pending when custom is false", async () 
   );
   await prompts.invalidate([noCustomQuestionRequest] as never, noPermissions);
 
-  await prompts.answer({ sessionId: "sess-1", text: "my text" });
+  await prompts.answer({
+    sessionId: "sess-1",
+    text: "my text",
+    replyToMessageId: 42,
+  });
   expect(grammySendQuestionPending).toHaveBeenCalledWith({
     bot,
     chatId: 123,
     threadId: undefined,
+    replyToMessageId: 42,
   });
   expect(mockQuestionReply).not.toHaveBeenCalled();
 });
@@ -1224,11 +1229,16 @@ test("answer custom text sends permission pending when permission is active", as
   );
   await prompts.invalidate(noQuestions, [permissionRequest] as never);
 
-  await prompts.answer({ sessionId: "sess-1", text: "some text" });
+  await prompts.answer({
+    sessionId: "sess-1",
+    text: "some text",
+    replyToMessageId: 99,
+  });
   expect(grammySendPermissionPending).toHaveBeenCalledWith({
     bot,
     chatId: 123,
     threadId: undefined,
+    replyToMessageId: 99,
   });
   expect(mockPermissionReply).not.toHaveBeenCalled();
 });
