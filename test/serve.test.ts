@@ -3,6 +3,7 @@ import { expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { Grammy } from "~/lib/grammy";
+import { McpServer } from "~/lib/mcp-server";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { OpencodeServer } from "~/lib/opencode-server";
 import { PendingPrompts } from "~/lib/pending-prompts";
@@ -181,6 +182,25 @@ function mockOpencodeEventStream() {
   };
 }
 
+function mockMcpServer() {
+  let resolveStopped: () => void;
+  const stopped = new Promise<void>((r) => {
+    resolveStopped = r;
+  });
+  stopped.then(
+    () => {},
+    () => {},
+  );
+  const dispose = vi.fn(() => {
+    resolveStopped();
+  });
+  vi.spyOn(McpServer, "create").mockReturnValue({
+    stopped,
+    [Symbol.dispose]: dispose,
+  } as never);
+  return dispose;
+}
+
 function mockGrammy() {
   let resolveStopped: () => void;
   const stopped = new Promise<void>((r) => {
@@ -218,6 +238,7 @@ function mockAll() {
   mockTelegramConfig();
   mockCreateDatabase();
   const disposeOpencodeServer = mockOpencodeServer();
+  const disposeMcpServer = mockMcpServer();
   const es = mockExistingSessions();
   const typing = mockTypingIndicators();
   const prompts = mockPendingPrompts();
@@ -226,6 +247,7 @@ function mockAll() {
   const triggerShutdown = mockShutdown();
   return {
     disposeOpencodeServer,
+    disposeMcpServer,
     es,
     typing,
     prompts,
@@ -236,18 +258,25 @@ function mockAll() {
 }
 
 test("disposes on shutdown", async () => {
-  const { disposeOpencodeServer, disposeGrammy, triggerShutdown } = mockAll();
+  const {
+    disposeOpencodeServer,
+    disposeMcpServer,
+    disposeGrammy,
+    triggerShutdown,
+  } = mockAll();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() => expect(Shutdown.create).toHaveBeenCalled());
   triggerShutdown();
   await run;
   expect(disposeOpencodeServer).toHaveBeenCalledOnce();
+  expect(disposeMcpServer).toHaveBeenCalledOnce();
   expect(disposeGrammy).toHaveBeenCalledOnce();
 });
 
 test("exits on unexpected opencode server exit", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
+  mockMcpServer();
   const exited = Promise.reject(
     new Error("OpenCode server exited unexpectedly (1)"),
   );
@@ -279,6 +308,7 @@ test("exits on unexpected grammy stop", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
+  mockMcpServer();
   mockExistingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
@@ -302,6 +332,7 @@ test("exits on event stream failure", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
+  mockMcpServer();
   mockExistingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
@@ -325,6 +356,7 @@ test("onEvent is fire-and-forget", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
+  mockMcpServer();
   mockExistingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
@@ -347,6 +379,7 @@ test("reconciles typing indicators on restart", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
+  mockMcpServer();
   const { existingSessions } = mockExistingSessions(["s1", "s2"]);
   const { invalidate } = mockTypingIndicators();
   mockPendingPrompts();
@@ -372,6 +405,7 @@ test("reconciles pending prompts on restart", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
+  mockMcpServer();
   mockExistingSessions(["s1", "s2"]);
   mockTypingIndicators();
   const { invalidate } = mockPendingPrompts();
@@ -396,6 +430,7 @@ test("updates working sessions on session.status event", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
+  mockMcpServer();
   mockExistingSessions(["s1"], {
     s1: { chatId: 100, threadId: undefined },
   });
@@ -425,6 +460,7 @@ test("updates pending prompts on question.asked event", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
+  mockMcpServer();
   mockExistingSessions(["s1"], {
     s1: { chatId: 100, threadId: undefined },
   });
@@ -453,6 +489,7 @@ test("updates pending prompts on permission.asked event", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
+  mockMcpServer();
   mockExistingSessions(["s1"], {
     s1: { chatId: 100, threadId: undefined },
   });
