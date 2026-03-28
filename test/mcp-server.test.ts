@@ -40,7 +40,10 @@ describe("McpServer", () => {
       fetch: (req: Request) => Response | Promise<Response>;
     }) => {
       capturedFetch = options.fetch;
-      return { url: new URL("http://127.0.0.1:12345"), stop: mockStop };
+      return {
+        url: new URL("http://127.0.0.1:12345"),
+        [Symbol.dispose]: mockStop,
+      };
     }) as never);
   });
 

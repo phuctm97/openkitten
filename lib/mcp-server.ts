@@ -37,7 +37,7 @@ export class McpServer implements AsyncDisposable {
   }
 
   async [Symbol.asyncDispose]() {
-    this.#server.stop();
+    this.#server[Symbol.dispose]();
     this.#resolve();
   }
 
