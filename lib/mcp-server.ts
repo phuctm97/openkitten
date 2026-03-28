@@ -4,7 +4,7 @@ import { logger } from "~/lib/logger";
 import pkg from "~/package.json" with { type: "json" };
 
 export class McpServer implements AsyncDisposable {
-  readonly #server: ReturnType<typeof Bun.serve>;
+  readonly #server: Bun.Server<undefined>;
   readonly #stopped: Promise<void>;
   readonly #resolve: () => void;
 
