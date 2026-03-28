@@ -29,7 +29,8 @@ export class McpServer implements Disposable {
       name: pkg.name,
       version: pkg.version,
       title: "OpenKitten",
-      description: pkg.description,
+      description:
+        "Provides tools and resources for interacting with OpenKitten.",
       websiteUrl: "https://openkitten.com",
     });
     const transport = new WebStandardStreamableHTTPServerTransport();

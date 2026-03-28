@@ -92,7 +92,7 @@ describe("McpServer", () => {
         title: "OpenKitten",
         version: "0.0.0",
         description:
-          "Telegram-first AI agent with 75+ AI providers, extensible plugins, multiple (sub)agents, composable skills, and controlled permissions.",
+          "Provides tools and resources for interacting with OpenKitten.",
         websiteUrl: "https://openkitten.com",
       },
     ]);
