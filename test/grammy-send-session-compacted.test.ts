@@ -1,23 +1,25 @@
 import { expect, test, vi } from "vitest";
-import * as grammyFormatCompactedModule from "~/lib/grammy-format-compacted";
+import * as grammyFormatSessionCompactedModule from "~/lib/grammy-format-session-compacted";
 import * as grammySendChunksModule from "~/lib/grammy-send-chunks";
-import { grammySendCompacted } from "~/lib/grammy-send-compacted";
+import { grammySendSessionCompacted } from "~/lib/grammy-send-session-compacted";
 
-test("formats compacted and sends chunks", async () => {
+test("formats session compacted and sends chunks", async () => {
   const chunks = [{ text: "compacted" }];
   vi.spyOn(
-    grammyFormatCompactedModule,
-    "grammyFormatCompacted",
+    grammyFormatSessionCompactedModule,
+    "grammyFormatSessionCompacted",
   ).mockReturnValue(chunks);
   vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
     undefined,
   );
-  await grammySendCompacted({
+  await grammySendSessionCompacted({
     bot: {} as never,
     chatId: 456,
     threadId: 789,
   });
-  expect(grammyFormatCompactedModule.grammyFormatCompacted).toHaveBeenCalled();
+  expect(
+    grammyFormatSessionCompactedModule.grammyFormatSessionCompacted,
+  ).toHaveBeenCalled();
   expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
     bot: {} as never,
     chunks,

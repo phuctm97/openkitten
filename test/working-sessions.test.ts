@@ -1,7 +1,7 @@
 import type { EventSessionStatus, SessionStatus } from "@opencode-ai/sdk/v2";
 import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
-import * as grammySendBusyModule from "~/lib/grammy-send-busy";
+import * as grammySendSessionPendingModule from "~/lib/grammy-send-session-pending";
 import { WorkingSessions } from "~/lib/working-sessions";
 
 const emptyStatuses: { readonly [sessionId: string]: SessionStatus } = {};
@@ -169,7 +169,7 @@ test("lock sends busy when session is cached as working", async () => {
   const { bot, existingSessions, working } = setup();
   await working.update(statusEvent("sess-1", { type: "busy" }));
   const spy = vi
-    .spyOn(grammySendBusyModule, "grammySendBusy")
+    .spyOn(grammySendSessionPendingModule, "grammySendSessionPending")
     .mockResolvedValue(undefined);
   let called = false;
   await working.lock("sess-1", async () => {
@@ -197,7 +197,7 @@ test("lock does not include session in check during fn", async () => {
 test("lock sends busy on concurrent lock of same session", async () => {
   const { working } = setup();
   const spy = vi
-    .spyOn(grammySendBusyModule, "grammySendBusy")
+    .spyOn(grammySendSessionPendingModule, "grammySendSessionPending")
     .mockResolvedValue(undefined);
   const { promise, resolve } = Promise.withResolvers<void>();
   const first = working.lock("sess-1", async () => {
@@ -241,7 +241,7 @@ test("lock clears locked state on fn error", async () => {
 test("locked session blocks concurrent lock even though check returns false", async () => {
   const { working } = setup();
   const spy = vi
-    .spyOn(grammySendBusyModule, "grammySendBusy")
+    .spyOn(grammySendSessionPendingModule, "grammySendSessionPending")
     .mockResolvedValue(undefined);
   const { promise, resolve } = Promise.withResolvers<void>();
   const locking = working.lock("sess-1", async () => {
@@ -261,7 +261,7 @@ test("locked session blocks concurrent lock even though check returns false", as
 test("beforeRemove does not affect locked state", async () => {
   const { existingSessions, working } = setup();
   const spy = vi
-    .spyOn(grammySendBusyModule, "grammySendBusy")
+    .spyOn(grammySendSessionPendingModule, "grammySendSessionPending")
     .mockResolvedValue(undefined);
   const { promise, resolve } = Promise.withResolvers<void>();
   const locking = working.lock("sess-1", async () => {

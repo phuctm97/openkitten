@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
-import { grammyFormatBusy } from "~/lib/grammy-format-busy";
+import { grammyFormatSessionPending } from "~/lib/grammy-format-session-pending";
 
 test("returns single chunk with busy message", () => {
-  const chunks = grammyFormatBusy();
+  const chunks = grammyFormatSessionPending();
   expect(chunks).toHaveLength(1);
   const chunk = chunks.at(0);
   expect(chunk).toBeDefined();

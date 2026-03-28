@@ -3,7 +3,7 @@ import type { Bot } from "grammy";
 import { createHooks, type Hookable } from "hookable";
 import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
-import { grammySendBusy } from "~/lib/grammy-send-busy";
+import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 
 export class WorkingSessions implements Disposable {
   readonly #bot: Bot;
@@ -50,7 +50,7 @@ export class WorkingSessions implements Disposable {
   ): Promise<void> {
     if (this.#cached.has(sessionId) || this.#locked.has(sessionId)) {
       const { chatId, threadId } = this.#existingSessions.resolve(sessionId);
-      await grammySendBusy({
+      await grammySendSessionPending({
         bot: this.#bot,
         chatId,
         threadId,
