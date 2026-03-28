@@ -327,31 +327,6 @@ test("exits on unexpected grammy stop", async () => {
   );
 });
 
-test("exits on unexpected MCP server close", async () => {
-  mockTelegramConfig();
-  mockCreateDatabase();
-  mockOpencodeServer();
-  const closed = Promise.reject(new Error("MCP server stopped unexpectedly"));
-  closed.then(
-    () => {},
-    () => {},
-  );
-  vi.spyOn(McpServer, "create").mockResolvedValue({
-    closed,
-    url: "http://127.0.0.1:3001/mcp",
-    [Symbol.asyncDispose]: async () => {},
-  } as never);
-  mockExistingSessions();
-  mockTypingIndicators();
-  mockPendingPrompts();
-  mockOpencodeEventStream();
-  mockGrammy();
-  mockShutdown();
-  await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "MCP server stopped unexpectedly",
-  );
-});
-
 test("exits on event stream failure", async () => {
   mockTelegramConfig();
   mockCreateDatabase();

@@ -141,7 +141,7 @@ test("dispose is idempotent", async () => {
   await mcpServer[Symbol.asyncDispose]();
   await mcpServer[Symbol.asyncDispose]();
 
-  expect(logger.info).toHaveBeenCalledTimes(3);
+  expect(logger.info).toHaveBeenCalledWith("MCP server is stopped");
 });
 
 test("serves health checks", async () => {

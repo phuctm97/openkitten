@@ -27,6 +27,9 @@ export class McpServer implements AsyncDisposable {
   }
 
   get closed(): Promise<void> {
+    // Bun.serve runs in-process and does not expose an independent unexpected
+    // close signal, so this only resolves when the wrapper is explicitly
+    // disposed.
     return this.#closed;
   }
 
@@ -98,13 +101,7 @@ export class McpServer implements AsyncDisposable {
 
     const status = data[McpServer.serverName];
 
-    if (status?.status === "connected") {
-      logger.info("MCP server is registered with OpenCode", {
-        name: McpServer.serverName,
-        status: status.status,
-      });
-      return;
-    }
+    if (status?.status === "connected") return;
 
     const message =
       status && "error" in status
@@ -159,10 +156,9 @@ export class McpServer implements AsyncDisposable {
       url,
     );
 
-    logger.info("MCP server is ready", { url });
-
     try {
       await mcpServer.#registerWithOpenCode();
+      logger.info("MCP server is ready", { url });
       return mcpServer;
     } catch (error) {
       await mcpServer[Symbol.asyncDispose]();
