@@ -12,6 +12,7 @@ import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
+import { NestingSessions } from "~/lib/nesting-sessions";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { opencodeCreateHandler } from "~/lib/opencode-create-handler";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
@@ -43,6 +44,7 @@ export const serve = defineCommand({
       database,
       opencodeServer.client,
     );
+    const nestingSessions = NestingSessions.create(opencodeServer.client);
     using workingSessions = WorkingSessions.create(bot, existingSessions);
     await using pendingPrompts = PendingPrompts.create(
       shutdown,
@@ -71,6 +73,7 @@ export const serve = defineCommand({
       opencodeClient: opencodeServer.client,
       floatingPromises,
       existingSessions,
+      nestingSessions,
       workingSessions,
       pendingPrompts,
       processingMessages,
@@ -89,6 +92,7 @@ export const serve = defineCommand({
           ]);
         await existingSessions.invalidate();
         const results = await Promise.allSettled([
+          nestingSessions.invalidate(),
           workingSessions.invalidate(statuses),
           pendingPrompts.invalidate(questions, permissions),
           processingMessages.invalidate(),

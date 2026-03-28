@@ -3,6 +3,7 @@ import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import type { FloatingPromises } from "~/lib/floating-promises";
+import type { NestingSessions } from "~/lib/nesting-sessions";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import type { ProcessingMessages } from "~/lib/processing-messages";
 import type { Shutdown } from "~/lib/shutdown";
@@ -16,6 +17,7 @@ export interface Scope {
   readonly opencodeClient: OpencodeClient;
   readonly floatingPromises: FloatingPromises;
   readonly existingSessions: ExistingSessions;
+  readonly nestingSessions: NestingSessions;
   readonly workingSessions: WorkingSessions;
   readonly pendingPrompts: PendingPrompts;
   readonly processingMessages: ProcessingMessages;

@@ -8,6 +8,7 @@ export async function opencodeHandleEvent(
   {
     bot,
     existingSessions,
+    nestingSessions,
     workingSessions,
     pendingPrompts,
     processingMessages,
@@ -28,6 +29,11 @@ export async function opencodeHandleEvent(
       break;
     case "message.updated":
       await processingMessages.update(event);
+      break;
+    case "session.created":
+    case "session.updated":
+    case "session.deleted":
+      await nestingSessions.update(event);
       break;
     case "session.error": {
       const { sessionID, error } = event.properties;

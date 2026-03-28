@@ -12,6 +12,7 @@ function mockScope() {
   const existingSessions = {
     resolve: vi.fn().mockReturnValue({ chatId: 123, threadId: 456 }),
   };
+  const nestingSessions = { update: vi.fn() };
   const workingSessions = { update: vi.fn() };
   const pendingPrompts = { update: vi.fn() };
   const processingMessages = { update: vi.fn() };
@@ -19,12 +20,14 @@ function mockScope() {
     scope: {
       bot,
       existingSessions,
+      nestingSessions,
       workingSessions,
       pendingPrompts,
       processingMessages,
     } as unknown as Scope,
     bot,
     existingSessions,
+    nestingSessions,
     workingSessions,
     pendingPrompts,
     processingMessages,
@@ -195,14 +198,45 @@ test("updates pending prompts on question.rejected event", async () => {
   expect(pendingPrompts.update).toHaveBeenCalledWith(event);
 });
 
-test("ignores unrelated event types", async () => {
-  const { scope, workingSessions, pendingPrompts, processingMessages } =
-    mockScope();
+test("updates nesting sessions on session.created event", async () => {
+  const { scope, nestingSessions } = mockScope();
+  const event = {
+    type: "session.created" as const,
+    properties: {
+      sessionID: "s1",
+      info: {
+        id: "s1",
+        slug: "s1",
+        projectID: "p1",
+        directory: "/tmp/project",
+        title: "s1",
+        version: "1",
+        time: { created: 1, updated: 1 },
+      },
+    },
+  };
   await opencodeHandleEvent(
     scope,
-    { type: "session.created" } as never,
+    event as never,
     new AbortController().signal,
   );
+  expect(nestingSessions.update).toHaveBeenCalledWith(event);
+});
+
+test("ignores unrelated event types", async () => {
+  const {
+    scope,
+    nestingSessions,
+    workingSessions,
+    pendingPrompts,
+    processingMessages,
+  } = mockScope();
+  await opencodeHandleEvent(
+    scope,
+    { type: "installation.updated" } as never,
+    new AbortController().signal,
+  );
+  expect(nestingSessions.update).not.toHaveBeenCalled();
   expect(workingSessions.update).not.toHaveBeenCalled();
   expect(pendingPrompts.update).not.toHaveBeenCalled();
   expect(processingMessages.update).not.toHaveBeenCalled();
