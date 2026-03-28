@@ -12,6 +12,7 @@ import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
+import { McpServer } from "~/lib/mcp-server";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { opencodeCreateHandler } from "~/lib/opencode-create-handler";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
@@ -36,6 +37,7 @@ export const serve = defineCommand({
     bot.use(grammyFilterUser(telegramConfig.userId));
     using shutdown = Shutdown.create();
     using database = Database.create(profile);
+    await using _mcpServer = await McpServer.create(shutdown);
     await using opencodeServer = await OpencodeServer.create(opencodeConfig);
     await using floatingPromises = FloatingPromises.create();
     const existingSessions = ExistingSessions.create(
