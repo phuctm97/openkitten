@@ -176,7 +176,7 @@ function tryConvert(chunk: string): readonly GrammyChunk[] {
 
 const hrPattern = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
 
-export function grammyFormatMessage(text: string): readonly GrammyChunk[] {
+export function grammyFormatText(text: string): readonly GrammyChunk[] {
   const sections = text.split(hrPattern);
   const results: GrammyChunk[] = [];
 

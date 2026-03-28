@@ -5,8 +5,8 @@ import type { ExistingSessions } from "~/lib/existing-sessions";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import * as schema from "~/lib/schema";
 
-vi.mock("~/lib/grammy-send-message", () => ({
-  grammySendMessage: vi.fn(async () => {}),
+vi.mock("~/lib/grammy-send-text", () => ({
+  grammySendText: vi.fn(async () => {}),
 }));
 
 type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
@@ -56,7 +56,7 @@ beforeEach(() => {
 // --- update tests ---
 
 test("update delivers completed assistant message", async () => {
-  const { grammySendMessage } = await import("~/lib/grammy-send-message");
+  const { grammySendText } = await import("~/lib/grammy-send-text");
   const { bot, pm } = setup();
   await pm.update({
     type: "message.updated",
@@ -73,7 +73,7 @@ test("update delivers completed assistant message", async () => {
     { sessionID: "sess-1", messageID: "m1" },
     { throwOnError: true },
   );
-  expect(grammySendMessage).toHaveBeenCalledWith({
+  expect(grammySendText).toHaveBeenCalledWith({
     bot,
     text: "hello world",
     chatId: 123,
@@ -82,7 +82,7 @@ test("update delivers completed assistant message", async () => {
 });
 
 test("update skips incomplete assistant message", async () => {
-  const { grammySendMessage } = await import("~/lib/grammy-send-message");
+  const { grammySendText } = await import("~/lib/grammy-send-text");
   const { pm } = setup();
   await pm.update({
     type: "message.updated",
@@ -96,11 +96,11 @@ test("update skips incomplete assistant message", async () => {
     },
   } as never);
   expect(mockSessionMessage).not.toHaveBeenCalled();
-  expect(grammySendMessage).not.toHaveBeenCalled();
+  expect(grammySendText).not.toHaveBeenCalled();
 });
 
 test("update skips user message", async () => {
-  const { grammySendMessage } = await import("~/lib/grammy-send-message");
+  const { grammySendText } = await import("~/lib/grammy-send-text");
   const { pm } = setup();
   await pm.update({
     type: "message.updated",
@@ -114,7 +114,7 @@ test("update skips user message", async () => {
     },
   } as never);
   expect(mockSessionMessage).not.toHaveBeenCalled();
-  expect(grammySendMessage).not.toHaveBeenCalled();
+  expect(grammySendText).not.toHaveBeenCalled();
 });
 
 test("update skips already processed message", async () => {
@@ -137,7 +137,7 @@ test("update skips already processed message", async () => {
 });
 
 test("update skips message with no text parts", async () => {
-  const { grammySendMessage } = await import("~/lib/grammy-send-message");
+  const { grammySendText } = await import("~/lib/grammy-send-text");
   const { pm } = setup();
   mockSessionMessage = vi.fn(async () => ({
     data: { info: {}, parts: [{ type: "tool", name: "bash" }] as never },
@@ -153,7 +153,7 @@ test("update skips message with no text parts", async () => {
       },
     },
   } as never);
-  expect(grammySendMessage).not.toHaveBeenCalled();
+  expect(grammySendText).not.toHaveBeenCalled();
 });
 
 test("update persists message to database", async () => {
@@ -179,7 +179,7 @@ test("update persists message to database", async () => {
 // --- invalidate tests ---
 
 test("invalidate delivers new messages not in database", async () => {
-  const { grammySendMessage } = await import("~/lib/grammy-send-message");
+  const { grammySendText } = await import("~/lib/grammy-send-text");
   const { pm } = setup();
   mockSessionMessages = vi.fn(async () => ({
     data: [
@@ -195,11 +195,11 @@ test("invalidate delivers new messages not in database", async () => {
     ],
   }));
   await pm.invalidate();
-  expect(grammySendMessage).toHaveBeenCalled();
+  expect(grammySendText).toHaveBeenCalled();
 });
 
 test("invalidate skips messages already in database", async () => {
-  const { grammySendMessage } = await import("~/lib/grammy-send-message");
+  const { grammySendText } = await import("~/lib/grammy-send-text");
   const { database, pm } = setup();
   database
     .insert(schema.message)
@@ -219,7 +219,7 @@ test("invalidate skips messages already in database", async () => {
     ],
   }));
   await pm.invalidate();
-  expect(grammySendMessage).not.toHaveBeenCalled();
+  expect(grammySendText).not.toHaveBeenCalled();
 });
 
 test("invalidate stops expanding when oldest message is already in database", async () => {
@@ -314,7 +314,7 @@ test("invalidate stops when batch is smaller than limit", async () => {
 });
 
 test("invalidate skips user messages", async () => {
-  const { grammySendMessage } = await import("~/lib/grammy-send-message");
+  const { grammySendText } = await import("~/lib/grammy-send-text");
   const { pm } = setup();
   mockSessionMessages = vi.fn(async () => ({
     data: [
@@ -330,7 +330,7 @@ test("invalidate skips user messages", async () => {
     ],
   }));
   await pm.invalidate();
-  expect(grammySendMessage).not.toHaveBeenCalled();
+  expect(grammySendText).not.toHaveBeenCalled();
 });
 
 test("invalidate with no sessions skips processing", async () => {
@@ -382,8 +382,8 @@ test("invalidate unclaims on delivery failure and allows retry", async () => {
       },
     ],
   }));
-  const mod = await import("~/lib/grammy-send-message");
-  vi.mocked(mod.grammySendMessage).mockRejectedValueOnce(
+  const mod = await import("~/lib/grammy-send-text");
+  vi.mocked(mod.grammySendText).mockRejectedValueOnce(
     new Error("delivery failed"),
   );
   await expect(pm.invalidate()).rejects.toThrow();
