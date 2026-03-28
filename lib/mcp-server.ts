@@ -1,4 +1,4 @@
-import { McpServer as SdkMcpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { logger } from "~/lib/logger";
 import pkg from "~/package.json" with { type: "json" };
@@ -25,7 +25,7 @@ export class McpServer implements Disposable {
     if (new URL(req.url).pathname !== "/mcp") {
       return new Response("Not Found", { status: 404 });
     }
-    const server = new SdkMcpServer({
+    const server = new Server({
       name: pkg.name,
       version: pkg.version,
     });
