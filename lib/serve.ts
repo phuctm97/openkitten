@@ -12,6 +12,7 @@ import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
+import { McpServer } from "~/lib/mcp-server";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { opencodeCreateHandler } from "~/lib/opencode-create-handler";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
@@ -37,6 +38,7 @@ export const serve = defineCommand({
     using shutdown = Shutdown.create();
     using database = Database.create(profile);
     await using opencodeServer = await OpencodeServer.create(opencodeConfig);
+    await using mcpServer = await McpServer.create(bot, opencodeServer.client);
     await using floatingPromises = FloatingPromises.create();
     const existingSessions = ExistingSessions.create(
       bot,
@@ -108,10 +110,12 @@ export const serve = defineCommand({
     bot.on("message:text", grammyCreateHandler(scope, grammyHandleText));
     await using grammy = await Grammy.create(shutdown, bot);
     // Shut down when: OS signal received, OpenCode server exits,
-    // event stream exhausts reconnects, or Telegram polling stops.
+    // the MCP server closes, event stream exhausts reconnects,
+    // or Telegram polling stops.
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,
+      mcpServer.closed,
       opencodeEventStream.closed,
       grammy.stopped,
     ]);
