@@ -181,19 +181,19 @@ function mockOpencodeEventStream() {
 }
 
 function mockMcpServer() {
-  let resolveClosed: () => void;
-  const closed = new Promise<void>((r) => {
-    resolveClosed = r;
+  let resolveStopped: () => void;
+  const stopped = new Promise<void>((r) => {
+    resolveStopped = r;
   });
-  closed.then(
+  stopped.then(
     () => {},
     () => {},
   );
   const dispose = vi.fn(async () => {
-    resolveClosed();
+    resolveStopped();
   });
   vi.spyOn(McpServer, "create").mockReturnValue({
-    closed,
+    stopped,
     [Symbol.asyncDispose]: dispose,
   } as never);
   return dispose;

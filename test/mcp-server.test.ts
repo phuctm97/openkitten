@@ -59,10 +59,10 @@ describe("McpServer", () => {
     );
   });
 
-  test("closed resolves on disposal", async () => {
+  test("stopped resolves on disposal", async () => {
     const server = McpServer.create();
     await server[Symbol.asyncDispose]();
-    await expect(server.closed).resolves.toBeUndefined();
+    await expect(server.stopped).resolves.toBeUndefined();
   });
 
   test("stops HTTP server on disposal", async () => {
