@@ -25,6 +25,55 @@ export class ExistingSessions {
     this.#opencodeClient = opencodeClient;
   }
 
+  #find(location: ExistingSessions.Location): string | undefined {
+    const row = this.#database.query.session
+      .findFirst({
+        columns: { id: true },
+        where: and(
+          eq(schema.session.chatId, location.chatId),
+          eq(schema.session.threadId, location.threadId || 0),
+        ),
+      })
+      .sync();
+    return row?.id;
+  }
+
+  async #create(location: ExistingSessions.Location): Promise<string> {
+    const {
+      data: { id: sessionId },
+    } = await this.#opencodeClient.session.create({}, { throwOnError: true });
+
+    const normalized: ExistingSessions.Location = {
+      chatId: location.chatId,
+      threadId: location.threadId || undefined,
+    };
+
+    try {
+      this.#database
+        .insert(schema.session)
+        .values({
+          id: sessionId,
+          chatId: normalized.chatId,
+          threadId: normalized.threadId || 0,
+        })
+        .run();
+      logger.info("New session is created", { sessionId, ...normalized });
+      return sessionId;
+    } catch (error) {
+      // Race condition: another concurrent call created the session first.
+      // Clean up the orphaned opencode session.
+      await this.#opencodeClient.session.delete(
+        { sessionID: sessionId },
+        { throwOnError: true },
+      );
+      // Return the raced winner from DB.
+      const raced = this.#find(location);
+      // No winner in DB — insert failed for a reason other than a race condition.
+      if (!raced) throw error;
+      return raced;
+    }
+  }
+
   get sessionIds(): readonly string[] {
     return this.#database.query.session
       .findMany({ columns: { id: true } })
@@ -86,26 +135,13 @@ export class ExistingSessions {
     location: ExistingSessions.Location,
     options: ExistingSessions.FindOptions = {},
   ): string | undefined | Promise<string> {
-    const existing = this.#findSessionId(location);
+    const existing = this.#find(location);
     if (existing) {
       if (options.createIfNotFound) return Promise.resolve(existing);
       return existing;
     }
     if (!options.createIfNotFound) return undefined;
-    return this.#createSession(location);
-  }
-
-  #findSessionId(location: ExistingSessions.Location): string | undefined {
-    const row = this.#database.query.session
-      .findFirst({
-        columns: { id: true },
-        where: and(
-          eq(schema.session.chatId, location.chatId),
-          eq(schema.session.threadId, location.threadId || 0),
-        ),
-      })
-      .sync();
-    return row?.id;
+    return this.#create(location);
   }
 
   async remove(sessionId: string): Promise<void> {
@@ -151,42 +187,6 @@ export class ExistingSessions {
     } finally {
       this.#removing.delete(sessionId);
       logger.info("Existing session is removed", { sessionId });
-    }
-  }
-
-  async #createSession(location: ExistingSessions.Location): Promise<string> {
-    const {
-      data: { id: sessionId },
-    } = await this.#opencodeClient.session.create({}, { throwOnError: true });
-
-    const normalized: ExistingSessions.Location = {
-      chatId: location.chatId,
-      threadId: location.threadId || undefined,
-    };
-
-    try {
-      this.#database
-        .insert(schema.session)
-        .values({
-          id: sessionId,
-          chatId: normalized.chatId,
-          threadId: normalized.threadId || 0,
-        })
-        .run();
-      logger.info("New session is created", { sessionId, ...normalized });
-      return sessionId;
-    } catch (error) {
-      // Race condition: another concurrent call created the session first.
-      // Clean up the orphaned opencode session.
-      await this.#opencodeClient.session.delete(
-        { sessionID: sessionId },
-        { throwOnError: true },
-      );
-      // Return the raced winner from DB.
-      const raced = this.#findSessionId(location);
-      // No winner in DB — insert failed for a reason other than a race condition.
-      if (!raced) throw error;
-      return raced;
     }
   }
 
@@ -253,22 +253,6 @@ export class ExistingSessions {
 }
 
 export namespace ExistingSessions {
-  export interface FindOptions {
-    readonly createIfNotFound?: boolean;
-  }
-
-  export interface FindOrCreateOptions extends FindOptions {
-    readonly createIfNotFound: true;
-  }
-
-  export interface GetOptions {
-    readonly throwIfNotFound?: boolean;
-  }
-
-  export interface GetOrThrowOptions extends GetOptions {
-    readonly throwIfNotFound: true;
-  }
-
   export interface Location {
     readonly chatId: number;
     readonly threadId: number | undefined;
@@ -280,5 +264,21 @@ export namespace ExistingSessions {
 
   export interface Hooks {
     beforeRemove: (event: BeforeRemoveEvent) => Promise<void> | void;
+  }
+
+  export interface GetOptions {
+    readonly throwIfNotFound?: boolean;
+  }
+
+  export interface GetOrThrowOptions extends GetOptions {
+    readonly throwIfNotFound: true;
+  }
+
+  export interface FindOptions {
+    readonly createIfNotFound?: boolean;
+  }
+
+  export interface FindOrCreateOptions extends FindOptions {
+    readonly createIfNotFound: true;
   }
 }
