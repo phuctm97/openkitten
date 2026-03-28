@@ -6,12 +6,12 @@ import pkg from "~/package.json" with { type: "json" };
 export class McpServer implements AsyncDisposable {
   readonly #httpServer: ReturnType<typeof Bun.serve>;
   readonly #stopped: Promise<void>;
-  readonly #resolveStopped: () => void;
+  readonly #resolve: () => void;
 
   private constructor() {
     const { resolve, promise } = Promise.withResolvers<void>();
     this.#stopped = promise;
-    this.#resolveStopped = resolve;
+    this.#resolve = resolve;
     this.#httpServer = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -38,7 +38,7 @@ export class McpServer implements AsyncDisposable {
 
   async [Symbol.asyncDispose]() {
     this.#httpServer.stop();
-    this.#resolveStopped();
+    this.#resolve();
   }
 
   static create(): McpServer {
