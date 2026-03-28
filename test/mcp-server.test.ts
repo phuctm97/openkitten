@@ -87,7 +87,14 @@ describe("McpServer", () => {
     const response = await capturedFetch(req);
 
     expect(sdkConstructorArgs).toEqual([
-      { name: "openkitten", version: "0.0.0" },
+      {
+        name: "openkitten",
+        title: "OpenKitten",
+        version: "0.0.0",
+        description:
+          "Telegram-first AI agent with 75+ AI providers, extensible plugins, multiple (sub)agents, composable skills, and controlled permissions.",
+        websiteUrl: "https://openkitten.com",
+      },
     ]);
     expect(mockConnect).toHaveBeenCalledOnce();
     expect(mockHandleRequest).toHaveBeenCalledWith(req);

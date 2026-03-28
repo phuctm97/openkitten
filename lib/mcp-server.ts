@@ -27,7 +27,10 @@ export class McpServer implements Disposable {
     }
     const server = new Server({
       name: pkg.name,
+      title: "OpenKitten",
       version: pkg.version,
+      description: pkg.description,
+      websiteUrl: "https://openkitten.com",
     });
     const transport = new WebStandardStreamableHTTPServerTransport();
     await server.connect(transport);
