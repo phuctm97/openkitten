@@ -34,7 +34,7 @@ function createMockExistingSessions(
     invalidate: vi.fn(),
     check: (sessionId: string) => sessionId in map,
 
-    get: (sessionId: string) => {
+    get: (sessionId: string, _options: ExistingSessions.GetOptions) => {
       const loc = map[sessionId];
       if (!loc) throw new Error(`No session found: ${sessionId}`);
       return loc;

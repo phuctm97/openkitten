@@ -35,14 +35,18 @@ export async function opencodeHandleEvent(
         sessionID,
       });
       if (sessionID) {
-        const location = existingSessions.get(sessionID);
+        const location = existingSessions.get(sessionID, {
+          throwIfNotFound: true,
+        });
         await grammySendError({ bot, error, ...location });
       }
       break;
     }
     case "session.compacted": {
       const { sessionID } = event.properties;
-      const location = existingSessions.get(sessionID);
+      const location = existingSessions.get(sessionID, {
+        throwIfNotFound: true,
+      });
       await grammySendSessionCompacted({ bot, ...location });
       break;
     }

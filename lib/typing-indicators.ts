@@ -52,7 +52,9 @@ export class TypingIndicators implements Disposable {
   }
 
   #send(sessionId: string) {
-    const { chatId, threadId } = this.#existingSessions.get(sessionId);
+    const { chatId, threadId } = this.#existingSessions.get(sessionId, {
+      throwIfNotFound: true,
+    });
     return this.#bot.api.sendChatAction(chatId, "typing", {
       ...(threadId && { message_thread_id: threadId }),
     });

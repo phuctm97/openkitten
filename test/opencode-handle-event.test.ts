@@ -1,4 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest";
+import type { ExistingSessions } from "~/lib/existing-sessions";
 import * as grammySendErrorModule from "~/lib/grammy-send-error";
 import * as grammySendSessionCompactedModule from "~/lib/grammy-send-session-compacted";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
@@ -10,7 +11,12 @@ vi.mock("~/lib/grammy-send-session-compacted");
 function mockScope() {
   const bot = {} as never;
   const existingSessions = {
-    get: vi.fn().mockReturnValue({ chatId: 123, threadId: 456 }),
+    get: vi.fn(
+      (_sessionId: string, _options: ExistingSessions.GetOrThrowOptions) => ({
+        chatId: 123,
+        threadId: 456,
+      }),
+    ),
   };
   const workingSessions = { update: vi.fn() };
   const pendingPrompts = { update: vi.fn() };

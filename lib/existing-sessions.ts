@@ -44,14 +44,30 @@ export class ExistingSessions {
       .sync();
   }
 
-  get(sessionId: string): ExistingSessions.Location {
+  get(
+    sessionId: string,
+    options: ExistingSessions.GetOrThrowOptions,
+  ): ExistingSessions.Location;
+  get(
+    sessionId: string,
+    options?: ExistingSessions.GetOptions,
+  ): ExistingSessions.Location | undefined;
+  get(
+    sessionId: string,
+    options: ExistingSessions.GetOptions = {},
+  ): ExistingSessions.Location | undefined {
     const row = this.#database.query.session
       .findFirst({
         columns: { chatId: true, threadId: true },
         where: eq(schema.session.id, sessionId),
       })
       .sync();
-    if (!row) throw new ExistingSessions.NotFoundError(sessionId);
+    if (!row) {
+      if (options.throwIfNotFound) {
+        throw new ExistingSessions.NotFoundError(sessionId);
+      }
+      return undefined;
+    }
     return {
       chatId: row.chatId,
       threadId: row.threadId || undefined,
@@ -219,6 +235,14 @@ export class ExistingSessions {
 }
 
 export namespace ExistingSessions {
+  export interface GetOptions {
+    readonly throwIfNotFound?: boolean;
+  }
+
+  export interface GetOrThrowOptions extends GetOptions {
+    readonly throwIfNotFound: true;
+  }
+
   export interface Location {
     readonly chatId: number;
     readonly threadId: number | undefined;
