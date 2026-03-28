@@ -9,14 +9,14 @@ export class McpServer implements Disposable {
   readonly #resolve: () => void;
 
   private constructor() {
-    const { resolve, promise } = Promise.withResolvers<void>();
-    this.#stopped = promise;
-    this.#resolve = resolve;
     this.#server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch: (req) => this.#fetch(req),
     });
+    const { resolve, promise } = Promise.withResolvers<void>();
+    this.#stopped = promise;
+    this.#resolve = resolve;
   }
 
   async #fetch(req: Request): Promise<Response> {
