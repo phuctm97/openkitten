@@ -91,8 +91,7 @@ describe("McpServer", () => {
         name: "openkitten",
         title: "OpenKitten",
         version: "0.0.0",
-        description:
-          "Provides tools and resources for interacting with OpenKitten.",
+        description: "MCP server for OpenKitten-powered agents",
         websiteUrl: "https://openkitten.com",
       },
     ]);
