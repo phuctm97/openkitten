@@ -19,11 +19,19 @@ function mockCtx(chatId: number, match: string, threadId?: number) {
 
 function mockExistingSessions(
   existingSessionId?: string,
+  createdSessionId = existingSessionId || "s-new",
 ): ExistingSessions & { remove: ReturnType<typeof vi.fn> } {
   return {
     sessionIds: existingSessionId ? [existingSessionId] : [],
-    find: vi.fn(() => existingSessionId),
-    findOrCreate: vi.fn(async () => existingSessionId || "s-new"),
+    find: vi.fn(
+      (
+        _location: ExistingSessions.Location,
+        options?: ExistingSessions.FindOptions,
+      ) => {
+        if (options?.createIfNotFound) return Promise.resolve(createdSessionId);
+        return existingSessionId;
+      },
+    ),
     invalidate: vi.fn(),
     check: vi.fn(() => true),
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
@@ -96,10 +104,10 @@ test("sends 'Hey' when no match text and no existing session", async () => {
     threadId: undefined,
   });
   expect(existingSessions.remove).not.toHaveBeenCalled();
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
-    chatId: 42,
-    threadId: undefined,
-  });
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 42, threadId: undefined },
+    { createIfNotFound: true },
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     { sessionID: "s-new", parts: [{ type: "text", text: "Hey" }] },
     { throwOnError: true },
@@ -130,9 +138,7 @@ test("sends custom text when match is provided", async () => {
 });
 
 test("removes existing session with messages and creates new one", async () => {
-  const existingSessions = mockExistingSessions("s-old");
-  // After remove, findOrCreate returns a new session
-  existingSessions.findOrCreate = vi.fn(async () => "s-new");
+  const existingSessions = mockExistingSessions("s-old", "s-new");
   const opencodeClient = mockOpencodeClient(1);
   const workingSessions = mockWorkingSessions();
   const scope = mockScope({
@@ -149,10 +155,10 @@ test("removes existing session with messages and creates new one", async () => {
     { throwOnError: true },
   );
   expect(existingSessions.remove).toHaveBeenCalledWith("s-old");
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
-    chatId: 42,
-    threadId: undefined,
-  });
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 42, threadId: undefined },
+    { createIfNotFound: true },
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     { sessionID: "s-new", parts: [{ type: "text", text: "Hey" }] },
     { throwOnError: true },
@@ -173,10 +179,10 @@ test("keeps existing session with no messages", async () => {
   await grammyHandleStart(scope, ctx);
 
   expect(existingSessions.remove).not.toHaveBeenCalled();
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
-    chatId: 42,
-    threadId: undefined,
-  });
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 42, threadId: undefined },
+    { createIfNotFound: true },
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     { sessionID: "s-old", parts: [{ type: "text", text: "Hey" }] },
     { throwOnError: true },
@@ -200,10 +206,10 @@ test("passes threadId through the flow", async () => {
     chatId: 42,
     threadId: 7,
   });
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
-    chatId: 42,
-    threadId: 7,
-  });
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 42, threadId: 7 },
+    { createIfNotFound: true },
+  );
 });
 
 test("locks session before sending prompt", async () => {

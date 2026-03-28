@@ -74,7 +74,28 @@ export class ExistingSessions {
     };
   }
 
-  find(location: ExistingSessions.Location): string | undefined {
+  find(
+    location: ExistingSessions.Location,
+    options: ExistingSessions.FindOrCreateOptions,
+  ): Promise<string>;
+  find(
+    location: ExistingSessions.Location,
+    options?: ExistingSessions.FindOptions,
+  ): string | undefined;
+  find(
+    location: ExistingSessions.Location,
+    options: ExistingSessions.FindOptions = {},
+  ): string | undefined | Promise<string> {
+    const existing = this.#findSessionId(location);
+    if (existing) {
+      if (options.createIfNotFound) return Promise.resolve(existing);
+      return existing;
+    }
+    if (!options.createIfNotFound) return undefined;
+    return this.#createSession(location);
+  }
+
+  #findSessionId(location: ExistingSessions.Location): string | undefined {
     const row = this.#database.query.session
       .findFirst({
         columns: { id: true },
@@ -133,10 +154,7 @@ export class ExistingSessions {
     }
   }
 
-  async findOrCreate(location: ExistingSessions.Location): Promise<string> {
-    const existing = this.find(location);
-    if (existing) return existing;
-
+  async #createSession(location: ExistingSessions.Location): Promise<string> {
     const {
       data: { id: sessionId },
     } = await this.#opencodeClient.session.create({}, { throwOnError: true });
@@ -165,7 +183,7 @@ export class ExistingSessions {
         { throwOnError: true },
       );
       // Return the raced winner from DB.
-      const raced = this.find(location);
+      const raced = this.#findSessionId(location);
       // No winner in DB — insert failed for a reason other than a race condition.
       if (!raced) throw error;
       return raced;
@@ -235,6 +253,14 @@ export class ExistingSessions {
 }
 
 export namespace ExistingSessions {
+  export interface FindOptions {
+    readonly createIfNotFound?: boolean;
+  }
+
+  export interface FindOrCreateOptions extends FindOptions {
+    readonly createIfNotFound: true;
+  }
+
   export interface GetOptions {
     readonly throwIfNotFound?: boolean;
   }

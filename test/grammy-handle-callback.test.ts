@@ -30,7 +30,6 @@ function mockExistingSessions(sessionId: string | undefined): ExistingSessions {
   return {
     sessionIds: sessionId ? [sessionId] : [],
     find: vi.fn(() => sessionId),
-    findOrCreate: vi.fn(),
     invalidate: vi.fn(),
     check: vi.fn(() => !!sessionId),
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({

@@ -31,7 +31,15 @@ function mockOpencodeClient() {
 function mockExistingSessions(sessionId = "s1"): ExistingSessions {
   return {
     sessionIds: [sessionId],
-    findOrCreate: vi.fn(async () => sessionId),
+    find: vi.fn(
+      (
+        _location: ExistingSessions.Location,
+        options?: ExistingSessions.FindOptions,
+      ) => {
+        if (options?.createIfNotFound) return Promise.resolve(sessionId);
+        return sessionId;
+      },
+    ),
     invalidate: vi.fn(),
     check: vi.fn(() => true),
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
@@ -140,10 +148,10 @@ test("creates new session when none exists", async () => {
 
   await grammyHandleText(scope, mockCtx(42, "hello"));
 
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
-    chatId: 42,
-    threadId: undefined,
-  });
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 42, threadId: undefined },
+    { createIfNotFound: true },
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     { sessionID: "s1", parts: [{ type: "text", text: "hello" }] },
     { throwOnError: true },
@@ -197,10 +205,10 @@ test("passes threadId through the flow", async () => {
 
   await grammyHandleText(scope, mockCtx(42, "hello", 7));
 
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
-    chatId: 42,
-    threadId: 7,
-  });
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 42, threadId: 7 },
+    { createIfNotFound: true },
+  );
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
     messageId: 100,
