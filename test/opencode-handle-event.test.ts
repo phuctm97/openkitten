@@ -1,11 +1,11 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import * as grammySendCompactedModule from "~/lib/grammy-send-compacted";
 import * as grammySendErrorModule from "~/lib/grammy-send-error";
+import * as grammySendSessionCompactedModule from "~/lib/grammy-send-session-compacted";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
 import type { Scope } from "~/lib/scope";
 
 vi.mock("~/lib/grammy-send-error");
-vi.mock("~/lib/grammy-send-compacted");
+vi.mock("~/lib/grammy-send-session-compacted");
 
 function mockScope() {
   const bot = {} as never;
@@ -133,7 +133,7 @@ test("ignores session.error without sessionID", async () => {
   expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();
 });
 
-test("sends compacted on session.compacted", async () => {
+test("sends session compacted on session.compacted", async () => {
   const { scope, bot } = mockScope();
   await opencodeHandleEvent(
     scope,
@@ -143,7 +143,9 @@ test("sends compacted on session.compacted", async () => {
     } as never,
     new AbortController().signal,
   );
-  expect(grammySendCompactedModule.grammySendCompacted).toHaveBeenCalledWith({
+  expect(
+    grammySendSessionCompactedModule.grammySendSessionCompacted,
+  ).toHaveBeenCalledWith({
     bot,
     chatId: 123,
     threadId: 456,
