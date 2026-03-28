@@ -4,7 +4,7 @@ import { logger } from "~/lib/logger";
 import pkg from "~/package.json" with { type: "json" };
 
 export class McpServer implements AsyncDisposable {
-  readonly #httpServer: ReturnType<typeof Bun.serve>;
+  readonly #server: ReturnType<typeof Bun.serve>;
   readonly #stopped: Promise<void>;
   readonly #resolve: () => void;
 
@@ -12,7 +12,7 @@ export class McpServer implements AsyncDisposable {
     const { resolve, promise } = Promise.withResolvers<void>();
     this.#stopped = promise;
     this.#resolve = resolve;
-    this.#httpServer = Bun.serve({
+    this.#server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch: (req) => this.#fetch(req),
@@ -37,14 +37,14 @@ export class McpServer implements AsyncDisposable {
   }
 
   async [Symbol.asyncDispose]() {
-    this.#httpServer.stop();
+    this.#server.stop();
     this.#resolve();
   }
 
   static create(): McpServer {
     logger.debug("MCP server is starting…");
     const mcpServer = new McpServer();
-    logger.info("MCP server is ready", { url: mcpServer.#httpServer.url.href });
+    logger.info("MCP server is ready", { url: mcpServer.#server.url.href });
     return mcpServer;
   }
 }
