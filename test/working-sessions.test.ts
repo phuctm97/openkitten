@@ -24,7 +24,7 @@ function mockExistingSessions() {
         hooks[name] = undefined;
       };
     }),
-    findOrCreate: vi.fn(),
+    find: vi.fn(),
     invalidate: vi.fn(),
     check: vi.fn(() => true),
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({

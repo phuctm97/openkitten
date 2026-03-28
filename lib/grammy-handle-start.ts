@@ -21,7 +21,9 @@ export async function grammyHandleStart(
     }
   }
 
-  const newSessionId = await existingSessions.findOrCreate(location);
+  const newSessionId = await existingSessions.find(location, {
+    createIfNotFound: true,
+  });
 
   await Promise.all([
     workingSessions.lock(newSessionId, async () => {

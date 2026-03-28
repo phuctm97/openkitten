@@ -19,8 +19,15 @@ function mockCtx(chatId: number, threadId?: number) {
 function mockExistingSessions(): ExistingSessions {
   return {
     sessionIds: ["s1"],
-    find: vi.fn(() => "s1"),
-    findOrCreate: vi.fn(async () => "s1"),
+    find: vi.fn(
+      (
+        _location: ExistingSessions.Location,
+        options?: ExistingSessions.FindOptions,
+      ) => {
+        if (options?.createIfNotFound) return Promise.resolve("s1");
+        return "s1";
+      },
+    ),
     invalidate: vi.fn(),
     check: vi.fn(() => true),
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
@@ -64,10 +71,10 @@ test("summarizes session and reacts with like", async () => {
 
   await grammyHandleCompact(scope, ctx);
 
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
-    chatId: 42,
-    threadId: undefined,
-  });
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 42, threadId: undefined },
+    { createIfNotFound: true },
+  );
   expect(opencodeClient.session.summarize).toHaveBeenCalledWith(
     { sessionID: "s1" },
     { throwOnError: true },
@@ -83,8 +90,8 @@ test("passes threadId when present", async () => {
 
   await grammyHandleCompact(scope, ctx);
 
-  expect(existingSessions.findOrCreate).toHaveBeenCalledWith({
-    chatId: 42,
-    threadId: 7,
-  });
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 42, threadId: 7 },
+    { createIfNotFound: true },
+  );
 });

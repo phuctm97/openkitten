@@ -47,7 +47,7 @@ function mockExistingSessions(
   getMap: Record<string, ExistingSessions.Location> = {},
 ) {
   const invalidate = vi.fn(async () => {});
-  const findOrCreate = vi.fn();
+  const find = vi.fn();
   const check = vi.fn((id: string) => id in getMap);
   const get = vi.fn(
     (id: string, _options: ExistingSessions.GetOptions) => getMap[id],
@@ -60,7 +60,7 @@ function mockExistingSessions(
     },
     hook,
     invalidate,
-    findOrCreate,
+    find,
     check,
     get,
     remove,
