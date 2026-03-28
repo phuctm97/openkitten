@@ -27,7 +27,10 @@ function mockExistingSessions() {
     findOrCreate: vi.fn(),
     invalidate: vi.fn(),
     check: vi.fn(() => true),
-    get: vi.fn(() => ({ chatId: 42, threadId: undefined })),
+    get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
+      chatId: 42,
+      threadId: undefined,
+    })),
     hooks,
   } as unknown as ExistingSessions & {
     sessionIds: string[];
@@ -176,7 +179,9 @@ test("lock sends busy when session is cached as working", async () => {
     called = true;
   });
   expect(called).toBe(false);
-  expect(existingSessions.get).toHaveBeenCalledWith("sess-1");
+  expect(existingSessions.get).toHaveBeenCalledWith("sess-1", {
+    throwIfNotFound: true,
+  });
   expect(spy).toHaveBeenCalledWith({
     bot,
     chatId: 42,

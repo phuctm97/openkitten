@@ -32,7 +32,10 @@ function createMockExistingSessions(
 ) {
   return {
     sessionIds,
-    get: vi.fn(() => ({ chatId: 123, threadId: undefined })),
+    get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
+      chatId: 123,
+      threadId: undefined,
+    })),
   } as unknown as ExistingSessions;
 }
 

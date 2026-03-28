@@ -49,7 +49,9 @@ function mockExistingSessions(
   const invalidate = vi.fn(async () => {});
   const findOrCreate = vi.fn();
   const check = vi.fn((id: string) => id in getMap);
-  const get = vi.fn((id: string) => getMap[id]);
+  const get = vi.fn(
+    (id: string, _options: ExistingSessions.GetOptions) => getMap[id],
+  );
   const hook = vi.fn(() => () => {});
   const remove = vi.fn(async () => {});
   const existingSessions = {

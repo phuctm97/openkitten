@@ -10,7 +10,10 @@ vi.mock("~/lib/grammy-send-session-compacted");
 function mockScope() {
   const bot = {} as never;
   const existingSessions = {
-    get: vi.fn().mockReturnValue({ chatId: 123, threadId: 456 }),
+    get: vi.fn((_sessionId: string, _options: { throwIfNotFound: true }) => ({
+      chatId: 123,
+      threadId: 456,
+    })),
   };
   const workingSessions = { update: vi.fn() };
   const pendingPrompts = { update: vi.fn() };

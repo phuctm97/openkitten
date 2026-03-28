@@ -70,7 +70,10 @@ test("findOrCreate creates new session", async () => {
     chatId: 123,
     threadId: undefined,
   });
-  expect(es.get("s1")).toEqual({ chatId: 123, threadId: undefined });
+  expect(es.get("s1", { throwIfNotFound: true })).toEqual({
+    chatId: 123,
+    threadId: undefined,
+  });
   expect(es.sessionIds).toEqual(["s1"]);
 });
 
@@ -135,7 +138,10 @@ test("findOrCreate handles race condition by cleaning up and reusing winner", as
 
   expect(first).toBe("s-winner");
   expect(second).toBe("s-winner");
-  expect(es.get("s-winner")).toEqual({ chatId: 123, threadId: undefined });
+  expect(es.get("s-winner", { throwIfNotFound: true })).toEqual({
+    chatId: 123,
+    threadId: undefined,
+  });
   expect(opencodeClient.session.delete).toHaveBeenCalledWith(
     { sessionID: "s-loser" },
     { throwOnError: true },
@@ -315,7 +321,10 @@ test("get returns location after findOrCreate", async () => {
 
   await es.findOrCreate({ chatId: 123, threadId: 7 });
 
-  expect(es.get("s1")).toEqual({ chatId: 123, threadId: 7 });
+  expect(es.get("s1", { throwIfNotFound: true })).toEqual({
+    chatId: 123,
+    threadId: 7,
+  });
 });
 
 test("get normalizes threadId 0 to undefined", () => {
@@ -325,16 +334,33 @@ test("get normalizes threadId 0 to undefined", () => {
     .values({ id: "s1", chatId: 100, threadId: 0 })
     .run();
 
-  expect(es.get("s1")).toEqual({ chatId: 100, threadId: undefined });
+  expect(es.get("s1", { throwIfNotFound: true })).toEqual({
+    chatId: 100,
+    threadId: undefined,
+  });
 });
 
 test("get throws for unknown session", () => {
   const { es } = setup();
 
-  expect(() => es.get("unknown")).toThrow(ExistingSessions.NotFoundError);
-  expect(() => es.get("unknown")).toThrow(
+  expect(() => es.get("unknown", { throwIfNotFound: true })).toThrow(
+    ExistingSessions.NotFoundError,
+  );
+  expect(() => es.get("unknown", { throwIfNotFound: true })).toThrow(
     expect.objectContaining({ sessionId: "unknown" }),
   );
+});
+
+test("get returns undefined for unknown session by default", () => {
+  const { es } = setup();
+
+  expect(es.get("unknown")).toBeUndefined();
+});
+
+test("get returns undefined for unknown session when throwIfNotFound is false", () => {
+  const { es } = setup();
+
+  expect(es.get("unknown", { throwIfNotFound: false })).toBeUndefined();
 });
 
 // --- find ---
