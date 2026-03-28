@@ -44,7 +44,7 @@ export class ExistingSessions {
       .sync();
   }
 
-  resolve(sessionId: string): ExistingSessions.Location {
+  get(sessionId: string): ExistingSessions.Location {
     const row = this.#database.query.session
       .findFirst({
         columns: { chatId: true, threadId: true },

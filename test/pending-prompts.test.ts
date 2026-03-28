@@ -78,7 +78,7 @@ function createMockExistingSessions(
     findOrCreate: vi.fn(),
     invalidate: vi.fn(),
     check: (sessionId: string) => sessionId in map,
-    resolve: (sessionId: string) => map[sessionId],
+    get: (sessionId: string) => map[sessionId],
     hooks,
   } as unknown as ExistingSessions & {
     hooks: typeof hooks;

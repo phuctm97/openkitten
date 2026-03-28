@@ -85,7 +85,7 @@ export class PendingPrompts implements AsyncDisposable {
   }
 
   async #flushItem(item: PendingPrompts.Item) {
-    const { chatId, threadId } = this.#existingSessions.resolve(
+    const { chatId, threadId } = this.#existingSessions.get(
       item.request.sessionID,
     );
     const sendOpts = {
@@ -146,7 +146,7 @@ export class PendingPrompts implements AsyncDisposable {
     resolvedText: string,
   ) {
     this.#removeItem(items, item);
-    const { chatId } = this.#existingSessions.resolve(item.request.sessionID);
+    const { chatId } = this.#existingSessions.get(item.request.sessionID);
     invariant(
       item.messageId,
       "Expected item to have a messageId when resolving",
@@ -185,7 +185,7 @@ export class PendingPrompts implements AsyncDisposable {
       item.currentAnswers = newAnswers;
       item.selectedOptions = [];
       item.messageId = undefined;
-      const { chatId } = this.#existingSessions.resolve(item.request.sessionID);
+      const { chatId } = this.#existingSessions.get(item.request.sessionID);
       invariant(
         previousMessageId,
         "Expected item to have a messageId when advancing",
@@ -251,7 +251,7 @@ export class PendingPrompts implements AsyncDisposable {
     if (!question.multiple) {
       await this.#advanceOrSubmit(items, item);
     } else if (item.messageId) {
-      const { chatId } = this.#existingSessions.resolve(item.request.sessionID);
+      const { chatId } = this.#existingSessions.get(item.request.sessionID);
       const promptText = grammyFormatQuestionPrompt(question);
       const kb = this.#buildQuestionKeyboard(
         item.key,
@@ -282,7 +282,7 @@ export class PendingPrompts implements AsyncDisposable {
 
   async #grammyDismiss(item: PendingPrompts.Item) {
     if (!item.messageId) return;
-    const { chatId } = this.#existingSessions.resolve(item.request.sessionID);
+    const { chatId } = this.#existingSessions.get(item.request.sessionID);
     const text =
       item.kind === "question"
         ? grammyFormatQuestionRejected()
@@ -303,7 +303,7 @@ export class PendingPrompts implements AsyncDisposable {
     const activeItem = items.find((i) => i.messageId);
     if (!activeItem) throw new PendingPrompts.NotFoundError();
     if (activeItem.kind === "permission") {
-      const { chatId, threadId } = this.#existingSessions.resolve(sessionId);
+      const { chatId, threadId } = this.#existingSessions.get(sessionId);
       await grammySendPermissionPending({
         bot: this.#bot,
         chatId,
@@ -315,7 +315,7 @@ export class PendingPrompts implements AsyncDisposable {
     const question = activeItem.request.questions[activeItem.currentIndex];
     invariant(question, "Expected a question at the current index");
     if (question.custom === false) {
-      const { chatId, threadId } = this.#existingSessions.resolve(sessionId);
+      const { chatId, threadId } = this.#existingSessions.get(sessionId);
       await grammySendQuestionPending({
         bot: this.#bot,
         chatId,

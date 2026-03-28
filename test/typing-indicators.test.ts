@@ -34,7 +34,7 @@ function createMockExistingSessions(
     invalidate: vi.fn(),
     check: (sessionId: string) => sessionId in map,
 
-    resolve: (sessionId: string) => {
+    get: (sessionId: string) => {
       const loc = map[sessionId];
       if (!loc) throw new Error(`No session found: ${sessionId}`);
       return loc;
@@ -194,7 +194,7 @@ test("initial send error bubbles up", async () => {
   await expect(indicators.invalidate()).rejects.toThrow("send failed");
 });
 
-test("resolve error bubbles up when session not in existingSessions", async () => {
+test("get error bubbles up when session not in existingSessions", async () => {
   const { es, indicators } = setup({}, new Set(["sess-1"]));
   es.sessionIds = ["sess-1"];
   await expect(indicators.invalidate()).rejects.toThrow("No session found");
