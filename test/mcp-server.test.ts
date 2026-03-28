@@ -48,7 +48,7 @@ describe("McpServer", () => {
   });
 
   test("logs start and ready", async () => {
-    await using _server = McpServer.create();
+    using _server = McpServer.create();
     expect(logger.debug).toHaveBeenCalledWith("MCP server is starting…");
     expect(logger.info).toHaveBeenCalledWith("MCP server is ready", {
       url: "http://127.0.0.1:12345/",
@@ -56,7 +56,7 @@ describe("McpServer", () => {
   });
 
   test("starts Bun.serve on localhost with random port", async () => {
-    await using _server = McpServer.create();
+    using _server = McpServer.create();
     expect(Bun.serve).toHaveBeenCalledWith(
       expect.objectContaining({ hostname: "127.0.0.1", port: 0 }),
     );
@@ -64,25 +64,25 @@ describe("McpServer", () => {
 
   test("stopped resolves on disposal", async () => {
     const server = McpServer.create();
-    await server[Symbol.asyncDispose]();
+    server[Symbol.dispose]();
     await expect(server.stopped).resolves.toBeUndefined();
   });
 
-  test("stops HTTP server on disposal", async () => {
+  test("stops HTTP server on disposal", () => {
     {
-      await using _server = McpServer.create();
+      using _server = McpServer.create();
     }
     expect(mockStop).toHaveBeenCalledOnce();
   });
 
   test("returns 404 for non-MCP paths", async () => {
-    await using _server = McpServer.create();
+    using _server = McpServer.create();
     const response = await capturedFetch(new Request("http://localhost/other"));
     expect(response.status).toBe(404);
   });
 
   test("creates SDK server and transport for MCP requests", async () => {
-    await using _server = McpServer.create();
+    using _server = McpServer.create();
     const req = new Request("http://localhost/mcp", { method: "POST" });
     const response = await capturedFetch(req);
 

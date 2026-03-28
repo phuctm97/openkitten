@@ -38,7 +38,7 @@ export const serve = defineCommand({
     using shutdown = Shutdown.create();
     using database = Database.create(profile);
     await using opencodeServer = await OpencodeServer.create(opencodeConfig);
-    await using mcpServer = McpServer.create();
+    using mcpServer = McpServer.create();
     await using floatingPromises = FloatingPromises.create();
     const existingSessions = ExistingSessions.create(
       bot,

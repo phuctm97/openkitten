@@ -3,7 +3,7 @@ import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/
 import { logger } from "~/lib/logger";
 import pkg from "~/package.json" with { type: "json" };
 
-export class McpServer implements AsyncDisposable {
+export class McpServer implements Disposable {
   readonly #server: Bun.Server<undefined>;
   readonly #stopped: Promise<void>;
   readonly #resolve: () => void;
@@ -36,7 +36,7 @@ export class McpServer implements AsyncDisposable {
     return this.#stopped;
   }
 
-  async [Symbol.asyncDispose]() {
+  [Symbol.dispose]() {
     this.#server[Symbol.dispose]();
     this.#resolve();
   }

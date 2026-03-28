@@ -189,12 +189,12 @@ function mockMcpServer() {
     () => {},
     () => {},
   );
-  const dispose = vi.fn(async () => {
+  const dispose = vi.fn(() => {
     resolveStopped();
   });
   vi.spyOn(McpServer, "create").mockReturnValue({
     stopped,
-    [Symbol.asyncDispose]: dispose,
+    [Symbol.dispose]: dispose,
   } as never);
   return dispose;
 }
