@@ -1,5 +1,5 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { Bot } from "grammy";
 import { createHooks, type Hookable } from "hookable";
 import type { Database } from "~/lib/database";
@@ -13,10 +13,7 @@ export class ExistingSessions {
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #hooks = createHooks<ExistingSessions.Hooks>();
-  readonly #sessionMap = new Map<string, ExistingSessions.Location>();
-  readonly #locationMap = new Map<string, string>();
   readonly #removing = new Set<string>();
-  #initialized = false;
 
   private constructor(
     bot: Bot,
@@ -28,35 +25,64 @@ export class ExistingSessions {
     this.#opencodeClient = opencodeClient;
   }
 
-  #locationKey({ chatId, threadId }: ExistingSessions.Location): string {
-    return `${chatId}:${threadId || ""}`;
-  }
-
   get sessionIds(): readonly string[] {
-    return [...this.#sessionMap.keys()];
+    return this.#database.query.session
+      .findMany({ columns: { id: true } })
+      .sync()
+      .map((row) => row.id);
   }
 
   readonly hook: Hookable<ExistingSessions.Hooks>["hook"] = (...args) =>
     this.#hooks.hook(...args);
 
   check(sessionId: string): boolean {
-    return this.#sessionMap.has(sessionId);
+    return !!this.#database.query.session
+      .findFirst({
+        columns: { id: true },
+        where: eq(schema.session.id, sessionId),
+      })
+      .sync();
   }
 
   resolve(sessionId: string): ExistingSessions.Location {
-    const location = this.#sessionMap.get(sessionId);
-    if (!location) throw new ExistingSessions.NotFoundError(sessionId);
-    return location;
+    const row = this.#database.query.session
+      .findFirst({
+        columns: { chatId: true, threadId: true },
+        where: eq(schema.session.id, sessionId),
+      })
+      .sync();
+    if (!row) throw new ExistingSessions.NotFoundError(sessionId);
+    return {
+      chatId: row.chatId,
+      threadId: row.threadId || undefined,
+    };
   }
 
   find(location: ExistingSessions.Location): string | undefined {
-    const key = this.#locationKey(location);
-    return this.#locationMap.get(key);
+    const row = this.#database.query.session
+      .findFirst({
+        columns: { id: true },
+        where: and(
+          eq(schema.session.chatId, location.chatId),
+          eq(schema.session.threadId, location.threadId || 0),
+        ),
+      })
+      .sync();
+    return row?.id;
   }
 
   async remove(sessionId: string): Promise<void> {
-    const location = this.#sessionMap.get(sessionId);
-    if (!location || this.#removing.has(sessionId)) return;
+    const row = this.#database.query.session
+      .findFirst({
+        columns: { chatId: true, threadId: true },
+        where: eq(schema.session.id, sessionId),
+      })
+      .sync();
+    if (!row || this.#removing.has(sessionId)) return;
+    const location: ExistingSessions.Location = {
+      chatId: row.chatId,
+      threadId: row.threadId || undefined,
+    };
     try {
       this.#removing.add(sessionId);
       const abortResults = await Promise.allSettled([
@@ -86,19 +112,13 @@ export class ExistingSessions {
         databaseResult,
       ]);
     } finally {
-      // Always evict from maps: once removal starts, the session is gone
-      // regardless of hook/DB errors.
       this.#removing.delete(sessionId);
-      this.#sessionMap.delete(sessionId);
-      this.#locationMap.delete(this.#locationKey(location));
       logger.info("Existing session is removed", { sessionId });
     }
   }
 
   async findOrCreate(location: ExistingSessions.Location): Promise<string> {
-    const key = this.#locationKey(location);
-
-    const existing = this.#locationMap.get(key);
+    const existing = this.find(location);
     if (existing) return existing;
 
     const {
@@ -119,8 +139,6 @@ export class ExistingSessions {
           threadId: normalized.threadId || 0,
         })
         .run();
-      this.#sessionMap.set(sessionId, normalized);
-      this.#locationMap.set(key, sessionId);
       logger.info("New session is created", { sessionId, ...normalized });
       return sessionId;
     } catch (error) {
@@ -130,41 +148,27 @@ export class ExistingSessions {
         { sessionID: sessionId },
         { throwOnError: true },
       );
-      // Return the raced winner from maps.
-      const raced = this.#locationMap.get(key);
-      // No winner in maps — insert failed for a reason other than a race condition.
+      // Return the raced winner from DB.
+      const raced = this.find(location);
+      // No winner in DB — insert failed for a reason other than a race condition.
       if (!raced) throw error;
       return raced;
     }
   }
 
   async invalidate(): Promise<void> {
-    // Load persisted sessions from DB on first run
-    if (!this.#initialized) {
-      const rows = this.#database.query.session
-        .findMany({
-          columns: { id: true, chatId: true, threadId: true },
-        })
-        .sync();
-      for (const row of rows) {
-        if (this.#sessionMap.has(row.id)) continue;
-        const location: ExistingSessions.Location = {
-          chatId: row.chatId,
-          threadId: row.threadId || undefined,
-        };
-        this.#sessionMap.set(row.id, location);
-        this.#locationMap.set(this.#locationKey(location), row.id);
-      }
-      this.#initialized = true;
-    }
+    const currentSessions = this.#database.query.session
+      .findMany({
+        columns: { id: true, chatId: true, threadId: true },
+      })
+      .sync()
+      .map((row) => ({
+        id: row.id,
+        chatId: row.chatId,
+        threadId: row.threadId || undefined,
+      }));
 
     // Check reachability for all current sessions
-    const currentSessions = [...this.#sessionMap.entries()].map(
-      ([id, location]) => ({
-        id,
-        ...location,
-      }),
-    );
     const reachabilityResults = await Promise.allSettled(
       currentSessions.map(async (session) => {
         try {
@@ -192,7 +196,7 @@ export class ExistingSessions {
     logger.debug("Current sessions are invalidated", {
       checked: currentSessions.length,
       removed: unreachableSessions.length,
-      remaining: this.#sessionMap.size,
+      remaining: currentSessions.length - unreachableSessions.length,
     });
   }
 

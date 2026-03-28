@@ -74,7 +74,7 @@ test("findOrCreate creates new session", async () => {
   expect(es.sessionIds).toEqual(["s1"]);
 });
 
-test("findOrCreate returns cached session without creating again", async () => {
+test("findOrCreate returns existing session without creating again", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
@@ -179,7 +179,7 @@ test("findOrCreate throws on OpenCode delete error during race recovery", async 
 
 // --- invalidate ---
 
-test("invalidate loads from DB on first run and keeps reachable sessions", async () => {
+test("invalidate loads from DB and keeps reachable sessions", async () => {
   const { es, database } = setup();
   database.insert(schema.session).values({ id: "s1", chatId: 100 }).run();
   database
@@ -275,20 +275,19 @@ test("invalidate handles empty sessions", async () => {
   );
 });
 
-test("invalidate restores from DB only on first run", async () => {
+test("invalidate picks up sessions added between calls", async () => {
   const { es, database } = setup();
   database.insert(schema.session).values({ id: "s1", chatId: 100 }).run();
 
   await es.invalidate();
   expect(es.sessionIds).toEqual(["s1"]);
 
-  // Add a session to DB after first invalidate — should not be picked up
   database.insert(schema.session).values({ id: "s2", chatId: 200 }).run();
   await es.invalidate();
-  expect(es.sessionIds).toEqual(["s1"]);
+  expect(es.sessionIds).toEqual(["s1", "s2"]);
 });
 
-test("invalidate skips DB sessions already in memory", async () => {
+test("invalidate includes sessions created via findOrCreate", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
   await es.findOrCreate({ chatId: 123, threadId: undefined });
@@ -296,7 +295,7 @@ test("invalidate skips DB sessions already in memory", async () => {
   expect(es.sessionIds).toEqual(["s1"]);
 });
 
-test("invalidate checks in-memory sessions not in DB", async () => {
+test("invalidate reflects sessions deleted from DB", async () => {
   const { es, database, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
@@ -305,15 +304,10 @@ test("invalidate checks in-memory sessions not in DB", async () => {
 
   await es.invalidate();
 
-  expect(es.sessionIds).toEqual(["s1"]);
+  expect(es.sessionIds).toEqual([]);
 });
 
 // --- resolve ---
-
-test("check returns false for unknown session", () => {
-  const { es } = setup();
-  expect(es.check("unknown")).toBe(false);
-});
 
 test("resolve returns location after findOrCreate", async () => {
   const { es, opencodeClient } = setup();
@@ -324,14 +318,12 @@ test("resolve returns location after findOrCreate", async () => {
   expect(es.resolve("s1")).toEqual({ chatId: 123, threadId: 7 });
 });
 
-test("resolve normalizes threadId 0 to undefined via invalidate", async () => {
+test("resolve normalizes threadId 0 to undefined", () => {
   const { es, database } = setup();
   database
     .insert(schema.session)
     .values({ id: "s1", chatId: 100, threadId: 0 })
     .run();
-
-  await es.invalidate();
 
   expect(es.resolve("s1")).toEqual({ chatId: 100, threadId: undefined });
 });
@@ -343,15 +335,6 @@ test("resolve throws for unknown session", () => {
   expect(() => es.resolve("unknown")).toThrow(
     expect.objectContaining({ sessionId: "unknown" }),
   );
-});
-
-test("resolve returns location after findOrCreate", async () => {
-  const { es, opencodeClient } = setup();
-  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
-
-  await es.findOrCreate({ chatId: 123, threadId: 7 });
-
-  expect(es.resolve("s1")).toEqual({ chatId: 123, threadId: 7 });
 });
 
 // --- find ---
@@ -390,7 +373,7 @@ test("find returns undefined after session is removed", async () => {
 
 // --- remove ---
 
-test("remove deletes from maps and database", async () => {
+test("remove deletes from database", async () => {
   const { es, database, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
@@ -426,14 +409,16 @@ test("remove throws and cleans state on abort error", async () => {
   expect(es.sessionIds).toEqual([]);
 });
 
-test("remove throws and cleans state on DB error", async () => {
+test("remove throws and preserves session on DB error", async () => {
   const { es, database, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
   await es.findOrCreate({ chatId: 123, threadId: undefined });
-  database[Symbol.dispose]();
-  await expect(es.remove("s1")).rejects.toThrow();
-  expect(es.sessionIds).toEqual([]);
+  vi.spyOn(database, "delete").mockImplementationOnce(() => {
+    throw new Error("disk full");
+  });
+  await expect(es.remove("s1")).rejects.toThrow("disk full");
+  expect(es.sessionIds).toEqual(["s1"]);
 });
 
 // --- hooks ---
