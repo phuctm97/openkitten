@@ -9,6 +9,7 @@ export class McpServer implements Disposable {
   readonly #resolve: () => void;
 
   private constructor() {
+    logger.debug("MCP server is starting…");
     this.#server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -17,6 +18,7 @@ export class McpServer implements Disposable {
     const { resolve, promise } = Promise.withResolvers<void>();
     this.#stopped = promise;
     this.#resolve = resolve;
+    logger.info("MCP server is ready", { url: this.#server.url.href });
   }
 
   async #fetch(req: Request): Promise<Response> {
@@ -42,9 +44,6 @@ export class McpServer implements Disposable {
   }
 
   static create(): McpServer {
-    logger.debug("MCP server is starting…");
-    const mcpServer = new McpServer();
-    logger.info("MCP server is ready", { url: mcpServer.#server.url.href });
-    return mcpServer;
+    return new McpServer();
   }
 }
