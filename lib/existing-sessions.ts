@@ -46,7 +46,7 @@ export class ExistingSessions {
 
   get(
     sessionId: string,
-    options: ExistingSessions.GetOptions & { readonly throwIfNotFound: true },
+    options: ExistingSessions.GetOrThrowOptions,
   ): ExistingSessions.Location;
   get(
     sessionId: string,
@@ -237,6 +237,10 @@ export class ExistingSessions {
 export namespace ExistingSessions {
   export interface GetOptions {
     readonly throwIfNotFound?: boolean;
+  }
+
+  export interface GetOrThrowOptions extends GetOptions {
+    readonly throwIfNotFound: true;
   }
 
   export interface Location {
