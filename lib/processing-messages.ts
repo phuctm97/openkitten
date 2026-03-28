@@ -10,7 +10,7 @@ import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
 import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
-import { grammySendMessage } from "~/lib/grammy-send-message";
+import { grammySendText } from "~/lib/grammy-send-text";
 import * as schema from "~/lib/schema";
 
 export class ProcessingMessages {
@@ -66,7 +66,7 @@ export class ProcessingMessages {
     const { chatId, threadId } = this.#existingSessions.resolve(
       message.sessionID,
     );
-    await grammySendMessage({ bot: this.#bot, text, chatId, threadId });
+    await grammySendText({ bot: this.#bot, text, chatId, threadId });
   }
 
   // Fetch messages with an expanding window until we overlap with

@@ -1,7 +1,7 @@
-import { grammyFormatMessage } from "~/lib/grammy-format-message";
+import { grammyFormatText } from "~/lib/grammy-format-text";
 
 export function grammyFormatPermissionPending() {
-  return grammyFormatMessage(
+  return grammyFormatText(
     "> ❗ A permission request needs your response.\n\n```tip\nRespond to the pending permission request before sending a new message.\n```",
   );
 }

@@ -1,5 +1,5 @@
 import type { PermissionRequest } from "@opencode-ai/sdk/v2";
-import { grammyFormatMessage } from "~/lib/grammy-format-message";
+import { grammyFormatText } from "~/lib/grammy-format-text";
 
 interface EditFile {
   readonly filePath: string;
@@ -478,5 +478,5 @@ export function grammyFormatPermissionMessage(request: PermissionRequest) {
   lines.push(`_${description}_`);
   formatPermission(lines, request);
   formatAlwaysAllow(lines, request);
-  return grammyFormatMessage(lines.join("\n"));
+  return grammyFormatText(lines.join("\n"));
 }
