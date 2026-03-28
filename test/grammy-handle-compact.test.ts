@@ -23,7 +23,7 @@ function mockExistingSessions(): ExistingSessions {
     findOrCreate: vi.fn(async () => "s1"),
     invalidate: vi.fn(),
     check: vi.fn(() => true),
-    resolve: vi.fn(() => ({ chatId: 42, threadId: undefined })),
+    get: vi.fn(() => ({ chatId: 42, threadId: undefined })),
   } as never;
 }
 

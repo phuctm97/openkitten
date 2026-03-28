@@ -44,12 +44,12 @@ function mockCreateDatabase() {
 
 function mockExistingSessions(
   sessionIds: readonly string[] = [],
-  resolveMap: Record<string, ExistingSessions.Location> = {},
+  getMap: Record<string, ExistingSessions.Location> = {},
 ) {
   const invalidate = vi.fn(async () => {});
   const findOrCreate = vi.fn();
-  const check = vi.fn((id: string) => id in resolveMap);
-  const resolve = vi.fn((id: string) => resolveMap[id]);
+  const check = vi.fn((id: string) => id in getMap);
+  const get = vi.fn((id: string) => getMap[id]);
   const hook = vi.fn(() => () => {});
   const remove = vi.fn(async () => {});
   const existingSessions = {
@@ -60,13 +60,13 @@ function mockExistingSessions(
     invalidate,
     findOrCreate,
     check,
-    resolve,
+    get,
     remove,
   };
   vi.spyOn(ExistingSessions, "create").mockReturnValue(
     existingSessions as never,
   );
-  return { existingSessions, invalidate, resolve };
+  return { existingSessions, invalidate, get };
 }
 
 function mockOpencodeServer() {

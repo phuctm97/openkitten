@@ -70,7 +70,7 @@ test("findOrCreate creates new session", async () => {
     chatId: 123,
     threadId: undefined,
   });
-  expect(es.resolve("s1")).toEqual({ chatId: 123, threadId: undefined });
+  expect(es.get("s1")).toEqual({ chatId: 123, threadId: undefined });
   expect(es.sessionIds).toEqual(["s1"]);
 });
 
@@ -135,7 +135,7 @@ test("findOrCreate handles race condition by cleaning up and reusing winner", as
 
   expect(first).toBe("s-winner");
   expect(second).toBe("s-winner");
-  expect(es.resolve("s-winner")).toEqual({ chatId: 123, threadId: undefined });
+  expect(es.get("s-winner")).toEqual({ chatId: 123, threadId: undefined });
   expect(opencodeClient.session.delete).toHaveBeenCalledWith(
     { sessionID: "s-loser" },
     { throwOnError: true },
@@ -307,32 +307,32 @@ test("invalidate reflects sessions deleted from DB", async () => {
   expect(es.sessionIds).toEqual([]);
 });
 
-// --- resolve ---
+// --- get ---
 
-test("resolve returns location after findOrCreate", async () => {
+test("get returns location after findOrCreate", async () => {
   const { es, opencodeClient } = setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
   await es.findOrCreate({ chatId: 123, threadId: 7 });
 
-  expect(es.resolve("s1")).toEqual({ chatId: 123, threadId: 7 });
+  expect(es.get("s1")).toEqual({ chatId: 123, threadId: 7 });
 });
 
-test("resolve normalizes threadId 0 to undefined", () => {
+test("get normalizes threadId 0 to undefined", () => {
   const { es, database } = setup();
   database
     .insert(schema.session)
     .values({ id: "s1", chatId: 100, threadId: 0 })
     .run();
 
-  expect(es.resolve("s1")).toEqual({ chatId: 100, threadId: undefined });
+  expect(es.get("s1")).toEqual({ chatId: 100, threadId: undefined });
 });
 
-test("resolve throws for unknown session", () => {
+test("get throws for unknown session", () => {
   const { es } = setup();
 
-  expect(() => es.resolve("unknown")).toThrow(ExistingSessions.NotFoundError);
-  expect(() => es.resolve("unknown")).toThrow(
+  expect(() => es.get("unknown")).toThrow(ExistingSessions.NotFoundError);
+  expect(() => es.get("unknown")).toThrow(
     expect.objectContaining({ sessionId: "unknown" }),
   );
 });

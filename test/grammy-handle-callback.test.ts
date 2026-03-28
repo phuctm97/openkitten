@@ -33,7 +33,7 @@ function mockExistingSessions(sessionId: string | undefined): ExistingSessions {
     findOrCreate: vi.fn(),
     invalidate: vi.fn(),
     check: vi.fn(() => !!sessionId),
-    resolve: vi.fn(() => ({ chatId: 42, threadId: undefined })),
+    get: vi.fn(() => ({ chatId: 42, threadId: undefined })),
   } as never;
 }
 

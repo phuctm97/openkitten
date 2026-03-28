@@ -32,7 +32,7 @@ function createMockExistingSessions(
 ) {
   return {
     sessionIds,
-    resolve: vi.fn(() => ({ chatId: 123, threadId: undefined })),
+    get: vi.fn(() => ({ chatId: 123, threadId: undefined })),
   } as unknown as ExistingSessions;
 }
 

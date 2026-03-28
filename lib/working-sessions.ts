@@ -49,7 +49,7 @@ export class WorkingSessions implements Disposable {
     fn: (sessionId: string) => Promise<void>,
   ): Promise<void> {
     if (this.#cached.has(sessionId) || this.#locked.has(sessionId)) {
-      const { chatId, threadId } = this.#existingSessions.resolve(sessionId);
+      const { chatId, threadId } = this.#existingSessions.get(sessionId);
       await grammySendSessionPending({
         bot: this.#bot,
         chatId,

@@ -63,9 +63,7 @@ export class ProcessingMessages {
       .map((part) => part.text)
       .join("\n");
     if (!text) return;
-    const { chatId, threadId } = this.#existingSessions.resolve(
-      message.sessionID,
-    );
+    const { chatId, threadId } = this.#existingSessions.get(message.sessionID);
     await grammySendText({ bot: this.#bot, text, chatId, threadId });
   }
 
