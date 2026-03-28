@@ -110,13 +110,13 @@ export const serve = defineCommand({
     bot.on("message:text", grammyCreateHandler(scope, grammyHandleText));
     await using grammy = await Grammy.create(shutdown, bot);
     // Shut down when: OS signal received, OpenCode server exits,
-    // event stream exhausts reconnects, Telegram polling stops, or MCP server closes.
+    // MCP server closes, event stream exhausts reconnects, or Telegram polling stops.
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,
+      mcpServer.closed,
       opencodeEventStream.closed,
       grammy.stopped,
-      mcpServer.closed,
     ]);
   },
 });
