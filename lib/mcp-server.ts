@@ -15,10 +15,10 @@ export class McpServer implements Disposable {
       port: 0,
       fetch: (req) => this.#fetch(req),
     });
+    logger.info("MCP server is ready", { url: this.#server.url.href });
     const { resolve, promise } = Promise.withResolvers<void>();
     this.#stopped = promise;
     this.#resolve = resolve;
-    logger.info("MCP server is ready", { url: this.#server.url.href });
   }
 
   async #fetch(req: Request): Promise<Response> {
