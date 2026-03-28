@@ -17,6 +17,7 @@
     "citty": "^0.2.1",
     "drizzle-orm": "^0.45.1",
     "grammy": "^1.41.1",
+    "hono": "^4.12.9",
     "hookable": "^6.1.0",
     "opencode-ai": "^1.3.3",
     "telegram-markdown-v2": "^0.0.4",

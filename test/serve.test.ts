@@ -96,19 +96,8 @@ function mockOpencodeServer() {
 }
 
 function mockMcpServer() {
-  let resolveClosed: () => void;
-  const closed = new Promise<void>((r) => {
-    resolveClosed = r;
-  });
-  closed.then(
-    () => {},
-    () => {},
-  );
-  const dispose = vi.fn(async () => {
-    resolveClosed();
-  });
+  const dispose = vi.fn(async () => {});
   vi.spyOn(McpServer, "create").mockResolvedValue({
-    closed,
     url: "http://127.0.0.1:3001/mcp",
     [Symbol.asyncDispose]: dispose,
   } as never);

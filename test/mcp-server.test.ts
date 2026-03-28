@@ -122,18 +122,6 @@ test("registers with OpenCode using a remote MCP config", async () => {
   });
 });
 
-test("resolves closed when disposed", async () => {
-  const { client } = mockOpencodeClient();
-  const mcpServer = await McpServer.create({} as never, client as never);
-
-  const closed = mcpServer.closed;
-
-  await mcpServer[Symbol.asyncDispose]();
-
-  await expect(closed).resolves.toBeUndefined();
-  expect(logger.info).toHaveBeenCalledWith("MCP server is stopped");
-});
-
 test("dispose is idempotent", async () => {
   const { client } = mockOpencodeClient();
   const mcpServer = await McpServer.create({} as never, client as never);
@@ -164,6 +152,49 @@ test("returns not found for unknown paths", async () => {
 
   expect(response.status).toBe(404);
   expect(await response.text()).toBe("Not Found");
+});
+
+test("returns transport errors for unsupported methods", async () => {
+  const { client } = mockOpencodeClient();
+
+  await using mcpServer = await McpServer.create({} as never, client as never);
+
+  const response = await fetch(mcpServer.url, { method: "PUT" });
+
+  expect(response.status).toBe(405);
+  expect(await response.json()).toEqual({
+    jsonrpc: "2.0",
+    error: {
+      code: -32000,
+      message: "Method not allowed.",
+    },
+    id: null,
+  });
+});
+
+test("falls back to SDK parsing for invalid JSON requests", async () => {
+  const { client } = mockOpencodeClient();
+
+  await using mcpServer = await McpServer.create({} as never, client as never);
+
+  const response = await fetch(mcpServer.url, {
+    method: "POST",
+    headers: {
+      accept: "application/json, text/event-stream",
+      "content-type": "application/json",
+    },
+    body: "{",
+  });
+
+  expect(response.status).toBe(400);
+  expect(await response.json()).toEqual({
+    jsonrpc: "2.0",
+    error: {
+      code: -32700,
+      message: "Parse error: Invalid JSON",
+    },
+    id: null,
+  });
 });
 
 test("returns a JSON-RPC error when MCP request handling throws", async () => {
@@ -244,46 +275,4 @@ test("throws when OpenCode returns a non-connected status without an error", asy
   await expect(McpServer.create({} as never, client as never)).rejects.toThrow(
     `OpenCode failed to connect MCP server "${pkg.name}"`,
   );
-});
-
-test("reuses cleanup work", async () => {
-  let cleaned = 0;
-  const cleanup = McpServer.createCleanup(async () => {
-    cleaned++;
-  });
-
-  await Promise.all([cleanup(), cleanup()]);
-
-  expect(cleaned).toBe(1);
-});
-
-test("cleans up bodyless responses", async () => {
-  let cleaned = 0;
-  const response = McpServer.withCleanup(new Response(null), async () => {
-    cleaned++;
-  });
-
-  expect(await response.text()).toBe("");
-  expect(cleaned).toBe(1);
-});
-
-test("cleans up cancelled response streams", async () => {
-  let cleaned = 0;
-  const response = McpServer.withCleanup(
-    new Response(
-      new ReadableStream<Uint8Array>({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode("hello"));
-        },
-      }),
-    ),
-    async () => {
-      cleaned++;
-    },
-  );
-
-  const reader = response.body?.getReader();
-  expect(reader).toBeDefined();
-  await reader?.cancel();
-  expect(cleaned).toBe(1);
 });

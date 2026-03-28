@@ -110,10 +110,8 @@ export const serve = defineCommand({
     );
     bot.on("message:text", grammyCreateHandler(scope, grammyHandleText));
     await using grammy = await Grammy.create(shutdown, bot);
-    // Shut down when: an OS signal arrives, OpenCode server exits,
-    // event stream exhausts reconnect attempts, or Telegram polling stops.
-    // The MCP HTTP server runs in-process, so it does not expose a separate
-    // unexpected-close signal like the external services above.
+    // Shut down when: an OS signal arrives, the OpenCode server exits,
+    // the event stream exhausts reconnect attempts, or Telegram polling stops.
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,
