@@ -1,23 +1,22 @@
 import { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { logger } from "~/lib/logger";
 import pkg from "~/package.json" with { type: "json" };
 
 export class McpServer implements Disposable {
   readonly #server: Bun.Server<undefined>;
-  readonly #stopped: Promise<void>;
+  readonly #disconnected: Promise<void>;
   readonly #resolve: () => void;
 
   private constructor() {
-    logger.debug("MCP server is starting…");
     this.#server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch: (req) => this.#fetch(req),
     });
-    logger.info("MCP server is ready", { url: this.#server.url.href });
     const { resolve, promise } = Promise.withResolvers<void>();
-    this.#stopped = promise;
+    this.#disconnected = promise;
     this.#resolve = resolve;
   }
 
@@ -38,16 +37,30 @@ export class McpServer implements Disposable {
     return transport.handleRequest(req);
   }
 
-  get stopped(): Promise<void> {
-    return this.#stopped;
+  get disconnected(): Promise<void> {
+    return this.#disconnected;
   }
 
   [Symbol.dispose]() {
     this.#server[Symbol.dispose]();
     this.#resolve();
+    logger.info("MCP server is disconnected");
   }
 
-  static create(): McpServer {
-    return new McpServer();
+  static async create(opencodeClient: OpencodeClient): Promise<McpServer> {
+    logger.debug("MCP server is connecting…");
+    const server = new McpServer();
+    const url = new URL("/mcp", server.#server.url).href;
+    try {
+      await opencodeClient.mcp.add(
+        { name: pkg.name, config: { type: "remote", url } },
+        { throwOnError: true },
+      );
+      logger.info("MCP server is connected", { url });
+    } catch (error) {
+      server[Symbol.dispose]();
+      throw error;
+    }
+    return server;
   }
 }
