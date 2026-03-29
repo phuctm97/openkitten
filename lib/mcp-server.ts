@@ -11,8 +11,8 @@ export class McpServer implements Disposable {
   readonly #resolve: () => void;
   readonly #token: string;
 
-  private constructor(token: string) {
-    this.#token = token;
+  private constructor() {
+    this.#token = randomBytes(32).toString("base64url");
     this.#server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -55,8 +55,7 @@ export class McpServer implements Disposable {
 
   static async create(opencodeClient: OpencodeClient): Promise<McpServer> {
     logger.debug("MCP server is connecting…");
-    const token = randomBytes(32).toString("base64url");
-    const server = new McpServer(token);
+    const server = new McpServer();
     const url = new URL("/mcp", server.#server.url).href;
     try {
       await opencodeClient.mcp.add(
@@ -65,7 +64,7 @@ export class McpServer implements Disposable {
           config: {
             type: "remote",
             url,
-            headers: { authorization: `Bearer ${token}` },
+            headers: { authorization: `Bearer ${server.#token}` },
           },
         },
         { throwOnError: true },
