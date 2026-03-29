@@ -22,6 +22,7 @@ test("formats question message and sends chunks", async () => {
     question,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
   expect(
     grammyFormatQuestionMessageModule.grammyFormatQuestionMessage,
@@ -31,5 +32,6 @@ test("formats question message and sends chunks", async () => {
     chunks,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
 });

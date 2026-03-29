@@ -3,11 +3,9 @@ import { grammySendChunks } from "~/lib/grammy-send-chunks";
 import type { GrammySendPermissionMessageOptions } from "~/lib/grammy-send-permission-message-options";
 
 export async function grammySendPermissionMessage({
-  bot,
   request,
-  chatId,
-  threadId,
+  ...options
 }: GrammySendPermissionMessageOptions): Promise<void> {
   const chunks = grammyFormatPermissionMessage(request);
-  await grammySendChunks({ bot, chunks, chatId, threadId });
+  await grammySendChunks({ ...options, chunks });
 }
