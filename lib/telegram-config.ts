@@ -151,7 +151,6 @@ export namespace TelegramConfig {
         // Invalid or unreadable config
       }
       if (config) {
-        clack.log.success("Parsed config");
         const s = clack.spinner();
         s.start("Verifying bot token");
         try {
@@ -175,8 +174,12 @@ export namespace TelegramConfig {
     }
 
     // Prompt for missing values
-    if (!botToken) botToken = await promptBotToken();
-    if (!userId) userId = await promptUserId();
+    if (!botToken || !userId) {
+      clack.intro(`Config ${styleText("dim", formatPath(path))}`);
+      botToken = await promptBotToken();
+      if (!userId) userId = await promptUserId();
+      clack.outro("Done");
+    }
 
     // Action loop
     let action: string | symbol;
@@ -194,9 +197,13 @@ export namespace TelegramConfig {
       if (clack.isCancel(action)) cancel();
       clack.outro("Done");
       if (action === "bot-token") {
+        clack.intro("Change bot token");
         botToken = await promptBotToken();
+        clack.outro("Done");
       } else if (action === "user-id") {
+        clack.intro("Change user ID");
         userId = await promptUserId();
+        clack.outro("Done");
       }
     } while (action !== "continue");
 
