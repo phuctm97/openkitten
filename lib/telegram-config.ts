@@ -179,7 +179,7 @@ export namespace TelegramConfig {
       clack.intro(`Config ${styleText("dim", formatPath(path))}`);
     if (!botToken) botToken = await promptBotToken();
     if (!userId) userId = await promptUserId();
-    if (needsPrompt) clack.outro("Done");
+    if (needsPrompt) clack.outro("Updated config");
 
     // Action loop
     let action: string | symbol;
