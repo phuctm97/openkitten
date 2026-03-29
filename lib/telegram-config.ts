@@ -166,7 +166,7 @@ export namespace TelegramConfig {
           }
         }
         userId = config.userId;
-        clack.log.info(`User ID: ${userId}`);
+        clack.log.step(`Authorized user ID: ${userId}`);
       } else {
         clack.log.error("Invalid config");
       }
