@@ -48,7 +48,6 @@ export const serve = defineCommand({
     );
     const nestingSessions = NestingSessions.create(opencodeServer.client);
     using workingSessions = WorkingSessions.create(
-      bot,
       opencodeServer.client,
       existingSessions,
     );
@@ -104,9 +103,9 @@ export const serve = defineCommand({
       },
       opencodeCreateHandler(scope, opencodeHandleEvent),
     );
+    bot.command("start", grammyCreateHandler(scope, grammyHandleStart));
     bot.command("abort", grammyCreateHandler(scope, grammyHandleAbort));
     bot.command("compact", grammyCreateHandler(scope, grammyHandleCompact));
-    bot.command("start", grammyCreateHandler(scope, grammyHandleStart));
     bot.on(
       "callback_query:data",
       grammyCreateHandler(scope, grammyHandleCallback),

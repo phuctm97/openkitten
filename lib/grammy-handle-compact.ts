@@ -1,8 +1,10 @@
 import type { CommandContext, Context } from "grammy";
+import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import type { Scope } from "~/lib/scope";
+import { WorkingSessions } from "~/lib/working-sessions";
 
 export async function grammyHandleCompact(
-  { opencodeClient, existingSessions }: Scope,
+  { bot, opencodeClient, existingSessions, workingSessions }: Scope,
   ctx: CommandContext<Context>,
 ): Promise<void> {
   const sessionId = await existingSessions.find(
@@ -13,11 +15,23 @@ export async function grammyHandleCompact(
     { createIfNotFound: true },
   );
 
-  await Promise.all([
-    opencodeClient.session.summarize(
-      { sessionID: sessionId },
-      { throwOnError: true },
-    ),
-    ctx.react("👍"),
-  ]);
+  try {
+    await workingSessions.lock(sessionId, async () => {
+      await Promise.all([
+        opencodeClient.session.summarize(
+          { sessionID: sessionId },
+          { throwOnError: true },
+        ),
+        ctx.react("👍"),
+      ]);
+    });
+  } catch (error) {
+    if (!(error instanceof WorkingSessions.LockedError)) throw error;
+    await grammySendSessionPending({
+      bot,
+      chatId: ctx.chat.id,
+      threadId: ctx.msg.message_thread_id || undefined,
+      replyToMessageId: ctx.msg.message_id,
+    });
+  }
 }
