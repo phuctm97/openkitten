@@ -56,10 +56,7 @@ async function updateSource(): Promise<void> {
     clack.log.warn(`Skipped update\n${styleText("dim", "Dirty worktree")}`);
     return;
   }
-  await runTask("Pulling latest changes", "Pulled latest changes", [
-    "git",
-    "pull",
-  ]);
+  await runTask("Pulling changes", "Pulled changes", ["git", "pull"]);
   await runTask("Installing dependencies", "Installed dependencies", [
     "bun",
     "install",
@@ -86,11 +83,10 @@ RestartSec=3
 WantedBy=default.target
 `;
   const s = clack.spinner();
-  s.start("Installing service");
+  s.start("Updating service");
   const wasRunning =
     (await Bun.$`systemctl --user is-active ${label}`.nothrow().quiet())
       .exitCode === 0;
-  if (wasRunning) s.message("Restarting service");
   await mkdir(unitDir, { recursive: true });
   await Bun.write(unitPath, unitContent);
   await Bun.$`systemctl --user daemon-reload`;
@@ -99,7 +95,7 @@ WantedBy=default.target
   } else {
     await Bun.$`systemctl --user enable --now ${label}`;
   }
-  s.stop(wasRunning ? "Restarted service" : "Installed service");
+  s.stop("Updated service");
   clack.note(
     `Just open Telegram and say hi to your kitten\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  journalctl --user -u ${label} -f`,
     "Next steps",
@@ -145,18 +141,27 @@ async function installDarwin(profile: Profile): Promise<void> {
 </plist>
 `;
   const s = clack.spinner();
-  s.start("Installing service");
-  const wasRunning =
-    (await Bun.$`launchctl bootout gui/${userId}/${label}`.nothrow().quiet())
-      .exitCode === 0;
-  if (wasRunning) s.message("Restarting service");
+  s.start("Updating service");
+  const domain = `gui/${userId}`;
+  const target = `${domain}/${label}`;
+  if (
+    (await Bun.$`launchctl bootout ${target}`.nothrow().quiet()).exitCode === 0
+  ) {
+    const deadline = Date.now() + 10_000;
+    while (
+      Date.now() < deadline &&
+      (await Bun.$`launchctl print ${target}`.nothrow().quiet()).exitCode === 0
+    ) {
+      await Bun.sleep(100);
+    }
+  }
   await Promise.all([
     mkdir(logsDir, { recursive: true }),
     mkdir(plistDir, { recursive: true }),
   ]);
   await Bun.write(plistPath, plistContent);
-  await Bun.$`launchctl bootstrap gui/${userId} ${plistPath}`;
-  s.stop(wasRunning ? "Restarted service" : "Installed service");
+  await Bun.$`launchctl bootstrap ${domain} ${plistPath}`;
+  s.stop("Updated service");
   clack.note(
     `Just open Telegram and say hi to your kitten\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  tail -f ~/Library/Logs/OpenKitten/${label}.*.log\n  or open Console.app and filter by "${label}"`,
     "Next steps",
@@ -167,15 +172,11 @@ async function installWin32(profile: Profile): Promise<void> {
   const taskName = `\\OpenKitten\\Profiles\\${profile.name}`;
   const logsDir = `${process.env["LOCALAPPDATA"]}\\OpenKitten\\Profiles\\${profile.name}\\Logs`;
   const s = clack.spinner();
-  s.start("Installing service");
-  const wasRunning =
-    (await Bun.$`schtasks /Query /TN ${taskName}`.nothrow().quiet())
-      .exitCode === 0;
-  if (wasRunning) s.message("Restarting service");
+  s.start("Updating service");
   await mkdir(logsDir, { recursive: true });
   const tr = `cmd /C "cd /D \\"${projectDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
-  s.stop(wasRunning ? "Restarted service" : "Installed service");
+  s.stop("Updated service");
   clack.note(
     `Just open Telegram and say hi to your kitten\n\nTo update:\n  bun . up\n\nTo uninstall:\n  bun . down\n\nTroubleshooting:\n  type "${logsDir}\\stderr.log"`,
     "Next steps",
