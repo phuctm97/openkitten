@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
@@ -5,11 +6,13 @@ import { logger } from "~/lib/logger";
 import pkg from "~/package.json" with { type: "json" };
 
 export class McpServer implements Disposable {
+  readonly #token: string;
   readonly #server: Bun.Server<undefined>;
   readonly #disconnected: Promise<void>;
   readonly #resolve: () => void;
 
   private constructor() {
+    this.#token = randomBytes(32).toString("base64url");
     this.#server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
@@ -23,6 +26,9 @@ export class McpServer implements Disposable {
   async #fetch(req: Request): Promise<Response> {
     if (new URL(req.url).pathname !== "/mcp") {
       return new Response("Not Found", { status: 404 });
+    }
+    if (req.headers.get("authorization") !== `Bearer ${this.#token}`) {
+      return new Response("Unauthorized", { status: 401 });
     }
     const server = new Server({
       name: pkg.name,
@@ -53,7 +59,14 @@ export class McpServer implements Disposable {
     const url = new URL("/mcp", server.#server.url).href;
     try {
       await opencodeClient.mcp.add(
-        { name: pkg.name, config: { type: "remote", url } },
+        {
+          name: pkg.name,
+          config: {
+            type: "remote",
+            url,
+            headers: { authorization: `Bearer ${server.#token}` },
+          },
+        },
         { throwOnError: true },
       );
       logger.info("MCP server is connected", { url });

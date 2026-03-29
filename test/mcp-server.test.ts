@@ -2,6 +2,12 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
 
+vi.mock("node:crypto", () => ({
+  randomBytes: vi.fn(() => ({
+    toString: () => "test-token-abc123",
+  })),
+}));
+
 const { mockStop, mockConnect, mockHandleRequest, sdkConstructorArgs } =
   vi.hoisted(() => ({
     mockStop: vi.fn(),
@@ -70,7 +76,11 @@ describe("McpServer", () => {
     expect(mockMcpAdd).toHaveBeenCalledWith(
       {
         name: "openkitten",
-        config: { type: "remote", url: "http://127.0.0.1:12345/mcp" },
+        config: {
+          type: "remote",
+          url: "http://127.0.0.1:12345/mcp",
+          headers: { authorization: "Bearer test-token-abc123" },
+        },
       },
       { throwOnError: true },
     );
@@ -105,9 +115,31 @@ describe("McpServer", () => {
     expect(response.status).toBe(404);
   });
 
+  test("returns 401 for missing auth", async () => {
+    using _server = await McpServer.create(mockClient);
+    const response = await capturedFetch(
+      new Request("http://localhost/mcp", { method: "POST" }),
+    );
+    expect(response.status).toBe(401);
+  });
+
+  test("returns 401 for wrong auth", async () => {
+    using _server = await McpServer.create(mockClient);
+    const response = await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer wrong-token" },
+      }),
+    );
+    expect(response.status).toBe(401);
+  });
+
   test("creates SDK server and transport for MCP requests", async () => {
     using _server = await McpServer.create(mockClient);
-    const req = new Request("http://localhost/mcp", { method: "POST" });
+    const req = new Request("http://localhost/mcp", {
+      method: "POST",
+      headers: { authorization: "Bearer test-token-abc123" },
+    });
     const response = await capturedFetch(req);
 
     expect(sdkConstructorArgs).toEqual([
