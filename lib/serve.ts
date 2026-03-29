@@ -38,7 +38,7 @@ export const serve = defineCommand({
     using shutdown = Shutdown.create();
     using database = Database.create(profile);
     await using opencodeServer = await OpencodeServer.create(opencodeConfig);
-    using mcpServer = McpServer.create();
+    using mcpServer = await McpServer.create(opencodeServer.client);
     await using floatingPromises = FloatingPromises.create();
     const existingSessions = ExistingSessions.create(
       bot,
@@ -110,11 +110,11 @@ export const serve = defineCommand({
     bot.on("message:text", grammyCreateHandler(scope, grammyHandleText));
     await using grammy = await Grammy.create(shutdown, bot);
     // Shut down when: OS signal received, OpenCode server exits,
-    // MCP server stops, event stream exhausts reconnects, or Telegram polling stops.
+    // MCP server disconnects, event stream exhausts reconnects, or Telegram polling stops.
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,
-      mcpServer.stopped,
+      mcpServer.disconnected,
       opencodeEventStream.closed,
       grammy.stopped,
     ]);
