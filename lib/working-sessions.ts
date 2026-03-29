@@ -1,4 +1,5 @@
-import type { EventSessionStatus, SessionStatus } from "@opencode-ai/sdk/v2";
+import type { EventSessionStatus } from "@opencode-ai/sdk/v2";
+import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { Bot } from "grammy";
 import { createHooks, type Hookable } from "hookable";
 import { Errors } from "~/lib/errors";
@@ -7,14 +8,20 @@ import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 
 export class WorkingSessions implements Disposable {
   readonly #bot: Bot;
+  readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #hooks = createHooks<WorkingSessions.Hooks>();
   readonly #cached = new Set<string>();
   readonly #locked = new Set<string>();
   readonly #unhook: () => void;
 
-  private constructor(bot: Bot, existingSessions: ExistingSessions) {
+  private constructor(
+    bot: Bot,
+    opencodeClient: OpencodeClient,
+    existingSessions: ExistingSessions,
+  ) {
     this.#bot = bot;
+    this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
     this.#unhook = existingSessions.hook(
       "beforeRemove",
@@ -85,7 +92,11 @@ export class WorkingSessions implements Disposable {
     Errors.throwIfAny(results);
   }
 
-  async invalidate(statuses: { readonly [sessionId: string]: SessionStatus }) {
+  async invalidate() {
+    const { data: statuses } = await this.#opencodeClient.session.status(
+      {},
+      { throwOnError: true },
+    );
     const promises = [];
     for (const sessionId of this.#existingSessions.sessionIds) {
       const status = statuses[sessionId];
@@ -114,8 +125,12 @@ export class WorkingSessions implements Disposable {
     this.#unhook();
   }
 
-  static create(bot: Bot, existingSessions: ExistingSessions): WorkingSessions {
-    return new WorkingSessions(bot, existingSessions);
+  static create(
+    bot: Bot,
+    opencodeClient: OpencodeClient,
+    existingSessions: ExistingSessions,
+  ): WorkingSessions {
+    return new WorkingSessions(bot, opencodeClient, existingSessions);
   }
 }
 

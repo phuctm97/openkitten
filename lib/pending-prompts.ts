@@ -24,6 +24,7 @@ import { grammySendPermissionPending } from "~/lib/grammy-send-permission-pendin
 import { grammySendQuestionMessage } from "~/lib/grammy-send-question-message";
 import { grammySendQuestionPending } from "~/lib/grammy-send-question-pending";
 import { logger } from "~/lib/logger";
+import type { NestingSessions } from "~/lib/nesting-sessions";
 import type { Shutdown } from "~/lib/shutdown";
 
 export class PendingPrompts implements AsyncDisposable {
@@ -31,6 +32,7 @@ export class PendingPrompts implements AsyncDisposable {
   readonly #bot: Bot;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
+  readonly #nestingSessions: NestingSessions;
   readonly #hooks = createHooks<PendingPrompts.Hooks>();
   readonly #sessionMap = new Map<string, PendingPrompts.Item[]>();
   readonly #unhook: () => void;
@@ -41,17 +43,46 @@ export class PendingPrompts implements AsyncDisposable {
     bot: Bot,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
+    nestingSessions: NestingSessions,
   ) {
     this.#shutdown = shutdown;
     this.#bot = bot;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
+    this.#nestingSessions = nestingSessions;
     this.#unhook = existingSessions.hook(
       "beforeRemove",
       async ({ sessionId }) => {
         await this.#dismiss(sessionId);
       },
     );
+  }
+
+  async #resolveSessionIds(
+    questions: readonly QuestionRequest[],
+    permissions: readonly PermissionRequest[],
+  ) {
+    const uniqueIds = new Set([
+      ...questions.map((q) => q.sessionID),
+      ...permissions.map((p) => p.sessionID),
+    ]);
+    const resolved = new Map<string, string>();
+    const results = await Promise.allSettled(
+      [...uniqueIds].map(async (id) => {
+        resolved.set(id, await this.#nestingSessions.resolve(id));
+      }),
+    );
+    Errors.throwIfAny(results);
+    for (const q of questions) {
+      const id = resolved.get(q.sessionID);
+      invariant(id, "Expected resolved session ID for question");
+      q.sessionID = id;
+    }
+    for (const p of permissions) {
+      const id = resolved.get(p.sessionID);
+      invariant(id, "Expected resolved session ID for permission");
+      p.sessionID = id;
+    }
   }
 
   #nextKey() {
@@ -453,12 +484,15 @@ export class PendingPrompts implements AsyncDisposable {
       | EventPermissionAsked
       | EventPermissionReplied,
   ) {
+    const sessionID = await this.#nestingSessions.resolve(
+      event.properties.sessionID,
+    );
     if (
       event.type === "permission.replied" ||
       event.type === "question.replied" ||
       event.type === "question.rejected"
     ) {
-      const { sessionID, requestID } = event.properties;
+      const { requestID } = event.properties;
       const items = this.#sessionMap.get(sessionID);
       if (!items) return;
       const item = items.find((i) => i.request.id === requestID);
@@ -489,20 +523,19 @@ export class PendingPrompts implements AsyncDisposable {
       await this.#resolveItem(items, item, resolvedText);
       return;
     }
-    const sessionId = event.properties.sessionID;
-    let items = this.#sessionMap.get(sessionId);
+    let items = this.#sessionMap.get(sessionID);
     if (items?.some((i) => i.request.id === event.properties.id)) return;
     const wasPending = !!items;
     if (!items) {
       items = [];
-      this.#sessionMap.set(sessionId, items);
+      this.#sessionMap.set(sessionID, items);
     }
     const item: PendingPrompts.Item =
       event.type === "question.asked"
         ? {
             kind: "question",
             key: this.#nextKey(),
-            request: event.properties,
+            request: { ...event.properties, sessionID },
             messageId: undefined,
             currentIndex: 0,
             currentAnswers: [],
@@ -511,7 +544,7 @@ export class PendingPrompts implements AsyncDisposable {
         : {
             kind: "permission",
             key: this.#nextKey(),
-            request: event.properties,
+            request: { ...event.properties, sessionID },
             messageId: undefined,
           };
     items.push(item);
@@ -525,18 +558,20 @@ export class PendingPrompts implements AsyncDisposable {
       const results = await this.#hooks.callHookWith(
         (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
         "change",
-        [{ sessionId, pending: true }],
+        [{ sessionId: sessionID, pending: true }],
       );
       Errors.throwIfAny(results);
     }
   }
 
-  async invalidate(
-    questions: readonly QuestionRequest[],
-    permissions: readonly PermissionRequest[],
-  ) {
+  async invalidate() {
     const { sessionIds } = this.#existingSessions;
     if (sessionIds.length === 0) return;
+    const [{ data: questions }, { data: permissions }] = await Promise.all([
+      this.#opencodeClient.question.list({}, { throwOnError: true }),
+      this.#opencodeClient.permission.list({}, { throwOnError: true }),
+    ]);
+    await this.#resolveSessionIds(questions, permissions);
     const dismissPromises: Promise<void>[] = [];
     const changedSessions: PendingPrompts.ChangeEvent[] = [];
     for (const sessionId of sessionIds) {
@@ -663,8 +698,15 @@ export class PendingPrompts implements AsyncDisposable {
     bot: Bot,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
+    nestingSessions: NestingSessions,
   ): PendingPrompts {
-    return new PendingPrompts(shutdown, bot, opencodeClient, existingSessions);
+    return new PendingPrompts(
+      shutdown,
+      bot,
+      opencodeClient,
+      existingSessions,
+      nestingSessions,
+    );
   }
 }
 
