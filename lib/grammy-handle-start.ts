@@ -1,7 +1,9 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { CommandContext, Context } from "grammy";
-import { grammySendSessionCreated } from "~/lib/grammy-send-session-created";
+import type { ExistingSessions } from "~/lib/existing-sessions";
+import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import type { Scope } from "~/lib/scope";
+import { WorkingSessions } from "~/lib/working-sessions";
 
 async function withMessages(
   opencodeClient: OpencodeClient,
@@ -14,14 +16,26 @@ async function withMessages(
   return messages.length > 0;
 }
 
+async function withSession(
+  { opencodeClient, existingSessions, workingSessions, pendingPrompts }: Scope,
+  location: ExistingSessions.Location,
+): Promise<string> {
+  const existingSessionId = existingSessions.find(location);
+  if (existingSessionId) {
+    if (
+      !workingSessions.check(existingSessionId) &&
+      !pendingPrompts.check(existingSessionId) &&
+      !(await withMessages(opencodeClient, existingSessionId))
+    ) {
+      return existingSessionId;
+    }
+    await existingSessions.remove(existingSessionId);
+  }
+  return existingSessions.find(location, { createIfNotFound: true });
+}
+
 export async function grammyHandleStart(
-  {
-    bot,
-    opencodeClient,
-    existingSessions,
-    workingSessions,
-    pendingPrompts,
-  }: Scope,
+  scope: Scope,
   ctx: CommandContext<Context>,
 ): Promise<void> {
   const location = {
@@ -29,37 +43,25 @@ export async function grammyHandleStart(
     threadId: ctx.msg.message_thread_id || undefined,
   };
 
-  const existingSessionId = existingSessions.find(location);
-  if (existingSessionId) {
-    if (
-      workingSessions.check(existingSessionId) ||
-      pendingPrompts.check(existingSessionId) ||
-      (await withMessages(opencodeClient, existingSessionId))
-    ) {
-      await existingSessions.remove(existingSessionId);
-    }
+  const sessionId = await withSession(scope, location);
+
+  try {
+    await scope.workingSessions.lock(sessionId, async () => {
+      await scope.opencodeClient.session.promptAsync(
+        {
+          sessionID: sessionId,
+          parts: [{ type: "text", text: ctx.match || "Hey" }],
+        },
+        { throwOnError: true },
+      );
+    });
+  } catch (error) {
+    if (!(error instanceof WorkingSessions.LockedError)) throw error;
+    await grammySendSessionPending({
+      bot: scope.bot,
+      chatId: location.chatId,
+      threadId: location.threadId,
+      replyToMessageId: ctx.msg.message_id,
+    });
   }
-
-  const newSessionId = await existingSessions.find(location, {
-    createIfNotFound: true,
-  });
-
-  await workingSessions.lock(newSessionId, async () => {
-    if (newSessionId !== existingSessionId) {
-      await grammySendSessionCreated({
-        bot,
-        sessionId: newSessionId,
-        replyToMessageId: ctx.msg.message_id,
-        ...location,
-      });
-    }
-
-    await opencodeClient.session.promptAsync(
-      {
-        sessionID: newSessionId,
-        parts: [{ type: "text", text: ctx.match || "Hey" }],
-      },
-      { throwOnError: true },
-    );
-  });
 }
