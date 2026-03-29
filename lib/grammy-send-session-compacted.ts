@@ -2,11 +2,9 @@ import { grammyFormatSessionCompacted } from "~/lib/grammy-format-session-compac
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
 import type { GrammySendOptions } from "~/lib/grammy-send-options";
 
-export async function grammySendSessionCompacted({
-  bot,
-  chatId,
-  threadId,
-}: GrammySendOptions): Promise<void> {
+export async function grammySendSessionCompacted(
+  options: GrammySendOptions,
+): Promise<void> {
   const chunks = grammyFormatSessionCompacted();
-  await grammySendChunks({ bot, chunks, chatId, threadId });
+  await grammySendChunks({ ...options, chunks });
 }

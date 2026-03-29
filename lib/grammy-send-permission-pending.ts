@@ -2,12 +2,9 @@ import { grammyFormatPermissionPending } from "~/lib/grammy-format-permission-pe
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
 import type { GrammySendOptions } from "~/lib/grammy-send-options";
 
-export async function grammySendPermissionPending({
-  bot,
-  chatId,
-  threadId,
-  replyToMessageId,
-}: GrammySendOptions): Promise<void> {
+export async function grammySendPermissionPending(
+  options: GrammySendOptions,
+): Promise<void> {
   const chunks = grammyFormatPermissionPending();
-  await grammySendChunks({ bot, chunks, chatId, threadId, replyToMessageId });
+  await grammySendChunks({ ...options, chunks });
 }

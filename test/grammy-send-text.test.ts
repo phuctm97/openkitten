@@ -14,6 +14,7 @@ test("formats text and sends chunks", async () => {
     text: "hello",
     chatId: 123,
     threadId: undefined,
+    replyToMessageId: 101,
   });
   expect(grammyFormatTextModule.grammyFormatText).toHaveBeenCalledWith("hello");
   expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
@@ -21,5 +22,6 @@ test("formats text and sends chunks", async () => {
     chunks,
     chatId: 123,
     threadId: undefined,
+    replyToMessageId: 101,
   });
 });

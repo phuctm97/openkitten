@@ -3,12 +3,9 @@ import { grammySendChunks } from "~/lib/grammy-send-chunks";
 import type { GrammySendSessionCreatedOptions } from "~/lib/grammy-send-session-created-options";
 
 export async function grammySendSessionCreated({
-  bot,
   sessionId,
-  chatId,
-  threadId,
-  replyToMessageId,
+  ...options
 }: GrammySendSessionCreatedOptions): Promise<void> {
   const chunks = grammyFormatSessionCreated(sessionId);
-  await grammySendChunks({ bot, chunks, chatId, threadId, replyToMessageId });
+  await grammySendChunks({ ...options, chunks });
 }

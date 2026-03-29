@@ -25,6 +25,7 @@ test("formats permission message and sends chunks", async () => {
     request,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
   expect(
     grammyFormatPermissionMessageModule.grammyFormatPermissionMessage,
@@ -34,5 +35,6 @@ test("formats permission message and sends chunks", async () => {
     chunks,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
 });

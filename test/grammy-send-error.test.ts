@@ -17,6 +17,7 @@ test("formats error and sends chunks", async () => {
     error,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
   expect(grammyFormatErrorModule.grammyFormatError).toHaveBeenCalledWith(error);
   expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
@@ -24,5 +25,6 @@ test("formats error and sends chunks", async () => {
     chunks,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
 });

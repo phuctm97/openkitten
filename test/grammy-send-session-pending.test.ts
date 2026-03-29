@@ -16,6 +16,7 @@ test("formats session pending and sends chunks", async () => {
     bot: {} as never,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
   expect(
     grammyFormatSessionPendingModule.grammyFormatSessionPending,
@@ -25,5 +26,6 @@ test("formats session pending and sends chunks", async () => {
     chunks,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
 });
