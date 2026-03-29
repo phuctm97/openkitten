@@ -1,14 +1,7 @@
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
-import { grammySendSessionCreated } from "~/lib/grammy-send-session-created";
 import type { Scope } from "~/lib/scope";
-
-vi.mock("~/lib/grammy-send-session-created");
-
-beforeEach(() => {
-  vi.clearAllMocks();
-});
 
 function mockCtx(chatId: number, match: string, threadId?: number) {
   return {
@@ -212,8 +205,8 @@ test("reuses existing empty session", async () => {
 
   await grammyHandleStart(scope, ctx);
 
+  expect(existingSessions.find).toHaveBeenCalledTimes(1);
   expect(existingSessions.remove).not.toHaveBeenCalled();
-  expect(grammySendSessionCreated).not.toHaveBeenCalled();
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     { sessionID: "s-old", parts: [{ type: "text", text: "Hey" }] },
     { throwOnError: true },
@@ -234,50 +227,6 @@ test("does not remove when no existing session", async () => {
   await grammyHandleStart(scope, ctx);
 
   expect(existingSessions.remove).not.toHaveBeenCalled();
-});
-
-test("sends session created notification for new session", async () => {
-  const existingSessions = mockExistingSessions(undefined);
-  const opencodeClient = mockOpencodeClient(0);
-  const workingSessions = mockWorkingSessions();
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    workingSessions,
-  });
-  const ctx = mockCtx(42, "");
-
-  await grammyHandleStart(scope, ctx);
-
-  expect(grammySendSessionCreated).toHaveBeenCalledWith({
-    bot: scope.bot,
-    sessionId: "s-new",
-    replyToMessageId: 99,
-    chatId: 42,
-    threadId: undefined,
-  });
-});
-
-test("sends session created notification when replacing existing session", async () => {
-  const existingSessions = mockExistingSessions("s-old");
-  const opencodeClient = mockOpencodeClient(1);
-  const workingSessions = mockWorkingSessions();
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    workingSessions,
-  });
-  const ctx = mockCtx(42, "");
-
-  await grammyHandleStart(scope, ctx);
-
-  expect(grammySendSessionCreated).toHaveBeenCalledWith({
-    bot: scope.bot,
-    sessionId: "s-new",
-    replyToMessageId: 99,
-    chatId: 42,
-    threadId: undefined,
-  });
 });
 
 test("locks session before sending prompt", async () => {
@@ -320,13 +269,6 @@ test("passes threadId through the flow", async () => {
     { chatId: 42, threadId: 7 },
     { createIfNotFound: true },
   );
-  expect(grammySendSessionCreated).toHaveBeenCalledWith({
-    bot: scope.bot,
-    sessionId: "s-new",
-    replyToMessageId: 99,
-    chatId: 42,
-    threadId: 7,
-  });
 });
 
 test("rethrows errors from lock", async () => {
