@@ -57,7 +57,7 @@ async function promptBotToken(): Promise<string> {
       return botToken;
     } catch (e) {
       if (e instanceof GrammyError) {
-        s.error("Invalid bot token, try again");
+        s.error("Invalid bot token: enter again");
         continue;
       }
       s.error("Failed to verify bot token");
@@ -159,7 +159,7 @@ export namespace TelegramConfig {
           botToken = config.botToken;
         } catch (e) {
           if (e instanceof GrammyError) {
-            s.error("Invalid bot token");
+            s.error("Invalid bot token: enter again");
           } else {
             s.error("Failed to verify bot token");
             throw e;
@@ -168,7 +168,7 @@ export namespace TelegramConfig {
         userId = config.userId;
         clack.log.step(`Authorized user ID: ${userId}`);
       } else {
-        clack.log.error("Invalid config");
+        clack.log.error("Invalid config: enter again");
       }
       clack.outro("Processed config");
     }
