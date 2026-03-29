@@ -1,7 +1,6 @@
 import type { EventSessionStatus, SessionStatus } from "@opencode-ai/sdk/v2";
 import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
-import * as grammySendSessionPendingModule from "~/lib/grammy-send-session-pending";
 import { WorkingSessions } from "~/lib/working-sessions";
 
 function statusEvent(
@@ -37,16 +36,14 @@ function mockExistingSessions() {
 }
 
 function setup() {
-  const bot = {} as never;
   const sessionStatus = vi.fn(async () => ({ data: {} }));
   const opencodeClient = { session: { status: sessionStatus } };
   const existingSessions = mockExistingSessions();
   const working = WorkingSessions.create(
-    bot,
     opencodeClient as never,
     existingSessions,
   );
-  return { bot, existingSessions, working, sessionStatus };
+  return { existingSessions, working, sessionStatus };
 }
 
 test("starts with no sessions", () => {
@@ -179,25 +176,14 @@ test("lock passes sessionId to fn", async () => {
   expect(received).toBe("sess-1");
 });
 
-test("lock sends busy when session is cached as working", async () => {
-  const { bot, existingSessions, working } = setup();
+test("lock throws LockedError when session is cached as working", async () => {
+  const { working } = setup();
   await working.update(statusEvent("sess-1", { type: "busy" }));
-  const spy = vi
-    .spyOn(grammySendSessionPendingModule, "grammySendSessionPending")
-    .mockResolvedValue(undefined);
-  let called = false;
-  await working.lock("sess-1", async () => {
-    called = true;
-  });
-  expect(called).toBe(false);
-  expect(existingSessions.get).toHaveBeenCalledWith("sess-1", {
-    throwIfNotFound: true,
-  });
-  expect(spy).toHaveBeenCalledWith({
-    bot,
-    chatId: 42,
-    threadId: undefined,
-  });
+  await expect(working.lock("sess-1", async () => {})).rejects.toSatisfy(
+    (error) =>
+      error instanceof WorkingSessions.LockedError &&
+      error.sessionId === "sess-1",
+  );
 });
 
 test("lock does not include session in check during fn", async () => {
@@ -210,21 +196,15 @@ test("lock does not include session in check during fn", async () => {
   expect(working.check("sess-1")).toBe(false);
 });
 
-test("lock sends busy on concurrent lock of same session", async () => {
+test("lock throws LockedError on concurrent lock of same session", async () => {
   const { working } = setup();
-  const spy = vi
-    .spyOn(grammySendSessionPendingModule, "grammySendSessionPending")
-    .mockResolvedValue(undefined);
   const { promise, resolve } = Promise.withResolvers<void>();
   const first = working.lock("sess-1", async () => {
     await promise;
   });
-  let called = false;
-  await working.lock("sess-1", async () => {
-    called = true;
-  });
-  expect(called).toBe(false);
-  expect(spy).toHaveBeenCalled();
+  await expect(working.lock("sess-1", async () => {})).rejects.toBeInstanceOf(
+    WorkingSessions.LockedError,
+  );
   resolve();
   await first;
 });
@@ -254,31 +234,22 @@ test("lock clears locked state on fn error", async () => {
   expect(working.check("sess-1")).toBe(false);
 });
 
-test("locked session blocks concurrent lock even though check returns false", async () => {
+test("locked session throws LockedError on concurrent lock even though check returns false", async () => {
   const { working } = setup();
-  const spy = vi
-    .spyOn(grammySendSessionPendingModule, "grammySendSessionPending")
-    .mockResolvedValue(undefined);
   const { promise, resolve } = Promise.withResolvers<void>();
   const locking = working.lock("sess-1", async () => {
     await promise;
   });
   expect(working.check("sess-1")).toBe(false);
-  let called = false;
-  await working.lock("sess-1", async () => {
-    called = true;
-  });
-  expect(called).toBe(false);
-  expect(spy).toHaveBeenCalled();
+  await expect(working.lock("sess-1", async () => {})).rejects.toBeInstanceOf(
+    WorkingSessions.LockedError,
+  );
   resolve();
   await locking;
 });
 
 test("beforeRemove does not affect locked state", async () => {
   const { existingSessions, working } = setup();
-  const spy = vi
-    .spyOn(grammySendSessionPendingModule, "grammySendSessionPending")
-    .mockResolvedValue(undefined);
   const { promise, resolve } = Promise.withResolvers<void>();
   const locking = working.lock("sess-1", async () => {
     await promise;
@@ -289,12 +260,9 @@ test("beforeRemove does not affect locked state", async () => {
     threadId: undefined,
   });
   expect(working.check("sess-1")).toBe(false);
-  let called = false;
-  await working.lock("sess-1", async () => {
-    called = true;
-  });
-  expect(called).toBe(false);
-  expect(spy).toHaveBeenCalled();
+  await expect(working.lock("sess-1", async () => {})).rejects.toBeInstanceOf(
+    WorkingSessions.LockedError,
+  );
   resolve();
   await locking;
 });

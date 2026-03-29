@@ -1,8 +1,12 @@
 import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
+import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
+import { WorkingSessions } from "~/lib/working-sessions";
+
+vi.mock("~/lib/grammy-send-session-pending");
 
 function mockCtx(
   chatId: number,
@@ -158,13 +162,13 @@ test("creates new session when none exists", async () => {
   );
 });
 
-test("delegates to lock when session is working", async () => {
+test("sends pending message when session is locked", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
   const workingSessions = mockWorkingSessions();
-  workingSessions.lock.mockResolvedValue(undefined);
+  workingSessions.lock.mockRejectedValue(new WorkingSessions.LockedError("s1"));
   const scope = {
     shutdown: {} as never,
     bot: {} as never,
@@ -180,7 +184,12 @@ test("delegates to lock when session is working", async () => {
 
   await grammyHandleText(scope, mockCtx(42, "hello"));
 
-  expect(workingSessions.lock).toHaveBeenCalledWith("s1", expect.any(Function));
+  expect(grammySendSessionPending).toHaveBeenCalledWith({
+    bot: scope.bot,
+    chatId: 42,
+    threadId: undefined,
+    replyToMessageId: 100,
+  });
   expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
 });
 

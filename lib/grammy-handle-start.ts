@@ -1,9 +1,27 @@
+import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { CommandContext, Context } from "grammy";
 import { grammySendSessionCreated } from "~/lib/grammy-send-session-created";
 import type { Scope } from "~/lib/scope";
 
+async function withMessages(
+  opencodeClient: OpencodeClient,
+  sessionId: string,
+): Promise<boolean> {
+  const { data: messages } = await opencodeClient.session.messages(
+    { sessionID: sessionId, limit: 1 },
+    { throwOnError: true },
+  );
+  return messages.length > 0;
+}
+
 export async function grammyHandleStart(
-  { bot, opencodeClient, existingSessions, workingSessions }: Scope,
+  {
+    bot,
+    opencodeClient,
+    existingSessions,
+    workingSessions,
+    pendingPrompts,
+  }: Scope,
   ctx: CommandContext<Context>,
 ): Promise<void> {
   const location = {
@@ -13,11 +31,11 @@ export async function grammyHandleStart(
 
   const existingSessionId = existingSessions.find(location);
   if (existingSessionId) {
-    const { data: messages } = await opencodeClient.session.messages(
-      { sessionID: existingSessionId, limit: 1 },
-      { throwOnError: true },
-    );
-    if (messages.length > 0) {
+    if (
+      workingSessions.check(existingSessionId) ||
+      pendingPrompts.check(existingSessionId) ||
+      (await withMessages(opencodeClient, existingSessionId))
+    ) {
       await existingSessions.remove(existingSessionId);
     }
   }
@@ -26,16 +44,16 @@ export async function grammyHandleStart(
     createIfNotFound: true,
   });
 
-  if (newSessionId !== existingSessionId) {
-    await grammySendSessionCreated({
-      bot,
-      sessionId: newSessionId,
-      replyToMessageId: ctx.msg.message_id,
-      ...location,
-    });
-  }
-
   await workingSessions.lock(newSessionId, async () => {
+    if (newSessionId !== existingSessionId) {
+      await grammySendSessionCreated({
+        bot,
+        sessionId: newSessionId,
+        replyToMessageId: ctx.msg.message_id,
+        ...location,
+      });
+    }
+
     await opencodeClient.session.promptAsync(
       {
         sessionID: newSessionId,

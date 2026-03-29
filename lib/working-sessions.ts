@@ -1,13 +1,10 @@
 import type { EventSessionStatus } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
-import type { Bot } from "grammy";
 import { createHooks, type Hookable } from "hookable";
 import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
-import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 
 export class WorkingSessions implements Disposable {
-  readonly #bot: Bot;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #hooks = createHooks<WorkingSessions.Hooks>();
@@ -16,11 +13,9 @@ export class WorkingSessions implements Disposable {
   readonly #unhook: () => void;
 
   private constructor(
-    bot: Bot,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
   ) {
-    this.#bot = bot;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
     this.#unhook = existingSessions.hook(
@@ -56,15 +51,7 @@ export class WorkingSessions implements Disposable {
     fn: (sessionId: string) => Promise<void>,
   ): Promise<void> {
     if (this.#cached.has(sessionId) || this.#locked.has(sessionId)) {
-      const { chatId, threadId } = this.#existingSessions.get(sessionId, {
-        throwIfNotFound: true,
-      });
-      await grammySendSessionPending({
-        bot: this.#bot,
-        chatId,
-        threadId,
-      });
-      return;
+      throw new WorkingSessions.LockedError(sessionId);
     }
     try {
       this.#locked.add(sessionId);
@@ -125,12 +112,19 @@ export class WorkingSessions implements Disposable {
     this.#unhook();
   }
 
+  static readonly LockedError = class LockedError extends Error {
+    readonly sessionId: string;
+    constructor(sessionId: string) {
+      super(`Locked session: ${sessionId}`);
+      this.sessionId = sessionId;
+    }
+  };
+
   static create(
-    bot: Bot,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
   ): WorkingSessions {
-    return new WorkingSessions(bot, opencodeClient, existingSessions);
+    return new WorkingSessions(opencodeClient, existingSessions);
   }
 }
 
