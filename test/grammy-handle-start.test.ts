@@ -1,20 +1,22 @@
-import { expect, test, vi } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
+import { grammySendSessionCreated } from "~/lib/grammy-send-session-created";
 import type { Scope } from "~/lib/scope";
 
+vi.mock("~/lib/grammy-send-session-created");
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
 function mockCtx(chatId: number, match: string, threadId?: number) {
-  const react = vi.fn(async () => true);
   return {
-    ctx: {
-      chat: { id: chatId },
-      msg: { message_thread_id: threadId },
-      match,
-      update: { update_id: 1 },
-      react,
-    } as never,
-    react,
-  };
+    chat: { id: chatId },
+    msg: { message_id: 99, message_thread_id: threadId },
+    match,
+    update: { update_id: 1 },
+  } as never;
 }
 
 function mockExistingSessions(
@@ -95,7 +97,7 @@ test("sends 'Hey' when no match text and no existing session", async () => {
     opencodeClient,
     workingSessions,
   });
-  const { ctx, react } = mockCtx(42, "");
+  const ctx = mockCtx(42, "");
 
   await grammyHandleStart(scope, ctx);
 
@@ -112,7 +114,6 @@ test("sends 'Hey' when no match text and no existing session", async () => {
     { sessionID: "s-new", parts: [{ type: "text", text: "Hey" }] },
     { throwOnError: true },
   );
-  expect(react).toHaveBeenCalledWith("👍");
 });
 
 test("sends custom text when match is provided", async () => {
@@ -124,7 +125,7 @@ test("sends custom text when match is provided", async () => {
     opencodeClient,
     workingSessions,
   });
-  const { ctx } = mockCtx(42, "Build a website");
+  const ctx = mockCtx(42, "Build a website");
 
   await grammyHandleStart(scope, ctx);
 
@@ -146,7 +147,7 @@ test("removes existing session with messages and creates new one", async () => {
     opencodeClient,
     workingSessions,
   });
-  const { ctx } = mockCtx(42, "");
+  const ctx = mockCtx(42, "");
 
   await grammyHandleStart(scope, ctx);
 
@@ -174,7 +175,7 @@ test("keeps existing session with no messages", async () => {
     opencodeClient,
     workingSessions,
   });
-  const { ctx } = mockCtx(42, "");
+  const ctx = mockCtx(42, "");
 
   await grammyHandleStart(scope, ctx);
 
@@ -198,7 +199,7 @@ test("passes threadId through the flow", async () => {
     opencodeClient,
     workingSessions,
   });
-  const { ctx } = mockCtx(42, "", 7);
+  const ctx = mockCtx(42, "", 7);
 
   await grammyHandleStart(scope, ctx);
 
@@ -210,6 +211,13 @@ test("passes threadId through the flow", async () => {
     { chatId: 42, threadId: 7 },
     { createIfNotFound: true },
   );
+  expect(grammySendSessionCreated).toHaveBeenCalledWith({
+    bot: scope.bot,
+    sessionId: "s-new",
+    replyToMessageId: 99,
+    chatId: 42,
+    threadId: 7,
+  });
 });
 
 test("locks session before sending prompt", async () => {
@@ -221,7 +229,7 @@ test("locks session before sending prompt", async () => {
     opencodeClient,
     workingSessions,
   });
-  const { ctx } = mockCtx(42, "");
+  const ctx = mockCtx(42, "");
 
   await grammyHandleStart(scope, ctx);
 
@@ -229,4 +237,64 @@ test("locks session before sending prompt", async () => {
     "s-new",
     expect.any(Function),
   );
+});
+
+test("sends session created notification for new session", async () => {
+  const existingSessions = mockExistingSessions(undefined);
+  const opencodeClient = mockOpencodeClient(0);
+  const workingSessions = mockWorkingSessions();
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    workingSessions,
+  });
+  const ctx = mockCtx(42, "");
+
+  await grammyHandleStart(scope, ctx);
+
+  expect(grammySendSessionCreated).toHaveBeenCalledWith({
+    bot: scope.bot,
+    sessionId: "s-new",
+    replyToMessageId: 99,
+    chatId: 42,
+    threadId: undefined,
+  });
+});
+
+test("sends session created notification when replacing existing session", async () => {
+  const existingSessions = mockExistingSessions("s-old", "s-new");
+  const opencodeClient = mockOpencodeClient(1);
+  const workingSessions = mockWorkingSessions();
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    workingSessions,
+  });
+  const ctx = mockCtx(42, "");
+
+  await grammyHandleStart(scope, ctx);
+
+  expect(grammySendSessionCreated).toHaveBeenCalledWith({
+    bot: scope.bot,
+    sessionId: "s-new",
+    replyToMessageId: 99,
+    chatId: 42,
+    threadId: undefined,
+  });
+});
+
+test("does not send session created notification when reusing existing session", async () => {
+  const existingSessions = mockExistingSessions("s-old");
+  const opencodeClient = mockOpencodeClient(0);
+  const workingSessions = mockWorkingSessions();
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    workingSessions,
+  });
+  const ctx = mockCtx(42, "");
+
+  await grammyHandleStart(scope, ctx);
+
+  expect(grammySendSessionCreated).not.toHaveBeenCalled();
 });

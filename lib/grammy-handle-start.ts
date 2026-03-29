@@ -1,8 +1,9 @@
 import type { CommandContext, Context } from "grammy";
+import { grammySendSessionCreated } from "~/lib/grammy-send-session-created";
 import type { Scope } from "~/lib/scope";
 
 export async function grammyHandleStart(
-  { opencodeClient, existingSessions, workingSessions }: Scope,
+  { bot, opencodeClient, existingSessions, workingSessions }: Scope,
   ctx: CommandContext<Context>,
 ): Promise<void> {
   const location = {
@@ -25,16 +26,22 @@ export async function grammyHandleStart(
     createIfNotFound: true,
   });
 
-  await Promise.all([
-    workingSessions.lock(newSessionId, async () => {
-      await opencodeClient.session.promptAsync(
-        {
-          sessionID: newSessionId,
-          parts: [{ type: "text", text: ctx.match || "Hey" }],
-        },
-        { throwOnError: true },
-      );
-    }),
-    ctx.react("👍"),
-  ]);
+  if (newSessionId !== existingSessionId) {
+    await grammySendSessionCreated({
+      bot,
+      sessionId: newSessionId,
+      replyToMessageId: ctx.msg.message_id,
+      ...location,
+    });
+  }
+
+  await workingSessions.lock(newSessionId, async () => {
+    await opencodeClient.session.promptAsync(
+      {
+        sessionID: newSessionId,
+        parts: [{ type: "text", text: ctx.match || "Hey" }],
+      },
+      { throwOnError: true },
+    );
+  });
 }

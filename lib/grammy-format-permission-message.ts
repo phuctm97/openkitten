@@ -78,7 +78,8 @@ const permissionTypes: { readonly [key: string]: PermissionType } = {
   doom_loop: {
     emoji: "🔄",
     title: "Continue after repeated calls",
-    description: "The same tool was called repeatedly with identical input.",
+    description:
+      "Continue after a tool is called repeatedly with identical input.",
   },
   skill: {
     emoji: "⚡",
