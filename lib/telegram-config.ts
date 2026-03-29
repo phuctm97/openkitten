@@ -125,7 +125,7 @@ export namespace TelegramConfig {
         await verifyBotToken(result.data.botToken);
       } catch (e) {
         if (!(e instanceof GrammyError)) throw e;
-        logger.error("Invalid bot token in Telegram config", e);
+        logger.error("Found invalid bot token in Telegram config", e);
         throw new TelegramConfig.NotFoundError(path);
       }
       return result.data;
