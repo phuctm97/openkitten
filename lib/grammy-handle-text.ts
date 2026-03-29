@@ -11,6 +11,7 @@ export async function grammyHandleText(
     bot,
     opencodeClient,
     existingSessions,
+    existingAgents,
     workingSessions,
     pendingPrompts,
   }: Scope,
@@ -39,9 +40,11 @@ export async function grammyHandleText(
   // Otherwise, lock the session and send the message to OpenCode.
   try {
     await workingSessions.lock(sessionId, async () => {
+      const agent = existingAgents.get(sessionId);
       await opencodeClient.session.promptAsync(
         {
           sessionID: sessionId,
+          ...(agent && { agent }),
           parts: [{ type: "text", text: ctx.message.text }],
         },
         { throwOnError: true },

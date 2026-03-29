@@ -1,0 +1,216 @@
+import { expect, test, vi } from "vitest";
+import type { ExistingSessions } from "~/lib/existing-sessions";
+import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
+import { grammySendText } from "~/lib/grammy-send-text";
+import type { Scope } from "~/lib/scope";
+
+vi.mock("~/lib/grammy-send-text");
+
+function mockCtx(chatId: number, match: string, threadId?: number) {
+  const react = vi.fn(async () => true);
+  return {
+    ctx: {
+      chat: { id: chatId },
+      msg: { message_id: 99, message_thread_id: threadId },
+      match,
+      update: { update_id: 1 },
+      react,
+    } as never,
+    react,
+  };
+}
+
+function mockExistingSessions(): ExistingSessions {
+  return {
+    sessionIds: ["s1"],
+    find: vi.fn(
+      (
+        _location: ExistingSessions.Location,
+        options?: ExistingSessions.FindOptions,
+      ) => {
+        if (options?.createIfNotFound) return Promise.resolve("s1");
+        return "s1";
+      },
+    ),
+    invalidate: vi.fn(),
+    check: vi.fn(() => true),
+    get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
+      chatId: 42,
+      threadId: undefined,
+    })),
+  } as never;
+}
+
+const agentList =
+  "**Available agents:**\n- `assist`: General purpose\n- `build`: Software engineering\n- `plan`: N/A";
+
+function mockOpencodeClient(defaultAgent?: string) {
+  return {
+    app: {
+      agents: vi.fn(async () => ({
+        data: [
+          { name: "assist", mode: "primary", description: "General purpose" },
+          {
+            name: "build",
+            mode: "all",
+            description: "Software engineering",
+          },
+          { name: "plan", mode: "primary" },
+          { name: "sub-task", mode: "subagent", description: "Internal" },
+        ],
+      })),
+    },
+    config: {
+      get: vi.fn(async () => ({
+        data: { default_agent: defaultAgent },
+      })),
+    },
+  };
+}
+
+function mockExistingAgents() {
+  return { get: vi.fn(), set: vi.fn() };
+}
+
+function mockScope(overrides: {
+  existingSessions: ExistingSessions;
+  opencodeClient: ReturnType<typeof mockOpencodeClient>;
+  existingAgents: ReturnType<typeof mockExistingAgents>;
+}): Scope {
+  return {
+    shutdown: {} as never,
+    bot: {} as never,
+    database: {} as never,
+    opencodeClient: overrides.opencodeClient as never,
+    floatingPromises: {} as never,
+    existingSessions: overrides.existingSessions,
+    existingAgents: overrides.existingAgents as never,
+    workingSessions: {} as never,
+    pendingPrompts: {} as never,
+    processingMessages: {} as never,
+    typingIndicators: {} as never,
+  };
+}
+
+test("shows current agent and available agents when no argument", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const existingAgents = mockExistingAgents();
+  existingAgents.get.mockReturnValue("build");
+  const scope = mockScope({ existingSessions, opencodeClient, existingAgents });
+  const { ctx } = mockCtx(42, "");
+
+  await grammyHandleAgent(scope, ctx);
+
+  expect(grammySendText).toHaveBeenCalledWith({
+    bot: scope.bot,
+    chatId: 42,
+    threadId: undefined,
+    replyToMessageId: 99,
+    text: `**Current agent:** \`build\`\n\n${agentList}`,
+  });
+});
+
+test("shows configured default agent when none is set", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient("assist");
+  const existingAgents = mockExistingAgents();
+  existingAgents.get.mockReturnValue(undefined);
+  const scope = mockScope({ existingSessions, opencodeClient, existingAgents });
+  const { ctx } = mockCtx(42, "");
+
+  await grammyHandleAgent(scope, ctx);
+
+  expect(grammySendText).toHaveBeenCalledWith({
+    bot: scope.bot,
+    chatId: 42,
+    threadId: undefined,
+    replyToMessageId: 99,
+    text: `**Current agent:** \`assist\`\n\n${agentList}`,
+  });
+});
+
+test("falls back to build when default_agent is not configured", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const existingAgents = mockExistingAgents();
+  existingAgents.get.mockReturnValue(undefined);
+  const scope = mockScope({ existingSessions, opencodeClient, existingAgents });
+  const { ctx } = mockCtx(42, "");
+
+  await grammyHandleAgent(scope, ctx);
+
+  expect(grammySendText).toHaveBeenCalledWith({
+    bot: scope.bot,
+    chatId: 42,
+    threadId: undefined,
+    replyToMessageId: 99,
+    text: `**Current agent:** \`build\`\n\n${agentList}`,
+  });
+});
+
+test("sets valid agent and reacts with like", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const existingAgents = mockExistingAgents();
+  const scope = mockScope({ existingSessions, opencodeClient, existingAgents });
+  const { ctx, react } = mockCtx(42, "build");
+
+  await grammyHandleAgent(scope, ctx);
+
+  expect(existingAgents.set).toHaveBeenCalledWith("s1", "build");
+  expect(react).toHaveBeenCalledWith("👍");
+});
+
+test("replies with error for unknown agent", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const existingAgents = mockExistingAgents();
+  const scope = mockScope({ existingSessions, opencodeClient, existingAgents });
+  const { ctx } = mockCtx(42, "nonexistent");
+
+  await grammyHandleAgent(scope, ctx);
+
+  expect(existingAgents.set).not.toHaveBeenCalled();
+  expect(grammySendText).toHaveBeenCalledWith({
+    bot: scope.bot,
+    chatId: 42,
+    threadId: undefined,
+    replyToMessageId: 99,
+    text: `**Unknown agent:** \`nonexistent\`\n\n${agentList}`,
+  });
+});
+
+test("rejects subagent", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const existingAgents = mockExistingAgents();
+  const scope = mockScope({ existingSessions, opencodeClient, existingAgents });
+  const { ctx } = mockCtx(42, "sub-task");
+
+  await grammyHandleAgent(scope, ctx);
+
+  expect(existingAgents.set).not.toHaveBeenCalled();
+  expect(grammySendText).toHaveBeenCalledWith({
+    bot: scope.bot,
+    chatId: 42,
+    threadId: undefined,
+    replyToMessageId: 99,
+    text: `**Unknown agent:** \`sub-task\`\n\n${agentList}`,
+  });
+});
+
+test("passes threadId when present", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const existingAgents = mockExistingAgents();
+  const scope = mockScope({ existingSessions, opencodeClient, existingAgents });
+  const { ctx } = mockCtx(42, "build", 7);
+
+  await grammyHandleAgent(scope, ctx);
+
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 42, threadId: 7 },
+    { createIfNotFound: true },
+  );
+});

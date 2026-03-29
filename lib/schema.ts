@@ -20,6 +20,7 @@ export const session = sqliteTable(
       .notNull()
       .default(sql`(unixepoch() * 1000)`)
       .$onUpdateFn(() => new Date()),
+    agent: text(),
   },
   (table) => [
     unique("session_chat_id_thread_id_idx").on(table.chatId, table.threadId),
