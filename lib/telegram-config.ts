@@ -174,12 +174,12 @@ export namespace TelegramConfig {
     }
 
     // Prompt for missing values
-    if (!botToken) {
+    const needsPrompt = !botToken || !userId;
+    if (needsPrompt)
       clack.intro(`Config ${styleText("dim", formatPath(path))}`);
-      botToken = await promptBotToken();
-      if (!userId) userId = await promptUserId();
-      clack.outro("Done");
-    }
+    if (!botToken) botToken = await promptBotToken();
+    if (!userId) userId = await promptUserId();
+    if (needsPrompt) clack.outro("Done");
 
     // Action loop
     let action: string | symbol;
