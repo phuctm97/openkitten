@@ -6,10 +6,10 @@ import { logger } from "~/lib/logger";
 import pkg from "~/package.json" with { type: "json" };
 
 export class McpServer implements Disposable {
+  readonly #token: string;
   readonly #server: Bun.Server<undefined>;
   readonly #disconnected: Promise<void>;
   readonly #resolve: () => void;
-  readonly #token: string;
 
   private constructor() {
     this.#token = randomBytes(32).toString("base64url");
