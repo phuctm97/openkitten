@@ -102,42 +102,107 @@ export namespace TelegramConfig {
 
   export async function create(profile: Profile): Promise<TelegramConfig> {
     const path = join(profile.xdgConfig, "openkitten", "telegram.json");
-    if (isTTY) {
-      process.stderr.write(
-        `${boxen(styleText("bold", "Telegram"), { padding: 1 })}\n`,
-      );
-    }
-    const file = Bun.file(path);
-    if (await file.exists()) {
-      const result = schema.safeParse(await file.json());
-      if (result.success) {
-        try {
-          const bot = await verifyBotToken(result.data.botToken);
-          if (isTTY) {
-            clack.intro(`Config ${styleText("dim", formatPath(path))}`);
-            clack.outro(`Verified config: ${bot}`);
-          }
-          return result.data;
-        } catch (e) {
-          if (!(e instanceof GrammyError)) throw e;
-          if (!isTTY) {
-            logger.error("Found invalid bot token in Telegram config", e);
-            throw new TelegramConfig.NotFoundError(path);
-          }
-        }
-      } else if (!isTTY) {
+
+    // Non-TTY: find, parse, validate, or throw
+    if (!isTTY) {
+      const file = Bun.file(path);
+      if (!(await file.exists())) {
+        throw new TelegramConfig.NotFoundError(path);
+      }
+      let json: unknown;
+      try {
+        json = await file.json();
+      } catch (e) {
+        logger.error("Failed to load Telegram config", e);
+        throw new TelegramConfig.NotFoundError(path);
+      }
+      const result = schema.safeParse(json);
+      if (!result.success) {
         logger.error("Failed to parse Telegram config", result.error);
         throw new TelegramConfig.NotFoundError(path);
       }
-    } else if (!isTTY) {
-      throw new TelegramConfig.NotFoundError(path);
+      try {
+        await verifyBotToken(result.data.botToken);
+      } catch (e) {
+        if (!(e instanceof GrammyError)) throw e;
+        logger.error("Invalid bot token in Telegram config", e);
+        throw new TelegramConfig.NotFoundError(path);
+      }
+      return result.data;
     }
-    clack.intro(`Config ${styleText("dim", formatPath(path))}`);
-    const botToken = await promptBotToken();
-    const userId = await promptUserId();
+
+    // TTY
+    process.stderr.write(
+      `${boxen(styleText("bold", "Telegram"), { padding: 1 })}\n`,
+    );
+
+    let botToken: string | undefined;
+    let userId: number | undefined;
+
+    // Load existing config
+    const file = Bun.file(path);
+    if (await file.exists()) {
+      clack.intro(`Config ${styleText("dim", formatPath(path))}`);
+      let config: TelegramConfig | undefined;
+      try {
+        const result = schema.safeParse(await file.json());
+        if (result.success) config = result.data;
+      } catch {
+        // Invalid or unreadable config
+      }
+      if (config) {
+        clack.log.success("Parsed config");
+        const s = clack.spinner();
+        s.start("Verifying bot token");
+        try {
+          const bot = await verifyBotToken(config.botToken);
+          s.stop(`Verified bot token: ${bot}`);
+          botToken = config.botToken;
+        } catch (e) {
+          if (e instanceof GrammyError) {
+            s.error("Invalid bot token");
+          } else {
+            s.error("Failed to verify bot token");
+            throw e;
+          }
+        }
+        userId = config.userId;
+        clack.log.info(`User ID: ${userId}`);
+      } else {
+        clack.log.error("Invalid config");
+      }
+      clack.outro("Done");
+    }
+
+    // Prompt for missing values
+    if (!botToken) botToken = await promptBotToken();
+    if (!userId) userId = await promptUserId();
+
+    // Action loop
+    let action: string | symbol;
+    do {
+      clack.intro("Actions");
+      action = await clack.select({
+        message: "What would you like to do?",
+        initialValue: "continue",
+        options: [
+          { value: "bot-token", label: "Change bot token" },
+          { value: "user-id", label: "Change user ID" },
+          { value: "continue", label: "Continue" },
+        ],
+      });
+      if (clack.isCancel(action)) cancel();
+      clack.outro("Done");
+      if (action === "bot-token") {
+        botToken = await promptBotToken();
+      } else if (action === "user-id") {
+        userId = await promptUserId();
+      }
+    } while (action !== "continue");
+
+    // Save config
     const config = schema.parse({ botToken, userId });
     await Bun.write(path, JSON.stringify(config), { mode: 0o600 });
-    clack.outro("Saved config");
     return config;
   }
 }
