@@ -4,8 +4,6 @@ import type { ExistingSessions } from "~/lib/existing-sessions";
 import * as grammySendSessionPendingModule from "~/lib/grammy-send-session-pending";
 import { WorkingSessions } from "~/lib/working-sessions";
 
-const emptyStatuses: { readonly [sessionId: string]: SessionStatus } = {};
-
 function statusEvent(
   sessionID: string,
   status: SessionStatus,
@@ -40,9 +38,15 @@ function mockExistingSessions() {
 
 function setup() {
   const bot = {} as never;
+  const sessionStatus = vi.fn(async () => ({ data: {} }));
+  const opencodeClient = { session: { status: sessionStatus } };
   const existingSessions = mockExistingSessions();
-  const working = WorkingSessions.create(bot, existingSessions);
-  return { bot, existingSessions, working };
+  const working = WorkingSessions.create(
+    bot,
+    opencodeClient as never,
+    existingSessions,
+  );
+  return { bot, existingSessions, working, sessionStatus };
 }
 
 test("starts with no sessions", () => {
@@ -51,9 +55,10 @@ test("starts with no sessions", () => {
 });
 
 test("check returns true for working session", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
-  await working.invalidate({ "sess-1": { type: "busy" } });
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "busy" } } });
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(true);
 });
 
@@ -63,51 +68,56 @@ test("check returns false for non-working session", () => {
 });
 
 test("marks session as working when status is busy", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
-  await working.invalidate({ "sess-1": { type: "busy" } });
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "busy" } } });
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(true);
 });
 
 test("marks session as working when status is retry", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
-  await working.invalidate({
-    "sess-1": { type: "retry", attempt: 1, message: "", next: 0 },
+  sessionStatus.mockResolvedValue({
+    data: { "sess-1": { type: "retry", attempt: 1, message: "", next: 0 } },
   });
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(true);
 });
 
 test("does not mark session as working when idle", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
-  await working.invalidate({ "sess-1": { type: "idle" } });
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "idle" } } });
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(false);
 });
 
 test("does not mark session as working when status is missing", async () => {
   const { existingSessions, working } = setup();
   existingSessions.sessionIds = ["sess-1"];
-  await working.invalidate(emptyStatuses);
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(false);
 });
 
 test("removes session when it becomes idle", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
-  await working.invalidate({ "sess-1": { type: "busy" } });
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "busy" } } });
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(true);
-  await working.invalidate({ "sess-1": { type: "idle" } });
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "idle" } } });
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(false);
 });
 
 test("tracks multiple sessions independently", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1", "sess-2"];
-  await working.invalidate({
-    "sess-1": { type: "busy" },
-    "sess-2": { type: "idle" },
+  sessionStatus.mockResolvedValue({
+    data: { "sess-1": { type: "busy" }, "sess-2": { type: "idle" } },
   });
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(true);
   expect(working.check("sess-2")).toBe(false);
 });
@@ -141,10 +151,11 @@ test("update removes a previously working session on idle event", async () => {
 });
 
 test("update and invalidate work together consistently", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
   await working.update(statusEvent("sess-1", { type: "busy" }));
-  await working.invalidate({ "sess-1": { type: "busy" } });
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "busy" } } });
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(true);
   await working.update(statusEvent("sess-1", { type: "idle" }));
   expect(working.check("sess-1")).toBe(false);
@@ -288,9 +299,9 @@ test("beforeRemove does not affect locked state", async () => {
   await locking;
 });
 
-test("invalidate with empty array is a no-op", async () => {
+test("invalidate with empty statuses is a no-op", async () => {
   const { working } = setup();
-  await working.invalidate(emptyStatuses);
+  await working.invalidate();
   expect(working.check("sess-1")).toBe(false);
 });
 
@@ -390,22 +401,24 @@ test("beforeRemove does not fire change hook for uncached sessions", async () =>
 });
 
 test("invalidate fires change hook with working=true for new busy sessions", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
   const onChange = vi.fn();
   working.hook("change", onChange);
-  await working.invalidate({ "sess-1": { type: "busy" } });
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "busy" } } });
+  await working.invalidate();
   expect(onChange).toHaveBeenCalledWith({ sessionId: "sess-1", working: true });
 });
 
 test("invalidate fires change hook with working=false for sessions becoming idle", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
   const onChange = vi.fn();
   working.hook("change", onChange);
   await working.update(statusEvent("sess-1", { type: "busy" }));
   onChange.mockClear();
-  await working.invalidate({ "sess-1": { type: "idle" } });
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "idle" } } });
+  await working.invalidate();
   expect(onChange).toHaveBeenCalledWith({
     sessionId: "sess-1",
     working: false,
@@ -413,13 +426,14 @@ test("invalidate fires change hook with working=false for sessions becoming idle
 });
 
 test("invalidate does not fire change hook when state unchanged", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
   const onChange = vi.fn();
   working.hook("change", onChange);
   await working.update(statusEvent("sess-1", { type: "busy" }));
   onChange.mockClear();
-  await working.invalidate({ "sess-1": { type: "busy" } });
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "busy" } } });
+  await working.invalidate();
   expect(onChange).not.toHaveBeenCalled();
 });
 
@@ -434,12 +448,11 @@ test("change hook errors bubble up from update", async () => {
 });
 
 test("change hook errors bubble up from invalidate", async () => {
-  const { existingSessions, working } = setup();
+  const { existingSessions, working, sessionStatus } = setup();
   existingSessions.sessionIds = ["sess-1"];
   working.hook("change", () => {
     throw new Error("hook failed");
   });
-  await expect(
-    working.invalidate({ "sess-1": { type: "busy" } }),
-  ).rejects.toThrow();
+  sessionStatus.mockResolvedValue({ data: { "sess-1": { type: "busy" } } });
+  await expect(working.invalidate()).rejects.toThrow();
 });

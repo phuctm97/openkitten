@@ -13,6 +13,7 @@ import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { McpServer } from "~/lib/mcp-server";
+import { NestingSessions } from "~/lib/nesting-sessions";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { opencodeCreateHandler } from "~/lib/opencode-create-handler";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
@@ -45,12 +46,18 @@ export const serve = defineCommand({
       database,
       opencodeServer.client,
     );
-    using workingSessions = WorkingSessions.create(bot, existingSessions);
+    const nestingSessions = NestingSessions.create(opencodeServer.client);
+    using workingSessions = WorkingSessions.create(
+      bot,
+      opencodeServer.client,
+      existingSessions,
+    );
     await using pendingPrompts = PendingPrompts.create(
       shutdown,
       bot,
       opencodeServer.client,
       existingSessions,
+      nestingSessions,
     );
     const processingMessages = ProcessingMessages.create(
       bot,
@@ -83,20 +90,17 @@ export const serve = defineCommand({
       floatingPromises,
       // On (re)connect: fetch full server state and sync all local managers.
       async (_signal) => {
-        const [{ data: statuses }, { data: questions }, { data: permissions }] =
-          await Promise.all([
-            opencodeServer.client.session.status({}, { throwOnError: true }),
-            opencodeServer.client.question.list({}, { throwOnError: true }),
-            opencodeServer.client.permission.list({}, { throwOnError: true }),
-          ]);
         await existingSessions.invalidate();
-        const results = await Promise.allSettled([
-          workingSessions.invalidate(statuses),
-          pendingPrompts.invalidate(questions, permissions),
-          processingMessages.invalidate(),
+        const firstResults = await Promise.allSettled([
+          workingSessions.invalidate(),
+          pendingPrompts.invalidate(),
         ]);
-        Errors.throwIfAny(results);
-        await typingIndicators.invalidate();
+        Errors.throwIfAny(firstResults);
+        const secondResults = await Promise.allSettled([
+          processingMessages.invalidate(),
+          typingIndicators.invalidate(),
+        ]);
+        Errors.throwIfAny(secondResults);
       },
       opencodeCreateHandler(scope, opencodeHandleEvent),
     );
