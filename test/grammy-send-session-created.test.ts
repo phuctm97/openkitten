@@ -17,6 +17,7 @@ test("formats session created and sends chunks", async () => {
     sessionId: "sess_abc123",
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
   expect(
     grammyFormatSessionCreatedModule.grammyFormatSessionCreated,
@@ -26,5 +27,6 @@ test("formats session created and sends chunks", async () => {
     chunks,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
 });

@@ -7,7 +7,8 @@ export async function grammySendSessionCreated({
   sessionId,
   chatId,
   threadId,
+  replyToMessageId,
 }: GrammySendSessionCreatedOptions): Promise<void> {
   const chunks = grammyFormatSessionCreated(sessionId);
-  await grammySendChunks({ bot, chunks, chatId, threadId });
+  await grammySendChunks({ bot, chunks, chatId, threadId, replyToMessageId });
 }
