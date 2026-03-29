@@ -1,7 +1,9 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { CommandContext, Context } from "grammy";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import type { Scope } from "~/lib/scope";
+import { WorkingSessions } from "~/lib/working-sessions";
 
 async function withMessages(
   opencodeClient: OpencodeClient,
@@ -43,13 +45,23 @@ export async function grammyHandleStart(
 
   const sessionId = await withSession(scope, location);
 
-  await scope.workingSessions.lock(sessionId, async () => {
-    await scope.opencodeClient.session.promptAsync(
-      {
-        sessionID: sessionId,
-        parts: [{ type: "text", text: ctx.match || "Hey" }],
-      },
-      { throwOnError: true },
-    );
-  });
+  try {
+    await scope.workingSessions.lock(sessionId, async () => {
+      await scope.opencodeClient.session.promptAsync(
+        {
+          sessionID: sessionId,
+          parts: [{ type: "text", text: ctx.match || "Hey" }],
+        },
+        { throwOnError: true },
+      );
+    });
+  } catch (error) {
+    if (!(error instanceof WorkingSessions.LockedError)) throw error;
+    await grammySendSessionPending({
+      bot: scope.bot,
+      chatId: location.chatId,
+      threadId: location.threadId,
+      replyToMessageId: ctx.msg.message_id,
+    });
+  }
 }

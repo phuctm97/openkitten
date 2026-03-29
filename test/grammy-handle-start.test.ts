@@ -1,7 +1,15 @@
-import { expect, test, vi } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
+import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import type { Scope } from "~/lib/scope";
+import { WorkingSessions } from "~/lib/working-sessions";
+
+vi.mock("~/lib/grammy-send-session-pending");
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 function mockCtx(chatId: number, match: string, threadId?: number) {
   return {
@@ -271,7 +279,32 @@ test("passes threadId through the flow", async () => {
   );
 });
 
-test("rethrows errors from lock", async () => {
+test("sends pending message when session is locked", async () => {
+  const existingSessions = mockExistingSessions(undefined);
+  const opencodeClient = mockOpencodeClient(0);
+  const workingSessions = mockWorkingSessions();
+  workingSessions.lock.mockRejectedValue(
+    new WorkingSessions.LockedError("s-new"),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    workingSessions,
+  });
+  const ctx = mockCtx(42, "");
+
+  await grammyHandleStart(scope, ctx);
+
+  expect(grammySendSessionPending).toHaveBeenCalledWith({
+    bot: scope.bot,
+    chatId: 42,
+    threadId: undefined,
+    replyToMessageId: 99,
+  });
+  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
+});
+
+test("rethrows non-LockedError from lock", async () => {
   const existingSessions = mockExistingSessions(undefined);
   const opencodeClient = mockOpencodeClient(0);
   const workingSessions = mockWorkingSessions();
