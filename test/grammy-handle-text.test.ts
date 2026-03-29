@@ -88,6 +88,7 @@ test("answers pending prompt when session has one", async () => {
     opencodeClient: opencodeClient as never,
     floatingPromises: {} as never,
     existingSessions,
+    existingAgents: { get: vi.fn() } as never,
     workingSessions: mockWorkingSessions() as never,
     pendingPrompts: pendingPrompts as never,
     processingMessages: {} as never,
@@ -117,6 +118,7 @@ test("prompts opencode when no pending prompt", async () => {
     opencodeClient: opencodeClient as never,
     floatingPromises: {} as never,
     existingSessions,
+    existingAgents: { get: vi.fn() } as never,
     workingSessions: mockWorkingSessions() as never,
     pendingPrompts: pendingPrompts as never,
     processingMessages: {} as never,
@@ -144,6 +146,7 @@ test("creates new session when none exists", async () => {
     opencodeClient: opencodeClient as never,
     floatingPromises: {} as never,
     existingSessions,
+    existingAgents: { get: vi.fn() } as never,
     workingSessions: mockWorkingSessions() as never,
     pendingPrompts: pendingPrompts as never,
     processingMessages: {} as never,
@@ -162,6 +165,39 @@ test("creates new session when none exists", async () => {
   );
 });
 
+test("passes agent to promptAsync when set", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const existingAgents = { get: vi.fn(() => "build") };
+  const scope = {
+    shutdown: {} as never,
+    bot: {} as never,
+    database: {} as never,
+    opencodeClient: opencodeClient as never,
+    floatingPromises: {} as never,
+    existingSessions,
+    existingAgents: existingAgents as never,
+    workingSessions: mockWorkingSessions() as never,
+    pendingPrompts: pendingPrompts as never,
+    processingMessages: {} as never,
+    typingIndicators: {} as never,
+  } satisfies Scope;
+
+  await grammyHandleText(scope, mockCtx(42, "hello"));
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      agent: "build",
+      parts: [{ type: "text", text: "hello" }],
+    },
+    { throwOnError: true },
+  );
+});
+
 test("sends pending message when session is locked", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
@@ -176,6 +212,7 @@ test("sends pending message when session is locked", async () => {
     opencodeClient: opencodeClient as never,
     floatingPromises: {} as never,
     existingSessions,
+    existingAgents: { get: vi.fn() } as never,
     workingSessions: workingSessions as never,
     pendingPrompts: pendingPrompts as never,
     processingMessages: {} as never,
@@ -206,6 +243,7 @@ test("passes threadId through the flow", async () => {
     opencodeClient: opencodeClient as never,
     floatingPromises: {} as never,
     existingSessions,
+    existingAgents: { get: vi.fn() } as never,
     workingSessions: mockWorkingSessions() as never,
     pendingPrompts: pendingPrompts as never,
     processingMessages: {} as never,
@@ -239,6 +277,7 @@ test("rethrows non-PendingPrompts.NotFoundError from answer", async () => {
     opencodeClient: opencodeClient as never,
     floatingPromises: {} as never,
     existingSessions,
+    existingAgents: { get: vi.fn() } as never,
     workingSessions: mockWorkingSessions() as never,
     pendingPrompts: pendingPrompts as never,
     processingMessages: {} as never,
@@ -265,6 +304,7 @@ test("rethrows errors from lock", async () => {
     opencodeClient: opencodeClient as never,
     floatingPromises: {} as never,
     existingSessions,
+    existingAgents: { get: vi.fn() } as never,
     workingSessions: workingSessions as never,
     pendingPrompts: pendingPrompts as never,
     processingMessages: {} as never,

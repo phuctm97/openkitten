@@ -96,6 +96,7 @@ function mockScope(overrides: {
     opencodeClient: overrides.opencodeClient as never,
     floatingPromises: {} as never,
     existingSessions: overrides.existingSessions,
+    existingAgents: { get: vi.fn() } as never,
     workingSessions: overrides.workingSessions as never,
     pendingPrompts: (overrides.pendingPrompts ?? mockPendingPrompts()) as never,
     processingMessages: {} as never,
@@ -302,6 +303,32 @@ test("sends pending message when session is locked", async () => {
     replyToMessageId: 99,
   });
   expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
+});
+
+test("passes agent to promptAsync when set", async () => {
+  const existingSessions = mockExistingSessions(undefined);
+  const opencodeClient = mockOpencodeClient(0);
+  const workingSessions = mockWorkingSessions();
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    workingSessions,
+  });
+  (scope.existingAgents.get as ReturnType<typeof vi.fn>).mockReturnValue(
+    "build",
+  );
+  const ctx = mockCtx(42, "");
+
+  await grammyHandleStart(scope, ctx);
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s-new",
+      agent: "build",
+      parts: [{ type: "text", text: "Hey" }],
+    },
+    { throwOnError: true },
+  );
 });
 
 test("rethrows non-LockedError from lock", async () => {

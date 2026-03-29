@@ -2,12 +2,14 @@ import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { Database } from "~/lib/database";
 import { Errors } from "~/lib/errors";
+import { ExistingAgents } from "~/lib/existing-agents";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
 import { Grammy } from "~/lib/grammy";
 import { grammyCreateHandler } from "~/lib/grammy-create-handler";
 import { grammyFilterUser } from "~/lib/grammy-filter-user";
 import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
+import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
 import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
@@ -46,6 +48,7 @@ export const serve = defineCommand({
       database,
       opencodeServer.client,
     );
+    const existingAgents = ExistingAgents.create(database);
     const nestingSessions = NestingSessions.create(opencodeServer.client);
     using workingSessions = WorkingSessions.create(
       opencodeServer.client,
@@ -79,6 +82,7 @@ export const serve = defineCommand({
       opencodeClient: opencodeServer.client,
       floatingPromises,
       existingSessions,
+      existingAgents,
       workingSessions,
       pendingPrompts,
       processingMessages,
@@ -106,6 +110,7 @@ export const serve = defineCommand({
     bot.command("start", grammyCreateHandler(scope, grammyHandleStart));
     bot.command("abort", grammyCreateHandler(scope, grammyHandleAbort));
     bot.command("compact", grammyCreateHandler(scope, grammyHandleCompact));
+    bot.command("agent", grammyCreateHandler(scope, grammyHandleAgent));
     bot.on(
       "callback_query:data",
       grammyCreateHandler(scope, grammyHandleCallback),

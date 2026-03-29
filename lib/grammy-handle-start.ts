@@ -47,9 +47,11 @@ export async function grammyHandleStart(
 
   try {
     await scope.workingSessions.lock(sessionId, async () => {
+      const agent = scope.existingAgents.get(sessionId);
       await scope.opencodeClient.session.promptAsync(
         {
           sessionID: sessionId,
+          ...(agent && { agent }),
           parts: [{ type: "text", text: ctx.match || "Hey" }],
         },
         { throwOnError: true },
