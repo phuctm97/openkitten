@@ -130,7 +130,7 @@ test("restarts on linux when already running", async () => {
   const clack = await import("@clack/prompts");
   const spinnerInstance = vi.mocked(clack.spinner).mock.results[0]
     ?.value as ReturnType<typeof clack.spinner>;
-  expect(spinnerInstance.stop).toHaveBeenCalledWith("Restarted service");
+  expect(spinnerInstance.stop).toHaveBeenCalledWith("Updated service");
 });
 
 test("installs on darwin with default profile", async () => {
@@ -151,7 +151,7 @@ test("installs on darwin with default profile", async () => {
   const clack = await import("@clack/prompts");
   const spinnerInstance = vi.mocked(clack.spinner).mock.results[0]
     ?.value as ReturnType<typeof clack.spinner>;
-  expect(spinnerInstance.stop).toHaveBeenCalledWith("Installed service");
+  expect(spinnerInstance.stop).toHaveBeenCalledWith("Updated service");
 });
 
 test("installs on darwin with custom profile", async () => {
@@ -160,7 +160,9 @@ test("installs on darwin with custom profile", async () => {
   Bun.env["OPENKITTEN_PROFILE"] = "work";
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "")));
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
   expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
     "/mock-home/Library/LaunchAgents/com.openkitten.profiles.work.plist",
@@ -176,12 +178,31 @@ test("restarts on darwin when already running", async () => {
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
     .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
   const spinnerInstance = vi.mocked(clack.spinner).mock.results[0]
     ?.value as ReturnType<typeof clack.spinner>;
-  expect(spinnerInstance.message).toHaveBeenCalledWith("Restarting service");
-  expect(spinnerInstance.stop).toHaveBeenCalledWith("Restarted service");
+  expect(spinnerInstance.stop).toHaveBeenCalledWith("Updated service");
+});
+
+test("proceeds after darwin bootout timeout", async () => {
+  Object.defineProperty(process, "platform", { value: "darwin" });
+  Object.defineProperty(process, "getuid", { value: () => 501 });
+  vi.spyOn(globalThis.Date, "now")
+    .mockReturnValueOnce(0)
+    .mockReturnValue(10_000);
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: [] });
+  expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
+    "/mock-home/Library/LaunchAgents/com.openkitten.profiles.default.plist",
+    expect.stringContaining("<key>OPENKITTEN_PROFILE</key>"),
+  );
 });
 
 test("installs on win32", async () => {
@@ -191,7 +212,6 @@ test("installs on win32", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
   expect(vi.mocked(mkdir)).toHaveBeenCalledWith(
@@ -203,21 +223,6 @@ test("installs on win32", async () => {
     expect.stringContaining("stderr.log"),
     "Next steps",
   );
-});
-
-test("restarts on win32 when already running", async () => {
-  Object.defineProperty(process, "platform", { value: "win32" });
-  process.env["LOCALAPPDATA"] = "C:\\MockLocal";
-  shellMock
-    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0)))
-    .mockReturnValueOnce(chainable(shellResult(0)));
-  await runCommand(up, { rawArgs: [] });
-  const clack = await import("@clack/prompts");
-  const spinnerInstance = vi.mocked(clack.spinner).mock.results[0]
-    ?.value as ReturnType<typeof clack.spinner>;
-  expect(spinnerInstance.stop).toHaveBeenCalledWith("Restarted service");
 });
 
 test("skips update when not on main branch", async () => {
