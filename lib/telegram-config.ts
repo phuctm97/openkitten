@@ -170,7 +170,7 @@ export namespace TelegramConfig {
       } else {
         clack.log.error("Invalid config");
       }
-      clack.outro("Done");
+      clack.outro("Processed config");
     }
 
     // Prompt for missing values
