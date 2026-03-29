@@ -6,6 +6,7 @@ import { Api, GrammyError } from "grammy";
 import zod from "zod";
 import { formatPath } from "~/lib/format-path";
 import { isTTY } from "~/lib/is-tty";
+import { logger } from "~/lib/logger";
 import type { Profile } from "~/lib/profile";
 
 const botTokenPattern = /^\d+:[A-Za-z0-9_-]{35}$/;
@@ -28,6 +29,11 @@ function require<T>(value: T | symbol): T {
   return value;
 }
 
+async function verifyBotToken(botToken: string): Promise<string> {
+  const me = await new Api(botToken).getMe();
+  return `${me.first_name} (@${me.username})`;
+}
+
 async function promptBotToken(): Promise<string> {
   clack.log.message(
     "Create a bot with @BotFather: https://t.me/BotFather",
@@ -46,12 +52,12 @@ async function promptBotToken(): Promise<string> {
     const s = clack.spinner();
     s.start("Verifying bot token");
     try {
-      const me = await new Api(botToken).getMe();
-      s.stop(`Verified bot token: ${me.first_name} (@${me.username})`);
+      const bot = await verifyBotToken(botToken);
+      s.stop(`Verified bot token: ${bot}`);
       return botToken;
     } catch (e) {
       if (e instanceof GrammyError) {
-        s.error("Invalid bot token, please try again");
+        s.error("Invalid bot token, try again");
         continue;
       }
       s.error("Failed to verify bot token");
@@ -105,14 +111,27 @@ export namespace TelegramConfig {
     if (await file.exists()) {
       const result = schema.safeParse(await file.json());
       if (result.success) {
-        if (isTTY) {
-          clack.intro(`Config ${styleText("dim", formatPath(path))}`);
-          clack.outro("Verified config");
+        try {
+          const bot = await verifyBotToken(result.data.botToken);
+          if (isTTY) {
+            clack.intro(`Config ${styleText("dim", formatPath(path))}`);
+            clack.outro(`Verified config: ${bot}`);
+          }
+          return result.data;
+        } catch (e) {
+          if (!(e instanceof GrammyError)) throw e;
+          if (!isTTY) {
+            logger.error("Found invalid bot token in Telegram config", e);
+            throw new TelegramConfig.NotFoundError(path);
+          }
         }
-        return result.data;
+      } else if (!isTTY) {
+        logger.error("Failed to parse Telegram config", result.error);
+        throw new TelegramConfig.NotFoundError(path);
       }
+    } else if (!isTTY) {
+      throw new TelegramConfig.NotFoundError(path);
     }
-    if (!isTTY) throw new TelegramConfig.NotFoundError(path);
     clack.intro(`Config ${styleText("dim", formatPath(path))}`);
     const botToken = await promptBotToken();
     const userId = await promptUserId();

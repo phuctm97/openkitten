@@ -4,8 +4,13 @@ import { join } from "node:path";
 import { password, spinner, text } from "@clack/prompts";
 import { GrammyError } from "grammy";
 import { beforeEach, expect, test, vi } from "vitest";
+import { logger } from "~/lib/logger";
 import type { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
+
+vi.mock("~/lib/logger", () => ({
+  logger: { error: vi.fn() },
+}));
 
 const cancelSymbol = Symbol("cancel");
 const validToken = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
@@ -85,6 +90,7 @@ test("loads valid config without TTY output", async () => {
     configPath,
     JSON.stringify({ botToken: validToken, userId: 123 }),
   );
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
   const config = await TelegramConfig.create(profile);
   expect(config.botToken).toBe(validToken);
   expect(config.userId).toBe(123);
@@ -95,6 +101,7 @@ test("loads valid config from file", async () => {
     configPath,
     JSON.stringify({ botToken: validToken, userId: 123 }),
   );
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
   const config = await TelegramConfig.create(profile);
   expect(config.botToken).toBe(validToken);
   expect(config.userId).toBe(123);
@@ -114,6 +121,7 @@ test("saves config after prompting", async () => {
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("456");
   await TelegramConfig.create(profile);
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
   const saved = await TelegramConfig.create(profile);
   expect(saved.botToken).toBe(validToken);
   expect(saved.userId).toBe(456);
@@ -173,6 +181,68 @@ test("throws when not a TTY", async () => {
   await expect(TelegramConfig.create(profile)).rejects.toThrow(
     TelegramConfig.NotFoundError,
   );
+});
+
+test("throws when saved bot token is invalid in non-TTY", async () => {
+  isTTYMock.isTTY = false;
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  mockGetMe(false);
+  await expect(TelegramConfig.create(profile)).rejects.toThrow(
+    TelegramConfig.NotFoundError,
+  );
+  expect(logger.error).toHaveBeenCalled();
+});
+
+test("throws when config is unparseable in non-TTY", async () => {
+  isTTYMock.isTTY = false;
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: "bad-format", userId: 123 }),
+  );
+  await expect(TelegramConfig.create(profile)).rejects.toThrow(
+    TelegramConfig.NotFoundError,
+  );
+  expect(logger.error).toHaveBeenCalled();
+});
+
+test("rethrows non-GrammyError during saved config verification", async () => {
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  getMeMock.mockRejectedValueOnce(new Error("network failure"));
+  await expect(TelegramConfig.create(profile)).rejects.toThrow(
+    "network failure",
+  );
+});
+
+test("rethrows non-GrammyError during saved config verification in non-TTY", async () => {
+  isTTYMock.isTTY = false;
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  getMeMock.mockRejectedValueOnce(new Error("network failure"));
+  await expect(TelegramConfig.create(profile)).rejects.toThrow(
+    "network failure",
+  );
+});
+
+test("re-prompts when saved bot token is invalid in TTY", async () => {
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  mockGetMe(false);
+  vi.mocked(password).mockResolvedValueOnce(validToken);
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  vi.mocked(text).mockResolvedValueOnce("456");
+  const config = await TelegramConfig.create(profile);
+  expect(password).toHaveBeenCalled();
+  expect(config.botToken).toBe(validToken);
 });
 
 test("bot token validate rejects empty value", async () => {
