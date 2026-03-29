@@ -115,7 +115,7 @@ export namespace TelegramConfig {
           const bot = await verifyBotToken(result.data.botToken);
           if (isTTY) {
             clack.intro(`Config ${styleText("dim", formatPath(path))}`);
-            clack.outro(`Verified bot: ${bot}`);
+            clack.outro(`Verified config: ${bot}`);
           }
           return result.data;
         } catch (e) {
