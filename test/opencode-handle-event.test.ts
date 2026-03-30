@@ -107,6 +107,85 @@ test("processes message on message.updated event", async () => {
   expect(processingMessages.update).toHaveBeenCalledWith(event);
 });
 
+test("processes message on message.removed event", async () => {
+  const { scope, processingMessages } = mockScope();
+  const event = {
+    type: "message.removed" as const,
+    properties: {
+      sessionID: "s1",
+      messageID: "m1",
+    },
+  };
+  await opencodeHandleEvent(
+    scope,
+    event as never,
+    new AbortController().signal,
+  );
+  expect(processingMessages.update).toHaveBeenCalledWith(event);
+});
+
+test("processes message on message.part.updated event", async () => {
+  const { scope, processingMessages } = mockScope();
+  const event = {
+    type: "message.part.updated" as const,
+    properties: {
+      sessionID: "s1",
+      part: {
+        id: "p1",
+        sessionID: "s1",
+        messageID: "m1",
+        type: "text" as const,
+        text: "hello",
+      },
+      time: 1,
+    },
+  };
+  await opencodeHandleEvent(
+    scope,
+    event as never,
+    new AbortController().signal,
+  );
+  expect(processingMessages.update).toHaveBeenCalledWith(event);
+});
+
+test("processes message on message.part.removed event", async () => {
+  const { scope, processingMessages } = mockScope();
+  const event = {
+    type: "message.part.removed" as const,
+    properties: {
+      sessionID: "s1",
+      messageID: "m1",
+      partID: "p1",
+    },
+  };
+  await opencodeHandleEvent(
+    scope,
+    event as never,
+    new AbortController().signal,
+  );
+  expect(processingMessages.update).toHaveBeenCalledWith(event);
+});
+
+test("processes message on message.part.delta event", async () => {
+  const { scope, processingMessages } = mockScope();
+  const event = {
+    type: "message.part.delta" as const,
+    properties: {
+      sessionID: "s1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: "hello",
+    },
+  };
+  await opencodeHandleEvent(
+    scope,
+    event as never,
+    new AbortController().signal,
+  );
+  expect(processingMessages.update).toHaveBeenCalledWith(event);
+});
+
 test("sends error on session.error", async () => {
   const { scope, bot } = mockScope();
   const error = { type: "unknown_error" as const, message: "boom" };
