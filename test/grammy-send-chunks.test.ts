@@ -91,6 +91,26 @@ test("includes reply parameters in send options", async () => {
   });
 });
 
+test("replies only with the first chunk", async () => {
+  await send([{ text: "first" }, { text: "second" }, { text: "third" }], {
+    replyToMessageId: 789,
+    threadId: 456,
+  });
+  expect(bot.api.sendMessage).toHaveBeenNthCalledWith(1, 123, "first", {
+    link_preview_options: noPreview,
+    message_thread_id: 456,
+    reply_parameters: { message_id: 789 },
+  });
+  expect(bot.api.sendMessage).toHaveBeenNthCalledWith(2, 123, "second", {
+    link_preview_options: noPreview,
+    message_thread_id: 456,
+  });
+  expect(bot.api.sendMessage).toHaveBeenNthCalledWith(3, 123, "third", {
+    link_preview_options: noPreview,
+    message_thread_id: 456,
+  });
+});
+
 test("throws on send error", async () => {
   bot.api.sendMessage.mockRejectedValueOnce(new Error("network error"));
   await expect(send([{ text: "fail" }])).rejects.toThrow("network error");
