@@ -19,6 +19,7 @@ test("formats agent list and sends chunks", async () => {
     availableAgents: agents as never,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
   expect(
     grammyFormatAgentListModule.grammyFormatAgentList,
@@ -28,5 +29,6 @@ test("formats agent list and sends chunks", async () => {
     chunks,
     chatId: 456,
     threadId: 789,
+    replyToMessageId: 101,
   });
 });
