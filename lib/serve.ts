@@ -24,6 +24,7 @@ import { ProcessingMessages } from "~/lib/processing-messages";
 import { Profile } from "~/lib/profile";
 import type { Scope } from "~/lib/scope";
 import { Shutdown } from "~/lib/shutdown";
+import { StreamingMessages } from "~/lib/streaming-messages";
 import { TelegramConfig } from "~/lib/telegram-config";
 import { TypingIndicators } from "~/lib/typing-indicators";
 import { WorkingSessions } from "~/lib/working-sessions";
@@ -56,11 +57,16 @@ export const serve = defineCommand({
       opencodeServer.client,
       existingSessions,
     );
+    await using streamingMessages = StreamingMessages.create(
+      bot,
+      existingSessions,
+    );
     const processingMessages = ProcessingMessages.create(
       bot,
       database,
       opencodeServer.client,
       existingSessions,
+      streamingMessages,
     );
     using typingIndicators = TypingIndicators.create(
       shutdown,

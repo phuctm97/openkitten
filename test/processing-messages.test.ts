@@ -13,6 +13,17 @@ type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 
 let mockSessionMessage: MockFn;
 let mockSessionMessages: MockFn;
+let mockStreamingMessagesUpdate: MockFn;
+let mockStreamingMessagesClear: MockFn;
+
+function createMockStreamingMessages() {
+  mockStreamingMessagesUpdate = vi.fn();
+  mockStreamingMessagesClear = vi.fn(async () => {});
+  return {
+    update: (...args: unknown[]) => mockStreamingMessagesUpdate(...args),
+    clear: (...args: unknown[]) => mockStreamingMessagesClear(...args),
+  } as never;
+}
 
 function createMockOpencodeClient() {
   mockSessionMessage = vi.fn(async () => ({
@@ -48,8 +59,9 @@ function setup() {
   const bot = {} as never;
   const client = createMockOpencodeClient();
   const es = createMockExistingSessions();
-  const pm = ProcessingMessages.create(bot, database, client, es);
-  return { database, bot, client, es, pm };
+  const sm = createMockStreamingMessages();
+  const pm = ProcessingMessages.create(bot, database, client, es, sm);
+  return { database, bot, client, es, pm, sm };
 }
 
 beforeEach(() => {
@@ -110,6 +122,7 @@ test("update clears the streaming message once it completes", async () => {
     },
   } as never);
   expect(pm.streaming("sess-1")).toBeUndefined();
+  expect(mockStreamingMessagesClear).toHaveBeenCalledWith("sess-1");
 });
 
 test("update skips incomplete assistant message", async () => {
@@ -151,6 +164,111 @@ test("update stores incomplete assistant message as latest streaming state", asy
       time: { created: 1 },
     },
     parts: [],
+  });
+});
+
+test("update streams text parts to Telegram draft updates", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  expect(mockStreamingMessagesUpdate).toHaveBeenLastCalledWith({
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1 },
+    },
+    parts: [
+      {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+    ],
+  });
+});
+
+test("update streams full message parts when only non-text parts exist", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  mockStreamingMessagesUpdate.mockClear();
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "tool",
+        callID: "call-1",
+        tool: "bash",
+        state: {
+          status: "pending",
+          input: {},
+          raw: "echo hello",
+        },
+      },
+      time: 2,
+    },
+  } as never);
+  expect(mockStreamingMessagesUpdate).toHaveBeenCalledWith({
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1 },
+    },
+    parts: [
+      {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "tool",
+        callID: "call-1",
+        tool: "bash",
+        state: {
+          status: "pending",
+          input: {},
+          raw: "echo hello",
+        },
+      },
+    ],
   });
 });
 
@@ -719,6 +837,38 @@ test("update ignores part removals for a different message", async () => {
   ]);
 });
 
+test("update ignores part removals for missing parts", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.removed",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")).toEqual({
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1 },
+    },
+    parts: [],
+  });
+});
+
 test("update removes the latest streaming message", async () => {
   const { pm } = setup();
   await pm.update({
@@ -1242,7 +1392,8 @@ test("invalidate with no sessions skips processing", async () => {
   const bot = {} as never;
   const client = createMockOpencodeClient();
   const es = createMockExistingSessions([]);
-  const pm = ProcessingMessages.create(bot, database, client, es);
+  const sm = createMockStreamingMessages();
+  const pm = ProcessingMessages.create(bot, database, client, es, sm);
   await pm.invalidate();
   expect(mockSessionMessages).not.toHaveBeenCalled();
 });
