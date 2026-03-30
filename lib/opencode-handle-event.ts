@@ -27,6 +27,10 @@ export async function opencodeHandleEvent(
       await pendingPrompts.update(event);
       break;
     case "message.updated":
+    case "message.removed":
+    case "message.part.updated":
+    case "message.part.removed":
+    case "message.part.delta":
       await processingMessages.update(event);
       break;
     case "session.error": {
