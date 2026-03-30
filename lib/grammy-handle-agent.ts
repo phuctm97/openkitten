@@ -34,6 +34,7 @@ export async function grammyHandleAgent(
       bot,
       chatId: ctx.chat.id,
       threadId: ctx.msg.message_thread_id || undefined,
+      replyToMessageId: ctx.msg.message_id,
       currentAgent,
       availableAgents,
     });

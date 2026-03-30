@@ -105,6 +105,7 @@ test("shows current agent and available agents when no argument", async () => {
     bot: scope.bot,
     chatId: 42,
     threadId: undefined,
+    replyToMessageId: 99,
     currentAgent: "build",
     availableAgents,
   });
@@ -124,6 +125,7 @@ test("shows configured default agent when none is set", async () => {
     bot: scope.bot,
     chatId: 42,
     threadId: undefined,
+    replyToMessageId: 99,
     currentAgent: "assist",
     availableAgents,
   });
@@ -143,6 +145,7 @@ test("falls back to build when default_agent is not configured", async () => {
     bot: scope.bot,
     chatId: 42,
     threadId: undefined,
+    replyToMessageId: 99,
     currentAgent: "build",
     availableAgents,
   });
