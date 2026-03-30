@@ -1,10 +1,12 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
 
+vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
 
 beforeEach(() => {
@@ -96,7 +98,6 @@ function mockScope(overrides: {
     opencodeClient: overrides.opencodeClient as never,
     floatingPromises: {} as never,
     existingSessions: overrides.existingSessions,
-    existingAgents: { get: vi.fn() } as never,
     workingSessions: overrides.workingSessions as never,
     pendingPrompts: (overrides.pendingPrompts ?? mockPendingPrompts()) as never,
     processingMessages: {} as never,
@@ -309,14 +310,12 @@ test("passes agent to promptAsync when set", async () => {
   const existingSessions = mockExistingSessions(undefined);
   const opencodeClient = mockOpencodeClient(0);
   const workingSessions = mockWorkingSessions();
+  vi.mocked(getSessionAgent).mockReturnValue("build");
   const scope = mockScope({
     existingSessions,
     opencodeClient,
     workingSessions,
   });
-  (scope.existingAgents.get as ReturnType<typeof vi.fn>).mockReturnValue(
-    "build",
-  );
   const ctx = mockCtx(42, "");
 
   await grammyHandleStart(scope, ctx);

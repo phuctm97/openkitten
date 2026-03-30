@@ -24,7 +24,7 @@ import { grammySendPermissionPending } from "~/lib/grammy-send-permission-pendin
 import { grammySendQuestionMessage } from "~/lib/grammy-send-question-message";
 import { grammySendQuestionPending } from "~/lib/grammy-send-question-pending";
 import { logger } from "~/lib/logger";
-import { resolveRootSessionId } from "~/lib/resolve-root-session-id";
+import { opencodeResolveRootSessionId } from "~/lib/opencode-resolve-root-session-id";
 import type { Shutdown } from "~/lib/shutdown";
 
 export class PendingPrompts implements AsyncDisposable {
@@ -55,7 +55,7 @@ export class PendingPrompts implements AsyncDisposable {
     );
   }
 
-  async #resolveRootSessionIds(
+  async #resolveOpencodeRootSessionIds(
     questions: readonly QuestionRequest[],
     permissions: readonly PermissionRequest[],
   ) {
@@ -66,7 +66,10 @@ export class PendingPrompts implements AsyncDisposable {
     const resolved = new Map<string, string>();
     const results = await Promise.allSettled(
       [...uniqueIds].map(async (id) => {
-        resolved.set(id, await resolveRootSessionId(this.#opencodeClient, id));
+        resolved.set(
+          id,
+          await opencodeResolveRootSessionId(this.#opencodeClient, id),
+        );
       }),
     );
     Errors.throwIfAny(results);
@@ -481,7 +484,7 @@ export class PendingPrompts implements AsyncDisposable {
       | EventPermissionAsked
       | EventPermissionReplied,
   ) {
-    const sessionID = await resolveRootSessionId(
+    const sessionID = await opencodeResolveRootSessionId(
       this.#opencodeClient,
       event.properties.sessionID,
     );
@@ -569,7 +572,7 @@ export class PendingPrompts implements AsyncDisposable {
       this.#opencodeClient.question.list({}, { throwOnError: true }),
       this.#opencodeClient.permission.list({}, { throwOnError: true }),
     ]);
-    await this.#resolveRootSessionIds(questions, permissions);
+    await this.#resolveOpencodeRootSessionIds(questions, permissions);
     const dismissPromises: Promise<void>[] = [];
     const changedSessions: PendingPrompts.ChangeEvent[] = [];
     for (const sessionId of sessionIds) {

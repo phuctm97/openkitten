@@ -1,12 +1,18 @@
-import { expect, test, vi } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
 
+vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 function mockCtx(
   chatId: number,
@@ -76,24 +82,37 @@ function mockWorkingSessions() {
   };
 }
 
+function mockScope(overrides: {
+  existingSessions?: ExistingSessions;
+  opencodeClient?: ReturnType<typeof mockOpencodeClient>;
+  pendingPrompts?: ReturnType<typeof mockPendingPrompts>;
+  workingSessions?: ReturnType<typeof mockWorkingSessions>;
+}): Scope {
+  return {
+    shutdown: {} as never,
+    bot: {} as never,
+    database: {} as never,
+    opencodeClient: (overrides.opencodeClient ?? mockOpencodeClient()) as never,
+    floatingPromises: {} as never,
+    existingSessions: overrides.existingSessions ?? mockExistingSessions(),
+    workingSessions: (overrides.workingSessions ??
+      mockWorkingSessions()) as never,
+    pendingPrompts: (overrides.pendingPrompts ?? mockPendingPrompts()) as never,
+    processingMessages: {} as never,
+    typingIndicators: {} as never,
+  };
+}
+
 test("answers pending prompt when session has one", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.answer.mockResolvedValue(undefined);
-  const scope = {
-    shutdown: {} as never,
-    bot: {} as never,
-    database: {} as never,
-    opencodeClient: opencodeClient as never,
-    floatingPromises: {} as never,
+  const scope = mockScope({
     existingSessions,
-    existingAgents: { get: vi.fn() } as never,
-    workingSessions: mockWorkingSessions() as never,
-    pendingPrompts: pendingPrompts as never,
-    processingMessages: {} as never,
-    typingIndicators: {} as never,
-  } satisfies Scope;
+    opencodeClient,
+    pendingPrompts,
+  });
 
   await grammyHandleText(scope, mockCtx(42, "my answer", undefined, 55));
 
@@ -111,19 +130,11 @@ test("prompts opencode when no pending prompt", async () => {
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  const scope = {
-    shutdown: {} as never,
-    bot: {} as never,
-    database: {} as never,
-    opencodeClient: opencodeClient as never,
-    floatingPromises: {} as never,
+  const scope = mockScope({
     existingSessions,
-    existingAgents: { get: vi.fn() } as never,
-    workingSessions: mockWorkingSessions() as never,
-    pendingPrompts: pendingPrompts as never,
-    processingMessages: {} as never,
-    typingIndicators: {} as never,
-  } satisfies Scope;
+    opencodeClient,
+    pendingPrompts,
+  });
 
   await grammyHandleText(scope, mockCtx(42, "hello"));
 
@@ -139,19 +150,11 @@ test("creates new session when none exists", async () => {
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  const scope = {
-    shutdown: {} as never,
-    bot: {} as never,
-    database: {} as never,
-    opencodeClient: opencodeClient as never,
-    floatingPromises: {} as never,
+  const scope = mockScope({
     existingSessions,
-    existingAgents: { get: vi.fn() } as never,
-    workingSessions: mockWorkingSessions() as never,
-    pendingPrompts: pendingPrompts as never,
-    processingMessages: {} as never,
-    typingIndicators: {} as never,
-  } satisfies Scope;
+    opencodeClient,
+    pendingPrompts,
+  });
 
   await grammyHandleText(scope, mockCtx(42, "hello"));
 
@@ -171,20 +174,8 @@ test("passes agent to promptAsync when set", async () => {
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  const existingAgents = { get: vi.fn(() => "build") };
-  const scope = {
-    shutdown: {} as never,
-    bot: {} as never,
-    database: {} as never,
-    opencodeClient: opencodeClient as never,
-    floatingPromises: {} as never,
-    existingSessions,
-    existingAgents: existingAgents as never,
-    workingSessions: mockWorkingSessions() as never,
-    pendingPrompts: pendingPrompts as never,
-    processingMessages: {} as never,
-    typingIndicators: {} as never,
-  } satisfies Scope;
+  vi.mocked(getSessionAgent).mockReturnValue("build");
+  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
 
   await grammyHandleText(scope, mockCtx(42, "hello"));
 
@@ -205,19 +196,12 @@ test("sends pending message when session is locked", async () => {
   pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
   const workingSessions = mockWorkingSessions();
   workingSessions.lock.mockRejectedValue(new WorkingSessions.LockedError("s1"));
-  const scope = {
-    shutdown: {} as never,
-    bot: {} as never,
-    database: {} as never,
-    opencodeClient: opencodeClient as never,
-    floatingPromises: {} as never,
+  const scope = mockScope({
     existingSessions,
-    existingAgents: { get: vi.fn() } as never,
-    workingSessions: workingSessions as never,
-    pendingPrompts: pendingPrompts as never,
-    processingMessages: {} as never,
-    typingIndicators: {} as never,
-  } satisfies Scope;
+    opencodeClient,
+    pendingPrompts,
+    workingSessions,
+  });
 
   await grammyHandleText(scope, mockCtx(42, "hello"));
 
@@ -236,19 +220,11 @@ test("passes threadId through the flow", async () => {
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  const scope = {
-    shutdown: {} as never,
-    bot: {} as never,
-    database: {} as never,
-    opencodeClient: opencodeClient as never,
-    floatingPromises: {} as never,
+  const scope = mockScope({
     existingSessions,
-    existingAgents: { get: vi.fn() } as never,
-    workingSessions: mockWorkingSessions() as never,
-    pendingPrompts: pendingPrompts as never,
-    processingMessages: {} as never,
-    typingIndicators: {} as never,
-  } satisfies Scope;
+    opencodeClient,
+    pendingPrompts,
+  });
 
   await grammyHandleText(scope, mockCtx(42, "hello", 7));
 
@@ -270,19 +246,11 @@ test("rethrows non-PendingPrompts.NotFoundError from answer", async () => {
   const pendingPrompts = mockPendingPrompts();
   const error = new Error("unexpected");
   pendingPrompts.answer.mockRejectedValue(error);
-  const scope = {
-    shutdown: {} as never,
-    bot: {} as never,
-    database: {} as never,
-    opencodeClient: opencodeClient as never,
-    floatingPromises: {} as never,
+  const scope = mockScope({
     existingSessions,
-    existingAgents: { get: vi.fn() } as never,
-    workingSessions: mockWorkingSessions() as never,
-    pendingPrompts: pendingPrompts as never,
-    processingMessages: {} as never,
-    typingIndicators: {} as never,
-  } satisfies Scope;
+    opencodeClient,
+    pendingPrompts,
+  });
 
   await expect(grammyHandleText(scope, mockCtx(42, "hello"))).rejects.toBe(
     error,
@@ -297,19 +265,12 @@ test("rethrows errors from lock", async () => {
   const error = new Error("unexpected");
   const workingSessions = mockWorkingSessions();
   workingSessions.lock.mockRejectedValue(error);
-  const scope = {
-    shutdown: {} as never,
-    bot: {} as never,
-    database: {} as never,
-    opencodeClient: opencodeClient as never,
-    floatingPromises: {} as never,
+  const scope = mockScope({
     existingSessions,
-    existingAgents: { get: vi.fn() } as never,
-    workingSessions: workingSessions as never,
-    pendingPrompts: pendingPrompts as never,
-    processingMessages: {} as never,
-    typingIndicators: {} as never,
-  } satisfies Scope;
+    opencodeClient,
+    pendingPrompts,
+    workingSessions,
+  });
 
   await expect(grammyHandleText(scope, mockCtx(42, "hello"))).rejects.toBe(
     error,

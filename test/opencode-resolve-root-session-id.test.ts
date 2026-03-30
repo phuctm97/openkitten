@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vitest";
-import { resolveRootSessionId } from "~/lib/resolve-root-session-id";
+import { opencodeResolveRootSessionId } from "~/lib/opencode-resolve-root-session-id";
 
 function setup() {
   const sessionGet = vi.fn();
@@ -10,7 +10,7 @@ function setup() {
 test("returns sessionId when session has no parentID", async () => {
   const { opencodeClient, sessionGet } = setup();
   sessionGet.mockResolvedValue({ data: { id: "s1" } });
-  const result = await resolveRootSessionId(opencodeClient, "s1");
+  const result = await opencodeResolveRootSessionId(opencodeClient, "s1");
   expect(result).toBe("s1");
   expect(sessionGet).toHaveBeenCalledWith(
     { sessionID: "s1" },
@@ -23,7 +23,7 @@ test("follows parentID to root", async () => {
   sessionGet
     .mockResolvedValueOnce({ data: { id: "child", parentID: "parent" } })
     .mockResolvedValueOnce({ data: { id: "parent" } });
-  const result = await resolveRootSessionId(opencodeClient, "child");
+  const result = await opencodeResolveRootSessionId(opencodeClient, "child");
   expect(result).toBe("parent");
 });
 
@@ -35,7 +35,10 @@ test("follows multi-level parentID chain", async () => {
     })
     .mockResolvedValueOnce({ data: { id: "child", parentID: "root" } })
     .mockResolvedValueOnce({ data: { id: "root" } });
-  const result = await resolveRootSessionId(opencodeClient, "grandchild");
+  const result = await opencodeResolveRootSessionId(
+    opencodeClient,
+    "grandchild",
+  );
   expect(result).toBe("root");
   expect(sessionGet).toHaveBeenCalledTimes(3);
 });

@@ -1,7 +1,6 @@
 import { runCommand } from "citty";
 import { expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
-import { ExistingAgents } from "~/lib/existing-agents";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { Grammy } from "~/lib/grammy";
 import { McpServer } from "~/lib/mcp-server";
@@ -138,13 +137,6 @@ function mockWorkingSessions() {
   return { workingSessions, update };
 }
 
-function mockExistingAgents() {
-  vi.spyOn(ExistingAgents, "create").mockReturnValue({
-    get: vi.fn(),
-    set: vi.fn(),
-  } as never);
-}
-
 function mockProcessingMessages() {
   const invalidate = vi.fn();
   const update = vi.fn();
@@ -247,7 +239,6 @@ function mockAll() {
   const disposeOpencodeServer = mockOpencodeServer();
   const disposeMcpServer = mockMcpServer();
   const es = mockExistingSessions();
-  mockExistingAgents();
   const typing = mockTypingIndicators();
   const prompts = mockPendingPrompts();
   const stream = mockOpencodeEventStream();

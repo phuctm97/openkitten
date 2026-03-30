@@ -62,7 +62,6 @@ function mockScope(overrides: {
     opencodeClient: {} as never,
     floatingPromises: {} as never,
     existingSessions: overrides.existingSessions,
-    existingAgents: {} as never,
     workingSessions: {} as never,
     pendingPrompts: overrides.pendingPrompts as never,
     processingMessages: {} as never,

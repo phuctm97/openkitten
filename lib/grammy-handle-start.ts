@@ -1,6 +1,7 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { CommandContext, Context } from "grammy";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
@@ -47,7 +48,7 @@ export async function grammyHandleStart(
 
   try {
     await scope.workingSessions.lock(sessionId, async () => {
-      const agent = scope.existingAgents.get(sessionId);
+      const agent = getSessionAgent(scope.database, sessionId);
       await scope.opencodeClient.session.promptAsync(
         {
           sessionID: sessionId,
