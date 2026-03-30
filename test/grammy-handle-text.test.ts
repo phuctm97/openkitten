@@ -11,7 +11,7 @@ vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 function mockCtx(
@@ -237,7 +237,10 @@ test("passes threadId through the flow", async () => {
     messageId: 100,
     text: "hello",
   });
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalled();
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    { sessionID: "s1", parts: [{ type: "text", text: "hello" }] },
+    { throwOnError: true },
+  );
 });
 
 test("rethrows non-PendingPrompts.NotFoundError from answer", async () => {

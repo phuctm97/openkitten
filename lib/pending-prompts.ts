@@ -55,7 +55,7 @@ export class PendingPrompts implements AsyncDisposable {
     );
   }
 
-  async #resolveOpencodeRootSessionIds(
+  async #resolveRootSessionIds(
     questions: readonly QuestionRequest[],
     permissions: readonly PermissionRequest[],
   ) {
@@ -572,7 +572,7 @@ export class PendingPrompts implements AsyncDisposable {
       this.#opencodeClient.question.list({}, { throwOnError: true }),
       this.#opencodeClient.permission.list({}, { throwOnError: true }),
     ]);
-    await this.#resolveOpencodeRootSessionIds(questions, permissions);
+    await this.#resolveRootSessionIds(questions, permissions);
     const dismissPromises: Promise<void>[] = [];
     const changedSessions: PendingPrompts.ChangeEvent[] = [];
     for (const sessionId of sessionIds) {

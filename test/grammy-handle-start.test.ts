@@ -10,7 +10,7 @@ vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 function mockCtx(chatId: number, match: string, threadId?: number) {

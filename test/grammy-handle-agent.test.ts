@@ -15,7 +15,7 @@ vi.mock("~/lib/grammy-send-agent-not-found");
 vi.mock("~/lib/set-session-agent");
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
 });
 
 function mockCtx(chatId: number, match: string, threadId?: number) {
