@@ -1,4 +1,4 @@
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
@@ -8,10 +8,6 @@ import { WorkingSessions } from "~/lib/working-sessions";
 
 vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
-
-beforeEach(() => {
-  vi.resetAllMocks();
-});
 
 function mockCtx(chatId: number, match: string, threadId?: number) {
   return {

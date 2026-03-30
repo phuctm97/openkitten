@@ -8,10 +8,6 @@ import { logger } from "~/lib/logger";
 import type { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
 
-vi.mock("~/lib/logger", () => ({
-  logger: { error: vi.fn() },
-}));
-
 const cancelSymbol = Symbol("cancel");
 const validToken = "123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
 

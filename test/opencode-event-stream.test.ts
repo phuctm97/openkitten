@@ -1,11 +1,7 @@
-import { afterEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 function mockSleep() {
   return vi.spyOn(Bun, "sleep").mockResolvedValue(undefined as never);
