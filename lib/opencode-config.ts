@@ -19,6 +19,27 @@ const defaultConfigJson = {
   default_agent: "assist",
 };
 
+const opencodeToolPrefix = `${pkg.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_`;
+
+const opencodePluginFilename = "openkitten.js";
+
+const opencodePluginSource = `export default {
+  id: ${JSON.stringify(pkg.name)},
+  server: async () => ({
+    "tool.execute.before": async (input, output) => {
+      if (!input.tool.startsWith(${JSON.stringify(opencodeToolPrefix)})) return;
+      if (!output.args || typeof output.args !== "object" || Array.isArray(output.args)) {
+        throw new Error(\`Cannot attach __OPENKITTEN__ metadata to \${input.tool}: tool args must be a mutable object.\`);
+      }
+      output.args.__OPENKITTEN__ = {
+        sessionID: input.sessionID,
+        callID: input.callID,
+      };
+    },
+  }),
+};
+`;
+
 function cancel(): never {
   clack.cancel("Cancelled");
   throw new OpencodeConfig.CancelledError();
@@ -42,7 +63,11 @@ export namespace OpencodeConfig {
     const writes: Promise<unknown>[] = [];
     const configDir = join(profile.dir, ".opencode");
     const agentsDir = join(configDir, "agents");
-    await mkdir(agentsDir, { recursive: true });
+    const pluginsDir = join(profile.xdgConfig, "opencode", "plugins");
+    await Promise.all([
+      mkdir(agentsDir, { recursive: true }),
+      mkdir(pluginsDir, { recursive: true }),
+    ]);
     const agentsGlob = new Bun.Glob("*.md");
     for await (const file of agentsGlob.scan(defaultAgentsDir)) {
       writes.push(
@@ -59,6 +84,9 @@ export namespace OpencodeConfig {
         JSON.stringify(defaultConfigJson, null, 2),
         { flag: "wx" },
       ),
+    );
+    writes.push(
+      Bun.write(join(pluginsDir, opencodePluginFilename), opencodePluginSource),
     );
     const results = await Promise.allSettled(writes);
     const errors = results

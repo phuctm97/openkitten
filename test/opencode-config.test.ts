@@ -38,6 +38,10 @@ afterEach(async () => {
 
 const configDir = () => join(profileDir, ".opencode");
 
+const pluginsDir = () => join(profile.xdgConfig, "opencode", "plugins");
+
+const toolPrefix = `${pkg.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_`;
+
 test("copies agent files", async () => {
   await OpencodeConfig.create(profile);
   await expect(
@@ -57,6 +61,26 @@ test("writes opencode config", async () => {
     await readFile(join(configDir(), "opencode.json"), "utf-8"),
   );
   expect(config.default_agent).toBe("assist");
+});
+
+test("writes system OpenCode plugin", async () => {
+  await OpencodeConfig.create(profile);
+  const content = await readFile(join(pluginsDir(), "openkitten.js"), "utf-8");
+  expect(content).toContain(`id: ${JSON.stringify(pkg.name)}`);
+  expect(content).toContain("server: async () => ({");
+  expect(content).toContain(
+    '"tool.execute.before": async (input, output) => {',
+  );
+  expect(content).toContain(
+    `if (!input.tool.startsWith(${JSON.stringify(toolPrefix)})) return;`,
+  );
+  expect(content).toContain(
+    `throw new Error(\`Cannot attach __OPENKITTEN__ metadata to \${input.tool}: tool args must be a mutable object.\`);`,
+  );
+  expect(content).toContain("output.args.__OPENKITTEN__ = {");
+  expect(content).toContain("sessionID: input.sessionID,");
+  expect(content).toContain("callID: input.callID,");
+  expect(content).toContain("};");
 });
 
 test("does not overwrite existing opencode config", async () => {
@@ -87,6 +111,16 @@ test("copies new agents while preserving existing ones", async () => {
   const planPath = join(configDir(), "agents", "plan.md");
   const planContent = await readFile(planPath, "utf-8");
   expect(planContent).not.toBe("custom content");
+});
+
+test("overwrites existing system OpenCode plugin", async () => {
+  await mkdir(pluginsDir(), { recursive: true });
+  const pluginPath = join(pluginsDir(), "openkitten.js");
+  await writeFile(pluginPath, "custom content");
+  await OpencodeConfig.create(profile);
+  const content = await readFile(pluginPath, "utf-8");
+  expect(content).not.toBe("custom content");
+  expect(content).toContain("output.args.__OPENKITTEN__ = {");
 });
 
 test("throws on single non-EEXIST error", async () => {
