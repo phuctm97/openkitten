@@ -1,5 +1,7 @@
 import type { CommandContext, Context } from "grammy";
-import { grammySendText } from "~/lib/grammy-send-text";
+import { grammySendAgentChanged } from "~/lib/grammy-send-agent-changed";
+import { grammySendAgentList } from "~/lib/grammy-send-agent-list";
+import { grammySendAgentNotFound } from "~/lib/grammy-send-agent-not-found";
 import type { Scope } from "~/lib/scope";
 
 export async function grammyHandleAgent(
@@ -14,42 +16,50 @@ export async function grammyHandleAgent(
     { createIfNotFound: true },
   );
 
-  const [{ data: allAgents }, { data: config }] = await Promise.all([
-    opencodeClient.app.agents({}, { throwOnError: true }),
-    opencodeClient.config.get({}, { throwOnError: true }),
-  ]);
-  const mainAgents = allAgents.filter((a) => a.mode !== "subagent");
-  const availableAgents = `**Available agents:**\n${mainAgents
-    .map((a) => `- \`${a.name}\`: ${a.description || "N/A"}`)
-    .join("\n")}`;
-  const defaultAgent = config.default_agent || "build";
+  const { data: allAgents } = await opencodeClient.app.agents(
+    {},
+    { throwOnError: true },
+  );
+  const availableAgents = allAgents.filter((a) => a.mode !== "subagent");
 
   // No argument: show current agent and available agents.
   if (!ctx.match) {
-    const current = existingAgents.get(sessionId) || defaultAgent;
-    await grammySendText({
+    const { data: config } = await opencodeClient.config.get(
+      {},
+      { throwOnError: true },
+    );
+    const currentAgent =
+      existingAgents.get(sessionId) || config.default_agent || "build";
+    await grammySendAgentList({
       bot,
       chatId: ctx.chat.id,
       threadId: ctx.msg.message_thread_id || undefined,
       replyToMessageId: ctx.msg.message_id,
-      text: `**Current agent:** \`${current}\`\n\n${availableAgents}`,
+      currentAgent,
+      availableAgents,
     });
     return;
   }
 
   // Validate the agent name.
-  const agent = mainAgents.find((a) => a.name === ctx.match);
+  const agent = availableAgents.find((a) => a.name === ctx.match);
   if (!agent) {
-    await grammySendText({
+    await grammySendAgentNotFound({
       bot,
       chatId: ctx.chat.id,
       threadId: ctx.msg.message_thread_id || undefined,
       replyToMessageId: ctx.msg.message_id,
-      text: `**Unknown agent:** \`${ctx.match}\`\n\n${availableAgents}`,
+      name: ctx.match,
     });
     return;
   }
 
   existingAgents.set(sessionId, agent.name);
-  await ctx.react("👍");
+  await grammySendAgentChanged({
+    bot,
+    chatId: ctx.chat.id,
+    threadId: ctx.msg.message_thread_id || undefined,
+    replyToMessageId: ctx.msg.message_id,
+    agent,
+  });
 }
