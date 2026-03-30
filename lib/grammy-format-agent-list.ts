@@ -6,9 +6,10 @@ export function grammyFormatAgentList(
   availableAgents: readonly Agent[],
 ) {
   const list = availableAgents
-    .map((a) => `- \`${a.name}\`: ${a.description || "N/A"}`)
+    .map((a) => {
+      const current = a.name === currentAgent ? " _(current)_" : "";
+      return `- \`${a.name}\`${current}: ${a.description || "N/A"}`;
+    })
     .join("\n");
-  return grammyFormatText(
-    `**Current agent:** \`${currentAgent}\`\n\n**Available agents:**\n${list}`,
-  );
+  return grammyFormatText(`> 📋 Here are the available agents.\n\n${list}`);
 }
