@@ -1,10 +1,14 @@
 import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
-import { grammySendText } from "~/lib/grammy-send-text";
+import { grammySendAgentChanged } from "~/lib/grammy-send-agent-changed";
+import { grammySendAgentList } from "~/lib/grammy-send-agent-list";
+import { grammySendAgentNotFound } from "~/lib/grammy-send-agent-not-found";
 import type { Scope } from "~/lib/scope";
 
-vi.mock("~/lib/grammy-send-text");
+vi.mock("~/lib/grammy-send-agent-changed");
+vi.mock("~/lib/grammy-send-agent-list");
+vi.mock("~/lib/grammy-send-agent-not-found");
 
 function mockCtx(chatId: number, match: string, threadId?: number) {
   const react = vi.fn(async () => true);
@@ -41,24 +45,19 @@ function mockExistingSessions(): ExistingSessions {
   } as never;
 }
 
-const agentList =
-  "**Available agents:**\n- `assist`: General purpose\n- `build`: Software engineering\n- `plan`: N/A";
+const agents = [
+  { name: "assist", mode: "primary", description: "General purpose" },
+  { name: "build", mode: "all", description: "Software engineering" },
+  { name: "plan", mode: "primary" },
+  { name: "sub-task", mode: "subagent", description: "Internal" },
+];
+
+const availableAgents = agents.filter((a) => a.mode !== "subagent");
 
 function mockOpencodeClient(defaultAgent?: string) {
   return {
     app: {
-      agents: vi.fn(async () => ({
-        data: [
-          { name: "assist", mode: "primary", description: "General purpose" },
-          {
-            name: "build",
-            mode: "all",
-            description: "Software engineering",
-          },
-          { name: "plan", mode: "primary" },
-          { name: "sub-task", mode: "subagent", description: "Internal" },
-        ],
-      })),
+      agents: vi.fn(async () => ({ data: agents })),
     },
     config: {
       get: vi.fn(async () => ({
@@ -102,12 +101,12 @@ test("shows current agent and available agents when no argument", async () => {
 
   await grammyHandleAgent(scope, ctx);
 
-  expect(grammySendText).toHaveBeenCalledWith({
+  expect(grammySendAgentList).toHaveBeenCalledWith({
     bot: scope.bot,
     chatId: 42,
     threadId: undefined,
-    replyToMessageId: 99,
-    text: `**Current agent:** \`build\`\n\n${agentList}`,
+    currentAgent: "build",
+    availableAgents,
   });
 });
 
@@ -121,12 +120,12 @@ test("shows configured default agent when none is set", async () => {
 
   await grammyHandleAgent(scope, ctx);
 
-  expect(grammySendText).toHaveBeenCalledWith({
+  expect(grammySendAgentList).toHaveBeenCalledWith({
     bot: scope.bot,
     chatId: 42,
     threadId: undefined,
-    replyToMessageId: 99,
-    text: `**Current agent:** \`assist\`\n\n${agentList}`,
+    currentAgent: "assist",
+    availableAgents,
   });
 });
 
@@ -140,16 +139,16 @@ test("falls back to build when default_agent is not configured", async () => {
 
   await grammyHandleAgent(scope, ctx);
 
-  expect(grammySendText).toHaveBeenCalledWith({
+  expect(grammySendAgentList).toHaveBeenCalledWith({
     bot: scope.bot,
     chatId: 42,
     threadId: undefined,
-    replyToMessageId: 99,
-    text: `**Current agent:** \`build\`\n\n${agentList}`,
+    currentAgent: "build",
+    availableAgents,
   });
 });
 
-test("sets valid agent and reacts with like", async () => {
+test("sets valid agent and replies with agent changed", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const existingAgents = mockExistingAgents();
@@ -159,10 +158,17 @@ test("sets valid agent and reacts with like", async () => {
   await grammyHandleAgent(scope, ctx);
 
   expect(existingAgents.set).toHaveBeenCalledWith("s1", "build");
-  expect(react).toHaveBeenCalledWith("👍");
+  expect(react).not.toHaveBeenCalled();
+  expect(grammySendAgentChanged).toHaveBeenCalledWith({
+    bot: scope.bot,
+    chatId: 42,
+    threadId: undefined,
+    replyToMessageId: 99,
+    agent: agents[1],
+  });
 });
 
-test("replies with error for unknown agent", async () => {
+test("replies with not found for unknown agent", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const existingAgents = mockExistingAgents();
@@ -172,12 +178,12 @@ test("replies with error for unknown agent", async () => {
   await grammyHandleAgent(scope, ctx);
 
   expect(existingAgents.set).not.toHaveBeenCalled();
-  expect(grammySendText).toHaveBeenCalledWith({
+  expect(grammySendAgentNotFound).toHaveBeenCalledWith({
     bot: scope.bot,
     chatId: 42,
     threadId: undefined,
     replyToMessageId: 99,
-    text: `**Unknown agent:** \`nonexistent\`\n\n${agentList}`,
+    name: "nonexistent",
   });
 });
 
@@ -191,12 +197,12 @@ test("rejects subagent", async () => {
   await grammyHandleAgent(scope, ctx);
 
   expect(existingAgents.set).not.toHaveBeenCalled();
-  expect(grammySendText).toHaveBeenCalledWith({
+  expect(grammySendAgentNotFound).toHaveBeenCalledWith({
     bot: scope.bot,
     chatId: 42,
     threadId: undefined,
     replyToMessageId: 99,
-    text: `**Unknown agent:** \`sub-task\`\n\n${agentList}`,
+    name: "sub-task",
   });
 });
 
@@ -212,5 +218,8 @@ test("passes threadId when present", async () => {
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: 7 },
     { createIfNotFound: true },
+  );
+  expect(grammySendAgentChanged).toHaveBeenCalledWith(
+    expect.objectContaining({ threadId: 7 }),
   );
 });
