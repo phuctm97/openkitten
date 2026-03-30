@@ -154,6 +154,63 @@ test("update stores incomplete assistant message as latest streaming state", asy
   });
 });
 
+test("update refreshes streaming message info without dropping parts", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  expect(pm.streaming("sess-1")).toEqual({
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1 },
+    },
+    parts: [
+      {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+    ],
+  });
+});
+
 test("update ignores part snapshots without an active streaming message", async () => {
   const { pm } = setup();
   await pm.update({
@@ -171,6 +228,58 @@ test("update ignores part snapshots without an active streaming message", async 
     },
   } as never);
   expect(pm.streaming("sess-1")).toBeUndefined();
+});
+
+test("update replaces an existing part snapshot", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "world",
+      },
+      time: 3,
+    },
+  } as never);
+  expect(pm.streaming("sess-1")?.parts).toEqual([
+    {
+      id: "p1",
+      sessionID: "sess-1",
+      messageID: "m1",
+      type: "text",
+      text: "world",
+    },
+  ]);
 });
 
 test("update stores latest parts for the streaming assistant message", async () => {
@@ -300,6 +409,232 @@ test("update appends deltas onto text parts in streaming state", async () => {
   ]);
 });
 
+test("update appends deltas onto reasoning parts in streaming state", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "reasoning",
+        text: "think",
+        time: { start: 2 },
+      },
+      time: 2,
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: "ing",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")?.parts).toEqual([
+    {
+      id: "p1",
+      sessionID: "sess-1",
+      messageID: "m1",
+      type: "reasoning",
+      text: "thinking",
+      time: { start: 2 },
+    },
+  ]);
+});
+
+test("update ignores deltas for unsupported fields", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "metadata",
+      delta: "ignored",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")?.parts).toEqual([
+    {
+      id: "p1",
+      sessionID: "sess-1",
+      messageID: "m1",
+      type: "text",
+      text: "hello",
+    },
+  ]);
+});
+
+test("update ignores deltas for missing parts", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: "ignored",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")).toEqual({
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1 },
+    },
+    parts: [],
+  });
+});
+
+test("update ignores deltas for a different message", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m2",
+      partID: "p1",
+      field: "text",
+      delta: "ignored",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")).toEqual({
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1 },
+    },
+    parts: [],
+  });
+});
+
+test("update ignores text deltas for non-text parts", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "tool",
+        callID: "call-1",
+        tool: "bash",
+        state: {
+          status: "pending",
+          input: {},
+          raw: "echo hello",
+        },
+      },
+      time: 2,
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: "ignored",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")?.parts).toEqual([
+    {
+      id: "p1",
+      sessionID: "sess-1",
+      messageID: "m1",
+      type: "tool",
+      callID: "call-1",
+      tool: "bash",
+      state: {
+        status: "pending",
+        input: {},
+        raw: "echo hello",
+      },
+    },
+  ]);
+});
+
 test("update removes parts from the latest streaming message", async () => {
   const { pm } = setup();
   await pm.update({
@@ -336,6 +671,52 @@ test("update removes parts from the latest streaming message", async () => {
     },
   } as never);
   expect(pm.streaming("sess-1")?.parts).toEqual([]);
+});
+
+test("update ignores part removals for a different message", async () => {
+  const { pm } = setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.removed",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m2",
+      partID: "p1",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")?.parts).toEqual([
+    {
+      id: "p1",
+      sessionID: "sess-1",
+      messageID: "m1",
+      type: "text",
+      text: "hello",
+    },
+  ]);
 });
 
 test("update removes the latest streaming message", async () => {
@@ -510,6 +891,99 @@ test("invalidate seeds the latest assistant streaming state", async () => {
       },
     ],
   });
+});
+
+test("invalidate picks the newest streaming assistant message by creation time", async () => {
+  const { pm } = setup();
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 1 },
+        },
+        parts: [],
+      },
+      {
+        info: {
+          id: "m2",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 2 },
+        },
+        parts: [],
+      },
+    ],
+  }));
+  await pm.invalidate();
+  expect(pm.streaming("sess-1")?.info.id).toBe("m2");
+});
+
+test("invalidate keeps the newer streaming message when a later candidate is older", async () => {
+  const { pm } = setup();
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m2",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 2 },
+        },
+        parts: [],
+      },
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 1 },
+        },
+        parts: [],
+      },
+    ],
+  }));
+  await pm.invalidate();
+  expect(pm.streaming("sess-1")?.info.id).toBe("m2");
+});
+
+test("invalidate breaks streaming-message ties by higher message id", async () => {
+  const { pm } = setup();
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m2",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 2 },
+        },
+        parts: [],
+      },
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 2 },
+        },
+        parts: [],
+      },
+      {
+        info: {
+          id: "m3",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 2 },
+        },
+        parts: [],
+      },
+    ],
+  }));
+  await pm.invalidate();
+  expect(pm.streaming("sess-1")?.info.id).toBe("m3");
 });
 
 test("invalidate clears the streaming message when no assistant is streaming", async () => {
