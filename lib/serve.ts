@@ -2,7 +2,6 @@ import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { Database } from "~/lib/database";
 import { Errors } from "~/lib/errors";
-import { ExistingAgents } from "~/lib/existing-agents";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
 import { Grammy } from "~/lib/grammy";
@@ -47,7 +46,6 @@ export const serve = defineCommand({
       database,
       opencodeServer.client,
     );
-    const existingAgents = ExistingAgents.create(database);
     using workingSessions = WorkingSessions.create(
       opencodeServer.client,
       existingSessions,
@@ -79,7 +77,6 @@ export const serve = defineCommand({
       opencodeClient: opencodeServer.client,
       floatingPromises,
       existingSessions,
-      existingAgents,
       workingSessions,
       pendingPrompts,
       processingMessages,

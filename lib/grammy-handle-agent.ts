@@ -1,11 +1,13 @@
 import type { CommandContext, Context } from "grammy";
+import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammySendAgentChanged } from "~/lib/grammy-send-agent-changed";
 import { grammySendAgentList } from "~/lib/grammy-send-agent-list";
 import { grammySendAgentNotFound } from "~/lib/grammy-send-agent-not-found";
 import type { Scope } from "~/lib/scope";
+import { setSessionAgent } from "~/lib/set-session-agent";
 
 export async function grammyHandleAgent(
-  { bot, opencodeClient, existingSessions, existingAgents }: Scope,
+  { bot, database, opencodeClient, existingSessions }: Scope,
   ctx: CommandContext<Context>,
 ): Promise<void> {
   const sessionId = await existingSessions.find(
@@ -29,7 +31,7 @@ export async function grammyHandleAgent(
       { throwOnError: true },
     );
     const currentAgent =
-      existingAgents.get(sessionId) || config.default_agent || "build";
+      getSessionAgent(database, sessionId) || config.default_agent || "build";
     await grammySendAgentList({
       bot,
       chatId: ctx.chat.id,
@@ -54,7 +56,7 @@ export async function grammyHandleAgent(
     return;
   }
 
-  existingAgents.set(sessionId, agent.name);
+  setSessionAgent(database, sessionId, agent.name);
   await grammySendAgentChanged({
     bot,
     chatId: ctx.chat.id,

@@ -20,8 +20,10 @@ vi.mock("~/lib/grammy-send-question-pending", () => ({
   grammySendQuestionPending: vi.fn(async () => {}),
 }));
 
-vi.mock("~/lib/resolve-root-session-id", () => ({
-  resolveRootSessionId: vi.fn(async (_client: unknown, id: string) => id),
+vi.mock("~/lib/opencode-resolve-root-session-id", () => ({
+  opencodeResolveRootSessionId: vi.fn(
+    async (_client: unknown, id: string) => id,
+  ),
 }));
 
 type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;

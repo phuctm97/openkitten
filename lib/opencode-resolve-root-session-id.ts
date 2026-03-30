@@ -1,6 +1,6 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 
-export async function resolveRootSessionId(
+export async function opencodeResolveRootSessionId(
   opencodeClient: OpencodeClient,
   sessionId: string,
 ): Promise<string> {
@@ -9,5 +9,5 @@ export async function resolveRootSessionId(
     { throwOnError: true },
   );
   if (!session.parentID) return sessionId;
-  return resolveRootSessionId(opencodeClient, session.parentID);
+  return opencodeResolveRootSessionId(opencodeClient, session.parentID);
 }
