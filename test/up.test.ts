@@ -75,7 +75,6 @@ const originalPlatform = process.platform;
 const originalGetuid = process.getuid;
 
 beforeEach(() => {
-  vi.clearAllMocks();
   shellMock = vi.fn(() => chainable(shellResult(0, "")));
   Object.assign(Bun, { $: shellMock });
   vi.spyOn(Bun, "spawn").mockImplementation((() => ({
