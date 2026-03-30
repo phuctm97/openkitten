@@ -5,7 +5,6 @@ import { ExistingAgents } from "~/lib/existing-agents";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { Grammy } from "~/lib/grammy";
 import { McpServer } from "~/lib/mcp-server";
-import { NestingSessions } from "~/lib/nesting-sessions";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { OpencodeServer } from "~/lib/opencode-server";
 import { PendingPrompts } from "~/lib/pending-prompts";
@@ -139,12 +138,6 @@ function mockWorkingSessions() {
   return { workingSessions, update };
 }
 
-function mockNestingSessions() {
-  vi.spyOn(NestingSessions, "create").mockReturnValue({
-    resolve: vi.fn(async (id: string) => id),
-  } as never);
-}
-
 function mockExistingAgents() {
   vi.spyOn(ExistingAgents, "create").mockReturnValue({
     get: vi.fn(),
@@ -254,7 +247,6 @@ function mockAll() {
   const disposeOpencodeServer = mockOpencodeServer();
   const disposeMcpServer = mockMcpServer();
   const es = mockExistingSessions();
-  mockNestingSessions();
   mockExistingAgents();
   const typing = mockTypingIndicators();
   const prompts = mockPendingPrompts();
@@ -309,7 +301,6 @@ test("exits on unexpected opencode server exit", async () => {
     [Symbol.asyncDispose]: async () => {},
   } as never);
   mockExistingSessions();
-  mockNestingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
   mockOpencodeEventStream();
@@ -326,7 +317,6 @@ test("exits on unexpected grammy stop", async () => {
   mockOpencodeServer();
   mockMcpServer();
   mockExistingSessions();
-  mockNestingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
   mockOpencodeEventStream();
@@ -351,7 +341,6 @@ test("exits on event stream failure", async () => {
   mockOpencodeServer();
   mockMcpServer();
   mockExistingSessions();
-  mockNestingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
   const closed = Promise.reject(new Error("event stream failed"));
@@ -376,7 +365,6 @@ test("onEvent is fire-and-forget", async () => {
   mockOpencodeServer();
   mockMcpServer();
   mockExistingSessions();
-  mockNestingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
   const stream = mockOpencodeEventStream();
@@ -400,7 +388,6 @@ test("reconciles typing indicators on restart", async () => {
   mockOpencodeServer();
   mockMcpServer();
   const { existingSessions } = mockExistingSessions(["s1", "s2"]);
-  mockNestingSessions();
   const { invalidate } = mockTypingIndicators();
   mockPendingPrompts();
   mockWorkingSessions();
@@ -428,7 +415,6 @@ test("reconciles pending prompts on restart", async () => {
   mockOpencodeServer();
   mockMcpServer();
   mockExistingSessions(["s1", "s2"]);
-  mockNestingSessions();
   mockTypingIndicators();
   const { invalidate } = mockPendingPrompts();
   mockWorkingSessions();
@@ -456,7 +442,6 @@ test("updates working sessions on session.status event", async () => {
   mockExistingSessions(["s1"], {
     s1: { chatId: 100, threadId: undefined },
   });
-  mockNestingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
   const { update } = mockWorkingSessions();
@@ -487,7 +472,6 @@ test("updates pending prompts on question.asked event", async () => {
   mockExistingSessions(["s1"], {
     s1: { chatId: 100, threadId: undefined },
   });
-  mockNestingSessions();
   mockTypingIndicators();
   const { update } = mockPendingPrompts();
   const stream = mockOpencodeEventStream();
@@ -517,7 +501,6 @@ test("updates pending prompts on permission.asked event", async () => {
   mockExistingSessions(["s1"], {
     s1: { chatId: 100, threadId: undefined },
   });
-  mockNestingSessions();
   mockTypingIndicators();
   const { update } = mockPendingPrompts();
   const stream = mockOpencodeEventStream();

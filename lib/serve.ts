@@ -15,7 +15,6 @@ import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { McpServer } from "~/lib/mcp-server";
-import { NestingSessions } from "~/lib/nesting-sessions";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { opencodeCreateHandler } from "~/lib/opencode-create-handler";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
@@ -49,7 +48,6 @@ export const serve = defineCommand({
       opencodeServer.client,
     );
     const existingAgents = ExistingAgents.create(database);
-    const nestingSessions = NestingSessions.create(opencodeServer.client);
     using workingSessions = WorkingSessions.create(
       opencodeServer.client,
       existingSessions,
@@ -59,7 +57,6 @@ export const serve = defineCommand({
       bot,
       opencodeServer.client,
       existingSessions,
-      nestingSessions,
     );
     const processingMessages = ProcessingMessages.create(
       bot,

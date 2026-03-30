@@ -20,6 +20,10 @@ vi.mock("~/lib/grammy-send-question-pending", () => ({
   grammySendQuestionPending: vi.fn(async () => {}),
 }));
 
+vi.mock("~/lib/resolve-root-session-id", () => ({
+  resolveRootSessionId: vi.fn(async (_client: unknown, id: string) => id),
+}));
+
 type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 
 let mockAnswerCallbackQuery: MockFn;
@@ -59,10 +63,6 @@ function createMockOpencodeClient() {
       reply: (...args: unknown[]) => mockPermissionReply(...args),
     },
   } as never;
-}
-
-function createMockNestingSessions() {
-  return { resolve: vi.fn(async (id: string) => id) };
 }
 
 function createMockExistingSessions(
@@ -184,20 +184,18 @@ function setup(esMap?: Record<string, ExistingSessions.Location>) {
   const bot = createMockBot();
   const client = createMockOpencodeClient();
   const existingSessions = createMockExistingSessions(esMap);
-  const nestingSessions = createMockNestingSessions();
-  return { shutdown, bot, client, existingSessions, nestingSessions };
+  return { shutdown, bot, client, existingSessions };
 }
 
 // --- check tests ---
 
 test("check returns true for session with pending prompts", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -205,13 +203,12 @@ test("check returns true for session with pending prompts", async () => {
 });
 
 test("check returns false for session without pending prompts", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   expect(prompts.check("sess-1")).toBe(false);
 });
@@ -219,13 +216,12 @@ test("check returns false for session without pending prompts", async () => {
 // --- check tests (session tracking) ---
 
 test("tracks sessions with pending questions", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -233,13 +229,12 @@ test("tracks sessions with pending questions", async () => {
 });
 
 test("tracks sessions with pending permissions", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -247,13 +242,12 @@ test("tracks sessions with pending permissions", async () => {
 });
 
 test("tracks sessions with both questions and permissions", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
@@ -262,26 +256,24 @@ test("tracks sessions with both questions and permissions", async () => {
 });
 
 test("does not track sessions without pending prompts", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await prompts.invalidate();
   expect(prompts.check("sess-1")).toBe(false);
 });
 
 test("removes session when prompts are resolved", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -292,13 +284,12 @@ test("removes session when prompts are resolved", async () => {
 });
 
 test("tracks multiple sessions independently", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({
     data: [
@@ -314,27 +305,23 @@ test("tracks multiple sessions independently", async () => {
 // --- invalidate tests ---
 
 test("invalidate with no sessions skips processing", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup(
-    {},
-  );
+  const { shutdown, bot, client, existingSessions } = setup({});
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await prompts.invalidate();
 });
 
 test("keeps existing question items that are still on server", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({
     data: [
@@ -354,13 +341,12 @@ test("keeps existing question items that are still on server", async () => {
 });
 
 test("keeps existing permission items that are still on server", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({
     data: [
@@ -380,13 +366,12 @@ test("keeps existing permission items that are still on server", async () => {
 });
 
 test("only invalidates given sessions", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({
     data: [
@@ -399,13 +384,12 @@ test("only invalidates given sessions", async () => {
 });
 
 test("invalidate sends first item to telegram", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -420,13 +404,12 @@ test("invalidate sends first item to telegram", async () => {
 });
 
 test("invalidate sends question prompt to telegram", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -441,13 +424,12 @@ test("invalidate sends question prompt to telegram", async () => {
 });
 
 test("invalidate does not flush if a prompt is already active", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({
     data: [
@@ -463,7 +445,7 @@ test("invalidate does not flush if a prompt is already active", async () => {
 });
 
 test("invalidate throws grammy gone error during flush", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   const error = new GrammyError(
     "Call to 'sendMessage' failed! (403: Forbidden: bot was blocked by the user)",
     {
@@ -482,20 +464,18 @@ test("invalidate throws grammy gone error during flush", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await expect(prompts.invalidate()).rejects.toBe(error);
 });
 
 test("invalidate includes thread id when present", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({
     data: [{ ...permissionRequest, sessionID: "sess-2" }],
@@ -509,13 +489,12 @@ test("invalidate includes thread id when present", async () => {
 });
 
 test("invalidate dismisses stale items on telegram when they have message id", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -532,7 +511,7 @@ test("invalidate dismisses stale items on telegram when they have message id", a
 });
 
 test("invalidate throws when flush fails with non-gone error", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockSendMessage = vi.fn(async () => {
     throw new Error("send failed");
   });
@@ -541,20 +520,18 @@ test("invalidate throws when flush fails with non-gone error", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await expect(prompts.invalidate()).rejects.toThrow("send failed");
 });
 
 test("invalidate edits stale items that were flushed", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -571,13 +548,12 @@ test("invalidate edits stale items that were flushed", async () => {
 // --- answer tests ---
 
 test("answer permission with once calls opencode", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -602,13 +578,12 @@ test("answer permission with once calls opencode", async () => {
 });
 
 test("answer permission with always calls opencode", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -625,13 +600,12 @@ test("answer permission with always calls opencode", async () => {
 });
 
 test("answer permission with reject calls opencode", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -648,7 +622,7 @@ test("answer permission with reject calls opencode", async () => {
 });
 
 test("answer permission rethrows on opencode failure", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockPermissionReply = vi.fn(async () => {
     throw new Error("failed");
   });
@@ -657,7 +631,6 @@ test("answer permission rethrows on opencode failure", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -671,13 +644,12 @@ test("answer permission rethrows on opencode failure", async () => {
 });
 
 test("answer question with reject calls opencode", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -701,7 +673,7 @@ test("answer question with reject calls opencode", async () => {
 });
 
 test("answer question reject rethrows on opencode failure", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockQuestionReject = vi.fn(async () => {
     throw new Error("failed");
   });
@@ -710,7 +682,6 @@ test("answer question reject rethrows on opencode failure", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -724,13 +695,12 @@ test("answer question reject rethrows on opencode failure", async () => {
 });
 
 test("answer question select single auto-submits", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -748,13 +718,12 @@ test("answer question select single auto-submits", async () => {
 });
 
 test("answer question select multi toggles selection", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiSelectQuestionRequest] });
   await prompts.invalidate();
@@ -778,13 +747,12 @@ test("answer question select multi toggles selection", async () => {
 });
 
 test("answer question select multi toggles off", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiSelectQuestionRequest] });
   await prompts.invalidate();
@@ -813,13 +781,12 @@ test("answer question select multi toggles off", async () => {
 });
 
 test("answer question confirm submits selected options", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiSelectQuestionRequest] });
   await prompts.invalidate();
@@ -847,13 +814,12 @@ test("answer question confirm submits selected options", async () => {
 });
 
 test("answer advances to next question in multi-question", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiQuestionRequest] });
   await prompts.invalidate();
@@ -881,13 +847,12 @@ test("answer advances to next question in multi-question", async () => {
 });
 
 test("advance edits current message with answered text", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiQuestionRequest] });
   await prompts.invalidate();
@@ -906,7 +871,7 @@ test("advance edits current message with answered text", async () => {
 });
 
 test("advance rethrows on opencode failure", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockQuestionReply = vi.fn(async () => {
     throw new Error("failed");
   });
@@ -915,7 +880,6 @@ test("advance rethrows on opencode failure", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -930,13 +894,12 @@ test("advance rethrows on opencode failure", async () => {
 });
 
 test("answer throws grammy gone error", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiQuestionRequest] });
   await prompts.invalidate();
@@ -964,7 +927,7 @@ test("answer throws grammy gone error", async () => {
 });
 
 test("answer rethrows opencode not found error without dismissing session", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   const error = { name: "NotFoundError", data: { message: "not found" } };
   mockPermissionReply = vi.fn(async () => {
     throw error;
@@ -974,7 +937,6 @@ test("answer rethrows opencode not found error without dismissing session", asyn
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -989,13 +951,12 @@ test("answer rethrows opencode not found error without dismissing session", asyn
 });
 
 test("answer resolves item and flushes next item", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
@@ -1013,13 +974,12 @@ test("answer resolves item and flushes next item", async () => {
 });
 
 test("answer removes item from session", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -1056,13 +1016,12 @@ test.each([
     code: "invalid_prefix",
   },
 ])("answer toasts $desc (permission item)", async ({ data, code }) => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1098,13 +1057,12 @@ test.each([
     code: "unknown_prefix",
   },
 ])("answer toasts $desc (question item)", async ({ data, code }) => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -1119,7 +1077,7 @@ test.each([
 });
 
 test("answer question select multi skips grammy edit after flush failure", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockSendMessage = vi.fn(async () => {
     throw new Error("send failed");
   });
@@ -1128,7 +1086,6 @@ test("answer question select multi skips grammy edit after flush failure", async
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiSelectQuestionRequest] });
   await expect(prompts.invalidate()).rejects.toThrow();
@@ -1142,7 +1099,7 @@ test("answer question select multi skips grammy edit after flush failure", async
 });
 
 test("answer question select multi rethrows on grammy error", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockEditMessageText = vi.fn(async () => {
     throw new Error("edit failed");
   });
@@ -1151,7 +1108,6 @@ test("answer question select multi rethrows on grammy error", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiSelectQuestionRequest] });
   await prompts.invalidate();
@@ -1166,7 +1122,7 @@ test("answer question select multi rethrows on grammy error", async () => {
 });
 
 test("answer question select multi throws grammy gone error", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   const error = new GrammyError(
     "Call to 'editMessageText' failed! (403: Forbidden)",
     { ok: false, error_code: 403, description: "Forbidden" },
@@ -1181,7 +1137,6 @@ test("answer question select multi throws grammy gone error", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiSelectQuestionRequest] });
   await prompts.invalidate();
@@ -1196,7 +1151,7 @@ test("answer question select multi throws grammy gone error", async () => {
 });
 
 test("answer throws when answer callback fails", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockAnswerCallbackQuery = vi.fn(async () => {
     throw new Error("callback failed");
   });
@@ -1205,7 +1160,6 @@ test("answer throws when answer callback fails", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await expect(
     prompts.answer({
@@ -1219,13 +1173,12 @@ test("answer throws when answer callback fails", async () => {
 // --- answer custom text tests ---
 
 test("answer custom text submits text as answer for single-select question", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -1238,13 +1191,12 @@ test("answer custom text submits text as answer for single-select question", asy
 });
 
 test("answer custom text appends to selected options for multi-select question", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiSelectQuestionRequest] });
   await prompts.invalidate();
@@ -1265,13 +1217,12 @@ test("answer custom text sends question pending when custom is false", async () 
   const { grammySendQuestionPending } = await import(
     "~/lib/grammy-send-question-pending"
   );
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [noCustomQuestionRequest] });
   await prompts.invalidate();
@@ -1294,13 +1245,12 @@ test("answer custom text sends permission pending when permission is active", as
   const { grammySendPermissionPending } = await import(
     "~/lib/grammy-send-permission-pending"
   );
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1320,7 +1270,7 @@ test("answer custom text sends permission pending when permission is active", as
 });
 
 test("answer custom text throws PendingPrompts.NotFoundError when no active item after flush failure", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockSendMessage = vi.fn(async () => {
     throw new Error("send failed");
   });
@@ -1329,7 +1279,6 @@ test("answer custom text throws PendingPrompts.NotFoundError when no active item
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await expect(prompts.invalidate()).rejects.toThrow();
@@ -1340,13 +1289,12 @@ test("answer custom text throws PendingPrompts.NotFoundError when no active item
 });
 
 test("answer custom text throws PendingPrompts.NotFoundError for unknown session", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await expect(
     prompts.answer({ sessionId: "unknown", text: "hello" }),
@@ -1354,13 +1302,12 @@ test("answer custom text throws PendingPrompts.NotFoundError for unknown session
 });
 
 test("answer custom text throws grammy gone error", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiQuestionRequest] });
   await prompts.invalidate();
@@ -1384,7 +1331,7 @@ test("answer custom text throws grammy gone error", async () => {
 });
 
 test("answer custom text rethrows non-gone errors", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockQuestionReply = vi.fn(async () => {
     throw new Error("network error");
   });
@@ -1393,7 +1340,6 @@ test("answer custom text rethrows non-gone errors", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -1404,13 +1350,12 @@ test("answer custom text rethrows non-gone errors", async () => {
 });
 
 test("answer custom text advances to next question in multi-question request", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiQuestionRequest] });
   await prompts.invalidate();
@@ -1429,13 +1374,12 @@ test("answer custom text advances to next question in multi-question request", a
 // --- beforeRemove tests ---
 
 test("beforeRemove dismisses and rejects questions and denies permissions", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
@@ -1457,13 +1401,12 @@ test("beforeRemove dismisses and rejects questions and denies permissions", asyn
 });
 
 test("beforeRemove handles multiple questions and permissions", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({
     data: [
@@ -1488,13 +1431,12 @@ test("beforeRemove handles multiple questions and permissions", async () => {
 });
 
 test("beforeRemove edits telegram when items have message id", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1513,13 +1455,12 @@ test("beforeRemove edits telegram when items have message id", async () => {
 });
 
 test("beforeRemove is no-op for unknown session", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await existingSessions.hooks["beforeRemove"]?.({
     sessionId: "unknown",
@@ -1532,7 +1473,7 @@ test("beforeRemove is no-op for unknown session", async () => {
 });
 
 test("beforeRemove throws on question reject failure", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockQuestionReject = vi.fn(async () => {
     throw new Error("reject failed");
   });
@@ -1541,7 +1482,6 @@ test("beforeRemove throws on question reject failure", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -1555,7 +1495,7 @@ test("beforeRemove throws on question reject failure", async () => {
 });
 
 test("beforeRemove throws on permission reply failure", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockPermissionReply = vi.fn(async () => {
     throw new Error("reply failed");
   });
@@ -1564,7 +1504,6 @@ test("beforeRemove throws on permission reply failure", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1578,7 +1517,7 @@ test("beforeRemove throws on permission reply failure", async () => {
 });
 
 test("beforeRemove throws question reject not found error", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   const error = { name: "NotFoundError", data: { message: "not found" } };
   mockQuestionReject = vi.fn(async () => {
     throw error;
@@ -1588,7 +1527,6 @@ test("beforeRemove throws question reject not found error", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -1602,7 +1540,7 @@ test("beforeRemove throws question reject not found error", async () => {
 });
 
 test("beforeRemove throws permission reply not found error", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   const error = { name: "NotFoundError", data: { message: "not found" } };
   mockPermissionReply = vi.fn(async () => {
     throw error;
@@ -1612,7 +1550,6 @@ test("beforeRemove throws permission reply not found error", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1626,7 +1563,7 @@ test("beforeRemove throws permission reply not found error", async () => {
 });
 
 test("beforeRemove throws on grammy non-gone error", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockEditMessageText = vi.fn(async () => {
     throw new Error("network error");
   });
@@ -1635,7 +1572,6 @@ test("beforeRemove throws on grammy non-gone error", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1650,7 +1586,7 @@ test("beforeRemove throws on grammy non-gone error", async () => {
 });
 
 test("beforeRemove throws grammy gone error", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   const error = new GrammyError(
     "Call to 'editMessageText' failed! (403: Forbidden: bot was blocked by the user)",
     {
@@ -1669,7 +1605,6 @@ test("beforeRemove throws grammy gone error", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1684,14 +1619,13 @@ test("beforeRemove throws grammy gone error", async () => {
 });
 
 test("dispose dismisses all tracked sessions", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   {
     await using prompts = PendingPrompts.create(
       shutdown,
       bot,
       client,
       existingSessions,
-      nestingSessions as never,
     );
     mockQuestionList.mockResolvedValue({
       data: [
@@ -1709,13 +1643,12 @@ test("dispose dismisses all tracked sessions", async () => {
 // --- update tests ---
 
 test("update question.asked adds item and flushes when no active item", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await prompts.update({
     type: "question.asked",
@@ -1726,13 +1659,12 @@ test("update question.asked adds item and flushes when no active item", async ()
 });
 
 test("update question.asked adds item without flushing when item already active", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1745,13 +1677,12 @@ test("update question.asked adds item without flushing when item already active"
 });
 
 test("update question.asked skips duplicate request ID", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await prompts.update({
     type: "question.asked",
@@ -1765,13 +1696,12 @@ test("update question.asked skips duplicate request ID", async () => {
 });
 
 test("update permission.asked adds item and flushes when no active item", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await prompts.update({
     type: "permission.asked",
@@ -1782,13 +1712,12 @@ test("update permission.asked adds item and flushes when no active item", async 
 });
 
 test("update permission.asked adds item without flushing when item already active", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -1801,13 +1730,12 @@ test("update permission.asked adds item without flushing when item already activ
 });
 
 test("update permission.asked skips duplicate request ID", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await prompts.update({
     type: "permission.asked",
@@ -1821,13 +1749,12 @@ test("update permission.asked skips duplicate request ID", async () => {
 });
 
 test("update creates new session entry when session not yet in sessionMap", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   expect(prompts.check("sess-1")).toBe(false);
   await prompts.update({
@@ -1845,13 +1772,12 @@ test("update creates new session entry when session not yet in sessionMap", asyn
 // --- hook tests ---
 
 test("beforeRemove hook dismisses session", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1865,20 +1791,19 @@ test("beforeRemove hook dismisses session", async () => {
 });
 
 test("dispose unhooks beforeRemove", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await prompts[Symbol.asyncDispose]();
   expect(existingSessions.hooks["beforeRemove"]).toBeUndefined();
 });
 
 test("invalidate collects multiple flush errors", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockSendMessage = vi.fn(async () => {
     throw new Error("send failed");
   });
@@ -1887,7 +1812,6 @@ test("invalidate collects multiple flush errors", async () => {
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const perm1 = { ...permissionRequest, sessionID: "sess-1" };
   const perm2 = { ...permissionRequest, id: "p2", sessionID: "sess-2" };
@@ -1898,13 +1822,12 @@ test("invalidate collects multiple flush errors", async () => {
 // --- update replied/rejected tests ---
 
 test("update permission.replied removes item and edits telegram", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1926,13 +1849,12 @@ test("update permission.replied removes item and edits telegram", async () => {
 });
 
 test("update permission.replied with reject shows denied", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -1954,13 +1876,12 @@ test("update permission.replied with reject shows denied", async () => {
 });
 
 test("update question.replied removes item and shows last answer", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -1982,13 +1903,12 @@ test("update question.replied removes item and shows last answer", async () => {
 });
 
 test("update question.replied with multiple answers shows last answer", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [multiQuestionRequest] });
   await prompts.invalidate();
@@ -2010,13 +1930,12 @@ test("update question.replied with multiple answers shows last answer", async ()
 });
 
 test("update question.rejected removes item and shows dismissed", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -2037,13 +1956,12 @@ test("update question.rejected removes item and shows dismissed", async () => {
 });
 
 test("update replied is no-op for unknown session", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   await prompts.update({
     type: "permission.replied",
@@ -2057,13 +1975,12 @@ test("update replied is no-op for unknown session", async () => {
 });
 
 test("update replied is no-op for unknown request ID (deduplication)", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -2081,13 +1998,12 @@ test("update replied is no-op for unknown request ID (deduplication)", async () 
 });
 
 test("update replied after user answer is no-op (race condition)", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
@@ -2112,13 +2028,12 @@ test("update replied after user answer is no-op (race condition)", async () => {
 });
 
 test("update replied flushes next queued item", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
@@ -2140,13 +2055,12 @@ test("update replied flushes next queued item", async () => {
 });
 
 test("update replied removes queued item without messageId", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   // Question is flushed (gets messageId), permission is queued (no messageId)
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
@@ -2169,13 +2083,12 @@ test("update replied removes queued item without messageId", async () => {
 });
 
 test("update replied removes only queued item and fires change hook", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2205,7 +2118,7 @@ test("update replied removes only queued item and fires change hook", async () =
 });
 
 test("update replied removes only queued item as last item and fires change hook", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   mockSendMessage = vi.fn(async () => {
     throw new Error("send failed");
   });
@@ -2214,7 +2127,6 @@ test("update replied removes only queued item as last item and fires change hook
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2240,13 +2152,12 @@ test("update replied removes only queued item as last item and fires change hook
 });
 
 test("update replied fires change hook with pending=false for last item", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2268,13 +2179,12 @@ test("update replied fires change hook with pending=false for last item", async 
 });
 
 test("update replied does not fire change hook when items remain", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2294,13 +2204,12 @@ test("update replied does not fire change hook when items remain", async () => {
 });
 
 test("update question.replied with empty answers shows empty text", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
@@ -2324,13 +2233,12 @@ test("update question.replied with empty answers shows empty text", async () => 
 // --- change hook tests ---
 
 test("update fires change hook with pending=true for new session", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2345,13 +2253,12 @@ test("update fires change hook with pending=true for new session", async () => {
 });
 
 test("update does not fire change hook for existing session", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2368,13 +2275,12 @@ test("update does not fire change hook for existing session", async () => {
 });
 
 test("beforeRemove fires change hook with pending=false", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2393,13 +2299,12 @@ test("beforeRemove fires change hook with pending=false", async () => {
 });
 
 test("beforeRemove does not fire change hook for unknown session", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2412,13 +2317,12 @@ test("beforeRemove does not fire change hook for unknown session", async () => {
 });
 
 test("invalidate fires change hook with pending=true for new sessions", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2431,13 +2335,12 @@ test("invalidate fires change hook with pending=true for new sessions", async ()
 });
 
 test("invalidate fires change hook with pending=false when all items removed", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2453,13 +2356,12 @@ test("invalidate fires change hook with pending=false when all items removed", a
 });
 
 test("invalidate does not fire change hook when state unchanged", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2471,13 +2373,12 @@ test("invalidate does not fire change hook when state unchanged", async () => {
 });
 
 test("resolving last item fires change hook with pending=false", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2496,13 +2397,12 @@ test("resolving last item fires change hook with pending=false", async () => {
 });
 
 test("resolving non-last item does not fire change hook", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
@@ -2523,13 +2423,12 @@ test("resolving non-last item does not fire change hook", async () => {
 });
 
 test("change hook errors bubble up from beforeRemove", async () => {
-  const { shutdown, bot, client, existingSessions, nestingSessions } = setup();
+  const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
     bot,
     client,
     existingSessions,
-    nestingSessions as never,
   );
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
