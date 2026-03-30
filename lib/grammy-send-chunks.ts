@@ -8,14 +8,10 @@ export async function grammySendChunks({
   threadId,
   replyToMessageId,
 }: GrammySendChunksOptions): Promise<void> {
-  const baseSendOpts = {
-    link_preview_options: { is_disabled: true } as const,
-    ...(threadId && { message_thread_id: threadId }),
-  };
-
   for (const [index, { markdown, text }] of chunks.entries()) {
     const sendOpts = {
-      ...baseSendOpts,
+      link_preview_options: { is_disabled: true } as const,
+      ...(threadId && { message_thread_id: threadId }),
       ...(index === 0 &&
         replyToMessageId && {
           reply_parameters: { message_id: replyToMessageId },
