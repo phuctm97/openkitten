@@ -1,3 +1,4 @@
+import { lookup } from "mime-types";
 import { beforeEach, expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
@@ -7,11 +8,27 @@ import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
 
+const mimeTypesState = vi.hoisted((): { actualLookup?: typeof lookup } => ({}));
+
+vi.mock("mime-types", async () => {
+  const actual =
+    await vi.importActual<typeof import("mime-types")>("mime-types");
+  mimeTypesState.actualLookup = actual.lookup;
+  return {
+    ...actual,
+    lookup: vi.fn(actual.lookup),
+  };
+});
+
 vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
 
 beforeEach(() => {
   vi.resetAllMocks();
+  if (!mimeTypesState.actualLookup) {
+    throw new Error("Expected mime-types lookup to be initialized");
+  }
+  vi.mocked(lookup).mockImplementation(mimeTypesState.actualLookup);
 });
 
 function mockPhotoCtx(
@@ -655,6 +672,50 @@ test("falls back to jpeg mime and suffix when header is invalid", async () => {
       headers: { "content-type": "image" },
     }),
   );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+  });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(42, undefined, undefined, 100, "/") as never,
+  );
+
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/jpeg",
+          filename: "telegram-photo.jpg",
+          url: "data:image/jpeg;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
+});
+
+test("falls back to jpeg mime when file-path lookup throws", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3]), {
+      headers: { "content-type": "application/octet-stream" },
+    }),
+  );
+  vi.mocked(lookup).mockImplementation(() => {
+    throw new Error("lookup failed");
+  });
   const scope = mockScope({
     existingSessions,
     opencodeClient,

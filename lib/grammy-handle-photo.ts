@@ -20,10 +20,15 @@ function promptMime(filePath: string, response: Response): string {
       // Fall through to file-path inference when Telegram returns an invalid header.
     }
   }
-  const detected = lookup(filePath);
-  return typeof detected === "string" && detected.startsWith("image/")
-    ? detected
-    : "image/jpeg";
+  try {
+    const detected = lookup(filePath);
+    if (typeof detected === "string" && detected.startsWith("image/")) {
+      return detected;
+    }
+  } catch {
+    // Fall through to the default when MIME lookup fails unexpectedly.
+  }
+  return "image/jpeg";
 }
 
 function promptFilename(filePath: string, mime: string): string {
