@@ -11,6 +11,7 @@ import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
 import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
+import { grammyHandlePhoto } from "~/lib/grammy-handle-photo";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { McpServer } from "~/lib/mcp-server";
@@ -110,6 +111,7 @@ export const serve = defineCommand({
       grammyCreateHandler(scope, grammyHandleCallback),
     );
     bot.on("message:text", grammyCreateHandler(scope, grammyHandleText));
+    bot.on("message:photo", grammyCreateHandler(scope, grammyHandlePhoto));
     await using grammy = await Grammy.create(shutdown, bot);
     // Shut down when: OS signal received, OpenCode server exits,
     // MCP server disconnects, event stream exhausts reconnects, or Telegram polling stops.

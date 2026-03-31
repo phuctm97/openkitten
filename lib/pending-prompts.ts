@@ -468,6 +468,34 @@ export class PendingPrompts implements AsyncDisposable {
     return this.#sessionMap.has(sessionId);
   }
 
+  async protect({
+    sessionId,
+    messageId: replyToMessageId,
+  }: PendingPrompts.ProtectOptions) {
+    const items = this.#sessionMap.get(sessionId);
+    if (!items) throw new PendingPrompts.NotFoundError();
+    const activeItem = items.find((i) => i.messageId);
+    if (!activeItem) throw new PendingPrompts.NotFoundError();
+    const { chatId, threadId } = this.#existingSessions.get(sessionId, {
+      throwIfNotFound: true,
+    });
+    if (activeItem.kind === "permission") {
+      await grammySendPermissionPending({
+        bot: this.#bot,
+        chatId,
+        threadId,
+        replyToMessageId,
+      });
+      return;
+    }
+    await grammySendQuestionPending({
+      bot: this.#bot,
+      chatId,
+      threadId,
+      replyToMessageId,
+    });
+  }
+
   async answer(options: PendingPrompts.AnswerOptions) {
     if ("text" in options) {
       await this.#answerCustom(options);
@@ -734,6 +762,11 @@ export namespace PendingPrompts {
     readonly sessionId: string;
     readonly messageId?: number | undefined;
     readonly text: string;
+  }
+
+  export interface ProtectOptions {
+    readonly sessionId: string;
+    readonly messageId?: number | undefined;
   }
 
   export type AnswerOptions = AnswerCallbackOptions | AnswerCustomOptions;

@@ -24,6 +24,7 @@ function mockCtx(
     chat: { id: chatId },
     msg: { message_thread_id: threadId },
     message: { text, message_id: messageId },
+    api: { token: "test-token" },
     update: { update_id: 1 },
   } as never;
 }
