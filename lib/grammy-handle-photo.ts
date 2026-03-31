@@ -21,10 +21,8 @@ function promptMime(filePath: string, response: Response): string {
     }
   }
   try {
-    const detected = lookup(filePath);
-    if (typeof detected === "string" && detected.startsWith("image/")) {
-      return detected;
-    }
+    const type = lookup(filePath) || undefined;
+    if (type?.startsWith("image/")) return type;
   } catch {
     // Fall through to the default when MIME lookup fails unexpectedly.
   }
