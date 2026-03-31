@@ -55,6 +55,46 @@ test("copies agent files", async () => {
   ).resolves.toBeDefined();
 });
 
+test("copies agent files with self-memory instructions", async () => {
+  await OpencodeConfig.create(profile);
+  const assistPath = join(configDir(), "agents", "assist.md");
+  const assistContent = await readFile(assistPath, "utf-8");
+  expect(assistContent).toContain(
+    "You may read and edit your own agent file by default.",
+  );
+  expect(assistContent).toContain(
+    `Your active copy is this file at \`${assistPath}\`.`,
+  );
+  expect(assistContent).toContain("'*/.opencode/agents/assist.md': allow");
+  expect(assistContent).not.toContain("*\\.opencode\\agents\\assist.md");
+  expect(assistContent).not.toContain("__OPENKITTEN_AGENT_FILE_PATH__");
+
+  const buildPath = join(configDir(), "agents", "build.md");
+  const buildContent = await readFile(buildPath, "utf-8");
+  expect(buildContent).toContain(
+    "You may read and edit your own agent file by default.",
+  );
+  expect(buildContent).toContain(
+    `Your active copy is this file at \`${buildPath}\`.`,
+  );
+  expect(buildContent).toContain("'*/.opencode/agents/build.md': allow");
+  expect(buildContent).not.toContain("*\\.opencode\\agents\\build.md");
+  expect(buildContent).not.toContain("__OPENKITTEN_AGENT_FILE_PATH__");
+
+  const planPath = join(configDir(), "agents", "plan.md");
+  const planContent = await readFile(planPath, "utf-8");
+  expect(planContent).toContain(
+    "You may read and edit your own agent file by default.",
+  );
+  expect(planContent).toContain(
+    `Your active copy is this file at \`${planPath}\`.`,
+  );
+  expect(planContent).toContain("'*': deny");
+  expect(planContent).toContain("'*/.opencode/agents/plan.md': allow");
+  expect(planContent).not.toContain("*\\.opencode\\agents\\plan.md");
+  expect(planContent).not.toContain("__OPENKITTEN_AGENT_FILE_PATH__");
+});
+
 test("writes opencode config", async () => {
   await OpencodeConfig.create(profile);
   const config = JSON.parse(

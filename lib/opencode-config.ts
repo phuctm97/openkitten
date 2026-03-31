@@ -1,6 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { constants } from "node:fs";
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
@@ -13,6 +12,8 @@ import pkg from "~/package.json" with { type: "json" };
 const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
 const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
+
+const agentFilePathPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH__";
 
 const defaultConfigJson = {
   $schema: "https://opencode.ai/config.json",
@@ -45,6 +46,21 @@ function cancel(): never {
   throw new OpencodeConfig.CancelledError();
 }
 
+function renderAgentPrompt(template: string, agentPath: string): string {
+  return template.replaceAll(agentFilePathPlaceholder, agentPath);
+}
+
+async function writeDefaultAgentFile(
+  agentsDir: string,
+  filename: string,
+): Promise<void> {
+  const agentPath = join(agentsDir, filename);
+  const template = await readFile(join(defaultAgentsDir, filename), "utf-8");
+  await writeFile(agentPath, renderAgentPrompt(template, agentPath), {
+    flag: "wx",
+  });
+}
+
 export interface OpencodeConfig {
   readonly bin: string;
   readonly cwd: string;
@@ -70,13 +86,7 @@ export namespace OpencodeConfig {
     ]);
     const agentsGlob = new Bun.Glob("*.md");
     for await (const file of agentsGlob.scan(defaultAgentsDir)) {
-      writes.push(
-        copyFile(
-          join(defaultAgentsDir, file),
-          join(agentsDir, file),
-          constants.COPYFILE_EXCL,
-        ),
-      );
+      writes.push(writeDefaultAgentFile(agentsDir, file));
     }
     writes.push(
       writeFile(
