@@ -1271,7 +1271,7 @@ test("answer custom text sends permission pending when permission is active", as
   expect(mockPermissionReply).not.toHaveBeenCalled();
 });
 
-test("notifyPending sends question pending when a question is active", async () => {
+test("protect sends question pending when a question is active", async () => {
   const { grammySendQuestionPending } = await import(
     "~/lib/grammy-send-question-pending"
   );
@@ -1285,7 +1285,7 @@ test("notifyPending sends question pending when a question is active", async () 
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await prompts.invalidate();
 
-  await prompts.notifyPending({
+  await prompts.protect({
     sessionId: "sess-1",
     messageId: 17,
   });
@@ -1298,7 +1298,7 @@ test("notifyPending sends question pending when a question is active", async () 
   });
 });
 
-test("notifyPending sends permission pending when a permission is active", async () => {
+test("protect sends permission pending when a permission is active", async () => {
   const { grammySendPermissionPending } = await import(
     "~/lib/grammy-send-permission-pending"
   );
@@ -1312,7 +1312,7 @@ test("notifyPending sends permission pending when a permission is active", async
   mockPermissionList.mockResolvedValue({ data: [permissionRequest] });
   await prompts.invalidate();
 
-  await prompts.notifyPending({
+  await prompts.protect({
     sessionId: "sess-1",
     messageId: 18,
   });
@@ -1325,7 +1325,7 @@ test("notifyPending sends permission pending when a permission is active", async
   });
 });
 
-test("notifyPending throws PendingPrompts.NotFoundError when no active item after flush failure", async () => {
+test("protect throws PendingPrompts.NotFoundError when no active item after flush failure", async () => {
   const { shutdown, bot, client, existingSessions } = setup();
   mockSendMessage = vi.fn(async () => {
     throw new Error("send failed");
@@ -1339,12 +1339,12 @@ test("notifyPending throws PendingPrompts.NotFoundError when no active item afte
   mockQuestionList.mockResolvedValue({ data: [questionRequest] });
   await expect(prompts.invalidate()).rejects.toThrow();
 
-  await expect(prompts.notifyPending({ sessionId: "sess-1" })).rejects.toThrow(
+  await expect(prompts.protect({ sessionId: "sess-1" })).rejects.toThrow(
     PendingPrompts.NotFoundError,
   );
 });
 
-test("notifyPending throws PendingPrompts.NotFoundError for unknown session", async () => {
+test("protect throws PendingPrompts.NotFoundError for unknown session", async () => {
   const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
@@ -1353,7 +1353,7 @@ test("notifyPending throws PendingPrompts.NotFoundError for unknown session", as
     existingSessions,
   );
 
-  await expect(prompts.notifyPending({ sessionId: "unknown" })).rejects.toThrow(
+  await expect(prompts.protect({ sessionId: "unknown" })).rejects.toThrow(
     PendingPrompts.NotFoundError,
   );
 });

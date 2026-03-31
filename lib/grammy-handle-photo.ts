@@ -52,7 +52,7 @@ export async function grammyHandlePhoto(
 
   if (pendingPrompts.check(sessionId)) {
     try {
-      await pendingPrompts.notifyPending({
+      await pendingPrompts.protect({
         sessionId,
         messageId: ctx.message.message_id,
       });

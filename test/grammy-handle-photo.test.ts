@@ -76,7 +76,7 @@ function mockPendingPrompts() {
     update: vi.fn(),
     answer: vi.fn(),
     check: vi.fn(() => false),
-    notifyPending: vi.fn(),
+    protect: vi.fn(),
     dismiss: vi.fn(),
     [Symbol.asyncDispose]: vi.fn(),
   };
@@ -194,7 +194,7 @@ test("notifies about pending prompt for photo without caption", async () => {
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.check.mockReturnValue(true);
-  pendingPrompts.notifyPending.mockResolvedValue(undefined);
+  pendingPrompts.protect.mockResolvedValue(undefined);
   const scope = mockScope({
     existingSessions,
     opencodeClient,
@@ -206,7 +206,7 @@ test("notifies about pending prompt for photo without caption", async () => {
     mockPhotoCtx(42, undefined, undefined, 77) as never,
   );
 
-  expect(pendingPrompts.notifyPending).toHaveBeenCalledWith({
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
     sessionId: "s1",
     messageId: 77,
   });
@@ -219,7 +219,7 @@ test("notifies about pending prompt for photo with caption", async () => {
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.check.mockReturnValue(true);
-  pendingPrompts.notifyPending.mockResolvedValue(undefined);
+  pendingPrompts.protect.mockResolvedValue(undefined);
   const scope = mockScope({
     existingSessions,
     opencodeClient,
@@ -231,7 +231,7 @@ test("notifies about pending prompt for photo with caption", async () => {
     mockPhotoCtx(42, "describe this", undefined, 77) as never,
   );
 
-  expect(pendingPrompts.notifyPending).toHaveBeenCalledWith({
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
     sessionId: "s1",
     messageId: 77,
   });
@@ -244,9 +244,7 @@ test("continues with photo prompt when pending notice is already gone", async ()
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.check.mockReturnValue(true);
-  pendingPrompts.notifyPending.mockRejectedValue(
-    new PendingPrompts.NotFoundError(),
-  );
+  pendingPrompts.protect.mockRejectedValue(new PendingPrompts.NotFoundError());
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
@@ -417,13 +415,13 @@ test("rethrows when Telegram photo download fails", async () => {
   ).rejects.toThrow("Expected Telegram photo download to succeed");
 });
 
-test("rethrows non-PendingPrompts.NotFoundError from notifyPending", async () => {
+test("rethrows non-PendingPrompts.NotFoundError from protect", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
   pendingPrompts.check.mockReturnValue(true);
   const error = new Error("unexpected");
-  pendingPrompts.notifyPending.mockRejectedValue(error);
+  pendingPrompts.protect.mockRejectedValue(error);
   const scope = mockScope({
     existingSessions,
     opencodeClient,
