@@ -1,3 +1,4 @@
+import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { Database } from "~/lib/database";
@@ -36,6 +37,7 @@ export const serve = defineCommand({
     const telegramConfig = await TelegramConfig.create(profile);
     const opencodeConfig = await OpencodeConfig.create(profile);
     const bot = new Bot(telegramConfig.botToken);
+    bot.api.config.use(autoRetry());
     bot.use(grammyFilterUser(telegramConfig.userId));
     using shutdown = Shutdown.create();
     using database = Database.create(profile);
