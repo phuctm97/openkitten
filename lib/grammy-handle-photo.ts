@@ -14,15 +14,19 @@ function promptMime(filePath: string, response: Response): string {
   const header = response.headers.get("content-type");
   if (header) {
     try {
-      return parseContentType(header).type;
+      const type = parseContentType(header).type;
+      if (type.startsWith("image/")) return type;
     } catch {
       // Fall through to file-path inference when Telegram returns an invalid header.
     }
   }
-  const detected = lookup(filePath);
-  return typeof detected === "string" && detected.startsWith("image/")
-    ? detected
-    : "image/jpeg";
+  try {
+    const type = lookup(filePath) || undefined;
+    if (type?.startsWith("image/")) return type;
+  } catch {
+    // Fall through to the default when MIME lookup fails unexpectedly.
+  }
+  return "image/jpeg";
 }
 
 function promptFilename(filePath: string, mime: string): string {
