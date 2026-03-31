@@ -19,6 +19,7 @@ function mockPhotoCtx(
   caption?: string,
   threadId?: number,
   messageId = 100,
+  filePath = "photos/test.jpg",
 ) {
   return {
     chat: { id: chatId },
@@ -31,7 +32,7 @@ function mockPhotoCtx(
     api: { token: "test-token" },
     getFile: vi.fn<() => Promise<{ file_path: string | undefined }>>(
       async () => ({
-        file_path: "photos/test.jpg",
+        file_path: filePath,
       }),
     ),
     update: { update_id: 1 },
@@ -76,7 +77,9 @@ function mockPendingPrompts() {
     update: vi.fn(),
     answer: vi.fn(),
     check: vi.fn(() => false),
-    protect: vi.fn(),
+    protect: vi.fn<() => Promise<void>>(async () => {
+      throw new PendingPrompts.NotFoundError();
+    }),
     dismiss: vi.fn(),
     [Symbol.asyncDispose]: vi.fn(),
   };
@@ -132,15 +135,18 @@ test("prompts opencode with a photo attachment", async () => {
   await grammyHandlePhoto(scope, mockPhotoCtx(42) as never);
 
   expect(pendingPrompts.answer).not.toHaveBeenCalled();
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
-        { type: "text", text: "" },
         {
           type: "file",
           mime: "image/jpeg",
-          filename: "telegram-photo.jpg",
+          filename: "test.jpg",
           url: "data:image/jpeg;base64,AQID",
         },
       ],
@@ -149,6 +155,53 @@ test("prompts opencode with a photo attachment", async () => {
   );
   expect(fetch).toHaveBeenCalledWith(
     new URL("photos/test.jpg", "https://api.telegram.org/file/bottest-token/"),
+  );
+});
+
+test("preserves Telegram file name and download mime type", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3]), {
+      headers: { "content-type": "image/png; charset=binary" },
+    }),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+  });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(
+      42,
+      undefined,
+      undefined,
+      100,
+      "photos/original-name.png",
+    ) as never,
+  );
+
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/png",
+          filename: "original-name.png",
+          url: "data:image/png;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
   );
 });
 
@@ -172,6 +225,10 @@ test("prompts opencode with caption text on a photo message", async () => {
   );
 
   expect(pendingPrompts.answer).not.toHaveBeenCalled();
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 55,
+  });
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
@@ -180,7 +237,39 @@ test("prompts opencode with caption text on a photo message", async () => {
         {
           type: "file",
           mime: "image/jpeg",
-          filename: "telegram-photo.jpg",
+          filename: "test.jpg",
+          url: "data:image/jpeg;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
+});
+
+test("does not push an empty caption as a text part", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+  });
+
+  await grammyHandlePhoto(scope, mockPhotoCtx(42, "", undefined, 55) as never);
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/jpeg",
+          filename: "test.jpg",
           url: "data:image/jpeg;base64,AQID",
         },
       ],
@@ -193,7 +282,6 @@ test("notifies about pending prompt for photo without caption", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(true);
   pendingPrompts.protect.mockResolvedValue(undefined);
   const scope = mockScope({
     existingSessions,
@@ -218,7 +306,6 @@ test("notifies about pending prompt for photo with caption", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(true);
   pendingPrompts.protect.mockResolvedValue(undefined);
   const scope = mockScope({
     existingSessions,
@@ -243,7 +330,6 @@ test("continues with photo prompt when pending notice is already gone", async ()
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(true);
   pendingPrompts.protect.mockRejectedValue(new PendingPrompts.NotFoundError());
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -261,6 +347,10 @@ test("continues with photo prompt when pending notice is already gone", async ()
   );
 
   expect(pendingPrompts.answer).not.toHaveBeenCalled();
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 77,
+  });
   expect(opencodeClient.session.promptAsync).toHaveBeenCalled();
 });
 
@@ -284,6 +374,10 @@ test("creates new session when none exists", async () => {
     { chatId: 42, threadId: undefined },
     { createIfNotFound: true },
   );
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
 });
 
 test("passes agent to promptAsync when set", async () => {
@@ -299,16 +393,19 @@ test("passes agent to promptAsync when set", async () => {
 
   await grammyHandlePhoto(scope, mockPhotoCtx(42) as never);
 
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       agent: "build",
       parts: [
-        { type: "text", text: "" },
         {
           type: "file",
           mime: "image/jpeg",
-          filename: "telegram-photo.jpg",
+          filename: "test.jpg",
           url: "data:image/jpeg;base64,AQID",
         },
       ],
@@ -361,6 +458,10 @@ test("passes threadId through the flow", async () => {
     { chatId: 42, threadId: 7 },
     { createIfNotFound: true },
   );
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
@@ -369,8 +470,209 @@ test("passes threadId through the flow", async () => {
         {
           type: "file",
           mime: "image/jpeg",
+          filename: "test.jpg",
+          url: "data:image/jpeg;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
+});
+
+test("falls back to a default file name when Telegram omits one", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3]), {
+      headers: { "content-type": "image/webp" },
+    }),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+  });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(42, undefined, undefined, 100, "/") as never,
+  );
+
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/webp",
+          filename: "telegram-photo.webp",
+          url: "data:image/webp;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
+});
+
+test("falls back to jpeg mime when file path has no extension", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+  });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(42, undefined, undefined, 100, "photos/file.") as never,
+  );
+
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/jpeg",
+          filename: "file.",
+          url: "data:image/jpeg;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
+});
+
+test("falls back to jpeg mime when file extension is unknown", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+  });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(42, undefined, undefined, 100, "photos/file.bin") as never,
+  );
+
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/jpeg",
+          filename: "file.bin",
+          url: "data:image/jpeg;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
+});
+
+test("falls back to jpeg mime and suffix when header is invalid", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3]), {
+      headers: { "content-type": "image" },
+    }),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+  });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(42, undefined, undefined, 100, "/") as never,
+  );
+
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/jpeg",
           filename: "telegram-photo.jpg",
           url: "data:image/jpeg;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
+});
+
+test("falls back to a jpeg suffix when image mime has no known extension", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3]), {
+      headers: { "content-type": "image/foo" },
+    }),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+  });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(42, undefined, undefined, 100, "/") as never,
+  );
+
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/foo",
+          filename: "telegram-photo.jpeg",
+          url: "data:image/foo;base64,AQID",
         },
       ],
     },
@@ -419,7 +721,6 @@ test("rethrows non-PendingPrompts.NotFoundError from protect", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(true);
   const error = new Error("unexpected");
   pendingPrompts.protect.mockRejectedValue(error);
   const scope = mockScope({

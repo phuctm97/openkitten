@@ -1,4 +1,6 @@
+import { parse as parseContentType } from "content-type";
 import type { Context, Filter } from "grammy";
+import { extension, lookup } from "mime-types";
 import invariant from "tiny-invariant";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
@@ -7,6 +9,27 @@ import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
 
 type PhotoContext = Filter<Context, "message:photo">;
+
+function promptMime(filePath: string, response: Response): string {
+  const header = response.headers.get("content-type");
+  if (header) {
+    try {
+      return parseContentType(header).type;
+    } catch {
+      // Fall through to file-path inference when Telegram returns an invalid header.
+    }
+  }
+  const detected = lookup(filePath);
+  return typeof detected === "string" && detected.startsWith("image/")
+    ? detected
+    : "image/jpeg";
+}
+
+function promptFilename(filePath: string, mime: string): string {
+  const filename = filePath.split("/").filter(Boolean).at(-1);
+  if (filename) return filename;
+  return `telegram-photo.${extension(mime) || "jpeg"}`;
+}
 
 async function promptParts(ctx: PhotoContext) {
   const file = await ctx.getFile();
@@ -18,17 +41,22 @@ async function promptParts(ctx: PhotoContext) {
     ),
   );
   invariant(response.ok, "Expected Telegram photo download to succeed");
+  const mime = promptMime(file.file_path, response);
   const data = Buffer.from(await response.arrayBuffer()).toString("base64");
+  const parts = [];
 
-  return [
-    { type: "text" as const, text: ctx.message.caption ?? "" },
-    {
-      type: "file" as const,
-      mime: "image/jpeg",
-      filename: "telegram-photo.jpg",
-      url: `data:image/jpeg;base64,${data}`,
-    },
-  ];
+  if (ctx.message.caption) {
+    parts.push({ type: "text" as const, text: ctx.message.caption });
+  }
+
+  parts.push({
+    type: "file" as const,
+    mime,
+    filename: promptFilename(file.file_path, mime),
+    url: `data:${mime};base64,${data}`,
+  });
+
+  return parts;
 }
 
 export async function grammyHandlePhoto(
@@ -50,16 +78,14 @@ export async function grammyHandlePhoto(
     { createIfNotFound: true },
   );
 
-  if (pendingPrompts.check(sessionId)) {
-    try {
-      await pendingPrompts.protect({
-        sessionId,
-        messageId: ctx.message.message_id,
-      });
-      return;
-    } catch (error) {
-      if (!(error instanceof PendingPrompts.NotFoundError)) throw error;
-    }
+  try {
+    await pendingPrompts.protect({
+      sessionId,
+      messageId: ctx.message.message_id,
+    });
+    return;
+  } catch (error) {
+    if (!(error instanceof PendingPrompts.NotFoundError)) throw error;
   }
 
   try {
