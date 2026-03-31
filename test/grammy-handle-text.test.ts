@@ -29,30 +29,6 @@ function mockCtx(
   } as never;
 }
 
-function mockPhotoCtx(
-  chatId: number,
-  caption?: string,
-  threadId?: number,
-  messageId = 100,
-) {
-  return {
-    chat: { id: chatId },
-    msg: { message_thread_id: threadId },
-    message: {
-      ...(caption !== undefined && { caption }),
-      message_id: messageId,
-      photo: [{ file_id: "photo-small" }, { file_id: "photo-large" }],
-    },
-    api: { token: "test-token" },
-    getFile: vi.fn<() => Promise<{ file_path: string | undefined }>>(
-      async () => ({
-        file_path: "photos/test.jpg",
-      }),
-    ),
-    update: { update_id: 1 },
-  };
-}
-
 function mockOpencodeClient() {
   return {
     session: {
@@ -90,8 +66,6 @@ function mockPendingPrompts() {
     invalidate: vi.fn(),
     update: vi.fn(),
     answer: vi.fn(),
-    check: vi.fn(() => false),
-    notifyPending: vi.fn(),
     dismiss: vi.fn(),
     [Symbol.asyncDispose]: vi.fn(),
   };
@@ -169,156 +143,6 @@ test("prompts opencode when no pending prompt", async () => {
     { sessionID: "s1", parts: [{ type: "text", text: "hello" }] },
     { throwOnError: true },
   );
-});
-
-test("prompts opencode with a photo attachment", async () => {
-  const existingSessions = mockExistingSessions();
-  const opencodeClient = mockOpencodeClient();
-  const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(false);
-  opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response(new Uint8Array([1, 2, 3])),
-  );
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    pendingPrompts,
-  });
-
-  await grammyHandleText(scope, mockPhotoCtx(42) as never);
-
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
-    {
-      sessionID: "s1",
-      parts: [
-        { type: "text", text: "" },
-        {
-          type: "file",
-          mime: "image/jpeg",
-          filename: "telegram-photo.jpg",
-          url: "data:image/jpeg;base64,AQID",
-        },
-      ],
-    },
-    { throwOnError: true },
-  );
-  expect(fetch).toHaveBeenCalledWith(
-    new URL("photos/test.jpg", "https://api.telegram.org/file/bottest-token/"),
-  );
-});
-
-test("answers pending prompt from photo caption", async () => {
-  const existingSessions = mockExistingSessions();
-  const opencodeClient = mockOpencodeClient();
-  const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.answer.mockResolvedValue(undefined);
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    pendingPrompts,
-  });
-
-  await grammyHandleText(
-    scope,
-    mockPhotoCtx(42, "describe this", undefined, 55) as never,
-  );
-
-  expect(pendingPrompts.answer).toHaveBeenCalledWith({
-    sessionId: "s1",
-    messageId: 55,
-    text: "describe this",
-  });
-  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
-});
-
-test("notifies about pending prompt for photo without caption", async () => {
-  const existingSessions = mockExistingSessions();
-  const opencodeClient = mockOpencodeClient();
-  const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(true);
-  pendingPrompts.notifyPending.mockResolvedValue(undefined);
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    pendingPrompts,
-  });
-
-  await grammyHandleText(
-    scope,
-    mockPhotoCtx(42, undefined, undefined, 77) as never,
-  );
-
-  expect(pendingPrompts.notifyPending).toHaveBeenCalledWith({
-    sessionId: "s1",
-    messageId: 77,
-  });
-  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
-});
-
-test("continues with photo prompt when pending notice is already gone", async () => {
-  const existingSessions = mockExistingSessions();
-  const opencodeClient = mockOpencodeClient();
-  const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(true);
-  pendingPrompts.notifyPending.mockRejectedValue(
-    new PendingPrompts.NotFoundError(),
-  );
-  opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response(new Uint8Array([1, 2, 3])),
-  );
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    pendingPrompts,
-  });
-
-  await grammyHandleText(
-    scope,
-    mockPhotoCtx(42, undefined, undefined, 77) as never,
-  );
-
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalled();
-});
-
-test("rethrows when Telegram photo has no file path", async () => {
-  const existingSessions = mockExistingSessions();
-  const opencodeClient = mockOpencodeClient();
-  const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(false);
-  opencodeClient.session.promptAsync.mockResolvedValue({});
-  const ctx = mockPhotoCtx(42);
-  ctx.getFile.mockResolvedValue({ file_path: undefined });
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    pendingPrompts,
-  });
-
-  await expect(grammyHandleText(scope, ctx as never)).rejects.toThrow(
-    "Expected Telegram photo to have a file path",
-  );
-});
-
-test("rethrows when Telegram photo download fails", async () => {
-  const existingSessions = mockExistingSessions();
-  const opencodeClient = mockOpencodeClient();
-  const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(false);
-  opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.spyOn(globalThis, "fetch").mockResolvedValue(
-    new Response("nope", { status: 500 }),
-  );
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    pendingPrompts,
-  });
-
-  await expect(
-    grammyHandleText(scope, mockPhotoCtx(42) as never),
-  ).rejects.toThrow("Expected Telegram photo download to succeed");
 });
 
 test("creates new session when none exists", async () => {
@@ -433,24 +257,6 @@ test("rethrows non-PendingPrompts.NotFoundError from answer", async () => {
   });
 
   await expect(grammyHandleText(scope, mockCtx(42, "hello"))).rejects.toBe(
-    error,
-  );
-});
-
-test("rethrows non-PendingPrompts.NotFoundError from notifyPending", async () => {
-  const existingSessions = mockExistingSessions();
-  const opencodeClient = mockOpencodeClient();
-  const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.check.mockReturnValue(true);
-  const error = new Error("unexpected");
-  pendingPrompts.notifyPending.mockRejectedValue(error);
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    pendingPrompts,
-  });
-
-  await expect(grammyHandleText(scope, mockPhotoCtx(42) as never)).rejects.toBe(
     error,
   );
 });
