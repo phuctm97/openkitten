@@ -22,7 +22,9 @@ export async function grammyHandleAgent(
     {},
     { throwOnError: true },
   );
-  const availableAgents = allAgents.filter((a) => a.mode !== "subagent");
+  const availableAgents = allAgents.filter(
+    (agent) => agent.mode !== "subagent" && agent.hidden !== true,
+  );
 
   // No argument: show current agent and available agents.
   if (!ctx.match) {
