@@ -205,6 +205,53 @@ test("preserves Telegram file name and download mime type", async () => {
   );
 });
 
+test("falls back to file-path image mime when Telegram serves octet-stream", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3]), {
+      headers: { "content-type": "application/octet-stream" },
+    }),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+  });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(
+      42,
+      undefined,
+      undefined,
+      100,
+      "photos/original-name.png",
+    ) as never,
+  );
+
+  expect(pendingPrompts.protect).toHaveBeenCalledWith({
+    sessionId: "s1",
+    messageId: 100,
+  });
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/png",
+          filename: "original-name.png",
+          url: "data:image/png;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
+});
+
 test("prompts opencode with caption text on a photo message", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
