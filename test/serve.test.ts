@@ -1,5 +1,5 @@
 import { runCommand } from "citty";
-import { expect, test, vi } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { Grammy } from "~/lib/grammy";
@@ -14,10 +14,36 @@ import { TelegramConfig } from "~/lib/telegram-config";
 import { TypingIndicators } from "~/lib/typing-indicators";
 import { WorkingSessions } from "~/lib/working-sessions";
 
-vi.mock("grammy", () => {
+const {
+  BotMock,
+  mockAutoRetry,
+  mockAutoRetryTransformer,
+  mockBotApiConfigUse,
+} = vi.hoisted(() => {
+  const mockBotApiConfigUse = vi.fn();
   const BotMock = vi.fn(function BotMock() {
-    return { command: vi.fn(), on: vi.fn(), use: vi.fn() };
+    return {
+      api: { config: { use: mockBotApiConfigUse } },
+      command: vi.fn(),
+      on: vi.fn(),
+      use: vi.fn(),
+    };
   });
+  const mockAutoRetryTransformer = vi.fn();
+  const mockAutoRetry = vi.fn(() => mockAutoRetryTransformer);
+  return {
+    BotMock,
+    mockAutoRetry,
+    mockAutoRetryTransformer,
+    mockBotApiConfigUse,
+  };
+});
+
+vi.mock("@grammyjs/auto-retry", () => ({
+  autoRetry: mockAutoRetry,
+}));
+
+vi.mock("grammy", () => {
   return { Bot: BotMock };
 });
 
@@ -26,6 +52,14 @@ vi.mock("node:fs/promises", () => ({
   copyFile: vi.fn(),
   writeFile: vi.fn(),
 }));
+
+beforeEach(() => {
+  BotMock.mockClear();
+  mockAutoRetry.mockClear();
+  mockAutoRetryTransformer.mockClear();
+  mockBotApiConfigUse.mockClear();
+  mockAutoRetry.mockReturnValue(mockAutoRetryTransformer);
+});
 
 function mockTelegramConfig() {
   vi.spyOn(TelegramConfig, "create").mockResolvedValue({
@@ -270,6 +304,16 @@ test("disposes on shutdown", async () => {
   expect(disposeOpencodeServer).toHaveBeenCalledOnce();
   expect(disposeMcpServer).toHaveBeenCalledOnce();
   expect(disposeGrammy).toHaveBeenCalledOnce();
+});
+
+test("configures auto-retry on the bot api during bootstrap", async () => {
+  const { triggerShutdown } = mockAll();
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(BotMock).toHaveBeenCalledOnce());
+  expect(mockAutoRetry).toHaveBeenCalledOnce();
+  expect(mockBotApiConfigUse).toHaveBeenCalledWith(mockAutoRetryTransformer);
+  triggerShutdown();
+  await run;
 });
 
 test("exits on unexpected opencode server exit", async () => {

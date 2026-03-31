@@ -1,4 +1,3 @@
-import { autoRetry } from "@grammyjs/auto-retry";
 import type { Bot } from "grammy";
 import { logger } from "~/lib/logger";
 import type { Shutdown } from "~/lib/shutdown";
@@ -22,7 +21,6 @@ export class Grammy implements AsyncDisposable {
 
   static async create(shutdown: Shutdown, bot: Bot): Promise<Grammy> {
     logger.debug("grammY is starting…");
-    bot.api.config.use(autoRetry());
 
     // Fatal: errors should never reach here — all event handlers will have
     // their own error boundaries.
