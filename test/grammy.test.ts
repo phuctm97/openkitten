@@ -1,4 +1,15 @@
 import { beforeEach, expect, test, vi } from "vitest";
+
+const { mockAutoRetry, mockAutoRetryTransformer } = vi.hoisted(() => {
+  const mockAutoRetryTransformer = vi.fn();
+  const mockAutoRetry = vi.fn(() => mockAutoRetryTransformer);
+  return { mockAutoRetry, mockAutoRetryTransformer };
+});
+
+vi.mock("@grammyjs/auto-retry", () => ({
+  autoRetry: mockAutoRetry,
+}));
+
 import { Grammy } from "~/lib/grammy";
 import { logger } from "~/lib/logger";
 import type { Shutdown } from "~/lib/shutdown";
@@ -11,6 +22,7 @@ let controls: MockControls;
 let mockStart: ReturnType<typeof vi.fn>;
 let mockStop: ReturnType<typeof vi.fn>;
 let mockCatch: ReturnType<typeof vi.fn>;
+let mockApiConfigUse: ReturnType<typeof vi.fn>;
 let mockShutdown: Shutdown;
 
 function setupMock(options?: { startError?: Error }): void {
@@ -19,6 +31,7 @@ function setupMock(options?: { startError?: Error }): void {
   };
   let resolveStopped: () => void;
   mockCatch = vi.fn();
+  mockApiConfigUse = vi.fn();
   mockStop = vi.fn(() => resolveStopped());
   mockStart = vi.fn(
     (opts?: { onStart?: () => void }) =>
@@ -39,10 +52,14 @@ function createMockBot() {
     start: mockStart,
     stop: mockStop,
     catch: mockCatch,
+    api: { config: { use: mockApiConfigUse } },
   } as never;
 }
 
 beforeEach(() => {
+  mockAutoRetry.mockClear();
+  mockAutoRetryTransformer.mockClear();
+  mockAutoRetry.mockReturnValue(mockAutoRetryTransformer);
   setupMock();
   mockShutdown = { trigger: vi.fn() } as never;
 });
@@ -51,6 +68,12 @@ test("logs start and ready", async () => {
   await using _grammy = await Grammy.create(mockShutdown, createMockBot());
   expect(logger.debug).toHaveBeenCalledWith("grammY is starting…");
   expect(logger.info).toHaveBeenCalledWith("grammY is ready");
+});
+
+test("configures auto-retry on the bot api", async () => {
+  await using _grammy = await Grammy.create(mockShutdown, createMockBot());
+  expect(mockAutoRetry).toHaveBeenCalledOnce();
+  expect(mockApiConfigUse).toHaveBeenCalledWith(mockAutoRetryTransformer);
 });
 
 test("is async disposable", async () => {
