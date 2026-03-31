@@ -57,10 +57,11 @@ const agents = [
   { name: "assist", mode: "primary", description: "General purpose" },
   { name: "build", mode: "all", description: "Software engineering" },
   { name: "plan", mode: "primary" },
+  { name: "summary", mode: "primary", hidden: true, description: "Internal" },
   { name: "sub-task", mode: "subagent", description: "Internal" },
 ];
 
-const availableAgents = agents.filter((a) => a.mode !== "subagent");
+const availableAgents = [agents[0], agents[1], agents[2]];
 
 function mockOpencodeClient(defaultAgent?: string) {
   return {
@@ -202,6 +203,24 @@ test("rejects subagent", async () => {
     threadId: undefined,
     replyToMessageId: 99,
     name: "sub-task",
+  });
+});
+
+test("rejects hidden primary agent", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const scope = mockScope({ existingSessions, opencodeClient });
+  const { ctx } = mockCtx(42, "summary");
+
+  await grammyHandleAgent(scope, ctx);
+
+  expect(setSessionAgent).not.toHaveBeenCalled();
+  expect(grammySendAgentNotFound).toHaveBeenCalledWith({
+    bot: scope.bot,
+    chatId: 42,
+    threadId: undefined,
+    replyToMessageId: 99,
+    name: "summary",
   });
 });
 

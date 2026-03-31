@@ -3,6 +3,7 @@ import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammySendAgentChanged } from "~/lib/grammy-send-agent-changed";
 import { grammySendAgentList } from "~/lib/grammy-send-agent-list";
 import { grammySendAgentNotFound } from "~/lib/grammy-send-agent-not-found";
+import { isVisiblePrimaryAgent } from "~/lib/is-visible-primary-agent";
 import type { Scope } from "~/lib/scope";
 import { setSessionAgent } from "~/lib/set-session-agent";
 
@@ -22,7 +23,7 @@ export async function grammyHandleAgent(
     {},
     { throwOnError: true },
   );
-  const availableAgents = allAgents.filter((a) => a.mode !== "subagent");
+  const availableAgents = allAgents.filter(isVisiblePrimaryAgent);
 
   // No argument: show current agent and available agents.
   if (!ctx.match) {
