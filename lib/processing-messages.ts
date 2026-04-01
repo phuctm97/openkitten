@@ -177,7 +177,7 @@ export class ProcessingMessages {
 
   // Fetch messages with an expanding window until we overlap with
   // already-delivered messages or exhaust the history.
-  async #invalidate(sessionId: string): Promise<void> {
+  async #sync(sessionId: string): Promise<void> {
     let limit = 10;
     let latest: StreamingMessage | undefined;
     let batch: { info: AssistantMessage; parts: Part[] }[] = [];
@@ -274,26 +274,28 @@ export class ProcessingMessages {
     }
   }
 
-  async invalidate() {
+  async #initialize() {
     const { sessionIds } = this.#existingSessions;
     if (sessionIds.length === 0) return;
     const results = await Promise.allSettled(
-      sessionIds.map((sessionId) => this.#invalidate(sessionId)),
+      sessionIds.map((sessionId) => this.#sync(sessionId)),
     );
     Errors.throwIfAny(results);
   }
 
-  static create(
+  static async create(
     bot: Bot,
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
-  ): ProcessingMessages {
-    return new ProcessingMessages(
+  ): Promise<ProcessingMessages> {
+    const messages = new ProcessingMessages(
       bot,
       database,
       opencodeClient,
       existingSessions,
     );
+    await messages.#initialize();
+    return messages;
   }
 }

@@ -3,11 +3,7 @@ import { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 
-function mockSleep() {
-  return vi.spyOn(Bun, "sleep").mockResolvedValue(undefined as never);
-}
-
-test("logs stop after loop exits", async () => {
+test("logs closed after the stream loop exits", async () => {
   const onEvent = vi.fn(() => {
     dispose();
   });
@@ -24,7 +20,6 @@ test("logs stop after loop exits", async () => {
   const subscription = OpencodeEventStream.create(
     opencodeClient as never,
     FloatingPromises.create(),
-    vi.fn() as never,
     onEvent as never,
   );
   const dispose = () => subscription[Symbol.asyncDispose]();
@@ -44,7 +39,7 @@ test("calls onEvent for each event", async () => {
     event: {
       subscribe: vi.fn(async () => ({
         stream: (async function* () {
-          for (const e of events) yield e;
+          for (const event of events) yield event;
         })(),
       })),
     },
@@ -53,7 +48,6 @@ test("calls onEvent for each event", async () => {
   const subscription = OpencodeEventStream.create(
     opencodeClient as never,
     FloatingPromises.create(),
-    vi.fn() as never,
     onEvent as never,
   );
   const dispose = () => subscription[Symbol.asyncDispose]();
@@ -62,41 +56,7 @@ test("calls onEvent for each event", async () => {
   expect(received).toEqual(events);
 });
 
-test("reconnects on stream error", async () => {
-  mockSleep();
-  const event = { type: "ok" };
-  const onEvent = vi.fn(() => {
-    dispose();
-  });
-  let calls = 0;
-  const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => {
-        calls++;
-        if (calls === 1) throw new Error("disconnect");
-        return {
-          stream: (async function* () {
-            yield event;
-          })(),
-        };
-      }),
-    },
-  };
-
-  const subscription = OpencodeEventStream.create(
-    opencodeClient as never,
-    FloatingPromises.create(),
-    vi.fn() as never,
-    onEvent as never,
-  );
-  const dispose = () => subscription[Symbol.asyncDispose]();
-
-  await subscription.closed;
-  expect(calls).toBe(2);
-  expect(onEvent).toHaveBeenCalledWith(event, expect.any(AbortSignal));
-});
-
-test("stops on dispose", async () => {
+test("stops on dispose while subscribe is pending", async () => {
   let subscribeResolve: (() => void) | undefined;
   const opencodeClient = {
     event: {
@@ -114,23 +74,18 @@ test("stops on dispose", async () => {
     opencodeClient as never,
     FloatingPromises.create(),
     vi.fn() as never,
-    vi.fn() as never,
   );
 
   expect(opencodeClient.event.subscribe).toHaveBeenCalledOnce();
-  // Dispose aborts the signal, which cancels the pending subscribe call.
-  // run() checks signal.aborted and breaks out of the loop.
   subscribeResolve?.();
   await subscription[Symbol.asyncDispose]();
 });
 
-test("throws after max reconnect attempts", async () => {
-  mockSleep();
-  const error = new Error("persistent failure");
+test("throws when subscribe fails", async () => {
   const opencodeClient = {
     event: {
       subscribe: vi.fn(async () => {
-        throw error;
+        throw new Error("disconnect");
       }),
     },
   };
@@ -139,33 +94,18 @@ test("throws after max reconnect attempts", async () => {
     opencodeClient as never,
     FloatingPromises.create(),
     vi.fn() as never,
-    vi.fn() as never,
   );
 
-  await expect(subscription.closed).rejects.toThrow("persistent failure");
-  expect(opencodeClient.event.subscribe).toHaveBeenCalledTimes(11);
+  await expect(subscription.closed).rejects.toThrow("disconnect");
   await subscription[Symbol.asyncDispose]();
 });
 
-test("resets attempt counter on success", async () => {
-  const sleep = mockSleep();
-  let calls = 0;
+test("throws when the stream ends unexpectedly", async () => {
   const opencodeClient = {
     event: {
-      subscribe: vi.fn(async () => {
-        calls++;
-        if (calls === 1) throw new Error("fail");
-        if (calls === 2) {
-          return {
-            stream: (async function* () {
-              yield { type: "a" };
-            })(),
-          };
-        }
-        if (calls === 3) throw new Error("fail");
-        dispose();
-        return { stream: (async function* () {})() };
-      }),
+      subscribe: vi.fn(async () => ({
+        stream: (async function* () {})(),
+      })),
     },
   };
 
@@ -173,69 +113,36 @@ test("resets attempt counter on success", async () => {
     opencodeClient as never,
     FloatingPromises.create(),
     vi.fn() as never,
-    vi.fn() as never,
   );
-  const dispose = () => subscription[Symbol.asyncDispose]();
 
-  await subscription.closed;
-  expect(calls).toBe(4);
-  expect(sleep).toHaveBeenNthCalledWith(1, 1000);
-  expect(sleep).toHaveBeenNthCalledWith(2, 1000);
+  await expect(subscription.closed).rejects.toThrow(
+    "OpenCode event stream ended unexpectedly",
+  );
+  await subscription[Symbol.asyncDispose]();
 });
 
-test("uses exponential backoff", async () => {
-  const sleep = mockSleep();
-  let calls = 0;
+test("throws when onEvent fails", async () => {
+  const error = new Error("handler failed");
   const opencodeClient = {
     event: {
-      subscribe: vi.fn(async () => {
-        calls++;
-        if (calls <= 3) throw new Error("fail");
-        dispose();
-        return { stream: (async function* () {})() };
-      }),
+      subscribe: vi.fn(async () => ({
+        stream: (async function* () {
+          yield { type: "a" };
+        })(),
+      })),
     },
   };
 
   const subscription = OpencodeEventStream.create(
     opencodeClient as never,
     FloatingPromises.create(),
-    vi.fn() as never,
-    vi.fn() as never,
+    vi.fn(async () => {
+      throw error;
+    }) as never,
   );
-  const dispose = () => subscription[Symbol.asyncDispose]();
 
-  await subscription.closed;
-  expect(sleep).toHaveBeenNthCalledWith(1, 1000);
-  expect(sleep).toHaveBeenNthCalledWith(2, 2000);
-  expect(sleep).toHaveBeenNthCalledWith(3, 4000);
-});
-
-test("caps backoff at 30 seconds", async () => {
-  const sleep = mockSleep();
-  let calls = 0;
-  const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => {
-        calls++;
-        if (calls <= 6) throw new Error("fail");
-        dispose();
-        return { stream: (async function* () {})() };
-      }),
-    },
-  };
-
-  const subscription = OpencodeEventStream.create(
-    opencodeClient as never,
-    FloatingPromises.create(),
-    vi.fn() as never,
-    vi.fn() as never,
-  );
-  const dispose = () => subscription[Symbol.asyncDispose]();
-
-  await subscription.closed;
-  expect(sleep).toHaveBeenNthCalledWith(5, 16_000);
-  expect(sleep).toHaveBeenNthCalledWith(6, 30_000);
+  await expect(subscription.closed).rejects.toBe(error);
+  await subscription[Symbol.asyncDispose]();
 });
 
 test("logs connecting and connected", async () => {
@@ -255,7 +162,6 @@ test("logs connecting and connected", async () => {
   const subscription = OpencodeEventStream.create(
     opencodeClient as never,
     FloatingPromises.create(),
-    vi.fn() as never,
     onEvent as never,
   );
   const dispose = () => subscription[Symbol.asyncDispose]();
@@ -269,46 +175,16 @@ test("logs connecting and connected", async () => {
   );
 });
 
-test("logs reconnection", async () => {
-  mockSleep();
-  let calls = 0;
-  const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => {
-        calls++;
-        if (calls === 1) throw new Error("fail");
-        dispose();
-        return { stream: (async function* () {})() };
-      }),
-    },
-  };
-
-  const subscription = OpencodeEventStream.create(
-    opencodeClient as never,
-    FloatingPromises.create(),
-    vi.fn() as never,
-    vi.fn() as never,
-  );
-  const dispose = () => subscription[Symbol.asyncDispose]();
-
-  await subscription.closed;
-  expect(logger.warn).toHaveBeenCalledWith(
-    "OpenCode event stream is disconnected, reconnecting…",
-    expect.any(Error),
-    { attempt: 0, delay: 1000 },
-  );
-});
-
 test("closed resolves when disposed mid-stream", async () => {
-  let resolveNext: ((v: IteratorResult<unknown>) => void) | undefined;
+  let resolveNext: ((value: IteratorResult<unknown>) => void) | undefined;
   const opencodeClient = {
     event: {
       subscribe: vi.fn(async () => ({
         stream: {
           [Symbol.asyncIterator]: () => ({
             next: () =>
-              new Promise<IteratorResult<unknown>>((r) => {
-                resolveNext = r;
+              new Promise<IteratorResult<unknown>>((resolve) => {
+                resolveNext = resolve;
               }),
             return: () => {
               resolveNext?.({ done: true, value: undefined });
@@ -323,25 +199,23 @@ test("closed resolves when disposed mid-stream", async () => {
     opencodeClient as never,
     FloatingPromises.create(),
     vi.fn() as never,
-    vi.fn() as never,
   );
 
-  // Wait for stream to connect.
   while (vi.mocked(logger.info).mock.calls.length < 1) await Bun.sleep(1);
 
   await subscription[Symbol.asyncDispose]();
 });
 
 test("swallows iter.return rejection on dispose", async () => {
-  let resolveNext: ((v: IteratorResult<unknown>) => void) | undefined;
+  let resolveNext: ((value: IteratorResult<unknown>) => void) | undefined;
   const opencodeClient = {
     event: {
       subscribe: vi.fn(async () => ({
         stream: {
           [Symbol.asyncIterator]: () => ({
             next: () =>
-              new Promise<IteratorResult<unknown>>((r) => {
-                resolveNext = r;
+              new Promise<IteratorResult<unknown>>((resolve) => {
+                resolveNext = resolve;
               }),
             return: () => {
               resolveNext?.({ done: true, value: undefined });
@@ -357,66 +231,11 @@ test("swallows iter.return rejection on dispose", async () => {
     opencodeClient as never,
     FloatingPromises.create(),
     vi.fn() as never,
-    vi.fn() as never,
   );
 
-  // Wait for stream to connect.
   while (vi.mocked(logger.info).mock.calls.length < 1) await Bun.sleep(1);
 
   await subscription[Symbol.asyncDispose]();
-});
-
-test("reconnects on normal stream end with backoff", async () => {
-  const sleep = mockSleep();
-  let calls = 0;
-  const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => {
-        calls++;
-        if (calls === 2) dispose();
-        return { stream: (async function* () {})() };
-      }),
-    },
-  };
-
-  const subscription = OpencodeEventStream.create(
-    opencodeClient as never,
-    FloatingPromises.create(),
-    vi.fn() as never,
-    vi.fn() as never,
-  );
-  const dispose = () => subscription[Symbol.asyncDispose]();
-
-  await subscription.closed;
-  expect(calls).toBe(2);
-  expect(sleep).toHaveBeenCalledWith(1000);
-});
-
-test("dispose interrupts backoff sleep", async () => {
-  vi.spyOn(Bun, "sleep").mockReturnValue(new Promise<void>(() => {}));
-  let calls = 0;
-  const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => {
-        calls++;
-        throw new Error("fail");
-      }),
-    },
-  };
-
-  const subscription = OpencodeEventStream.create(
-    opencodeClient as never,
-    FloatingPromises.create(),
-    vi.fn() as never,
-    vi.fn() as never,
-  );
-
-  const warnMock = vi.mocked(logger.warn);
-  while (warnMock.mock.calls.length < 1)
-    await new Promise((r) => setTimeout(r, 1));
-
-  await subscription[Symbol.asyncDispose]();
-  expect(calls).toBe(1);
 });
 
 test("passes signal to subscribe", async () => {
@@ -433,7 +252,6 @@ test("passes signal to subscribe", async () => {
   const subscription = OpencodeEventStream.create(
     opencodeClient as never,
     FloatingPromises.create(),
-    vi.fn() as never,
     vi.fn(() => {
       dispose();
     }) as never,
@@ -445,70 +263,4 @@ test("passes signal to subscribe", async () => {
     {},
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
-});
-
-test("calls onRestart on each connection", async () => {
-  mockSleep();
-  const onRestart = vi.fn();
-  let calls = 0;
-  const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => {
-        calls++;
-        if (calls === 1) {
-          return {
-            stream: (async function* () {
-              yield { type: "a" };
-            })(),
-          };
-        }
-        dispose();
-        return { stream: (async function* () {})() };
-      }),
-    },
-  };
-
-  const subscription = OpencodeEventStream.create(
-    opencodeClient as never,
-    FloatingPromises.create(),
-    onRestart as never,
-    vi.fn() as never,
-  );
-  const dispose = () => subscription[Symbol.asyncDispose]();
-
-  await subscription.closed;
-  expect(onRestart).toHaveBeenCalledTimes(2);
-});
-
-test("awaits async onRestart before consuming events", async () => {
-  const order: string[] = [];
-  const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => ({
-        stream: (async function* () {
-          yield { type: "a" };
-        })(),
-      })),
-    },
-  };
-
-  const onRestart = vi.fn(async () => {
-    await Bun.sleep(1);
-    order.push("restarted");
-  });
-  const onEvent = vi.fn(() => {
-    order.push("event");
-    dispose();
-  });
-
-  const subscription = OpencodeEventStream.create(
-    opencodeClient as never,
-    FloatingPromises.create(),
-    onRestart as never,
-    onEvent as never,
-  );
-  const dispose = () => subscription[Symbol.asyncDispose]();
-
-  await subscription.closed;
-  expect(order).toEqual(["restarted", "event"]);
 });

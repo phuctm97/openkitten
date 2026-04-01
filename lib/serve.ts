@@ -2,7 +2,6 @@ import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { Database } from "~/lib/database";
-import { Errors } from "~/lib/errors";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
 import { Grammy } from "~/lib/grammy";
@@ -44,22 +43,19 @@ export const serve = defineCommand({
     await using opencodeServer = await OpencodeServer.create(opencodeConfig);
     using mcpServer = await McpServer.create(opencodeServer.client);
     await using floatingPromises = FloatingPromises.create();
-    const existingSessions = ExistingSessions.create(
+    const existingSessions = await ExistingSessions.create(
       bot,
       database,
       opencodeServer.client,
     );
-    using workingSessions = WorkingSessions.create(
-      opencodeServer.client,
-      existingSessions,
-    );
+    using workingSessions = WorkingSessions.create(existingSessions);
     await using pendingPrompts = PendingPrompts.create(
       shutdown,
       bot,
       opencodeServer.client,
       existingSessions,
     );
-    const processingMessages = ProcessingMessages.create(
+    const processingMessages = await ProcessingMessages.create(
       bot,
       database,
       opencodeServer.client,
@@ -88,20 +84,6 @@ export const serve = defineCommand({
     await using opencodeEventStream = OpencodeEventStream.create(
       opencodeServer.client,
       floatingPromises,
-      // On (re)connect: fetch full server state and sync all local managers.
-      async (_signal) => {
-        await existingSessions.invalidate();
-        const firstResults = await Promise.allSettled([
-          workingSessions.invalidate(),
-          pendingPrompts.invalidate(),
-        ]);
-        Errors.throwIfAny(firstResults);
-        const secondResults = await Promise.allSettled([
-          processingMessages.invalidate(),
-          typingIndicators.invalidate(),
-        ]);
-        Errors.throwIfAny(secondResults);
-      },
       opencodeCreateHandler(scope, opencodeHandleEvent),
     );
     bot.command("start", grammyCreateHandler(scope, grammyHandleStart));
@@ -116,7 +98,7 @@ export const serve = defineCommand({
     bot.on("message:photo", grammyCreateHandler(scope, grammyHandlePhoto));
     await using grammy = await Grammy.create(shutdown, bot);
     // Shut down when: OS signal received, OpenCode server exits,
-    // MCP server disconnects, event stream exhausts reconnects, or Telegram polling stops.
+    // MCP server disconnects, the event stream ends, or Telegram polling stops.
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,

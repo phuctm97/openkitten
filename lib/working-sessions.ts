@@ -1,23 +1,15 @@
 import type { EventSessionStatus } from "@opencode-ai/sdk/v2";
-import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { createHooks, type Hookable } from "hookable";
 import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 
 export class WorkingSessions implements Disposable {
-  readonly #opencodeClient: OpencodeClient;
-  readonly #existingSessions: ExistingSessions;
   readonly #hooks = createHooks<WorkingSessions.Hooks>();
   readonly #cached = new Set<string>();
   readonly #locked = new Set<string>();
   readonly #unhook: () => void;
 
-  private constructor(
-    opencodeClient: OpencodeClient,
-    existingSessions: ExistingSessions,
-  ) {
-    this.#opencodeClient = opencodeClient;
-    this.#existingSessions = existingSessions;
+  private constructor(existingSessions: ExistingSessions) {
     this.#unhook = existingSessions.hook(
       "beforeRemove",
       async ({ sessionId }) => {
@@ -79,35 +71,6 @@ export class WorkingSessions implements Disposable {
     Errors.throwIfAny(results);
   }
 
-  async invalidate() {
-    const { data: statuses } = await this.#opencodeClient.session.status(
-      {},
-      { throwOnError: true },
-    );
-    const promises = [];
-    for (const sessionId of this.#existingSessions.sessionIds) {
-      const status = statuses[sessionId];
-      const working = status?.type === "busy" || status?.type === "retry";
-      if (working) {
-        if (this.#cached.has(sessionId)) continue;
-        this.#cached.add(sessionId);
-      } else {
-        if (!this.#cached.has(sessionId)) continue;
-        this.#cached.delete(sessionId);
-      }
-      promises.push(
-        this.#hooks.callHookWith(
-          (hooks, args) =>
-            Promise.allSettled(hooks.map((hook) => hook(...args))),
-          "change",
-          [{ sessionId, working }],
-        ),
-      );
-    }
-    const results = (await Promise.all(promises)).flat();
-    Errors.throwIfAny(results);
-  }
-
   [Symbol.dispose]() {
     this.#unhook();
   }
@@ -120,11 +83,8 @@ export class WorkingSessions implements Disposable {
     }
   };
 
-  static create(
-    opencodeClient: OpencodeClient,
-    existingSessions: ExistingSessions,
-  ): WorkingSessions {
-    return new WorkingSessions(opencodeClient, existingSessions);
+  static create(existingSessions: ExistingSessions): WorkingSessions {
+    return new WorkingSessions(existingSessions);
   }
 }
 
