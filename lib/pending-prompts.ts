@@ -33,7 +33,7 @@ export class PendingPrompts implements AsyncDisposable {
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #hooks = createHooks<PendingPrompts.Hooks>();
-  readonly #sessionMap = new Map<string, PendingPrompts.Item[]>();
+  readonly #sessionItems = new Map<string, PendingPrompts.Item[]>();
   readonly #sessionOperations = new Map<string, Promise<void>>();
   readonly #unhook: () => void;
   #keyCounter = 0;
@@ -161,7 +161,7 @@ export class PendingPrompts implements AsyncDisposable {
       "Expected the resolved item to exist in session items",
     );
     items.splice(index, 1);
-    if (items.length === 0) this.#sessionMap.delete(item.request.sessionID);
+    if (items.length === 0) this.#sessionItems.delete(item.request.sessionID);
   }
 
   async #resolveItem(
@@ -330,7 +330,7 @@ export class PendingPrompts implements AsyncDisposable {
     messageId: replyToMessageId,
     text,
   }: PendingPrompts.AnswerCustomOptions) {
-    const items = this.#sessionMap.get(sessionId);
+    const items = this.#sessionItems.get(sessionId);
     if (!items) throw new PendingPrompts.NotFoundError();
     const activeItem = items.find((i) => i.messageId);
     if (!activeItem) throw new PendingPrompts.NotFoundError();
@@ -370,7 +370,7 @@ export class PendingPrompts implements AsyncDisposable {
     callbackQueryData: callbackData,
   }: PendingPrompts.AnswerCallbackOptions) {
     try {
-      const items = this.#sessionMap.get(sessionId);
+      const items = this.#sessionItems.get(sessionId);
       if (!items) throw new PendingPrompts.AnswerError("expired_session");
       const parts = callbackData.split(":");
       const prefix = parts[0];
@@ -437,14 +437,14 @@ export class PendingPrompts implements AsyncDisposable {
 
   async #dismiss(sessionId: string) {
     await this.#runSessionExclusive(sessionId, async () => {
-      const items = this.#sessionMap.get(sessionId);
+      const items = this.#sessionItems.get(sessionId);
       if (!items) return;
       const promises: Promise<void>[] = [];
       for (const item of items) {
         promises.push(this.#opencodeDismiss(item));
         promises.push(this.#grammyDismiss(item));
       }
-      this.#sessionMap.delete(sessionId);
+      this.#sessionItems.delete(sessionId);
       const dismissResults = await Promise.allSettled(promises);
       const hookResults = await this.#hooks.callHookWith(
         (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
@@ -459,7 +459,7 @@ export class PendingPrompts implements AsyncDisposable {
     this.#hooks.hook(...args);
 
   check(sessionId: string): boolean {
-    return this.#sessionMap.has(sessionId);
+    return this.#sessionItems.has(sessionId);
   }
 
   async protect({
@@ -467,7 +467,7 @@ export class PendingPrompts implements AsyncDisposable {
     messageId: replyToMessageId,
   }: PendingPrompts.ProtectOptions) {
     await this.#runSessionExclusive(sessionId, async () => {
-      const items = this.#sessionMap.get(sessionId);
+      const items = this.#sessionItems.get(sessionId);
       if (!items) throw new PendingPrompts.NotFoundError();
       const activeItem = items.find((i) => i.messageId);
       if (!activeItem) throw new PendingPrompts.NotFoundError();
@@ -521,7 +521,7 @@ export class PendingPrompts implements AsyncDisposable {
         event.type === "question.rejected"
       ) {
         const { requestID } = event.properties;
-        const items = this.#sessionMap.get(sessionID);
+        const items = this.#sessionItems.get(sessionID);
         if (!items) return;
         const item = items.find((i) => i.request.id === requestID);
         if (!item) return;
@@ -551,12 +551,12 @@ export class PendingPrompts implements AsyncDisposable {
         await this.#resolveItem(items, item, resolvedText);
         return;
       }
-      let items = this.#sessionMap.get(sessionID);
+      let items = this.#sessionItems.get(sessionID);
       if (items?.some((i) => i.request.id === event.properties.id)) return;
       const wasPending = !!items;
       if (!items) {
         items = [];
-        this.#sessionMap.set(sessionID, items);
+        this.#sessionItems.set(sessionID, items);
       }
       const item: PendingPrompts.Item =
         event.type === "question.asked"
@@ -598,7 +598,7 @@ export class PendingPrompts implements AsyncDisposable {
     this.#unhook();
     try {
       const results = await Promise.allSettled(
-        [...this.#sessionMap.keys()].map((id) => this.#dismiss(id)),
+        [...this.#sessionItems.keys()].map((id) => this.#dismiss(id)),
       );
       Errors.throwIfAny(results);
     } catch (error) {

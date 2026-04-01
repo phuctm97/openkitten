@@ -1573,7 +1573,7 @@ test("update permission.asked skips duplicate request ID", async () => {
   expect(mockSendMessage).toHaveBeenCalledTimes(1);
 });
 
-test("update creates new session entry when session not yet in sessionMap", async () => {
+test("update creates new session entry when session not yet in sessionItems", async () => {
   const { shutdown, bot, client, existingSessions } = setup();
   await using prompts = PendingPrompts.create(
     shutdown,
