@@ -14,11 +14,15 @@ type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 let mockSessionMessage: MockFn;
 let mockSessionMessages: MockFn;
 
-function createMockOpencodeClient() {
+function createMockOpencodeClient(
+  options: { preserveMessagesMock?: boolean } = {},
+) {
   mockSessionMessage = vi.fn(async () => ({
     data: { info: {}, parts: [{ type: "text", text: "hello world" }] },
   }));
-  mockSessionMessages = vi.fn(async () => ({ data: [] }));
+  if (!options.preserveMessagesMock) {
+    mockSessionMessages = vi.fn(async () => ({ data: [] }));
+  }
   return {
     session: {
       message: (...args: unknown[]) => mockSessionMessage(...args),
@@ -27,28 +31,43 @@ function createMockOpencodeClient() {
   } as never;
 }
 
-function createMockExistingSessions(
-  sessionIds: readonly string[] = ["sess-1"],
-) {
+function createMockExistingSessions(sessionIds: readonly string[] = []) {
   return {
-    sessionIds,
+    sessionIds: [...sessionIds],
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
       chatId: 123,
       threadId: undefined,
     })),
-  } as unknown as ExistingSessions;
+  } as unknown as ExistingSessions & { sessionIds: string[] };
 }
 
-function setup() {
+async function setup(
+  sessionIds: readonly string[] = [],
+  options: {
+    preserveMessagesMock?: boolean;
+    persistedMessageIds?: readonly string[];
+  } = {},
+) {
   const database = Database.create();
   database
     .insert(schema.session)
     .values({ id: "sess-1", chatId: 123, threadId: 0 })
     .run();
+  if (options.persistedMessageIds) {
+    database
+      .insert(schema.message)
+      .values(
+        options.persistedMessageIds.map((id) => ({
+          id,
+          sessionId: "sess-1",
+        })),
+      )
+      .run();
+  }
   const bot = {} as never;
-  const client = createMockOpencodeClient();
-  const es = createMockExistingSessions();
-  const pm = ProcessingMessages.create(bot, database, client, es);
+  const client = createMockOpencodeClient(options);
+  const es = createMockExistingSessions(sessionIds);
+  const pm = await ProcessingMessages.create(bot, database, client, es);
   return { database, bot, client, es, pm };
 }
 
@@ -60,7 +79,7 @@ beforeEach(() => {
 
 test("update delivers completed assistant message", async () => {
   const { grammySendText } = await import("~/lib/grammy-send-text");
-  const { bot, pm } = setup();
+  const { bot, pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -85,7 +104,7 @@ test("update delivers completed assistant message", async () => {
 });
 
 test("update clears the streaming message once it completes", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -114,7 +133,7 @@ test("update clears the streaming message once it completes", async () => {
 
 test("update skips incomplete assistant message", async () => {
   const { grammySendText } = await import("~/lib/grammy-send-text");
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -131,7 +150,7 @@ test("update skips incomplete assistant message", async () => {
 });
 
 test("update stores incomplete assistant message as latest streaming state", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -155,7 +174,7 @@ test("update stores incomplete assistant message as latest streaming state", asy
 });
 
 test("update refreshes streaming message info without dropping parts", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -212,7 +231,7 @@ test("update refreshes streaming message info without dropping parts", async () 
 });
 
 test("update ignores part snapshots without an active streaming message", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.part.updated",
     properties: {
@@ -231,7 +250,7 @@ test("update ignores part snapshots without an active streaming message", async 
 });
 
 test("update replaces an existing part snapshot", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -283,7 +302,7 @@ test("update replaces an existing part snapshot", async () => {
 });
 
 test("update stores latest parts for the streaming assistant message", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -362,7 +381,7 @@ test("update stores latest parts for the streaming assistant message", async () 
 });
 
 test("update appends deltas onto text parts in streaming state", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -410,7 +429,7 @@ test("update appends deltas onto text parts in streaming state", async () => {
 });
 
 test("update appends deltas onto reasoning parts in streaming state", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -460,7 +479,7 @@ test("update appends deltas onto reasoning parts in streaming state", async () =
 });
 
 test("update ignores deltas for unsupported fields", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -508,7 +527,7 @@ test("update ignores deltas for unsupported fields", async () => {
 });
 
 test("update ignores deltas for missing parts", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -542,7 +561,7 @@ test("update ignores deltas for missing parts", async () => {
 });
 
 test("update ignores deltas for a different message", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -576,7 +595,7 @@ test("update ignores deltas for a different message", async () => {
 });
 
 test("update ignores text deltas for non-text parts", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -636,7 +655,7 @@ test("update ignores text deltas for non-text parts", async () => {
 });
 
 test("update removes parts from the latest streaming message", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -674,7 +693,7 @@ test("update removes parts from the latest streaming message", async () => {
 });
 
 test("update ignores part removals for a different message", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -720,7 +739,7 @@ test("update ignores part removals for a different message", async () => {
 });
 
 test("update removes the latest streaming message", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -744,7 +763,7 @@ test("update removes the latest streaming message", async () => {
 
 test("update skips user message", async () => {
   const { grammySendText } = await import("~/lib/grammy-send-text");
-  const { pm } = setup();
+  const { pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -761,7 +780,7 @@ test("update skips user message", async () => {
 });
 
 test("update skips already processed message", async () => {
-  const { pm } = setup();
+  const { pm } = await setup();
   const event = {
     type: "message.updated",
     properties: {
@@ -781,7 +800,7 @@ test("update skips already processed message", async () => {
 
 test("update skips message with no text parts", async () => {
   const { grammySendText } = await import("~/lib/grammy-send-text");
-  const { pm } = setup();
+  const { pm } = await setup();
   mockSessionMessage = vi.fn(async () => ({
     data: { info: {}, parts: [{ type: "tool", name: "bash" }] as never },
   }));
@@ -800,7 +819,7 @@ test("update skips message with no text parts", async () => {
 });
 
 test("update persists message to database", async () => {
-  const { database, pm } = setup();
+  const { database, pm } = await setup();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -819,11 +838,10 @@ test("update persists message to database", async () => {
   expect(row?.sessionId).toBe("sess-1");
 });
 
-// --- invalidate tests ---
+// --- initialized tests ---
 
-test("invalidate delivers new messages not in database", async () => {
+test("initialized syncs persisted messages on startup", async () => {
   const { grammySendText } = await import("~/lib/grammy-send-text");
-  const { pm } = setup();
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -837,12 +855,16 @@ test("invalidate delivers new messages not in database", async () => {
       },
     ],
   }));
-  await pm.invalidate();
-  expect(grammySendText).toHaveBeenCalled();
+  const { bot } = await setup(["sess-1"], { preserveMessagesMock: true });
+  expect(grammySendText).toHaveBeenCalledWith({
+    bot,
+    text: "hello",
+    chatId: 123,
+    threadId: undefined,
+  });
 });
 
-test("invalidate seeds the latest assistant streaming state", async () => {
-  const { pm } = setup();
+test("initialized seeds the latest assistant streaming state", async () => {
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -873,7 +895,7 @@ test("invalidate seeds the latest assistant streaming state", async () => {
       },
     ],
   }));
-  await pm.invalidate();
+  const { pm } = await setup(["sess-1"], { preserveMessagesMock: true });
   expect(pm.streaming("sess-1")).toEqual({
     info: {
       id: "m1",
@@ -893,8 +915,7 @@ test("invalidate seeds the latest assistant streaming state", async () => {
   });
 });
 
-test("invalidate picks the newest streaming assistant message by creation time", async () => {
-  const { pm } = setup();
+test("initialized picks the newest streaming assistant message by creation time", async () => {
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -917,12 +938,11 @@ test("invalidate picks the newest streaming assistant message by creation time",
       },
     ],
   }));
-  await pm.invalidate();
+  const { pm } = await setup(["sess-1"], { preserveMessagesMock: true });
   expect(pm.streaming("sess-1")?.info.id).toBe("m2");
 });
 
-test("invalidate keeps the newer streaming message when a later candidate is older", async () => {
-  const { pm } = setup();
+test("initialized keeps the newer streaming message when a later candidate is older", async () => {
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -945,12 +965,11 @@ test("invalidate keeps the newer streaming message when a later candidate is old
       },
     ],
   }));
-  await pm.invalidate();
+  const { pm } = await setup(["sess-1"], { preserveMessagesMock: true });
   expect(pm.streaming("sess-1")?.info.id).toBe("m2");
 });
 
-test("invalidate breaks streaming-message ties by higher message id", async () => {
-  const { pm } = setup();
+test("initialized breaks streaming-message ties by higher message id", async () => {
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -982,133 +1001,12 @@ test("invalidate breaks streaming-message ties by higher message id", async () =
       },
     ],
   }));
-  await pm.invalidate();
+  const { pm } = await setup(["sess-1"], { preserveMessagesMock: true });
   expect(pm.streaming("sess-1")?.info.id).toBe("m3");
 });
 
-test("invalidate clears the streaming message when no assistant is streaming", async () => {
-  const { pm } = setup();
-  await pm.update({
-    type: "message.updated",
-    properties: {
-      info: {
-        id: "m1",
-        sessionID: "sess-1",
-        role: "assistant",
-        time: { created: 1 },
-      },
-    },
-  } as never);
-  mockSessionMessages = vi.fn(async () => ({
-    data: [
-      {
-        info: {
-          id: "m1",
-          sessionID: "sess-1",
-          role: "assistant",
-          time: { created: 1, completed: 2 },
-        },
-        parts: [
-          {
-            id: "p1",
-            sessionID: "sess-1",
-            messageID: "m1",
-            type: "text",
-            text: "done",
-          },
-        ],
-      },
-    ],
-  }));
-  await pm.invalidate();
-  expect(pm.streaming("sess-1")).toBeUndefined();
-});
-
-test("invalidate resets to the latest persisted snapshot for the same in-progress message", async () => {
-  const { pm } = setup();
-  await pm.update({
-    type: "message.updated",
-    properties: {
-      info: {
-        id: "m1",
-        sessionID: "sess-1",
-        role: "assistant",
-        time: { created: 2 },
-      },
-    },
-  } as never);
-  await pm.update({
-    type: "message.part.updated",
-    properties: {
-      sessionID: "sess-1",
-      part: {
-        id: "p1",
-        sessionID: "sess-1",
-        messageID: "m1",
-        type: "text",
-        text: "hello",
-      },
-      time: 3,
-    },
-  } as never);
-  await pm.update({
-    type: "message.part.delta",
-    properties: {
-      sessionID: "sess-1",
-      messageID: "m1",
-      partID: "p1",
-      field: "text",
-      delta: " world",
-    },
-  } as never);
-  mockSessionMessages = vi.fn(async () => ({
-    data: [
-      {
-        info: {
-          id: "m1",
-          sessionID: "sess-1",
-          role: "assistant",
-          time: { created: 2 },
-        },
-        parts: [
-          {
-            id: "p1",
-            sessionID: "sess-1",
-            messageID: "m1",
-            type: "text",
-            text: "hello",
-          },
-        ],
-      },
-    ],
-  }));
-  await pm.invalidate();
-  expect(pm.streaming("sess-1")).toEqual({
-    info: {
-      id: "m1",
-      sessionID: "sess-1",
-      role: "assistant",
-      time: { created: 2 },
-    },
-    parts: [
-      {
-        id: "p1",
-        sessionID: "sess-1",
-        messageID: "m1",
-        type: "text",
-        text: "hello",
-      },
-    ],
-  });
-});
-
-test("invalidate skips messages already in database", async () => {
+test("initialized skips messages already in database", async () => {
   const { grammySendText } = await import("~/lib/grammy-send-text");
-  const { database, pm } = setup();
-  database
-    .insert(schema.message)
-    .values({ id: "m1", sessionId: "sess-1" })
-    .run();
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -1122,16 +1020,14 @@ test("invalidate skips messages already in database", async () => {
       },
     ],
   }));
-  await pm.invalidate();
+  await setup(["sess-1"], {
+    preserveMessagesMock: true,
+    persistedMessageIds: ["m1"],
+  });
   expect(grammySendText).not.toHaveBeenCalled();
 });
 
-test("invalidate stops expanding when oldest message is already in database", async () => {
-  const { database, pm } = setup();
-  database
-    .insert(schema.message)
-    .values({ id: "m0", sessionId: "sess-1" })
-    .run();
+test("initialized stops expanding when oldest message is already in database", async () => {
   mockSessionMessages = vi.fn(async () => ({
     data: Array.from({ length: 10 }, (_, i) => ({
       info: {
@@ -1143,12 +1039,14 @@ test("invalidate stops expanding when oldest message is already in database", as
       parts: [],
     })),
   }));
-  await pm.invalidate();
+  await setup(["sess-1"], {
+    preserveMessagesMock: true,
+    persistedMessageIds: ["m0"],
+  });
   expect(mockSessionMessages).toHaveBeenCalledTimes(1);
 });
 
-test("invalidate doubles limit when no overlap found", async () => {
-  const { pm } = setup();
+test("initialized doubles limit when no overlap is found", async () => {
   let callCount = 0;
   mockSessionMessages = vi.fn(async (...args: unknown[]) => {
     const { limit } = args[0] as { limit: number };
@@ -1170,12 +1068,11 @@ test("invalidate doubles limit when no overlap found", async () => {
     expect(limit).toBe(20);
     return { data: [] };
   });
-  await pm.invalidate();
+  await setup(["sess-1"], { preserveMessagesMock: true });
   expect(mockSessionMessages).toHaveBeenCalledTimes(2);
 });
 
-test("invalidate keeps expanding when batch has no assistant messages", async () => {
-  const { pm } = setup();
+test("initialized keeps expanding when the batch has no assistant messages", async () => {
   let callCount = 0;
   mockSessionMessages = vi.fn(async () => {
     callCount++;
@@ -1194,12 +1091,11 @@ test("invalidate keeps expanding when batch has no assistant messages", async ()
     }
     return { data: [] };
   });
-  await pm.invalidate();
+  await setup(["sess-1"], { preserveMessagesMock: true });
   expect(mockSessionMessages).toHaveBeenCalledTimes(2);
 });
 
-test("invalidate stops when batch is smaller than limit", async () => {
-  const { pm } = setup();
+test("initialized stops when the batch is smaller than the limit", async () => {
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -1213,13 +1109,12 @@ test("invalidate stops when batch is smaller than limit", async () => {
       },
     ],
   }));
-  await pm.invalidate();
+  await setup(["sess-1"], { preserveMessagesMock: true });
   expect(mockSessionMessages).toHaveBeenCalledTimes(1);
 });
 
-test("invalidate skips user messages", async () => {
+test("initialized skips user messages", async () => {
   const { grammySendText } = await import("~/lib/grammy-send-text");
-  const { pm } = setup();
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -1233,22 +1128,21 @@ test("invalidate skips user messages", async () => {
       },
     ],
   }));
-  await pm.invalidate();
+  await setup(["sess-1"], { preserveMessagesMock: true });
   expect(grammySendText).not.toHaveBeenCalled();
 });
 
-test("invalidate with no sessions skips processing", async () => {
+test("initialized with no sessions skips processing", async () => {
   const database = Database.create();
   const bot = {} as never;
   const client = createMockOpencodeClient();
   const es = createMockExistingSessions([]);
-  const pm = ProcessingMessages.create(bot, database, client, es);
-  await pm.invalidate();
+  await ProcessingMessages.create(bot, database, client, es);
   expect(mockSessionMessages).not.toHaveBeenCalled();
 });
 
 test("update unclaims on delivery failure and allows retry", async () => {
-  const { database, pm } = setup();
+  const { database, pm } = await setup();
   mockSessionMessage = vi.fn(async () => {
     throw new Error("delivery failed");
   });
@@ -1271,8 +1165,7 @@ test("update unclaims on delivery failure and allows retry", async () => {
   expect(row).toBeUndefined();
 });
 
-test("invalidate unclaims on delivery failure and allows retry", async () => {
-  const { database, pm } = setup();
+test("initialized unclaims on delivery failure and allows retry", async () => {
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -1290,15 +1183,24 @@ test("invalidate unclaims on delivery failure and allows retry", async () => {
   vi.mocked(mod.grammySendText).mockRejectedValueOnce(
     new Error("delivery failed"),
   );
-  await expect(pm.invalidate()).rejects.toThrow();
+  const database = Database.create();
+  database
+    .insert(schema.session)
+    .values({ id: "sess-1", chatId: 123, threadId: 0 })
+    .run();
+  const bot = {} as never;
+  const client = createMockOpencodeClient({ preserveMessagesMock: true });
+  const es = createMockExistingSessions(["sess-1"]);
+  await expect(
+    ProcessingMessages.create(bot, database, client, es),
+  ).rejects.toThrow();
   const row = database.query.message
     .findFirst({ where: eq(schema.message.id, "m1") })
     .sync();
   expect(row).toBeUndefined();
 });
 
-test("update after invalidate deduplicates via database", async () => {
-  const { pm } = setup();
+test("update after initialized deduplicates via database", async () => {
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -1312,7 +1214,7 @@ test("update after invalidate deduplicates via database", async () => {
       },
     ],
   }));
-  await pm.invalidate();
+  const { pm } = await setup(["sess-1"], { preserveMessagesMock: true });
   mockSessionMessage.mockClear();
   await pm.update({
     type: "message.updated",

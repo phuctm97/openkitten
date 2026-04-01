@@ -1,5 +1,4 @@
 import type { Bot } from "grammy";
-import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import type { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
@@ -98,21 +97,6 @@ export class TypingIndicators implements Disposable {
 
   check(sessionId: string): boolean {
     return this.#timers.has(sessionId);
-  }
-
-  async invalidate() {
-    const { sessionIds } = this.#existingSessions;
-    if (sessionIds.length === 0) return;
-    const promises: Promise<void>[] = [];
-    for (const sessionId of sessionIds) {
-      if (this.#typing(sessionId)) {
-        promises.push(this.#start(sessionId));
-      } else {
-        this.#stop(sessionId);
-      }
-    }
-    const results = await Promise.allSettled(promises);
-    Errors.throwIfAny(results);
   }
 
   [Symbol.dispose]() {

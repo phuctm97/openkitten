@@ -190,7 +190,7 @@ export class ExistingSessions {
     }
   }
 
-  async invalidate(): Promise<void> {
+  async #initialize(): Promise<void> {
     const currentSessions = this.#database.query.session
       .findMany({
         columns: { id: true, chatId: true, threadId: true },
@@ -227,7 +227,7 @@ export class ExistingSessions {
     );
     Errors.throwIfAny(removalResults);
 
-    logger.debug("Current sessions are invalidated", {
+    logger.debug("Current sessions are synchronized", {
       checked: currentSessions.length,
       removed: unreachableSessions.length,
       remaining: currentSessions.length - unreachableSessions.length,
@@ -243,12 +243,18 @@ export class ExistingSessions {
     }
   };
 
-  static create(
+  static async create(
     bot: Bot,
     database: Database,
     opencodeClient: OpencodeClient,
-  ): ExistingSessions {
-    return new ExistingSessions(bot, database, opencodeClient);
+  ): Promise<ExistingSessions> {
+    const existingSessions = new ExistingSessions(
+      bot,
+      database,
+      opencodeClient,
+    );
+    await existingSessions.#initialize();
+    return existingSessions;
   }
 }
 

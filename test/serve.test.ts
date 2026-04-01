@@ -87,8 +87,8 @@ function mockCreateDatabase() {
 function mockExistingSessions(
   sessionIds: readonly string[] = [],
   getMap: Record<string, ExistingSessions.Location> = {},
+  options: { create?: Promise<unknown> } = {},
 ) {
-  const invalidate = vi.fn(async () => {});
   const find = vi.fn();
   const check = vi.fn((id: string) => id in getMap);
   const get = vi.fn(
@@ -101,16 +101,16 @@ function mockExistingSessions(
       return [...sessionIds];
     },
     hook,
-    invalidate,
     find,
     check,
     get,
     remove,
   };
-  vi.spyOn(ExistingSessions, "create").mockReturnValue(
-    existingSessions as never,
-  );
-  return { existingSessions, invalidate, get };
+  vi.spyOn(ExistingSessions, "create").mockImplementation(async () => {
+    await (options.create ?? Promise.resolve());
+    return existingSessions as never;
+  });
+  return { existingSessions, get };
 }
 
 function mockOpencodeServer() {
@@ -128,6 +128,7 @@ function mockOpencodeServer() {
   const client = {
     question: { list: vi.fn(async () => ({ data: [] })) },
     permission: { list: vi.fn(async () => ({ data: [] })) },
+    session: { messages: vi.fn(async () => ({ data: [] })) },
   };
   vi.spyOn(OpencodeServer, "create").mockResolvedValue({
     exited,
@@ -138,37 +139,32 @@ function mockOpencodeServer() {
 }
 
 function mockTypingIndicators() {
-  const invalidate = vi.fn();
   const stop = vi.fn();
   const typingIndicators = {
-    invalidate,
     stop,
     [Symbol.dispose]() {},
   };
   vi.spyOn(TypingIndicators, "create").mockReturnValue(
     typingIndicators as never,
   );
-  return { typingIndicators, invalidate, stop };
+  return { typingIndicators, stop };
 }
 
 function mockPendingPrompts() {
-  const invalidate = vi.fn();
   const dismiss = vi.fn();
   const update = vi.fn();
   const pendingPrompts = {
-    invalidate,
     dismiss,
     update,
     async [Symbol.asyncDispose]() {},
   };
   vi.spyOn(PendingPrompts, "create").mockReturnValue(pendingPrompts as never);
-  return { pendingPrompts, invalidate, dismiss, update };
+  return { pendingPrompts, dismiss, update };
 }
 
 function mockWorkingSessions() {
   const update = vi.fn();
   const workingSessions = {
-    invalidate: vi.fn(),
     update,
     lock: vi.fn(),
     release: vi.fn(),
@@ -179,17 +175,15 @@ function mockWorkingSessions() {
 }
 
 function mockProcessingMessages() {
-  const invalidate = vi.fn();
   const update = vi.fn();
   const processingMessages = {
-    invalidate,
     update,
     [Symbol.dispose]() {},
   };
-  vi.spyOn(ProcessingMessages, "create").mockReturnValue(
+  vi.spyOn(ProcessingMessages, "create").mockResolvedValue(
     processingMessages as never,
   );
-  return { processingMessages, invalidate, update };
+  return { processingMessages, update };
 }
 
 function mockOpencodeEventStream() {
@@ -201,11 +195,9 @@ function mockOpencodeEventStream() {
     () => {},
     () => {},
   );
-  let onRestart: (signal: AbortSignal) => void | Promise<void>;
   let onEvent: (event: never, signal: AbortSignal) => void;
   vi.spyOn(OpencodeEventStream, "create").mockImplementation(
-    (_client, _floatingPromises, restart, event) => {
-      onRestart = restart;
+    (_client, _floatingPromises, event) => {
       onEvent = event as never;
       return {
         closed,
@@ -216,7 +208,6 @@ function mockOpencodeEventStream() {
     },
   );
   return {
-    onRestart: () => onRestart,
     onEvent: () => onEvent,
     resolveClosed: () => resolveClosed(),
   };
@@ -280,8 +271,10 @@ function mockAll() {
   const disposeOpencodeServer = mockOpencodeServer();
   const disposeMcpServer = mockMcpServer();
   const es = mockExistingSessions();
+  const working = mockWorkingSessions();
   const typing = mockTypingIndicators();
   const prompts = mockPendingPrompts();
+  const processing = mockProcessingMessages();
   const stream = mockOpencodeEventStream();
   const disposeGrammy = mockGrammy();
   const triggerShutdown = mockShutdown();
@@ -289,8 +282,10 @@ function mockAll() {
     disposeOpencodeServer,
     disposeMcpServer,
     es,
+    working,
     typing,
     prompts,
+    processing,
     stream,
     disposeGrammy,
     triggerShutdown,
@@ -401,14 +396,77 @@ test("exits on event stream failure", async () => {
   );
 });
 
+test("awaits existing session initialization before creating working sessions", async () => {
+  mockTelegramConfig();
+  mockCreateDatabase();
+  mockOpencodeServer();
+  mockMcpServer();
+  const { promise, resolve } = Promise.withResolvers<void>();
+  mockExistingSessions([], {}, { create: promise });
+  mockWorkingSessions();
+  mockTypingIndicators();
+  mockPendingPrompts();
+  mockProcessingMessages();
+  mockOpencodeEventStream();
+  mockGrammy();
+  const triggerShutdown = mockShutdown();
+
+  const run = runCommand(serve, { rawArgs: [] });
+
+  await Bun.sleep(0);
+  expect(WorkingSessions.create).not.toHaveBeenCalled();
+
+  resolve();
+  await vi.waitFor(() => expect(WorkingSessions.create).toHaveBeenCalledOnce());
+
+  triggerShutdown();
+  await run;
+});
+
+test("awaits processing message initialization before connecting event stream", async () => {
+  mockTelegramConfig();
+  mockCreateDatabase();
+  mockOpencodeServer();
+  mockMcpServer();
+  mockExistingSessions();
+  mockWorkingSessions();
+  mockTypingIndicators();
+  mockPendingPrompts();
+  const { promise, resolve } = Promise.withResolvers<void>();
+  const update = vi.fn();
+  vi.spyOn(ProcessingMessages, "create").mockImplementation(async () => {
+    await promise;
+    return {
+      update,
+      [Symbol.dispose]() {},
+    } as never;
+  });
+  mockOpencodeEventStream();
+  mockGrammy();
+  const triggerShutdown = mockShutdown();
+
+  const run = runCommand(serve, { rawArgs: [] });
+
+  await Bun.sleep(0);
+  expect(OpencodeEventStream.create).not.toHaveBeenCalled();
+
+  resolve();
+  await vi.waitFor(() => expect(OpencodeEventStream.create).toHaveBeenCalled());
+
+  triggerShutdown();
+  await run;
+});
+
 test("onEvent is fire-and-forget", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();
   mockExistingSessions();
+  mockWorkingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
+  mockProcessingMessages();
   const stream = mockOpencodeEventStream();
   mockGrammy();
   const triggerShutdown = mockShutdown();
@@ -419,58 +477,6 @@ test("onEvent is fire-and-forget", async () => {
   const signal = new AbortController().signal;
   const result = stream.onEvent()({ type: "any-event" } as never, signal);
   expect(result).toBeUndefined();
-
-  triggerShutdown();
-  await run;
-});
-
-test("reconciles typing indicators on restart", async () => {
-  mockTelegramConfig();
-  mockCreateDatabase();
-  mockOpencodeServer();
-  mockMcpServer();
-  const { existingSessions } = mockExistingSessions(["s1", "s2"]);
-  const { invalidate } = mockTypingIndicators();
-  mockPendingPrompts();
-  mockWorkingSessions();
-  mockProcessingMessages();
-  const stream = mockOpencodeEventStream();
-  mockGrammy();
-  const triggerShutdown = mockShutdown();
-
-  const run = runCommand(serve, { rawArgs: [] });
-  await vi.waitFor(() => expect(stream.onRestart()).toBeDefined());
-
-  await stream.onRestart()(new AbortController().signal);
-
-  expect(existingSessions.invalidate).toHaveBeenCalledOnce();
-  expect(invalidate).toHaveBeenCalledOnce();
-  expect(invalidate).toHaveBeenCalledWith();
-
-  triggerShutdown();
-  await run;
-});
-
-test("reconciles pending prompts on restart", async () => {
-  mockTelegramConfig();
-  mockCreateDatabase();
-  mockOpencodeServer();
-  mockMcpServer();
-  mockExistingSessions(["s1", "s2"]);
-  mockTypingIndicators();
-  const { invalidate } = mockPendingPrompts();
-  mockWorkingSessions();
-  mockProcessingMessages();
-  const stream = mockOpencodeEventStream();
-  mockGrammy();
-  const triggerShutdown = mockShutdown();
-
-  const run = runCommand(serve, { rawArgs: [] });
-  await vi.waitFor(() => expect(stream.onRestart()).toBeDefined());
-
-  await stream.onRestart()(new AbortController().signal);
-
-  expect(invalidate).toHaveBeenCalledOnce();
 
   triggerShutdown();
   await run;
