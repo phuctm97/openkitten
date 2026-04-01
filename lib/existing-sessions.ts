@@ -248,9 +248,13 @@ export class ExistingSessions {
     database: Database,
     opencodeClient: OpencodeClient,
   ): Promise<ExistingSessions> {
-    const sessions = new ExistingSessions(bot, database, opencodeClient);
-    await sessions.#initialize();
-    return sessions;
+    const existingSessions = new ExistingSessions(
+      bot,
+      database,
+      opencodeClient,
+    );
+    await existingSessions.#initialize();
+    return existingSessions;
   }
 }
 
