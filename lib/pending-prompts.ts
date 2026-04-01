@@ -33,7 +33,8 @@ export class PendingPrompts implements AsyncDisposable {
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #hooks = createHooks<PendingPrompts.Hooks>();
-  readonly #sessionMap = new Map<string, PendingPrompts.Item[]>();
+  readonly #sessionItems = new Map<string, PendingPrompts.Item[]>();
+  readonly #sessionOperations = new Map<string, Promise<void>>();
   readonly #unhook: () => void;
   #keyCounter = 0;
 
@@ -57,6 +58,27 @@ export class PendingPrompts implements AsyncDisposable {
 
   #nextKey() {
     return (this.#keyCounter++).toString(36);
+  }
+
+  // Serialize per-session mutations so a prompt that is still flushing
+  // already counts as active for later operations in the same session.
+  async #runSessionExclusive<T>(
+    sessionId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const previous = this.#sessionOperations.get(sessionId);
+    const current = Promise.withResolvers<void>();
+    const queued = (previous ?? Promise.resolve()).then(() => current.promise);
+    this.#sessionOperations.set(sessionId, queued);
+    if (previous) await previous;
+    try {
+      return await fn();
+    } finally {
+      current.resolve();
+      if (this.#sessionOperations.get(sessionId) === queued) {
+        this.#sessionOperations.delete(sessionId);
+      }
+    }
   }
 
   #buildQuestionKeyboard(
@@ -139,7 +161,7 @@ export class PendingPrompts implements AsyncDisposable {
       "Expected the resolved item to exist in session items",
     );
     items.splice(index, 1);
-    if (items.length === 0) this.#sessionMap.delete(item.request.sessionID);
+    if (items.length === 0) this.#sessionItems.delete(item.request.sessionID);
   }
 
   async #resolveItem(
@@ -308,7 +330,7 @@ export class PendingPrompts implements AsyncDisposable {
     messageId: replyToMessageId,
     text,
   }: PendingPrompts.AnswerCustomOptions) {
-    const items = this.#sessionMap.get(sessionId);
+    const items = this.#sessionItems.get(sessionId);
     if (!items) throw new PendingPrompts.NotFoundError();
     const activeItem = items.find((i) => i.messageId);
     if (!activeItem) throw new PendingPrompts.NotFoundError();
@@ -348,7 +370,7 @@ export class PendingPrompts implements AsyncDisposable {
     callbackQueryData: callbackData,
   }: PendingPrompts.AnswerCallbackOptions) {
     try {
-      const items = this.#sessionMap.get(sessionId);
+      const items = this.#sessionItems.get(sessionId);
       if (!items) throw new PendingPrompts.AnswerError("expired_session");
       const parts = callbackData.split(":");
       const prefix = parts[0];
@@ -414,64 +436,70 @@ export class PendingPrompts implements AsyncDisposable {
   }
 
   async #dismiss(sessionId: string) {
-    const items = this.#sessionMap.get(sessionId);
-    if (!items) return;
-    const promises: Promise<void>[] = [];
-    for (const item of items) {
-      promises.push(this.#opencodeDismiss(item));
-      promises.push(this.#grammyDismiss(item));
-    }
-    this.#sessionMap.delete(sessionId);
-    const dismissResults = await Promise.allSettled(promises);
-    const hookResults = await this.#hooks.callHookWith(
-      (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
-      "change",
-      [{ sessionId, pending: false }],
-    );
-    Errors.throwIfAny([...dismissResults, ...hookResults]);
+    await this.#runSessionExclusive(sessionId, async () => {
+      const items = this.#sessionItems.get(sessionId);
+      if (!items) return;
+      const promises: Promise<void>[] = [];
+      for (const item of items) {
+        promises.push(this.#opencodeDismiss(item));
+        promises.push(this.#grammyDismiss(item));
+      }
+      this.#sessionItems.delete(sessionId);
+      const dismissResults = await Promise.allSettled(promises);
+      const hookResults = await this.#hooks.callHookWith(
+        (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
+        "change",
+        [{ sessionId, pending: false }],
+      );
+      Errors.throwIfAny([...dismissResults, ...hookResults]);
+    });
   }
 
   readonly hook: Hookable<PendingPrompts.Hooks>["hook"] = (...args) =>
     this.#hooks.hook(...args);
 
   check(sessionId: string): boolean {
-    return this.#sessionMap.has(sessionId);
+    return this.#sessionItems.has(sessionId);
   }
 
   async protect({
     sessionId,
     messageId: replyToMessageId,
   }: PendingPrompts.ProtectOptions) {
-    const items = this.#sessionMap.get(sessionId);
-    if (!items) throw new PendingPrompts.NotFoundError();
-    const activeItem = items.find((i) => i.messageId);
-    if (!activeItem) throw new PendingPrompts.NotFoundError();
-    const { chatId, threadId } = this.#existingSessions.get(sessionId, {
-      throwIfNotFound: true,
-    });
-    if (activeItem.kind === "permission") {
-      await grammySendPermissionPending({
+    await this.#runSessionExclusive(sessionId, async () => {
+      const items = this.#sessionItems.get(sessionId);
+      if (!items) throw new PendingPrompts.NotFoundError();
+      const activeItem = items.find((i) => i.messageId);
+      if (!activeItem) throw new PendingPrompts.NotFoundError();
+      const { chatId, threadId } = this.#existingSessions.get(sessionId, {
+        throwIfNotFound: true,
+      });
+      if (activeItem.kind === "permission") {
+        await grammySendPermissionPending({
+          bot: this.#bot,
+          chatId,
+          threadId,
+          replyToMessageId,
+        });
+        return;
+      }
+      await grammySendQuestionPending({
         bot: this.#bot,
         chatId,
         threadId,
         replyToMessageId,
       });
-      return;
-    }
-    await grammySendQuestionPending({
-      bot: this.#bot,
-      chatId,
-      threadId,
-      replyToMessageId,
     });
   }
 
   async answer(options: PendingPrompts.AnswerOptions) {
-    if ("text" in options) {
-      await this.#answerCustom(options);
-      return;
-    }
-    await this.#answerCallback(options);
+    await this.#runSessionExclusive(options.sessionId, async () => {
+      if ("text" in options) {
+        await this.#answerCustom(options);
+        return;
+      }
+      await this.#answerCallback(options);
+    });
   }
 
   async update(
@@ -486,88 +514,91 @@ export class PendingPrompts implements AsyncDisposable {
       this.#opencodeClient,
       event.properties.sessionID,
     );
-    if (
-      event.type === "permission.replied" ||
-      event.type === "question.replied" ||
-      event.type === "question.rejected"
-    ) {
-      const { requestID } = event.properties;
-      const items = this.#sessionMap.get(sessionID);
-      if (!items) return;
-      const item = items.find((i) => i.request.id === requestID);
-      if (!item) return;
-      // Item was queued but never shown to the user — just remove it.
-      if (!item.messageId) {
-        this.#removeItem(items, item);
-        if (items.length === 0) {
-          const results = await this.#hooks.callHookWith(
-            (hooks, args) =>
-              Promise.allSettled(hooks.map((hook) => hook(...args))),
-            "change",
-            [{ sessionId: sessionID, pending: false }],
-          );
-          Errors.throwIfAny(results);
+    await this.#runSessionExclusive(sessionID, async () => {
+      if (
+        event.type === "permission.replied" ||
+        event.type === "question.replied" ||
+        event.type === "question.rejected"
+      ) {
+        const { requestID } = event.properties;
+        const items = this.#sessionItems.get(sessionID);
+        if (!items) return;
+        const item = items.find((i) => i.request.id === requestID);
+        if (!item) return;
+        // Item was queued but never shown to the user — just remove it.
+        if (!item.messageId) {
+          this.#removeItem(items, item);
+          if (items.length === 0) {
+            const results = await this.#hooks.callHookWith(
+              (hooks, args) =>
+                Promise.allSettled(hooks.map((hook) => hook(...args))),
+              "change",
+              [{ sessionId: sessionID, pending: false }],
+            );
+            Errors.throwIfAny(results);
+          }
+          return;
         }
+        let resolvedText: string;
+        if (event.type === "permission.replied") {
+          resolvedText = grammyFormatPermissionReplied(event.properties.reply);
+        } else if (event.type === "question.rejected") {
+          resolvedText = grammyFormatQuestionRejected();
+        } else {
+          const lastAnswer = event.properties.answers.at(-1) ?? [];
+          resolvedText = grammyFormatQuestionReplied(lastAnswer);
+        }
+        await this.#resolveItem(items, item, resolvedText);
         return;
       }
-      let resolvedText: string;
-      if (event.type === "permission.replied") {
-        resolvedText = grammyFormatPermissionReplied(event.properties.reply);
-      } else if (event.type === "question.rejected") {
-        resolvedText = grammyFormatQuestionRejected();
-      } else {
-        const lastAnswer = event.properties.answers.at(-1) ?? [];
-        resolvedText = grammyFormatQuestionReplied(lastAnswer);
+      let items = this.#sessionItems.get(sessionID);
+      if (items?.some((i) => i.request.id === event.properties.id)) return;
+      const wasPending = !!items;
+      if (!items) {
+        items = [];
+        this.#sessionItems.set(sessionID, items);
       }
-      await this.#resolveItem(items, item, resolvedText);
-      return;
-    }
-    let items = this.#sessionMap.get(sessionID);
-    if (items?.some((i) => i.request.id === event.properties.id)) return;
-    const wasPending = !!items;
-    if (!items) {
-      items = [];
-      this.#sessionMap.set(sessionID, items);
-    }
-    const item: PendingPrompts.Item =
-      event.type === "question.asked"
-        ? {
-            kind: "question",
-            key: this.#nextKey(),
-            request: { ...event.properties, sessionID },
-            messageId: undefined,
-            currentIndex: 0,
-            currentAnswers: [],
-            selectedOptions: [],
-          }
-        : {
-            kind: "permission",
-            key: this.#nextKey(),
-            request: { ...event.properties, sessionID },
-            messageId: undefined,
-          };
-    items.push(item);
-    // Show one prompt at a time per session — only flush if nothing is displayed.
-    if (!items.some((i) => i.messageId)) {
-      const first = items[0];
-      invariant(first, "Expected at least one item in non-empty session");
-      await this.#flushItem(first);
-    }
-    if (!wasPending) {
-      const results = await this.#hooks.callHookWith(
-        (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
-        "change",
-        [{ sessionId: sessionID, pending: true }],
-      );
-      Errors.throwIfAny(results);
-    }
+      const item: PendingPrompts.Item =
+        event.type === "question.asked"
+          ? {
+              kind: "question",
+              key: this.#nextKey(),
+              request: { ...event.properties, sessionID },
+              messageId: undefined,
+              currentIndex: 0,
+              currentAnswers: [],
+              selectedOptions: [],
+            }
+          : {
+              kind: "permission",
+              key: this.#nextKey(),
+              request: { ...event.properties, sessionID },
+              messageId: undefined,
+            };
+      items.push(item);
+      // Show one prompt at a time per session — only flush if nothing is displayed.
+      if (!items.some((i) => i.messageId)) {
+        const first = items[0];
+        invariant(first, "Expected at least one item in non-empty session");
+        await this.#flushItem(first);
+      }
+      if (!wasPending) {
+        const results = await this.#hooks.callHookWith(
+          (hooks, args) =>
+            Promise.allSettled(hooks.map((hook) => hook(...args))),
+          "change",
+          [{ sessionId: sessionID, pending: true }],
+        );
+        Errors.throwIfAny(results);
+      }
+    });
   }
 
   async [Symbol.asyncDispose]() {
     this.#unhook();
     try {
       const results = await Promise.allSettled(
-        [...this.#sessionMap.keys()].map((id) => this.#dismiss(id)),
+        [...this.#sessionItems.keys()].map((id) => this.#dismiss(id)),
       );
       Errors.throwIfAny(results);
     } catch (error) {
