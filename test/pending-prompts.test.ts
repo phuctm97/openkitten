@@ -1649,6 +1649,76 @@ test("multiple asked events surface flush failures", async () => {
   ).rejects.toThrow("send failed");
 });
 
+test("concurrent permission.asked events for one session only flush one prompt", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  const firstSendStarted = Promise.withResolvers<void>();
+  const releaseFirstSend = Promise.withResolvers<void>();
+  let sendCount = 0;
+  mockSendMessage = vi.fn(async () => {
+    sendCount += 1;
+    if (sendCount === 1) {
+      firstSendStarted.resolve();
+      await releaseFirstSend.promise;
+    }
+    return { message_id: messageIdCounter++ };
+  });
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  const first = askPermission(prompts, permissionRequest);
+  await firstSendStarted.promise;
+  const second = askPermission(prompts, {
+    ...permissionRequest,
+    id: "p2",
+  });
+  await Promise.resolve();
+  expect(mockSendMessage).toHaveBeenCalledTimes(1);
+  releaseFirstSend.resolve();
+  await Promise.all([first, second]);
+  expect(mockSendMessage).toHaveBeenCalledTimes(1);
+});
+
+test("answer callback waits for concurrent permission.replied update", async () => {
+  const { shutdown, bot, client, existingSessions } = setup();
+  const permissionReplyStarted = Promise.withResolvers<void>();
+  const releasePermissionReply = Promise.withResolvers<void>();
+  mockPermissionReply = vi.fn(async () => {
+    permissionReplyStarted.resolve();
+    await releasePermissionReply.promise;
+    return {};
+  });
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await askPermission(prompts);
+  const answer = prompts.answer({
+    sessionId: "sess-1",
+    callbackQueryId: "cb1",
+    callbackQueryData: "po:0",
+  });
+  await permissionReplyStarted.promise;
+  const update = prompts.update({
+    type: "permission.replied",
+    properties: {
+      sessionID: "sess-1",
+      requestID: "p1",
+      reply: "once",
+    },
+  });
+  await Promise.resolve();
+  expect(mockEditMessageText).not.toHaveBeenCalled();
+  releasePermissionReply.resolve();
+  await Promise.all([answer, update]);
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockEditMessageText).toHaveBeenCalledTimes(1);
+});
+
 // --- update replied/rejected tests ---
 
 test("update permission.replied removes item and edits telegram", async () => {
