@@ -1,11 +1,11 @@
-import type { Event } from "@opencode-ai/sdk/v2";
+import type { GlobalEvent } from "@opencode-ai/sdk/v2";
 import { logger } from "~/lib/logger";
 import type { Scope } from "~/lib/scope";
 
 export function opencodeCreateHandler(
   scope: Scope,
-  fn: (scope: Scope, event: Event, signal: AbortSignal) => Promise<void>,
-): (event: Event, signal: AbortSignal) => void {
+  fn: (scope: Scope, event: GlobalEvent, signal: AbortSignal) => Promise<void>,
+): (event: GlobalEvent, signal: AbortSignal) => void {
   return (event, signal) => {
     scope.floatingPromises.track(
       fn(scope, event, signal).catch((error) => {

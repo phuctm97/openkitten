@@ -1,4 +1,4 @@
-import type { Event } from "@opencode-ai/sdk/v2";
+import type { GlobalEvent } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
@@ -10,14 +10,14 @@ export class OpencodeEventStream implements AsyncDisposable {
   readonly #closed: Promise<void>;
   readonly #settled: Promise<void>;
   readonly #onEvent: (
-    event: Event,
+    event: GlobalEvent,
     signal: AbortSignal,
   ) => void | Promise<void>;
 
   private constructor(
     opencodeClient: OpencodeClient,
     floatingPromises: FloatingPromises,
-    onEvent: (event: Event, signal: AbortSignal) => void | Promise<void>,
+    onEvent: (event: GlobalEvent, signal: AbortSignal) => void | Promise<void>,
   ) {
     this.#opencodeClient = opencodeClient;
     this.#abortController = new AbortController();
@@ -37,10 +37,10 @@ export class OpencodeEventStream implements AsyncDisposable {
   async #run(): Promise<void> {
     logger.debug("OpenCode event stream is connecting…");
     try {
-      const { stream } = await this.#opencodeClient.event.subscribe(
-        {},
-        { signal: this.#abortController.signal, throwOnError: true },
-      );
+      const { stream } = await this.#opencodeClient.global.event({
+        signal: this.#abortController.signal,
+        throwOnError: true,
+      });
       if (this.#abortController.signal.aborted) return;
       const iter = stream[Symbol.asyncIterator]();
       const onAbort = () => {
@@ -82,7 +82,7 @@ export class OpencodeEventStream implements AsyncDisposable {
   static create(
     opencodeClient: OpencodeClient,
     floatingPromises: FloatingPromises,
-    onEvent: (event: Event, signal: AbortSignal) => void | Promise<void>,
+    onEvent: (event: GlobalEvent, signal: AbortSignal) => void | Promise<void>,
   ): OpencodeEventStream {
     return new OpencodeEventStream(opencodeClient, floatingPromises, onEvent);
   }

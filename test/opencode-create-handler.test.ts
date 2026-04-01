@@ -16,13 +16,19 @@ test("fires fn and does not return a promise", () => {
   const scope = mockScope();
   const handler = opencodeCreateHandler(scope, fn);
   const result = handler(
-    { type: "session.status", properties: {} } as never,
+    {
+      directory: "/tmp/a",
+      payload: { type: "session.status", properties: {} },
+    } as never,
     new AbortController().signal,
   );
   expect(result).toBeUndefined();
   expect(fn).toHaveBeenCalledWith(
     scope,
-    { type: "session.status", properties: {} },
+    {
+      directory: "/tmp/a",
+      payload: { type: "session.status", properties: {} },
+    },
     expect.any(AbortSignal),
   );
 });
@@ -35,14 +41,22 @@ test("logs fatal and triggers shutdown when fn rejects", async () => {
   const scope = mockScope();
   const handler = opencodeCreateHandler(scope, fn);
   handler(
-    { type: "session.status", properties: {} } as never,
+    {
+      directory: "/tmp/a",
+      payload: { type: "session.status", properties: {} },
+    } as never,
     new AbortController().signal,
   );
   await vi.waitFor(() =>
     expect(logger.fatal).toHaveBeenCalledWith(
       "Failed to process event from OpenCode",
       error,
-      { event: { type: "session.status", properties: {} } },
+      {
+        event: {
+          directory: "/tmp/a",
+          payload: { type: "session.status", properties: {} },
+        },
+      },
     ),
   );
   expect(scope.shutdown.trigger).toHaveBeenCalledOnce();

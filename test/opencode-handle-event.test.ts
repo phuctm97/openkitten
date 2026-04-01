@@ -1,3 +1,4 @@
+import type { Event, GlobalEvent } from "@opencode-ai/sdk/v2";
 import { beforeEach, expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import * as grammySendErrorModule from "~/lib/grammy-send-error";
@@ -37,37 +38,41 @@ function mockScope() {
   };
 }
 
+function wrap(payload: Event, directory = "/tmp/a"): GlobalEvent {
+  return { directory, payload };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 test("updates working sessions on session.status event", async () => {
   const { scope, workingSessions } = mockScope();
-  const event = {
+  const payload = {
     type: "session.status" as const,
     properties: { sessionID: "s1", status: { type: "busy" as const } },
   };
-  await opencodeHandleEvent(scope, event, new AbortController().signal);
-  expect(workingSessions.update).toHaveBeenCalledWith(event);
+  await opencodeHandleEvent(scope, wrap(payload), new AbortController().signal);
+  expect(workingSessions.update).toHaveBeenCalledWith(payload);
 });
 
 test("updates pending prompts on question.asked event", async () => {
   const { scope, pendingPrompts } = mockScope();
-  const event = {
+  const payload = {
     type: "question.asked" as const,
     properties: { id: "q1", sessionID: "s1", questions: [] },
   };
   await opencodeHandleEvent(
     scope,
-    event as never,
+    wrap(payload as never),
     new AbortController().signal,
   );
-  expect(pendingPrompts.update).toHaveBeenCalledWith(event);
+  expect(pendingPrompts.update).toHaveBeenCalledWith(payload);
 });
 
 test("updates pending prompts on permission.asked event", async () => {
   const { scope, pendingPrompts } = mockScope();
-  const event = {
+  const payload = {
     type: "permission.asked" as const,
     properties: {
       id: "p1",
@@ -80,15 +85,15 @@ test("updates pending prompts on permission.asked event", async () => {
   };
   await opencodeHandleEvent(
     scope,
-    event as never,
+    wrap(payload as never),
     new AbortController().signal,
   );
-  expect(pendingPrompts.update).toHaveBeenCalledWith(event);
+  expect(pendingPrompts.update).toHaveBeenCalledWith(payload);
 });
 
 test("processes message on message.updated event", async () => {
   const { scope, processingMessages } = mockScope();
-  const event = {
+  const payload = {
     type: "message.updated" as const,
     properties: {
       info: {
@@ -101,15 +106,15 @@ test("processes message on message.updated event", async () => {
   };
   await opencodeHandleEvent(
     scope,
-    event as never,
+    wrap(payload as never),
     new AbortController().signal,
   );
-  expect(processingMessages.update).toHaveBeenCalledWith(event);
+  expect(processingMessages.update).toHaveBeenCalledWith(payload);
 });
 
 test("processes message on message.removed event", async () => {
   const { scope, processingMessages } = mockScope();
-  const event = {
+  const payload = {
     type: "message.removed" as const,
     properties: {
       sessionID: "s1",
@@ -118,15 +123,15 @@ test("processes message on message.removed event", async () => {
   };
   await opencodeHandleEvent(
     scope,
-    event as never,
+    wrap(payload as never),
     new AbortController().signal,
   );
-  expect(processingMessages.update).toHaveBeenCalledWith(event);
+  expect(processingMessages.update).toHaveBeenCalledWith(payload);
 });
 
 test("processes message on message.part.updated event", async () => {
   const { scope, processingMessages } = mockScope();
-  const event = {
+  const payload = {
     type: "message.part.updated" as const,
     properties: {
       sessionID: "s1",
@@ -142,15 +147,15 @@ test("processes message on message.part.updated event", async () => {
   };
   await opencodeHandleEvent(
     scope,
-    event as never,
+    wrap(payload as never),
     new AbortController().signal,
   );
-  expect(processingMessages.update).toHaveBeenCalledWith(event);
+  expect(processingMessages.update).toHaveBeenCalledWith(payload);
 });
 
 test("processes message on message.part.removed event", async () => {
   const { scope, processingMessages } = mockScope();
-  const event = {
+  const payload = {
     type: "message.part.removed" as const,
     properties: {
       sessionID: "s1",
@@ -160,15 +165,15 @@ test("processes message on message.part.removed event", async () => {
   };
   await opencodeHandleEvent(
     scope,
-    event as never,
+    wrap(payload as never),
     new AbortController().signal,
   );
-  expect(processingMessages.update).toHaveBeenCalledWith(event);
+  expect(processingMessages.update).toHaveBeenCalledWith(payload);
 });
 
 test("processes message on message.part.delta event", async () => {
   const { scope, processingMessages } = mockScope();
-  const event = {
+  const payload = {
     type: "message.part.delta" as const,
     properties: {
       sessionID: "s1",
@@ -180,10 +185,10 @@ test("processes message on message.part.delta event", async () => {
   };
   await opencodeHandleEvent(
     scope,
-    event as never,
+    wrap(payload as never),
     new AbortController().signal,
   );
-  expect(processingMessages.update).toHaveBeenCalledWith(event);
+  expect(processingMessages.update).toHaveBeenCalledWith(payload);
 });
 
 test("sends error on session.error", async () => {
@@ -191,10 +196,10 @@ test("sends error on session.error", async () => {
   const error = { type: "unknown_error" as const, message: "boom" };
   await opencodeHandleEvent(
     scope,
-    {
+    wrap({
       type: "session.error" as const,
       properties: { sessionID: "s1", error },
-    } as never,
+    } as never),
     new AbortController().signal,
   );
   expect(grammySendErrorModule.grammySendError).toHaveBeenCalledWith({
@@ -209,10 +214,13 @@ test("ignores session.error without sessionID", async () => {
   const { scope } = mockScope();
   await opencodeHandleEvent(
     scope,
-    {
-      type: "session.error" as const,
-      properties: {},
-    } as never,
+    wrap(
+      {
+        type: "session.error" as const,
+        properties: {},
+      } as never,
+      "global",
+    ),
     new AbortController().signal,
   );
   expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();
@@ -222,10 +230,10 @@ test("sends compacted on session.compacted", async () => {
   const { scope, bot } = mockScope();
   await opencodeHandleEvent(
     scope,
-    {
+    wrap({
       type: "session.compacted" as const,
       properties: { sessionID: "s1" },
-    } as never,
+    } as never),
     new AbortController().signal,
   );
   expect(
@@ -239,7 +247,7 @@ test("sends compacted on session.compacted", async () => {
 
 test("updates pending prompts on permission.replied event", async () => {
   const { scope, pendingPrompts } = mockScope();
-  const event = {
+  const payload = {
     type: "permission.replied" as const,
     properties: {
       sessionID: "s1",
@@ -247,13 +255,17 @@ test("updates pending prompts on permission.replied event", async () => {
       reply: "once" as const,
     },
   };
-  await opencodeHandleEvent(scope, event, new AbortController().signal);
-  expect(pendingPrompts.update).toHaveBeenCalledWith(event);
+  await opencodeHandleEvent(
+    scope,
+    wrap(payload as never),
+    new AbortController().signal,
+  );
+  expect(pendingPrompts.update).toHaveBeenCalledWith(payload);
 });
 
 test("updates pending prompts on question.replied event", async () => {
   const { scope, pendingPrompts } = mockScope();
-  const event = {
+  const payload = {
     type: "question.replied" as const,
     properties: {
       sessionID: "s1",
@@ -263,23 +275,27 @@ test("updates pending prompts on question.replied event", async () => {
   };
   await opencodeHandleEvent(
     scope,
-    event as never,
+    wrap(payload as never),
     new AbortController().signal,
   );
-  expect(pendingPrompts.update).toHaveBeenCalledWith(event);
+  expect(pendingPrompts.update).toHaveBeenCalledWith(payload);
 });
 
 test("updates pending prompts on question.rejected event", async () => {
   const { scope, pendingPrompts } = mockScope();
-  const event = {
+  const payload = {
     type: "question.rejected" as const,
     properties: {
       sessionID: "s1",
       requestID: "q1",
     },
   };
-  await opencodeHandleEvent(scope, event, new AbortController().signal);
-  expect(pendingPrompts.update).toHaveBeenCalledWith(event);
+  await opencodeHandleEvent(
+    scope,
+    wrap(payload as never),
+    new AbortController().signal,
+  );
+  expect(pendingPrompts.update).toHaveBeenCalledWith(payload);
 });
 
 test("ignores unrelated event types", async () => {
@@ -287,7 +303,7 @@ test("ignores unrelated event types", async () => {
     mockScope();
   await opencodeHandleEvent(
     scope,
-    { type: "session.created" } as never,
+    wrap({ type: "session.created" } as never),
     new AbortController().signal,
   );
   expect(workingSessions.update).not.toHaveBeenCalled();

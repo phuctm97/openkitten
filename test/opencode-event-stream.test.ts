@@ -8,10 +8,10 @@ test("logs closed after the stream loop exits", async () => {
     dispose();
   });
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => ({
+    global: {
+      event: vi.fn(async () => ({
         stream: (async function* () {
-          yield { type: "a" };
+          yield { directory: "/tmp/a", payload: { type: "a" } };
         })(),
       })),
     },
@@ -36,10 +36,11 @@ test("calls onEvent for each event", async () => {
     if (received.length === events.length) dispose();
   });
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => ({
+    global: {
+      event: vi.fn(async () => ({
         stream: (async function* () {
-          for (const event of events) yield event;
+          for (const event of events)
+            yield { directory: "/tmp/a", payload: event };
         })(),
       })),
     },
@@ -53,14 +54,45 @@ test("calls onEvent for each event", async () => {
   const dispose = () => subscription[Symbol.asyncDispose]();
 
   await subscription.closed;
-  expect(received).toEqual(events);
+  expect(received).toEqual([
+    { directory: "/tmp/a", payload: events[0] },
+    { directory: "/tmp/a", payload: events[1] },
+  ]);
+});
+
+test("passes through event without normalizing directory", async () => {
+  const onEvent = vi.fn(() => {
+    dispose();
+  });
+  const opencodeClient = {
+    global: {
+      event: vi.fn(async () => ({
+        stream: (async function* () {
+          yield { payload: { type: "server.connected", properties: {} } };
+        })(),
+      })),
+    },
+  };
+
+  const subscription = OpencodeEventStream.create(
+    opencodeClient as never,
+    FloatingPromises.create(),
+    onEvent as never,
+  );
+  const dispose = () => subscription[Symbol.asyncDispose]();
+
+  await subscription.closed;
+  expect(onEvent).toHaveBeenCalledWith(
+    { payload: { type: "server.connected", properties: {} } },
+    expect.any(AbortSignal),
+  );
 });
 
 test("stops on dispose while subscribe is pending", async () => {
   let subscribeResolve: (() => void) | undefined;
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(
+    global: {
+      event: vi.fn(
         () =>
           new Promise<{ stream: AsyncIterable<unknown> }>((resolve) => {
             subscribeResolve = () =>
@@ -76,15 +108,15 @@ test("stops on dispose while subscribe is pending", async () => {
     vi.fn() as never,
   );
 
-  expect(opencodeClient.event.subscribe).toHaveBeenCalledOnce();
+  expect(opencodeClient.global.event).toHaveBeenCalledOnce();
   subscribeResolve?.();
   await subscription[Symbol.asyncDispose]();
 });
 
 test("throws when subscribe fails", async () => {
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => {
+    global: {
+      event: vi.fn(async () => {
         throw new Error("disconnect");
       }),
     },
@@ -102,8 +134,8 @@ test("throws when subscribe fails", async () => {
 
 test("throws when the stream ends unexpectedly", async () => {
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => ({
+    global: {
+      event: vi.fn(async () => ({
         stream: (async function* () {})(),
       })),
     },
@@ -124,10 +156,10 @@ test("throws when the stream ends unexpectedly", async () => {
 test("throws when onEvent fails", async () => {
   const error = new Error("handler failed");
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => ({
+    global: {
+      event: vi.fn(async () => ({
         stream: (async function* () {
-          yield { type: "a" };
+          yield { directory: "/tmp/a", payload: { type: "a" } };
         })(),
       })),
     },
@@ -150,10 +182,10 @@ test("logs connecting and connected", async () => {
     dispose();
   });
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => ({
+    global: {
+      event: vi.fn(async () => ({
         stream: (async function* () {
-          yield { type: "a" };
+          yield { directory: "/tmp/a", payload: { type: "a" } };
         })(),
       })),
     },
@@ -178,8 +210,8 @@ test("logs connecting and connected", async () => {
 test("closed resolves when disposed mid-stream", async () => {
   let resolveNext: ((value: IteratorResult<unknown>) => void) | undefined;
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => ({
+    global: {
+      event: vi.fn(async () => ({
         stream: {
           [Symbol.asyncIterator]: () => ({
             next: () =>
@@ -209,8 +241,8 @@ test("closed resolves when disposed mid-stream", async () => {
 test("swallows iter.return rejection on dispose", async () => {
   let resolveNext: ((value: IteratorResult<unknown>) => void) | undefined;
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => ({
+    global: {
+      event: vi.fn(async () => ({
         stream: {
           [Symbol.asyncIterator]: () => ({
             next: () =>
@@ -240,10 +272,10 @@ test("swallows iter.return rejection on dispose", async () => {
 
 test("passes signal to subscribe", async () => {
   const opencodeClient = {
-    event: {
-      subscribe: vi.fn(async () => ({
+    global: {
+      event: vi.fn(async () => ({
         stream: (async function* () {
-          yield { type: "a" };
+          yield { directory: "/tmp/a", payload: { type: "a" } };
         })(),
       })),
     },
@@ -259,8 +291,7 @@ test("passes signal to subscribe", async () => {
   const dispose = () => subscription[Symbol.asyncDispose]();
 
   await subscription.closed;
-  expect(opencodeClient.event.subscribe).toHaveBeenCalledWith(
-    {},
+  expect(opencodeClient.global.event).toHaveBeenCalledWith(
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
 });
