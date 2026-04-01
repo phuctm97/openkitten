@@ -475,7 +475,10 @@ test("onEvent is fire-and-forget", async () => {
   await vi.waitFor(() => expect(stream.onEvent()).toBeDefined());
 
   const signal = new AbortController().signal;
-  const result = stream.onEvent()({ type: "any-event" } as never, signal);
+  const result = stream.onEvent()(
+    { directory: "/tmp/a", payload: { type: "any-event" } } as never,
+    signal,
+  );
   expect(result).toBeUndefined();
 
   triggerShutdown();
@@ -501,12 +504,15 @@ test("updates working sessions on session.status event", async () => {
   await vi.waitFor(() => expect(stream.onEvent()).toBeDefined());
 
   const event = {
-    type: "session.status",
-    properties: { sessionID: "s1", status: { type: "busy" } },
+    directory: "/tmp/a",
+    payload: {
+      type: "session.status",
+      properties: { sessionID: "s1", status: { type: "busy" } },
+    },
   };
   stream.onEvent()(event as never, new AbortController().signal);
 
-  await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event));
+  await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event.payload));
 
   triggerShutdown();
   await run;
@@ -530,12 +536,15 @@ test("updates pending prompts on question.asked event", async () => {
   await vi.waitFor(() => expect(stream.onEvent()).toBeDefined());
 
   const event = {
-    type: "question.asked",
-    properties: { id: "q1", sessionID: "s1", questions: [] },
+    directory: "/tmp/a",
+    payload: {
+      type: "question.asked",
+      properties: { id: "q1", sessionID: "s1", questions: [] },
+    },
   };
   stream.onEvent()(event as never, new AbortController().signal);
 
-  await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event));
+  await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event.payload));
 
   triggerShutdown();
   await run;
@@ -559,19 +568,22 @@ test("updates pending prompts on permission.asked event", async () => {
   await vi.waitFor(() => expect(stream.onEvent()).toBeDefined());
 
   const event = {
-    type: "permission.asked",
-    properties: {
-      id: "p1",
-      sessionID: "s1",
-      permission: "bash",
-      patterns: [],
-      metadata: {},
-      always: [],
+    directory: "/tmp/a",
+    payload: {
+      type: "permission.asked",
+      properties: {
+        id: "p1",
+        sessionID: "s1",
+        permission: "bash",
+        patterns: [],
+        metadata: {},
+        always: [],
+      },
     },
   };
   stream.onEvent()(event as never, new AbortController().signal);
 
-  await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event));
+  await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event.payload));
 
   triggerShutdown();
   await run;
