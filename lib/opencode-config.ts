@@ -1,7 +1,6 @@
 import { randomBytes } from "node:crypto";
-import { constants } from "node:fs";
-import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
 import boxen from "boxen";
@@ -13,6 +12,11 @@ import pkg from "~/package.json" with { type: "json" };
 const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
 const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
+
+const agentFilePathPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH__";
+const agentFilePathYamlPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH_YAML__";
+const agentDirectoryGlobYamlPlaceholder =
+  "__OPENKITTEN_AGENT_DIRECTORY_GLOB_YAML__";
 
 const defaultConfigJson = {
   $schema: "https://opencode.ai/config.json",
@@ -39,6 +43,36 @@ const opencodePluginSource = `export default {
   }),
 };
 `;
+
+function normalizePathPattern(path: string): string {
+  return path.replaceAll("\\", "/");
+}
+
+function renderAgentTemplate(template: string, agentPath: string): string {
+  const normalizedAgentPath = normalizePathPattern(agentPath);
+  const normalizedAgentDirectoryGlob = normalizePathPattern(
+    join(dirname(agentPath), "*"),
+  );
+  return template
+    .replaceAll(agentFilePathPlaceholder, normalizedAgentPath)
+    .replaceAll(
+      agentFilePathYamlPlaceholder,
+      JSON.stringify(normalizedAgentPath),
+    )
+    .replaceAll(
+      agentDirectoryGlobYamlPlaceholder,
+      JSON.stringify(normalizedAgentDirectoryGlob),
+    );
+}
+
+async function writeDefaultAgentFile(
+  source: string,
+  destination: string,
+): Promise<void> {
+  const template = await readFile(source, "utf-8");
+  const rendered = renderAgentTemplate(template, destination);
+  await writeFile(destination, rendered, { flag: "wx" });
+}
 
 function cancel(): never {
   clack.cancel("Cancelled");
@@ -70,13 +104,9 @@ export namespace OpencodeConfig {
     ]);
     const agentsGlob = new Bun.Glob("*.md");
     for await (const file of agentsGlob.scan(defaultAgentsDir)) {
-      writes.push(
-        copyFile(
-          join(defaultAgentsDir, file),
-          join(agentsDir, file),
-          constants.COPYFILE_EXCL,
-        ),
-      );
+      const source = join(defaultAgentsDir, file);
+      const destination = join(agentsDir, file);
+      writes.push(writeDefaultAgentFile(source, destination));
     }
     writes.push(
       writeFile(
