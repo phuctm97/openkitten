@@ -47,11 +47,18 @@ vi.mock("grammy", () => {
   return { Bot: BotMock };
 });
 
-vi.mock("node:fs/promises", () => ({
-  mkdir: vi.fn(),
-  copyFile: vi.fn(),
-  writeFile: vi.fn(),
-}));
+vi.mock("node:fs/promises", async () => {
+  const actual =
+    await vi.importActual<typeof import("node:fs/promises")>(
+      "node:fs/promises",
+    );
+  return {
+    ...actual,
+    mkdir: vi.fn(),
+    copyFile: vi.fn(),
+    writeFile: vi.fn(),
+  };
+});
 
 beforeEach(() => {
   BotMock.mockClear();

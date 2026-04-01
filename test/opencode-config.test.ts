@@ -42,6 +42,8 @@ const pluginsDir = () => join(profile.xdgConfig, "opencode", "plugins");
 
 const toolPrefix = `${pkg.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_`;
 
+const normalizePathPattern = (path: string) => path.replaceAll("\\", "/");
+
 test("copies agent files", async () => {
   await OpencodeConfig.create(profile);
   await expect(
@@ -53,6 +55,30 @@ test("copies agent files", async () => {
   await expect(
     readFile(join(configDir(), "agents", "plan.md"), "utf-8"),
   ).resolves.toBeDefined();
+});
+
+test("renders agent files with self-file access", async () => {
+  await OpencodeConfig.create(profile);
+  const agentDirectoryGlob = normalizePathPattern(
+    join(configDir(), "agents", "*"),
+  );
+
+  for (const agent of ["assist", "build", "plan"]) {
+    const agentPath = join(configDir(), "agents", `${agent}.md`);
+    const normalizedAgentPath = normalizePathPattern(agentPath);
+    const content = await readFile(agentPath, "utf-8");
+    expect(content).toContain(normalizedAgentPath);
+    expect(content).toContain(
+      `    ${JSON.stringify(normalizedAgentPath)}: allow`,
+    );
+    expect(content).toContain(
+      `    ${JSON.stringify(agentDirectoryGlob)}: allow`,
+    );
+    expect(content).toContain("durable memory");
+    expect(content).toContain("# Memory");
+    expect(content).toContain("No durable memory recorded yet.");
+    expect(content).not.toContain("__OPENKITTEN_AGENT_");
+  }
 });
 
 test("writes opencode config", async () => {
