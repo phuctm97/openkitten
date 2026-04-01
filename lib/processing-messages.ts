@@ -289,13 +289,13 @@ export class ProcessingMessages {
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
   ): Promise<ProcessingMessages> {
-    const messages = new ProcessingMessages(
+    const processingMessages = new ProcessingMessages(
       bot,
       database,
       opencodeClient,
       existingSessions,
     );
-    await messages.#initialize();
-    return messages;
+    await processingMessages.#initialize();
+    return processingMessages;
   }
 }
