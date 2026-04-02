@@ -8,7 +8,7 @@ import { Errors } from "~/lib/errors";
 import { isTTY } from "~/lib/is-tty";
 import type { Profile } from "~/lib/profile";
 
-const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
+const bin = resolve(import.meta.dirname, "../../../node_modules/.bin/opencode");
 
 const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
 

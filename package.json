@@ -1,31 +1,21 @@
 {
-  "name": "openkitten",
-  "version": "0.0.0",
-  "description": "Telegram-first AI agent with 75+ AI providers, extensible plugins, multiple (sub)agents, composable skills, and controlled permissions.",
+  "name": "openkitten-workspace",
   "private": true,
   "type": "module",
-  "main": "lib/main.ts",
+  "workspaces": [
+    "packages/*"
+  ],
+  "main": "packages/bot/lib/main.ts",
   "scripts": {
     "prepare": "bun prepare.ts",
-    "typecheck": "bun --bun tsc --build"
-  },
-  "dependencies": {
-    "@clack/prompts": "^1.1.0",
-    "@grammyjs/auto-retry": "^2.0.2",
-    "@modelcontextprotocol/sdk": "^1.29.0",
-    "@opencode-ai/sdk": "^1.3.7",
-    "boxen": "^8.0.1",
-    "citty": "^0.2.1",
-    "content-type": "^1.0.5",
-    "drizzle-orm": "^0.45.2",
-    "grammy": "^1.41.1",
-    "hookable": "^6.1.0",
-    "mime-types": "^3.0.2",
-    "opencode-ai": "^1.3.7",
-    "telegram-markdown-v2": "^0.0.4",
-    "tiny-invariant": "^1.3.3",
-    "tslog": "^4.10.2",
-    "zod": "^4.3.6"
+    "serve": "bun . serve",
+    "up": "bun . up",
+    "down": "bun . down",
+    "typecheck": "bun run --workspaces --if-present typecheck",
+    "lint": "bun --bun biome check .",
+    "lint:fix": "bun --bun biome check --write .",
+    "test": "bun run --workspaces --if-present test",
+    "test:coverage": "bun run --workspaces --if-present test:coverage"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",

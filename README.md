@@ -41,6 +41,8 @@ cd openkitten
 bun install
 ```
 
+The repo uses Bun workspaces, and the current app package lives in `packages/bot` as `@openkitten/bot`.
+
 To update and install as a system service:
 
 ```bash

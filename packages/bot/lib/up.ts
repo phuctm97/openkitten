@@ -10,7 +10,7 @@ import { OpencodeConfig } from "~/lib/opencode-config";
 import { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
 
-const projectDir = resolve(import.meta.dirname, "..");
+const projectDir = resolve(import.meta.dirname, "../../..");
 
 async function runTask(
   title: string,
