@@ -175,7 +175,7 @@ test("throws Errors on multiple non-EEXIST errors", async () => {
 test("returns bin path", async () => {
   const config = await OpencodeConfig.create(profile);
   expect(config.bin).toBe(
-    resolve(import.meta.dirname, "../../../node_modules/.bin/opencode"),
+    resolve(import.meta.dirname, "../node_modules/.bin/opencode"),
   );
 });
 
