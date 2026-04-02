@@ -1,5 +1,4 @@
 {
-  "name": "openkitten-workspace",
   "private": true,
   "type": "module",
   "workspaces": [
