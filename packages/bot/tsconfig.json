@@ -1,0 +1,17 @@
+{
+  "include": [
+    "package.json",
+    "drizzle.config.ts",
+    "vitest.config.ts",
+    "lib",
+    "test"
+  ],
+  "references": [],
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "paths": {
+      "~/*": ["./*"]
+    }
+  }
+}
