@@ -13,9 +13,6 @@
     "exactOptionalPropertyTypes": true,
     "allowImportingTsExtensions": false,
     "emitDeclarationOnly": true,
-    "outDir": "dist",
-    "paths": {
-      "~/*": ["./*"]
-    }
+    "outDir": "dist"
   }
 }
