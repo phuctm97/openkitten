@@ -8,9 +8,6 @@
   "main": "packages/bot/lib/main.ts",
   "scripts": {
     "prepare": "bun prepare.ts",
-    "serve": "bun . serve",
-    "up": "bun . up",
-    "down": "bun . down",
     "typecheck": "bun run --workspaces --if-present typecheck",
     "lint": "bun --bun biome check .",
     "lint:fix": "bun --bun biome check --write .",
