@@ -9,6 +9,8 @@
   "references": [],
   "extends": "../../tsconfig.json",
   "compilerOptions": {
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "outDir": "dist",
     "paths": {
       "~/*": ["./*"]
