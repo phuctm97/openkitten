@@ -19,5 +19,5 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun ci
       - run: bun run --workspaces --if-present typecheck
-      - run: bun --bun biome check .
       - run: bun run --workspaces --if-present test:coverage
+      - run: bun --bun biome check .
