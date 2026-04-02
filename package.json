@@ -7,12 +7,7 @@
   ],
   "main": "packages/bot/lib/main.ts",
   "scripts": {
-    "prepare": "bun prepare.ts",
-    "typecheck": "bun run --workspaces --if-present typecheck",
-    "lint": "bun --bun biome check .",
-    "lint:fix": "bun --bun biome check --write .",
-    "test": "bun run --workspaces --if-present test",
-    "test:coverage": "bun run --workspaces --if-present test:coverage"
+    "prepare": "bun prepare.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.10",
