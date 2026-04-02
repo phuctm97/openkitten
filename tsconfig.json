@@ -3,9 +3,8 @@
   "extends": "@tsconfig/bun/tsconfig.json",
   "references": [{ "path": "./packages/bot/tsconfig.json" }],
   "compilerOptions": {
-    "composite": true,
     "types": ["bun"],
-    "incremental": true,
+    "composite": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
