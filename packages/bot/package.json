@@ -6,7 +6,7 @@
   "type": "module",
   "main": "lib/main.ts",
   "scripts": {
-    "test": "bun --bun vitest run --coverage"
+    "test": "bun --bun vitest run"
   },
   "dependencies": {
     "@clack/prompts": "^1.2.0",

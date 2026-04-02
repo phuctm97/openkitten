@@ -20,4 +20,4 @@ jobs:
       - run: bun ci
       - run: bun --bun biome check
       - run: bun --bun tsc --build
-      - run: bun run --workspaces --if-present test
+      - run: bun run --workspaces --if-present test --coverage
