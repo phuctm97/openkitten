@@ -1,16 +1,11 @@
-import type {
-  AssistantMessage,
-  Event,
-  Part,
-  TextPart,
-} from "@opencode-ai/sdk/v2";
+import type { AssistantMessage, Event, Part } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { eq } from "drizzle-orm";
 import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
 import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
-import { grammySendText } from "~/lib/grammy-send-text";
+import { grammySendAssistantMessage } from "~/lib/grammy-send-assistant-message";
 import * as schema from "~/lib/schema";
 
 interface StreamingMessage {
@@ -61,18 +56,19 @@ export class ProcessingMessages {
   }
 
   async #deliver(
-    message: AssistantMessage,
+    info: AssistantMessage,
     parts: readonly Part[],
   ): Promise<void> {
-    const text = parts
-      .filter((part): part is TextPart => part.type === "text")
-      .map((part) => part.text)
-      .join("\n");
-    if (!text) return;
-    const { chatId, threadId } = this.#existingSessions.get(message.sessionID, {
+    const { chatId, threadId } = this.#existingSessions.get(info.sessionID, {
       throwIfNotFound: true,
     });
-    await grammySendText({ bot: this.#bot, text, chatId, threadId });
+    await grammySendAssistantMessage({
+      bot: this.#bot,
+      info,
+      parts,
+      chatId,
+      threadId,
+    });
   }
 
   #getLatestMessage(
