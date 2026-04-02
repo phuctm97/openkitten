@@ -7,11 +7,11 @@ import boxen from "boxen";
 import { Errors } from "~/lib/errors";
 import { isTTY } from "~/lib/is-tty";
 import type { Profile } from "~/lib/profile";
-import pkg from "~/package.json" with { type: "json" };
 
 const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
 const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
+const opencodeServerName = "openkitten";
 
 const agentFilePathPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH__";
 const agentFilePathYamlPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH_YAML__";
@@ -23,12 +23,12 @@ const defaultConfigJson = {
   default_agent: "assist",
 };
 
-const opencodeToolPrefix = `${pkg.name.replace(/[^a-zA-Z0-9_-]/g, "_")}_`;
+const opencodeToolPrefix = `${opencodeServerName}_`;
 
 const opencodePluginFilename = "openkitten.js";
 
 const opencodePluginSource = `export default {
-  id: ${JSON.stringify(pkg.name)},
+  id: ${JSON.stringify(opencodeServerName)},
   server: async () => ({
     "tool.execute.before": async (input, output) => {
       if (!input.tool.startsWith(${JSON.stringify(opencodeToolPrefix)})) return;
@@ -127,7 +127,7 @@ export namespace OpencodeConfig {
       .map((r) => r.reason);
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) throw new Errors(...errors);
-    const username = pkg.name;
+    const username = opencodeServerName;
     const password = randomBytes(32).toString("base64url");
     const config: OpencodeConfig = {
       bin,
