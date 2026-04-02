@@ -1,7 +1,7 @@
 {
   "include": [
-    "drizzle.config.ts",
     "package.json",
+    "drizzle.config.ts",
     "vitest.config.ts",
     "lib",
     "test"
