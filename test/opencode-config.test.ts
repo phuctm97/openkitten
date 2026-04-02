@@ -17,8 +17,6 @@ import type { Profile } from "~/lib/profile";
 vi.mock("~/lib/is-tty", () => ({ isTTY: false }));
 vi.mock("@clack/prompts");
 
-const opencodeServerName = "openkitten";
-
 let profileDir: string;
 let profile: Profile;
 beforeEach(async () => {
@@ -41,7 +39,7 @@ const configDir = () => join(profileDir, ".opencode");
 
 const pluginsDir = () => join(profile.xdgConfig, "opencode", "plugins");
 
-const toolPrefix = `${opencodeServerName}_`;
+const toolPrefix = "openkitten_";
 
 const normalizePathPattern = (path: string) => path.replaceAll("\\", "/");
 
@@ -93,7 +91,7 @@ test("writes opencode config", async () => {
 test("writes system OpenCode plugin", async () => {
   await OpencodeConfig.create(profile);
   const content = await readFile(join(pluginsDir(), "openkitten.js"), "utf-8");
-  expect(content).toContain(`id: ${JSON.stringify(opencodeServerName)}`);
+  expect(content).toContain('id: "openkitten"');
   expect(content).toContain("server: async () => ({");
   expect(content).toContain(
     '"tool.execute.before": async (input, output) => {',
@@ -234,7 +232,7 @@ test("enables exa web search", async () => {
 test("returns server credentials in env", async () => {
   const config = await OpencodeConfig.create(profile);
   expect(config.env).toMatchObject({
-    OPENCODE_SERVER_USERNAME: opencodeServerName,
+    OPENCODE_SERVER_USERNAME: "openkitten",
     OPENCODE_SERVER_PASSWORD: expect.stringMatching(/^[\w-]{43}$/),
   });
 });
@@ -243,7 +241,7 @@ test("returns basic authorization header", async () => {
   const config = await OpencodeConfig.create(profile);
   expect(config.authorization).toMatch(/^Basic /);
   const decoded = atob(config.authorization.slice(6));
-  expect(decoded).toMatch(new RegExp(`^${opencodeServerName}:`));
+  expect(decoded).toMatch(/^openkitten:/);
 });
 
 test("runs providers list when tty", async () => {

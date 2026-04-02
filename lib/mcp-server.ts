@@ -5,8 +5,6 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { logger } from "~/lib/logger";
 import { version } from "~/package.json" with { type: "json" };
 
-const mcpServerName = "openkitten";
-
 export class McpServer implements Disposable {
   readonly #token: string;
   readonly #server: Bun.Server<undefined>;
@@ -33,7 +31,7 @@ export class McpServer implements Disposable {
       return new Response("Unauthorized", { status: 401 });
     }
     const server = new Server({
-      name: mcpServerName,
+      name: "openkitten",
       version,
       title: "OpenKitten",
       description:
@@ -62,7 +60,7 @@ export class McpServer implements Disposable {
     try {
       await opencodeClient.mcp.add(
         {
-          name: mcpServerName,
+          name: "openkitten",
           config: {
             type: "remote",
             url,

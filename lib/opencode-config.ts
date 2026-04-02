@@ -11,7 +11,6 @@ import type { Profile } from "~/lib/profile";
 const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
 const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
-const opencodeServerName = "openkitten";
 
 const agentFilePathPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH__";
 const agentFilePathYamlPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH_YAML__";
@@ -23,12 +22,12 @@ const defaultConfigJson = {
   default_agent: "assist",
 };
 
-const opencodeToolPrefix = `${opencodeServerName}_`;
+const opencodeToolPrefix = "openkitten_";
 
 const opencodePluginFilename = "openkitten.js";
 
 const opencodePluginSource = `export default {
-  id: ${JSON.stringify(opencodeServerName)},
+  id: "openkitten",
   server: async () => ({
     "tool.execute.before": async (input, output) => {
       if (!input.tool.startsWith(${JSON.stringify(opencodeToolPrefix)})) return;
@@ -127,7 +126,7 @@ export namespace OpencodeConfig {
       .map((r) => r.reason);
     if (errors.length === 1) throw errors[0];
     if (errors.length > 1) throw new Errors(...errors);
-    const username = opencodeServerName;
+    const username = "openkitten";
     const password = randomBytes(32).toString("base64url");
     const config: OpencodeConfig = {
       bin,

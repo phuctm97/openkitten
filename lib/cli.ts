@@ -6,11 +6,9 @@ import { serve } from "~/lib/serve";
 import { up } from "~/lib/up";
 import { description, version } from "~/package.json" with { type: "json" };
 
-const cliName = "openkitten";
-
 export const cli = defineCommand({
   meta: {
-    name: cliName,
+    name: "openkitten",
     version,
     description,
   },
