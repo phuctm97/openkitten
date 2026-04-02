@@ -64,7 +64,8 @@ export class ProcessingMessages {
     });
     await grammySendAssistantMessage({
       bot: this.#bot,
-      message: { info, parts },
+      info,
+      parts,
       chatId,
       threadId,
     });

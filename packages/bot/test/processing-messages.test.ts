@@ -99,15 +99,13 @@ test("update delivers completed assistant message", async () => {
   );
   expect(grammySendAssistantMessage).toHaveBeenCalledWith({
     bot,
-    message: {
-      info: {
-        id: "m1",
-        sessionID: "sess-1",
-        role: "assistant",
-        time: { created: 1, completed: 2 },
-      },
-      parts: [{ type: "text", text: "hello world" }],
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1, completed: 2 },
     },
+    parts: [{ type: "text", text: "hello world" }],
     chatId: 123,
     threadId: undefined,
   });
@@ -833,15 +831,13 @@ test("update forwards message with no text parts to the assistant sender", async
   } as never);
   expect(grammySendAssistantMessage).toHaveBeenCalledWith({
     bot,
-    message: {
-      info: {
-        id: "m1",
-        sessionID: "sess-1",
-        role: "assistant",
-        time: { created: 1, completed: 2 },
-      },
-      parts: [{ type: "tool", name: "bash" }],
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1, completed: 2 },
     },
+    parts: [{ type: "tool", name: "bash" }],
     chatId: 123,
     threadId: undefined,
   });
@@ -889,15 +885,13 @@ test("initialized syncs persisted messages on startup", async () => {
   const { bot } = await setup(["sess-1"], { preserveMessagesMock: true });
   expect(grammySendAssistantMessage).toHaveBeenCalledWith({
     bot,
-    message: {
-      info: {
-        id: "m1",
-        sessionID: "sess-1",
-        role: "assistant",
-        time: { created: 1, completed: 2 },
-      },
-      parts: [{ type: "text", text: "hello" }],
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1, completed: 2 },
     },
+    parts: [{ type: "text", text: "hello" }],
     chatId: 123,
     threadId: undefined,
   });

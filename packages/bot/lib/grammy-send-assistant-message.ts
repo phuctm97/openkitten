@@ -3,9 +3,10 @@ import type { GrammySendAssistantMessageOptions } from "~/lib/grammy-send-assist
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
 
 export async function grammySendAssistantMessage({
-  message,
+  info,
+  parts,
   ...options
 }: GrammySendAssistantMessageOptions): Promise<void> {
-  const chunks = grammyFormatAssistantMessage(message);
+  const chunks = grammyFormatAssistantMessage({ info, parts });
   await grammySendChunks({ ...options, chunks });
 }
