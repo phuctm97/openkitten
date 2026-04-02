@@ -7,8 +7,7 @@
   "main": "lib/main.ts",
   "scripts": {
     "typecheck": "bun --bun tsc --build",
-    "test": "bun --bun vitest run",
-    "test:coverage": "bun --bun vitest run --coverage"
+    "test": "bun --bun vitest run --coverage"
   },
   "dependencies": {
     "@clack/prompts": "^1.1.0",
