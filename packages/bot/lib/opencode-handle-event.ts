@@ -40,26 +40,14 @@ export async function opencodeHandleEvent(
       });
       if (sessionID) {
         const location = existingSessions.get(sessionID);
-        if (!location) {
-          logger.debug("Skipping OpenCode session error for removed session", {
-            sessionID,
-          });
-          break;
-        }
-        await grammySendError({ bot, error, ...location });
+        if (location) await grammySendError({ bot, error, ...location });
       }
       break;
     }
     case "session.compacted": {
       const { sessionID } = event.payload.properties;
       const location = existingSessions.get(sessionID);
-      if (!location) {
-        logger.debug("Skipping compacted notice for removed session", {
-          sessionID,
-        });
-        break;
-      }
-      await grammySendSessionCompacted({ bot, ...location });
+      if (location) await grammySendSessionCompacted({ bot, ...location });
       break;
     }
   }

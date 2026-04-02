@@ -3,7 +3,6 @@ import { beforeEach, expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import * as grammySendErrorModule from "~/lib/grammy-send-error";
 import * as grammySendSessionCompactedModule from "~/lib/grammy-send-session-compacted";
-import { logger } from "~/lib/logger";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
 import type { Scope } from "~/lib/scope";
 
@@ -245,12 +244,6 @@ test("ignores session.error for removed session", async () => {
     new AbortController().signal,
   );
   expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();
-  expect(logger.debug).toHaveBeenCalledWith(
-    "Skipping OpenCode session error for removed session",
-    {
-      sessionID: "s1",
-    },
-  );
 });
 
 test("sends compacted on session.compacted", async () => {
@@ -286,12 +279,6 @@ test("ignores session.compacted for removed session", async () => {
   expect(
     grammySendSessionCompactedModule.grammySendSessionCompacted,
   ).not.toHaveBeenCalled();
-  expect(logger.debug).toHaveBeenCalledWith(
-    "Skipping compacted notice for removed session",
-    {
-      sessionID: "s1",
-    },
-  );
 });
 
 test("updates pending prompts on permission.replied event", async () => {
