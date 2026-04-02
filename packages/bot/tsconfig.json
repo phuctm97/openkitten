@@ -1,16 +1,15 @@
 {
-  "include": ["drizzle.config.ts", "vitest.config.ts", "lib", "test"],
-  "extends": "@tsconfig/bun/tsconfig.json",
+  "include": [
+    "drizzle.config.ts",
+    "package.json",
+    "vitest.config.ts",
+    "lib",
+    "test"
+  ],
+  "extends": "../../tsconfig.json",
+  "references": [],
   "compilerOptions": {
-    "types": ["bun"],
-    "composite": true,
-    "incremental": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noImplicitReturns": true,
-    "noPropertyAccessFromIndexSignature": true,
-    "exactOptionalPropertyTypes": true,
-    "allowImportingTsExtensions": false,
+    "outDir": "../../.tsbuild/packages/bot",
     "paths": {
       "~/*": ["./*"]
     }

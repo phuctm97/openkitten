@@ -5,6 +5,7 @@ node_modules
 *.db
 *.db-wal
 *.db-shm
+.tsbuild
 .env.local
 .env.*.local
 dist

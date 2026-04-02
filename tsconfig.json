@@ -1,8 +1,22 @@
 {
   "include": ["prepare.ts"],
   "extends": "@tsconfig/bun/tsconfig.json",
+  "references": [{ "path": "./packages/bot/tsconfig.json" }],
   "compilerOptions": {
+    "composite": true,
+    "emitDeclarationOnly": true,
+    "outDir": "./.tsbuild/root",
     "types": ["bun"],
-    "incremental": true
+    "incremental": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "exactOptionalPropertyTypes": true,
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
+    "paths": {
+      "~/*": ["./*"]
+    }
   }
 }
