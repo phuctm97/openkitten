@@ -3,7 +3,7 @@ import { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { logger } from "~/lib/logger";
-import pkg from "~/package.json" with { type: "json" };
+import { version } from "~/package.json" with { type: "json" };
 
 export class McpServer implements Disposable {
   readonly #token: string;
@@ -31,8 +31,8 @@ export class McpServer implements Disposable {
       return new Response("Unauthorized", { status: 401 });
     }
     const server = new Server({
-      name: pkg.name,
-      version: pkg.version,
+      name: "openkitten",
+      version,
       title: "OpenKitten",
       description:
         "Additional tools and resources for OpenKitten-powered agents",
@@ -60,7 +60,7 @@ export class McpServer implements Disposable {
     try {
       await opencodeClient.mcp.add(
         {
-          name: pkg.name,
+          name: "openkitten",
           config: {
             type: "remote",
             url,
