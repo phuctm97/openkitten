@@ -18,9 +18,9 @@ Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js AP
 
 ## Commands & Scripts
 
-- `bun --bun biome check` — lint & format check (`bun --bun biome check --write` to auto-fix)
 - `bun --bun tsc --build` — check types
-- `bun run --workspaces --if-present test --coverage` — run tests with coverage
+- `bun --bun biome check` — lint & format check (`--write` to auto-fix)
+- `bun run --workspaces --if-present test --coverage` — run tests (`--coverage` to report coverage)
 
 ## Files & Exports
 
