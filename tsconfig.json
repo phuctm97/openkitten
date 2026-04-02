@@ -10,8 +10,8 @@
     "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": true,
     "noEmit": false,
-    "exactOptionalPropertyTypes": true,
     "allowImportingTsExtensions": false,
+    "exactOptionalPropertyTypes": true,
     "emitDeclarationOnly": true,
     "outDir": "dist",
     "paths": {
