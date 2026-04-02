@@ -34,6 +34,7 @@ function createMockOpencodeClient(
 function createMockExistingSessions(sessionIds: readonly string[] = []) {
   return {
     sessionIds: [...sessionIds],
+    check: vi.fn(() => true),
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
       chatId: 123,
       threadId: undefined,
@@ -1176,6 +1177,182 @@ test("initialized with no sessions skips processing", async () => {
   const es = createMockExistingSessions([]);
   await ProcessingMessages.create(bot, database, client, es);
   expect(mockSessionMessages).not.toHaveBeenCalled();
+});
+
+test("update skips removed sessions before processing", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  const { database, es, pm } = await setup();
+  vi.mocked(es.check).mockReturnValue(false);
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+    },
+  } as never);
+
+  expect(mockSessionMessage).not.toHaveBeenCalled();
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+  const row = database.query.message
+    .findFirst({ where: eq(schema.message.id, "m1") })
+    .sync();
+  expect(row).toBeUndefined();
+});
+
+test("update skips claim when session disappears after the event check", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  const { database, es, pm } = await setup();
+  vi.mocked(es.check)
+    .mockReturnValueOnce(true)
+    .mockReturnValueOnce(false)
+    .mockReturnValue(false);
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+    },
+  } as never);
+
+  expect(mockSessionMessage).not.toHaveBeenCalled();
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+  const row = database.query.message
+    .findFirst({ where: eq(schema.message.id, "m1") })
+    .sync();
+  expect(row).toBeUndefined();
+});
+
+test("update treats session removal during claim as already skipped", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  const { database, es, pm } = await setup();
+  database.delete(schema.session).where(eq(schema.session.id, "sess-1")).run();
+  vi.mocked(es.check)
+    .mockReturnValueOnce(true)
+    .mockReturnValueOnce(true)
+    .mockReturnValue(false);
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+    },
+  } as never);
+
+  expect(mockSessionMessage).not.toHaveBeenCalled();
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+});
+
+test("update skips delivery when session disappears after claim", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  const { database, es, pm } = await setup();
+  vi.mocked(es.get).mockReturnValue(undefined);
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+    },
+  } as never);
+
+  expect(mockSessionMessage).toHaveBeenCalledWith(
+    { sessionID: "sess-1", messageID: "m1" },
+    { throwOnError: true },
+  );
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+  const row = database.query.message
+    .findFirst({ where: eq(schema.message.id, "m1") })
+    .sync();
+  expect(row).toBeDefined();
+});
+
+test("initialized skips sessions removed before sync starts", async () => {
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 1, completed: 2 },
+        },
+        parts: [],
+      },
+    ],
+  }));
+  const database = Database.create();
+  database
+    .insert(schema.session)
+    .values({ id: "sess-1", chatId: 123, threadId: 0 })
+    .run();
+  const bot = {} as never;
+  const client = createMockOpencodeClient({ preserveMessagesMock: true });
+  const es = createMockExistingSessions(["sess-1"]);
+  vi.mocked(es.check).mockReturnValue(false);
+
+  await ProcessingMessages.create(bot, database, client, es);
+
+  expect(mockSessionMessages).not.toHaveBeenCalled();
+});
+
+test("initialized stops when session disappears after fetching messages", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 1, completed: 2 },
+        },
+        parts: [],
+      },
+    ],
+  }));
+  const database = Database.create();
+  database
+    .insert(schema.session)
+    .values({ id: "sess-1", chatId: 123, threadId: 0 })
+    .run();
+  const bot = {} as never;
+  const client = createMockOpencodeClient({ preserveMessagesMock: true });
+  const es = createMockExistingSessions(["sess-1"]);
+  vi.mocked(es.check).mockReturnValueOnce(true).mockReturnValue(false);
+
+  await ProcessingMessages.create(bot, database, client, es);
+
+  expect(mockSessionMessages).toHaveBeenCalledTimes(1);
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
 });
 
 test("update unclaims on delivery failure and allows retry", async () => {

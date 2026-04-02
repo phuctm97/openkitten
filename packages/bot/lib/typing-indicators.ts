@@ -50,16 +50,26 @@ export class TypingIndicators implements Disposable {
     );
   }
 
-  #send(sessionId: string) {
-    const { chatId, threadId } = this.#existingSessions.get(sessionId, {
-      throwIfNotFound: true,
-    });
-    return this.#bot.api.sendChatAction(chatId, "typing", {
+  async #send(sessionId: string): Promise<boolean> {
+    const location = this.#existingSessions.get(sessionId);
+    if (!location) {
+      logger.debug("Skipping typing indicator for removed session", {
+        sessionId,
+      });
+      return false;
+    }
+    const { chatId, threadId } = location;
+    await this.#bot.api.sendChatAction(chatId, "typing", {
       ...(threadId && { message_thread_id: threadId }),
     });
+    return true;
   }
 
   async #sync(sessionId: string) {
+    if (!this.#existingSessions.check(sessionId)) {
+      this.#stop(sessionId);
+      return;
+    }
     if (this.#typing(sessionId)) {
       await this.#start(sessionId);
     } else {
@@ -72,18 +82,29 @@ export class TypingIndicators implements Disposable {
     // Reserve the slot before the async send so concurrent calls bail out above.
     // After send, re-check: #stop may have cleared the slot while we were awaiting.
     this.#timers.set(sessionId, undefined);
-    await this.#send(sessionId);
-    if (!this.#timers.has(sessionId)) return;
+    const sent = await this.#send(sessionId);
+    if (!this.#timers.has(sessionId) || !sent) {
+      this.#stop(sessionId);
+      return;
+    }
     this.#timers.set(
       sessionId,
       setInterval(() => {
         this.#floatingPromises.track(
-          this.#send(sessionId).catch((error) => {
-            logger.fatal("Failed to send typing indicator to Telegram", error, {
-              sessionId,
-            });
-            this.#shutdown.trigger();
-          }),
+          this.#send(sessionId)
+            .then((intervalSent) => {
+              if (!intervalSent) this.#stop(sessionId);
+            })
+            .catch((error) => {
+              logger.fatal(
+                "Failed to send typing indicator to Telegram",
+                error,
+                {
+                  sessionId,
+                },
+              );
+              this.#shutdown.trigger();
+            }),
         );
       }, 4_000),
     );

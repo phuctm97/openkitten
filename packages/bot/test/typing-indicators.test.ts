@@ -29,9 +29,12 @@ function createMockExistingSessions(
         hooks[name] = undefined;
       };
     }),
-    get: (sessionId: string, _options: ExistingSessions.GetOptions) => {
+    check: (sessionId: string) => sessionId in map,
+    get: (sessionId: string, options: ExistingSessions.GetOptions = {}) => {
       const location = map[sessionId];
-      if (!location) throw new Error(`No session found: ${sessionId}`);
+      if (!location && options.throwIfNotFound) {
+        throw new Error(`No session found: ${sessionId}`);
+      }
       return location;
     },
     hooks,
@@ -208,11 +211,10 @@ test("start bubbles up initial send failures", async () => {
   ).rejects.toThrow("send failed");
 });
 
-test("start bubbles up missing session errors", async () => {
+test("start skips missing sessions", async () => {
   const { ws } = setup({}, new Set(["sess-1"]));
-  await expect(
-    ws.hooks["change"]?.({ sessionId: "sess-1", working: true }),
-  ).rejects.toThrow("No session found");
+  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  expect(mockSendChatAction).not.toHaveBeenCalled();
 });
 
 test("sends typing action every four seconds while active", async () => {
@@ -247,6 +249,61 @@ test("interval failures are tracked and trigger shutdown", async () => {
     { sessionId: "sess-1" },
   );
   expect(shutdown.trigger).toHaveBeenCalled();
+});
+
+test("start aborts when session disappears before the first send", async () => {
+  const hooks: Record<string, ((...args: unknown[]) => unknown) | undefined> =
+    {};
+  const shutdown = { trigger: vi.fn() };
+  const bot = createMockBot();
+  const es = {
+    hook: vi.fn((name: string, fn: (...args: unknown[]) => unknown) => {
+      hooks[name] = fn;
+      return () => {
+        hooks[name] = undefined;
+      };
+    }),
+    check: vi
+      .fn<(sessionId: string) => boolean>()
+      .mockReturnValueOnce(true)
+      .mockReturnValue(true),
+    get: vi.fn(() => undefined),
+  } as unknown as ExistingSessions;
+  const ws = createMockWorkingSessions(new Set(["sess-1"]));
+  const pp = createMockPendingPrompts();
+  const fp = createMockFloatingPromises();
+  const indicators = TypingIndicators.create(
+    shutdown as never,
+    bot,
+    es,
+    ws,
+    pp,
+    fp as never,
+  );
+
+  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+
+  expect(indicators.check("sess-1")).toBe(false);
+  expect(mockSendChatAction).not.toHaveBeenCalled();
+  expect(logger.debug).toHaveBeenCalledWith(
+    "Skipping typing indicator for removed session",
+    {
+      sessionId: "sess-1",
+    },
+  );
+});
+
+test("interval stops when session disappears after typing has started", async () => {
+  const map: Record<string, ExistingSessions.Location> = {
+    "sess-1": { chatId: 123, threadId: undefined },
+  };
+  const { ws, indicators, shutdown } = setup(map, new Set(["sess-1"]));
+  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  delete map["sess-1"];
+  await vi.advanceTimersByTimeAsync(4_000);
+  expect(indicators.check("sess-1")).toBe(false);
+  expect(mockSendChatAction).toHaveBeenCalledTimes(1);
+  expect(shutdown.trigger).not.toHaveBeenCalled();
 });
 
 test("beforeRemove stops typing", async () => {

@@ -35,17 +35,23 @@ export class ProcessingMessages {
   // Insert-or-ignore: returns true if we claimed the message first,
   // false if it was already claimed (e.g. by a previous invalidation or update).
   #claim(message: AssistantMessage): boolean {
-    const rows = this.#database
-      .insert(schema.message)
-      .values({
-        id: message.id,
-        sessionId: message.sessionID,
-        createdAt: new Date(message.time.created),
-      })
-      .onConflictDoNothing()
-      .returning({ id: schema.message.id })
-      .all();
-    return rows.length > 0;
+    if (!this.#existingSessions.check(message.sessionID)) return false;
+    try {
+      const rows = this.#database
+        .insert(schema.message)
+        .values({
+          id: message.id,
+          sessionId: message.sessionID,
+          createdAt: new Date(message.time.created),
+        })
+        .onConflictDoNothing()
+        .returning({ id: schema.message.id })
+        .all();
+      return rows.length > 0;
+    } catch (error) {
+      if (!this.#existingSessions.check(message.sessionID)) return false;
+      throw error;
+    }
   }
 
   #unclaim(message: AssistantMessage): void {
@@ -58,10 +64,10 @@ export class ProcessingMessages {
   async #deliver(
     info: AssistantMessage,
     parts: readonly Part[],
-  ): Promise<void> {
-    const { chatId, threadId } = this.#existingSessions.get(info.sessionID, {
-      throwIfNotFound: true,
-    });
+  ): Promise<boolean> {
+    const location = this.#existingSessions.get(info.sessionID);
+    if (!location) return false;
+    const { chatId, threadId } = location;
     await grammySendAssistantMessage({
       bot: this.#bot,
       info,
@@ -69,6 +75,7 @@ export class ProcessingMessages {
       chatId,
       threadId,
     });
+    return true;
   }
 
   #getLatestMessage(
@@ -174,6 +181,7 @@ export class ProcessingMessages {
   // Fetch messages with an expanding window until we overlap with
   // already-delivered messages or exhaust the history.
   async #sync(sessionId: string): Promise<void> {
+    if (!this.#existingSessions.check(sessionId)) return;
     let limit = 10;
     let latest: StreamingMessage | undefined;
     let batch: { info: AssistantMessage; parts: Part[] }[] = [];
@@ -203,6 +211,10 @@ export class ProcessingMessages {
     if (latest) this.#setStreamingMessage(latest);
     else this.#streaming.delete(sessionId);
     for (const { info, parts } of batch) {
+      if (!this.#existingSessions.check(info.sessionID)) {
+        this.#streaming.delete(info.sessionID);
+        return;
+      }
       if (!this.#claim(info)) continue;
       try {
         await this.#deliver(info, parts);
@@ -223,6 +235,10 @@ export class ProcessingMessages {
     switch (event.type) {
       case "message.updated": {
         const { info } = event.properties;
+        if (!this.#existingSessions.check(info.sessionID)) {
+          this.#streaming.delete(info.sessionID);
+          return;
+        }
         if (info.role !== "assistant") return;
         if (info.time.completed === undefined) {
           this.#setStreamingInfo(info);
@@ -243,15 +259,27 @@ export class ProcessingMessages {
         break;
       }
       case "message.removed":
+        if (!this.#existingSessions.check(event.properties.sessionID)) {
+          this.#streaming.delete(event.properties.sessionID);
+          return;
+        }
         this.#removeStreamingMessage(
           event.properties.sessionID,
           event.properties.messageID,
         );
         break;
       case "message.part.updated":
+        if (!this.#existingSessions.check(event.properties.sessionID)) {
+          this.#streaming.delete(event.properties.sessionID);
+          return;
+        }
         this.#upsertStreamingPart(event.properties.part);
         break;
       case "message.part.removed":
+        if (!this.#existingSessions.check(event.properties.sessionID)) {
+          this.#streaming.delete(event.properties.sessionID);
+          return;
+        }
         this.#removeStreamingPart(
           event.properties.sessionID,
           event.properties.messageID,
@@ -259,6 +287,10 @@ export class ProcessingMessages {
         );
         break;
       case "message.part.delta":
+        if (!this.#existingSessions.check(event.properties.sessionID)) {
+          this.#streaming.delete(event.properties.sessionID);
+          return;
+        }
         this.#applyPartDelta(
           event.properties.sessionID,
           event.properties.messageID,

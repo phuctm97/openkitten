@@ -1,6 +1,7 @@
 import { GrammyError } from "grammy";
 import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { logger } from "~/lib/logger";
 import { PendingPrompts } from "~/lib/pending-prompts";
 
 vi.mock("~/lib/grammy-send-permission-message", () => ({
@@ -1591,6 +1592,54 @@ test("update creates new session entry when session not yet in sessionItems", as
     456,
     expect.any(String),
     expect.objectContaining({ message_thread_id: 789 }),
+  );
+});
+
+test("update question.asked skips removed sessions", async () => {
+  const { shutdown, bot, client, existingSessions } = setup({});
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.update({
+    type: "question.asked",
+    properties: questionRequest as never,
+  });
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockSendMessage).not.toHaveBeenCalled();
+  expect(logger.debug).toHaveBeenCalledWith(
+    "Skipping pending prompt for removed session",
+    {
+      sessionID: "sess-1",
+      requestID: "q1",
+      type: "question.asked",
+    },
+  );
+});
+
+test("update permission.asked skips removed sessions", async () => {
+  const { shutdown, bot, client, existingSessions } = setup({});
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.update({
+    type: "permission.asked",
+    properties: permissionRequest as never,
+  });
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockSendMessage).not.toHaveBeenCalled();
+  expect(logger.debug).toHaveBeenCalledWith(
+    "Skipping pending prompt for removed session",
+    {
+      sessionID: "sess-1",
+      requestID: "p1",
+      type: "permission.asked",
+    },
   );
 });
 
