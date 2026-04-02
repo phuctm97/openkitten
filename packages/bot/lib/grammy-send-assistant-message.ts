@@ -7,6 +7,6 @@ export async function grammySendAssistantMessage({
   parts,
   ...options
 }: GrammySendAssistantMessageOptions): Promise<void> {
-  const chunks = grammyFormatAssistantMessage({ info, parts });
+  const chunks = grammyFormatAssistantMessage(info, parts);
   await grammySendChunks({ ...options, chunks });
 }

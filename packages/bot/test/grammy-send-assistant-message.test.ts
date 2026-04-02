@@ -46,10 +46,7 @@ test("formats assistant message and sends chunks", async () => {
   });
   expect(
     grammyFormatAssistantMessageModule.grammyFormatAssistantMessage,
-  ).toHaveBeenCalledWith({
-    info,
-    parts,
-  });
+  ).toHaveBeenCalledWith(info, parts);
   expect(grammySendChunksModule.grammySendChunks).toHaveBeenCalledWith({
     bot,
     chunks,
