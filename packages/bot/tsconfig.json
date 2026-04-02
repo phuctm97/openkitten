@@ -3,6 +3,7 @@
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "types": ["bun"],
+    "composite": true,
     "incremental": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
