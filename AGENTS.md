@@ -20,7 +20,7 @@ Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js AP
 
 - `bun --bun tsc --build` — TypeScript check
 - `bun --bun biome check` — linter & formatter check (`--write` to auto-fix)
-- `bun run --workspaces --if-present test --coverage` — run tests (`--coverage` to report coverage)
+- `bun run --workspaces --if-present test` — run tests (`--coverage` to report coverage)
 
 ## Files & Exports
 
