@@ -4,7 +4,6 @@
   "workspaces": [
     "packages/*"
   ],
-  "main": "packages/bot/lib/main.ts",
   "scripts": {
     "prepare": "bun prepare.ts"
   },
