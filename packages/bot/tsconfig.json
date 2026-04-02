@@ -6,8 +6,8 @@
     "lib",
     "test"
   ],
-  "extends": "../../tsconfig.json",
   "references": [],
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "dist",
     "paths": {

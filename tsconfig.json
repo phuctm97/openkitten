@@ -1,7 +1,7 @@
 {
   "include": ["prepare.ts"],
-  "extends": "@tsconfig/bun/tsconfig.json",
   "references": [{ "path": "./packages/bot/tsconfig.json" }],
+  "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
     "types": ["bun"],
     "composite": true,
