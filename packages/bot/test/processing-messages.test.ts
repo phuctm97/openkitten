@@ -5,8 +5,8 @@ import type { ExistingSessions } from "~/lib/existing-sessions";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import * as schema from "~/lib/schema";
 
-vi.mock("~/lib/grammy-send-text", () => ({
-  grammySendText: vi.fn(async () => {}),
+vi.mock("~/lib/grammy-send-assistant-message", () => ({
+  grammySendAssistantMessage: vi.fn(async () => {}),
 }));
 
 type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
@@ -78,7 +78,9 @@ beforeEach(() => {
 // --- update tests ---
 
 test("update delivers completed assistant message", async () => {
-  const { grammySendText } = await import("~/lib/grammy-send-text");
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
   const { bot, pm } = await setup();
   await pm.update({
     type: "message.updated",
@@ -95,9 +97,17 @@ test("update delivers completed assistant message", async () => {
     { sessionID: "sess-1", messageID: "m1" },
     { throwOnError: true },
   );
-  expect(grammySendText).toHaveBeenCalledWith({
+  expect(grammySendAssistantMessage).toHaveBeenCalledWith({
     bot,
-    text: "hello world",
+    message: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+      parts: [{ type: "text", text: "hello world" }],
+    },
     chatId: 123,
     threadId: undefined,
   });
@@ -132,7 +142,9 @@ test("update clears the streaming message once it completes", async () => {
 });
 
 test("update skips incomplete assistant message", async () => {
-  const { grammySendText } = await import("~/lib/grammy-send-text");
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
   const { pm } = await setup();
   await pm.update({
     type: "message.updated",
@@ -146,7 +158,7 @@ test("update skips incomplete assistant message", async () => {
     },
   } as never);
   expect(mockSessionMessage).not.toHaveBeenCalled();
-  expect(grammySendText).not.toHaveBeenCalled();
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
 });
 
 test("update stores incomplete assistant message as latest streaming state", async () => {
@@ -762,7 +774,9 @@ test("update removes the latest streaming message", async () => {
 });
 
 test("update skips user message", async () => {
-  const { grammySendText } = await import("~/lib/grammy-send-text");
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
   const { pm } = await setup();
   await pm.update({
     type: "message.updated",
@@ -776,7 +790,7 @@ test("update skips user message", async () => {
     },
   } as never);
   expect(mockSessionMessage).not.toHaveBeenCalled();
-  expect(grammySendText).not.toHaveBeenCalled();
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
 });
 
 test("update skips already processed message", async () => {
@@ -798,9 +812,11 @@ test("update skips already processed message", async () => {
   expect(mockSessionMessage).not.toHaveBeenCalled();
 });
 
-test("update skips message with no text parts", async () => {
-  const { grammySendText } = await import("~/lib/grammy-send-text");
-  const { pm } = await setup();
+test("update forwards message with no text parts to the assistant sender", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  const { bot, pm } = await setup();
   mockSessionMessage = vi.fn(async () => ({
     data: { info: {}, parts: [{ type: "tool", name: "bash" }] as never },
   }));
@@ -815,7 +831,20 @@ test("update skips message with no text parts", async () => {
       },
     },
   } as never);
-  expect(grammySendText).not.toHaveBeenCalled();
+  expect(grammySendAssistantMessage).toHaveBeenCalledWith({
+    bot,
+    message: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+      parts: [{ type: "tool", name: "bash" }],
+    },
+    chatId: 123,
+    threadId: undefined,
+  });
 });
 
 test("update persists message to database", async () => {
@@ -841,7 +870,9 @@ test("update persists message to database", async () => {
 // --- initialized tests ---
 
 test("initialized syncs persisted messages on startup", async () => {
-  const { grammySendText } = await import("~/lib/grammy-send-text");
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -856,9 +887,17 @@ test("initialized syncs persisted messages on startup", async () => {
     ],
   }));
   const { bot } = await setup(["sess-1"], { preserveMessagesMock: true });
-  expect(grammySendText).toHaveBeenCalledWith({
+  expect(grammySendAssistantMessage).toHaveBeenCalledWith({
     bot,
-    text: "hello",
+    message: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+      parts: [{ type: "text", text: "hello" }],
+    },
     chatId: 123,
     threadId: undefined,
   });
@@ -1006,7 +1045,9 @@ test("initialized breaks streaming-message ties by higher message id", async () 
 });
 
 test("initialized skips messages already in database", async () => {
-  const { grammySendText } = await import("~/lib/grammy-send-text");
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -1024,7 +1065,7 @@ test("initialized skips messages already in database", async () => {
     preserveMessagesMock: true,
     persistedMessageIds: ["m1"],
   });
-  expect(grammySendText).not.toHaveBeenCalled();
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
 });
 
 test("initialized stops expanding when oldest message is already in database", async () => {
@@ -1114,7 +1155,9 @@ test("initialized stops when the batch is smaller than the limit", async () => {
 });
 
 test("initialized skips user messages", async () => {
-  const { grammySendText } = await import("~/lib/grammy-send-text");
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
   mockSessionMessages = vi.fn(async () => ({
     data: [
       {
@@ -1129,7 +1172,7 @@ test("initialized skips user messages", async () => {
     ],
   }));
   await setup(["sess-1"], { preserveMessagesMock: true });
-  expect(grammySendText).not.toHaveBeenCalled();
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
 });
 
 test("initialized with no sessions skips processing", async () => {
@@ -1179,8 +1222,8 @@ test("initialized unclaims on delivery failure and allows retry", async () => {
       },
     ],
   }));
-  const mod = await import("~/lib/grammy-send-text");
-  vi.mocked(mod.grammySendText).mockRejectedValueOnce(
+  const mod = await import("~/lib/grammy-send-assistant-message");
+  vi.mocked(mod.grammySendAssistantMessage).mockRejectedValueOnce(
     new Error("delivery failed"),
   );
   const database = Database.create();

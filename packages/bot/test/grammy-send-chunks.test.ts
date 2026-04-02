@@ -37,6 +37,11 @@ test("sends plain text chunk", async () => {
   });
 });
 
+test("does nothing for empty chunk lists", async () => {
+  await send([]);
+  expect(bot.api.sendMessage).not.toHaveBeenCalled();
+});
+
 test("sends MarkdownV2 chunk", async () => {
   await send([{ text: "hello", markdown: "*hello*" }]);
   expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "*hello*", {
