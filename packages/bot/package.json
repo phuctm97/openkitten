@@ -6,9 +6,6 @@
   "type": "module",
   "main": "lib/main.ts",
   "scripts": {
-    "serve": "bun ./lib/main.ts serve",
-    "up": "bun ./lib/main.ts up",
-    "down": "bun ./lib/main.ts down",
     "typecheck": "bun --bun tsc --build",
     "test": "bun --bun vitest run",
     "test:coverage": "bun --bun vitest run --coverage"

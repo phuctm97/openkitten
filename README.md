@@ -35,13 +35,11 @@ NanoClaw took the right approach by going minimal at ~500 lines of code, but it'
 ```bash
 # Clone OpenKitten
 git clone https://github.com/phuctm97/openkitten.git
-cd openkitten
+cd openkitten/packages/bot
 
 # Install dependencies
 bun install
 ```
-
-The repo uses Bun workspaces, and the current app package lives in `packages/bot` as `@openkitten/bot`.
 
 To update and install as a system service:
 
