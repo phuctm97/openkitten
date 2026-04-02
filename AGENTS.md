@@ -18,7 +18,8 @@ Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js AP
 
 ## Commands & Scripts
 
-- `bun run --workspaces --if-present typecheck` — check types
+- `bun --bun tsc --noEmit` — check root types
+- `bun --cwd packages/bot --bun tsc --build` — check bot types
 - `bun run --workspaces --if-present test` — run tests with coverage
 - `bun --bun biome check .` — lint & format check (`bun --bun biome check --write .` to auto-fix)
 

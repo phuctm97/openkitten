@@ -8,7 +8,9 @@
     "prepare": "bun prepare.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.10",
-    "lefthook": "^2.1.4"
+    "@types/bun": "^1.3.11",
+    "lefthook": "^2.1.4",
+    "typescript": "^6.0.2",
+    "@biomejs/biome": "^2.4.10"
   }
 }

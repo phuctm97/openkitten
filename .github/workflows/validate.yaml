@@ -18,6 +18,7 @@ jobs:
         run: echo "::add-matcher::.github/matchers/tsc.json"
       - uses: oven-sh/setup-bun@v2
       - run: bun ci
-      - run: bun run --workspaces --if-present typecheck
+      - run: bun --bun tsc --noEmit
+      - run: bun --cwd packages/bot --bun tsc --build
       - run: bun run --workspaces --if-present test
       - run: bun --bun biome check .
