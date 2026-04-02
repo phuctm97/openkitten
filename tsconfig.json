@@ -5,7 +5,7 @@
   "compilerOptions": {
     "composite": true,
     "emitDeclarationOnly": true,
-    "outDir": "./.tsbuild/root",
+    "outDir": "dist",
     "types": ["bun"],
     "incremental": true,
     "noUnusedLocals": true,
