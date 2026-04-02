@@ -4,7 +4,6 @@
   "references": [{ "path": "./packages/bot/tsconfig.json" }],
   "compilerOptions": {
     "composite": true,
-    "emitDeclarationOnly": true,
     "outDir": "dist",
     "types": ["bun"],
     "incremental": true,
@@ -12,9 +11,10 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": true,
+    "noEmit": false,
     "exactOptionalPropertyTypes": true,
     "allowImportingTsExtensions": false,
-    "noEmit": false,
+    "emitDeclarationOnly": true,
     "paths": {
       "~/*": ["./*"]
     }
