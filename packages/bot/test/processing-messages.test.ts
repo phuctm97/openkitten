@@ -1242,63 +1242,6 @@ test("update skips removed sessions before processing", async () => {
   expect(row).toBeUndefined();
 });
 
-test("update skips claim when session disappears after the event check", async () => {
-  const { grammySendAssistantMessage } = await import(
-    "~/lib/grammy-send-assistant-message"
-  );
-  const { database, es, pm } = await setup();
-  vi.mocked(es.check)
-    .mockReturnValueOnce(true)
-    .mockReturnValueOnce(false)
-    .mockReturnValue(false);
-
-  await pm.update({
-    type: "message.updated",
-    properties: {
-      info: {
-        id: "m1",
-        sessionID: "sess-1",
-        role: "assistant",
-        time: { created: 1, completed: 2 },
-      },
-    },
-  } as never);
-
-  expect(mockSessionMessage).not.toHaveBeenCalled();
-  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
-  const row = database.query.message
-    .findFirst({ where: eq(schema.message.id, "m1") })
-    .sync();
-  expect(row).toBeUndefined();
-});
-
-test("update treats session removal during claim as already skipped", async () => {
-  const { grammySendAssistantMessage } = await import(
-    "~/lib/grammy-send-assistant-message"
-  );
-  const { database, es, pm } = await setup();
-  database.delete(schema.session).where(eq(schema.session.id, "sess-1")).run();
-  vi.mocked(es.check)
-    .mockReturnValueOnce(true)
-    .mockReturnValueOnce(true)
-    .mockReturnValue(false);
-
-  await pm.update({
-    type: "message.updated",
-    properties: {
-      info: {
-        id: "m1",
-        sessionID: "sess-1",
-        role: "assistant",
-        time: { created: 1, completed: 2 },
-      },
-    },
-  } as never);
-
-  expect(mockSessionMessage).not.toHaveBeenCalled();
-  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
-});
-
 test("update skips delivery when session disappears after claim", async () => {
   const { grammySendAssistantMessage } = await import(
     "~/lib/grammy-send-assistant-message"

@@ -39,23 +39,17 @@ export class ProcessingMessages {
   // Insert-or-ignore: returns true if we claimed the message first,
   // false if it was already claimed (e.g. by a previous invalidation or update).
   #claim(message: AssistantMessage): boolean {
-    if (!this.#existingSessions.check(message.sessionID)) return false;
-    try {
-      const rows = this.#database
-        .insert(schema.message)
-        .values({
-          id: message.id,
-          sessionId: message.sessionID,
-          createdAt: new Date(message.time.created),
-        })
-        .onConflictDoNothing()
-        .returning({ id: schema.message.id })
-        .all();
-      return rows.length > 0;
-    } catch (error) {
-      if (!this.#existingSessions.check(message.sessionID)) return false;
-      throw error;
-    }
+    const rows = this.#database
+      .insert(schema.message)
+      .values({
+        id: message.id,
+        sessionId: message.sessionID,
+        createdAt: new Date(message.time.created),
+      })
+      .onConflictDoNothing()
+      .returning({ id: schema.message.id })
+      .all();
+    return rows.length > 0;
   }
 
   #unclaim(message: AssistantMessage): void {
@@ -68,9 +62,9 @@ export class ProcessingMessages {
   async #deliver(
     info: AssistantMessage,
     parts: readonly Part[],
-  ): Promise<boolean> {
+  ): Promise<void> {
     const location = this.#existingSessions.get(info.sessionID);
-    if (!location) return false;
+    if (!location) return;
     const { chatId, threadId } = location;
     await grammySendAssistantMessage({
       bot: this.#bot,
@@ -79,7 +73,6 @@ export class ProcessingMessages {
       chatId,
       threadId,
     });
-    return true;
   }
 
   #getLatestMessage(

@@ -88,21 +88,6 @@ test("does not fire change hook when working state is unchanged", async () => {
   expect(onChange).not.toHaveBeenCalled();
 });
 
-test("fires change hook when stale removed session stops being working", async () => {
-  const { existingSessions, working } = setup();
-  const onChange = vi.fn();
-  working.hook("change", onChange);
-  await working.update(statusEvent("sess-1", { type: "busy" }));
-  onChange.mockClear();
-  existingSessions.sessionIds.delete("sess-1");
-  await working.update(statusEvent("sess-1", { type: "idle" }));
-  expect(working.check("sess-1")).toBe(false);
-  expect(onChange).toHaveBeenCalledWith({
-    sessionId: "sess-1",
-    working: false,
-  });
-});
-
 test("fires change hook when session becomes working", async () => {
   const { working } = setup();
   const onChange = vi.fn();

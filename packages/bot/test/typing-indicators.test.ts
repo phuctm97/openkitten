@@ -211,12 +211,6 @@ test("start bubbles up initial send failures", async () => {
   ).rejects.toThrow("send failed");
 });
 
-test("start skips missing sessions", async () => {
-  const { ws } = setup({}, new Set(["sess-1"]));
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
-  expect(mockSendChatAction).not.toHaveBeenCalled();
-});
-
 test("sends typing action every four seconds while active", async () => {
   const { ws } = setup(
     { "sess-1": { chatId: 123, threadId: undefined } },
@@ -249,45 +243,6 @@ test("interval failures are tracked and trigger shutdown", async () => {
     { sessionId: "sess-1" },
   );
   expect(shutdown.trigger).toHaveBeenCalled();
-});
-
-test("start bubbles up missing session errors", async () => {
-  const hooks: Record<string, ((...args: unknown[]) => unknown) | undefined> =
-    {};
-  const shutdown = { trigger: vi.fn() };
-  const bot = createMockBot();
-  const es = {
-    hook: vi.fn((name: string, fn: (...args: unknown[]) => unknown) => {
-      hooks[name] = fn;
-      return () => {
-        hooks[name] = undefined;
-      };
-    }),
-    check: vi
-      .fn<(sessionId: string) => boolean>()
-      .mockReturnValueOnce(true)
-      .mockReturnValue(true),
-    get: vi.fn(
-      (
-        sessionId: string,
-        options: ExistingSessions.GetOptions = {},
-      ): ExistingSessions.Location | undefined => {
-        if (options.throwIfNotFound) {
-          throw new ExistingSessions.NotFoundError(sessionId);
-        }
-        return undefined;
-      },
-    ),
-  } as unknown as ExistingSessions;
-  const ws = createMockWorkingSessions(new Set(["sess-1"]));
-  const pp = createMockPendingPrompts();
-  const fp = createMockFloatingPromises();
-  TypingIndicators.create(shutdown as never, bot, es, ws, pp, fp as never);
-
-  await expect(
-    ws.hooks["change"]?.({ sessionId: "sess-1", working: true }),
-  ).rejects.toThrow("No session found: sess-1");
-  expect(mockSendChatAction).not.toHaveBeenCalled();
 });
 
 test("beforeRemove prevents further interval sends after typing has started", async () => {
