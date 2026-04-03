@@ -13,7 +13,7 @@ export class ExistingSessions {
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #hooks = createHooks<ExistingSessions.Hooks>();
-  readonly #removing = new Set<string>();
+  readonly #removingPromises = new Map<string, Promise<void>>();
 
   private constructor(
     bot: Bot,
@@ -25,7 +25,7 @@ export class ExistingSessions {
     this.#opencodeClient = opencodeClient;
   }
 
-  #find(location: ExistingSessions.Location): string | undefined {
+  #findOrReturn(location: ExistingSessions.Location): string | undefined {
     const row = this.#database.query.session
       .findFirst({
         columns: { id: true },
@@ -36,6 +36,22 @@ export class ExistingSessions {
       })
       .sync();
     return row?.id;
+  }
+
+  async #findOrCreate(location: ExistingSessions.Location): Promise<string> {
+    for (;;) {
+      const existing = this.#findOrReturn(location);
+      if (existing) {
+        const removing = this.#removingPromises.get(existing);
+        if (!removing) return existing;
+        await removing;
+        continue;
+      }
+      const created = await this.#create(location);
+      const removing = this.#removingPromises.get(created);
+      if (!removing) return created;
+      await removing;
+    }
   }
 
   async #create(location: ExistingSessions.Location): Promise<string> {
@@ -67,7 +83,7 @@ export class ExistingSessions {
         { throwOnError: true },
       );
       // Return the raced winner from DB.
-      const raced = this.#find(location);
+      const raced = this.#findOrReturn(location);
       // No winner in DB — insert failed for a reason other than a race condition.
       if (!raced) throw error;
       return raced;
@@ -85,17 +101,20 @@ export class ExistingSessions {
     this.#hooks.hook(...args);
 
   check(sessionId: string): boolean {
-    return !!this.#database.query.session
-      .findFirst({
-        columns: { id: true },
-        where: eq(schema.session.id, sessionId),
-      })
-      .sync();
+    return (
+      !this.#removingPromises.has(sessionId) &&
+      !!this.#database.query.session
+        .findFirst({
+          columns: { id: true },
+          where: eq(schema.session.id, sessionId),
+        })
+        .sync()
+    );
   }
 
   get(
     sessionId: string,
-    options: ExistingSessions.GetOrThrowOptions,
+    options: ExistingSessions.UnsafeGetOptions,
   ): ExistingSessions.Location;
   get(
     sessionId: string,
@@ -112,9 +131,12 @@ export class ExistingSessions {
       })
       .sync();
     if (!row) {
-      if (options.throwIfNotFound) {
+      if (options.unsafe) {
         throw new ExistingSessions.NotFoundError(sessionId);
       }
+      return undefined;
+    }
+    if (this.#removingPromises.has(sessionId) && !options.unsafe) {
       return undefined;
     }
     return {
@@ -135,29 +157,18 @@ export class ExistingSessions {
     location: ExistingSessions.Location,
     options: ExistingSessions.FindOptions = {},
   ): string | undefined | Promise<string> {
-    const existing = this.#find(location);
-    if (existing) {
-      if (options.createIfNotFound) return Promise.resolve(existing);
-      return existing;
+    const existing = this.#findOrReturn(location);
+    if (existing && !this.#removingPromises.has(existing)) {
+      return options.createIfNotFound ? Promise.resolve(existing) : existing;
     }
-    if (!options.createIfNotFound) return undefined;
-    return this.#create(location);
+    return options.createIfNotFound ? this.#findOrCreate(location) : undefined;
   }
 
-  async remove(sessionId: string): Promise<void> {
-    const row = this.#database.query.session
-      .findFirst({
-        columns: { chatId: true, threadId: true },
-        where: eq(schema.session.id, sessionId),
-      })
-      .sync();
-    if (!row || this.#removing.has(sessionId)) return;
-    const location: ExistingSessions.Location = {
-      chatId: row.chatId,
-      threadId: row.threadId || undefined,
-    };
+  async #remove(
+    sessionId: string,
+    location: ExistingSessions.Location,
+  ): Promise<void> {
     try {
-      this.#removing.add(sessionId);
       const abortResults = await Promise.allSettled([
         this.#opencodeClient.session.abort(
           { sessionID: sessionId },
@@ -184,10 +195,29 @@ export class ExistingSessions {
         ...hookResults,
         databaseResult,
       ]);
-    } finally {
-      this.#removing.delete(sessionId);
       logger.info("Existing session is removed", { sessionId });
+    } finally {
+      this.#removingPromises.delete(sessionId);
     }
+  }
+
+  async remove(sessionId: string): Promise<void> {
+    const current = this.#removingPromises.get(sessionId);
+    if (current) return current;
+    const row = this.#database.query.session
+      .findFirst({
+        columns: { chatId: true, threadId: true },
+        where: eq(schema.session.id, sessionId),
+      })
+      .sync();
+    if (!row) return;
+    const location: ExistingSessions.Location = {
+      chatId: row.chatId,
+      threadId: row.threadId || undefined,
+    };
+    const removal = this.#remove(sessionId, location);
+    this.#removingPromises.set(sessionId, removal);
+    return removal;
   }
 
   async #initialize(): Promise<void> {
@@ -227,7 +257,7 @@ export class ExistingSessions {
     );
     Errors.throwIfAny(removalResults);
 
-    logger.debug("Current sessions are synchronized", {
+    logger.debug("Existing sessions are synchronized", {
       checked: currentSessions.length,
       removed: unreachableSessions.length,
       remaining: currentSessions.length - unreachableSessions.length,
@@ -273,11 +303,11 @@ export namespace ExistingSessions {
   }
 
   export interface GetOptions {
-    readonly throwIfNotFound?: boolean;
+    readonly unsafe?: boolean;
   }
 
-  export interface GetOrThrowOptions extends GetOptions {
-    readonly throwIfNotFound: true;
+  export interface UnsafeGetOptions extends GetOptions {
+    readonly unsafe: true;
   }
 
   export interface FindOptions {

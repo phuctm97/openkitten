@@ -13,7 +13,10 @@ function mockScope() {
   const bot = {} as never;
   const existingSessions = {
     get: vi.fn(
-      (_sessionId: string, _options: ExistingSessions.GetOrThrowOptions) => ({
+      (
+        _sessionId: string,
+        _options?: ExistingSessions.GetOptions,
+      ): ExistingSessions.Location | undefined => ({
         chatId: 123,
         threadId: 456,
       }),
@@ -226,6 +229,23 @@ test("ignores session.error without sessionID", async () => {
   expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();
 });
 
+test("ignores session.error for removed session", async () => {
+  const { scope, existingSessions } = mockScope();
+  existingSessions.get.mockReturnValue(undefined);
+  await opencodeHandleEvent(
+    scope,
+    wrap({
+      type: "session.error" as const,
+      properties: {
+        sessionID: "s1",
+        error: { type: "unknown_error" as const, message: "boom" },
+      },
+    } as never),
+    new AbortController().signal,
+  );
+  expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();
+});
+
 test("sends compacted on session.compacted", async () => {
   const { scope, bot } = mockScope();
   await opencodeHandleEvent(
@@ -243,6 +263,22 @@ test("sends compacted on session.compacted", async () => {
     chatId: 123,
     threadId: 456,
   });
+});
+
+test("ignores session.compacted for removed session", async () => {
+  const { scope, existingSessions } = mockScope();
+  existingSessions.get.mockReturnValue(undefined);
+  await opencodeHandleEvent(
+    scope,
+    wrap({
+      type: "session.compacted" as const,
+      properties: { sessionID: "s1" },
+    } as never),
+    new AbortController().signal,
+  );
+  expect(
+    grammySendSessionCompactedModule.grammySendSessionCompacted,
+  ).not.toHaveBeenCalled();
 });
 
 test("updates pending prompts on permission.replied event", async () => {

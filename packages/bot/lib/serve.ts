@@ -55,7 +55,7 @@ export const serve = defineCommand({
       opencodeServer.client,
       existingSessions,
     );
-    const processingMessages = await ProcessingMessages.create(
+    using processingMessages = await ProcessingMessages.create(
       bot,
       database,
       opencodeServer.client,

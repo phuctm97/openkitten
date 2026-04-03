@@ -32,13 +32,26 @@ function createMockOpencodeClient(
 }
 
 function createMockExistingSessions(sessionIds: readonly string[] = []) {
+  const hooks: Record<string, ((...args: unknown[]) => unknown) | undefined> =
+    {};
   return {
     sessionIds: [...sessionIds],
+    hook: vi.fn((name: string, fn: (...args: unknown[]) => unknown) => {
+      hooks[name] = fn;
+      return () => {
+        hooks[name] = undefined;
+      };
+    }),
+    check: vi.fn(() => true),
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
       chatId: 123,
       threadId: undefined,
     })),
-  } as unknown as ExistingSessions & { sessionIds: string[] };
+    hooks,
+  } as unknown as ExistingSessions & {
+    hooks: typeof hooks;
+    sessionIds: string[];
+  };
 }
 
 async function setup(
@@ -257,6 +270,37 @@ test("update ignores part snapshots without an active streaming message", async 
     },
   } as never);
   expect(pm.streaming("sess-1")).toBeUndefined();
+});
+
+test("update ignores part snapshots for removed sessions", async () => {
+  const { es, pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  vi.mocked(es.check).mockReturnValue(false);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 1,
+    },
+  } as never);
+  expect(pm.streaming("sess-1")?.parts).toEqual([]);
 });
 
 test("update replaces an existing part snapshot", async () => {
@@ -604,6 +648,55 @@ test("update ignores deltas for a different message", async () => {
   });
 });
 
+test("update ignores part deltas for removed sessions", async () => {
+  const { es, pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  vi.mocked(es.check).mockReturnValue(false);
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: " world",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")?.parts).toEqual([
+    {
+      id: "p1",
+      sessionID: "sess-1",
+      messageID: "m1",
+      type: "text",
+      text: "hello",
+    },
+  ]);
+});
+
 test("update ignores text deltas for non-text parts", async () => {
   const { pm } = await setup();
   await pm.update({
@@ -748,6 +841,53 @@ test("update ignores part removals for a different message", async () => {
   ]);
 });
 
+test("update ignores part removals for removed sessions", async () => {
+  const { es, pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  vi.mocked(es.check).mockReturnValue(false);
+  await pm.update({
+    type: "message.part.removed",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")?.parts).toEqual([
+    {
+      id: "p1",
+      sessionID: "sess-1",
+      messageID: "m1",
+      type: "text",
+      text: "hello",
+    },
+  ]);
+});
+
 test("update removes the latest streaming message", async () => {
   const { pm } = await setup();
   await pm.update({
@@ -768,6 +908,54 @@ test("update removes the latest streaming message", async () => {
       messageID: "m1",
     },
   } as never);
+  expect(pm.streaming("sess-1")).toBeUndefined();
+});
+
+test("update ignores message.removed for removed sessions", async () => {
+  const { es, pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  vi.mocked(es.check).mockReturnValue(false);
+  await pm.update({
+    type: "message.removed",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+    },
+  } as never);
+  expect(pm.streaming("sess-1")?.info.id).toBe("m1");
+});
+
+test("beforeRemove clears streaming state", async () => {
+  const { es, pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  expect(pm.streaming("sess-1")).toBeDefined();
+
+  es.hooks["beforeRemove"]?.({
+    sessionId: "sess-1",
+    chatId: 123,
+    threadId: undefined,
+  });
+
   expect(pm.streaming("sess-1")).toBeUndefined();
 });
 
@@ -1176,6 +1364,133 @@ test("initialized with no sessions skips processing", async () => {
   const es = createMockExistingSessions([]);
   await ProcessingMessages.create(bot, database, client, es);
   expect(mockSessionMessages).not.toHaveBeenCalled();
+});
+
+test("update skips removed sessions before processing", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  const { database, es, pm } = await setup();
+  vi.mocked(es.check).mockReturnValue(false);
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+    },
+  } as never);
+
+  expect(mockSessionMessage).not.toHaveBeenCalled();
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+  const row = database.query.message
+    .findFirst({ where: eq(schema.message.id, "m1") })
+    .sync();
+  expect(row).toBeUndefined();
+});
+
+test("update skips delivery when session disappears after claim", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  const { database, es, pm } = await setup();
+  vi.mocked(es.get).mockReturnValue(undefined);
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+    },
+  } as never);
+
+  expect(mockSessionMessage).toHaveBeenCalledWith(
+    { sessionID: "sess-1", messageID: "m1" },
+    { throwOnError: true },
+  );
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+  const row = database.query.message
+    .findFirst({ where: eq(schema.message.id, "m1") })
+    .sync();
+  expect(row).toBeDefined();
+});
+
+test("initialized stops when session disappears after fetching messages", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 1, completed: 2 },
+        },
+        parts: [],
+      },
+    ],
+  }));
+  const database = Database.create();
+  database
+    .insert(schema.session)
+    .values({ id: "sess-1", chatId: 123, threadId: 0 })
+    .run();
+  const bot = {} as never;
+  const client = createMockOpencodeClient({ preserveMessagesMock: true });
+  const es = createMockExistingSessions(["sess-1"]);
+  vi.mocked(es.check).mockReturnValueOnce(true).mockReturnValue(false);
+
+  const pm = await ProcessingMessages.create(bot, database, client, es);
+
+  expect(mockSessionMessages).toHaveBeenCalledTimes(1);
+  expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+  expect(pm.streaming("sess-1")).toBeUndefined();
+});
+
+test("initialized skips streaming state when session disappears before sync commits", async () => {
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 1 },
+        },
+        parts: [],
+      },
+    ],
+  }));
+  const database = Database.create();
+  database
+    .insert(schema.session)
+    .values({ id: "sess-1", chatId: 123, threadId: 0 })
+    .run();
+  const bot = {} as never;
+  const client = createMockOpencodeClient({ preserveMessagesMock: true });
+  const es = createMockExistingSessions(["sess-1"]);
+  vi.mocked(es.check).mockReturnValue(false);
+
+  const pm = await ProcessingMessages.create(bot, database, client, es);
+
+  expect(mockSessionMessages).toHaveBeenCalledTimes(1);
+  expect(pm.streaming("sess-1")).toBeUndefined();
+});
+
+test("dispose unhooks beforeRemove", async () => {
+  const { es, pm } = await setup();
+  pm[Symbol.dispose]();
+  expect(es.hooks["beforeRemove"]).toBeUndefined();
 });
 
 test("update unclaims on delivery failure and allows retry", async () => {

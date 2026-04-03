@@ -1,6 +1,6 @@
 import { GrammyError } from "grammy";
 import { expect, test, vi } from "vitest";
-import type { ExistingSessions } from "~/lib/existing-sessions";
+import { ExistingSessions } from "~/lib/existing-sessions";
 import { PendingPrompts } from "~/lib/pending-prompts";
 
 vi.mock("~/lib/grammy-send-permission-message", () => ({
@@ -78,8 +78,13 @@ function createMockExistingSessions(
     }),
     find: vi.fn(),
     check: (sessionId: string) => sessionId in map,
-    get: (sessionId: string, _options: ExistingSessions.GetOptions) =>
-      map[sessionId],
+    get: (sessionId: string, options: ExistingSessions.GetOptions = {}) => {
+      const location = map[sessionId];
+      if (!location && options.unsafe) {
+        throw new ExistingSessions.NotFoundError(sessionId);
+      }
+      return location;
+    },
     hooks,
   } as unknown as ExistingSessions & {
     hooks: typeof hooks;
@@ -1594,6 +1599,38 @@ test("update creates new session entry when session not yet in sessionItems", as
   );
 });
 
+test("update question.asked skips removed sessions", async () => {
+  const { shutdown, bot, client, existingSessions } = setup({});
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.update({
+    type: "question.asked",
+    properties: questionRequest as never,
+  });
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockSendMessage).not.toHaveBeenCalled();
+});
+
+test("update permission.asked skips removed sessions", async () => {
+  const { shutdown, bot, client, existingSessions } = setup({});
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+  await prompts.update({
+    type: "permission.asked",
+    properties: permissionRequest as never,
+  });
+  expect(prompts.check("sess-1")).toBe(false);
+  expect(mockSendMessage).not.toHaveBeenCalled();
+});
+
 // --- hook tests ---
 
 test("beforeRemove hook dismisses session", async () => {
@@ -1678,6 +1715,41 @@ test("concurrent permission.asked events for one session only flush one prompt",
   expect(mockSendMessage).toHaveBeenCalledTimes(1);
   releaseFirstSend.resolve();
   await Promise.all([first, second]);
+  expect(mockSendMessage).toHaveBeenCalledTimes(1);
+});
+
+test("queued asked event re-checks session existence before running", async () => {
+  const esMap = {
+    "sess-1": { chatId: 123, threadId: undefined },
+  } satisfies Record<string, ExistingSessions.Location>;
+  const { shutdown, bot, client, existingSessions } = setup(esMap);
+  const firstSendStarted = Promise.withResolvers<void>();
+  const releaseFirstSend = Promise.withResolvers<void>();
+  mockSendMessage = vi.fn(async () => {
+    firstSendStarted.resolve();
+    await releaseFirstSend.promise;
+    return { message_id: messageIdCounter++ };
+  });
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+
+  const first = askPermission(prompts, permissionRequest);
+  await firstSendStarted.promise;
+
+  const second = prompts.update({
+    type: "question.asked",
+    properties: questionRequest as never,
+  });
+  Reflect.deleteProperty(esMap, "sess-1");
+
+  releaseFirstSend.resolve();
+  await Promise.all([first, second]);
+
+  expect(prompts.check("sess-1")).toBe(true);
   expect(mockSendMessage).toHaveBeenCalledTimes(1);
 });
 

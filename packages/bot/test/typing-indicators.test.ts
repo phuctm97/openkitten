@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { ExistingSessions } from "~/lib/existing-sessions";
+import { ExistingSessions } from "~/lib/existing-sessions";
 import { logger } from "~/lib/logger";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import { TypingIndicators } from "~/lib/typing-indicators";
@@ -29,9 +29,12 @@ function createMockExistingSessions(
         hooks[name] = undefined;
       };
     }),
-    get: (sessionId: string, _options: ExistingSessions.GetOptions) => {
+    check: (sessionId: string) => sessionId in map,
+    get: (sessionId: string, options: ExistingSessions.GetOptions = {}) => {
       const location = map[sessionId];
-      if (!location) throw new Error(`No session found: ${sessionId}`);
+      if (!location && options.unsafe) {
+        throw new ExistingSessions.NotFoundError(sessionId);
+      }
       return location;
     },
     hooks,
@@ -208,13 +211,6 @@ test("start bubbles up initial send failures", async () => {
   ).rejects.toThrow("send failed");
 });
 
-test("start bubbles up missing session errors", async () => {
-  const { ws } = setup({}, new Set(["sess-1"]));
-  await expect(
-    ws.hooks["change"]?.({ sessionId: "sess-1", working: true }),
-  ).rejects.toThrow("No session found");
-});
-
 test("sends typing action every four seconds while active", async () => {
   const { ws } = setup(
     { "sess-1": { chatId: 123, threadId: undefined } },
@@ -247,6 +243,58 @@ test("interval failures are tracked and trigger shutdown", async () => {
     { sessionId: "sess-1" },
   );
   expect(shutdown.trigger).toHaveBeenCalled();
+});
+
+test("queued interval callback ignores removed sessions", async () => {
+  let intervalCallback: (() => void) | undefined;
+  const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+  setIntervalSpy.mockImplementation(((
+    fn: Parameters<typeof setInterval>[0],
+  ) => {
+    if (typeof fn === "function") intervalCallback = fn;
+    return 1 as unknown as Timer;
+  }) as typeof setInterval);
+  const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+  clearIntervalSpy.mockImplementation(() => {});
+  const map: Record<string, ExistingSessions.Location> = {
+    "sess-1": { chatId: 123, threadId: undefined },
+  };
+  const { es, ws, fp, shutdown } = setup(map, new Set(["sess-1"]));
+  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  es.hooks["beforeRemove"]?.({
+    sessionId: "sess-1",
+    chatId: 123,
+    threadId: undefined,
+  });
+  delete map["sess-1"];
+
+  intervalCallback?.();
+
+  expect(fp.track).toHaveBeenCalledOnce();
+  const tracked = (fp.track as MockFn).mock.calls[0]?.[0] as Promise<void>;
+  await tracked;
+  expect(mockSendChatAction).toHaveBeenCalledTimes(1);
+  expect(shutdown.trigger).not.toHaveBeenCalled();
+  setIntervalSpy.mockRestore();
+  clearIntervalSpy.mockRestore();
+});
+
+test("beforeRemove prevents further interval sends after typing has started", async () => {
+  const map: Record<string, ExistingSessions.Location> = {
+    "sess-1": { chatId: 123, threadId: undefined },
+  };
+  const { es, ws, indicators, shutdown } = setup(map, new Set(["sess-1"]));
+  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  es.hooks["beforeRemove"]?.({
+    sessionId: "sess-1",
+    chatId: 123,
+    threadId: undefined,
+  });
+  delete map["sess-1"];
+  await vi.advanceTimersByTimeAsync(4_000);
+  expect(indicators.check("sess-1")).toBe(false);
+  expect(mockSendChatAction).toHaveBeenCalledTimes(1);
+  expect(shutdown.trigger).not.toHaveBeenCalled();
 });
 
 test("beforeRemove stops typing", async () => {

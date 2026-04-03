@@ -4,12 +4,14 @@ import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 
 export class WorkingSessions implements Disposable {
+  readonly #existingSessions: ExistingSessions;
   readonly #hooks = createHooks<WorkingSessions.Hooks>();
   readonly #cached = new Set<string>();
   readonly #locked = new Set<string>();
   readonly #unhook: () => void;
 
   private constructor(existingSessions: ExistingSessions) {
+    this.#existingSessions = existingSessions;
     this.#unhook = existingSessions.hook(
       "beforeRemove",
       async ({ sessionId }) => {
@@ -55,18 +57,17 @@ export class WorkingSessions implements Disposable {
 
   async update(event: EventSessionStatus) {
     const { sessionID, status } = event.properties;
-    const working = status.type === "busy" || status.type === "retry";
-    if (working) {
-      if (this.#cached.has(sessionID)) return;
-      this.#cached.add(sessionID);
-    } else {
-      if (!this.#cached.has(sessionID)) return;
-      this.#cached.delete(sessionID);
-    }
+    const previous = this.#cached.has(sessionID);
+    const next =
+      this.#existingSessions.check(sessionID) &&
+      (status.type === "busy" || status.type === "retry");
+    if (previous === next) return;
+    if (next) this.#cached.add(sessionID);
+    else this.#cached.delete(sessionID);
     const results = await this.#hooks.callHookWith(
       (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
       "change",
-      [{ sessionId: sessionID, working }],
+      [{ sessionId: sessionID, working: next }],
     );
     Errors.throwIfAny(results);
   }
