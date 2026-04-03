@@ -40,7 +40,7 @@ export class ProcessingMessages {
   // false if the session is no longer available or the message was already
   // claimed (e.g. by a previous invalidation or update).
   #claim(message: AssistantMessage): boolean {
-    if (!this.#existingSessions.checkAvailable(message.sessionID)) return false;
+    if (!this.#existingSessions.check(message.sessionID)) return false;
     const rows = this.#database
       .insert(schema.message)
       .values({
@@ -65,7 +65,7 @@ export class ProcessingMessages {
     info: AssistantMessage,
     parts: readonly Part[],
   ): Promise<void> {
-    const location = this.#existingSessions.getAvailable(info.sessionID);
+    const location = this.#existingSessions.get(info.sessionID);
     if (!location) return;
     const { chatId, threadId } = location;
     await grammySendAssistantMessage({
@@ -206,7 +206,7 @@ export class ProcessingMessages {
       }
       limit *= 2;
     }
-    if (!this.#existingSessions.checkAvailable(sessionId)) return;
+    if (!this.#existingSessions.check(sessionId)) return;
     if (latest) this.#setStreamingMessage(latest);
     else this.#streaming.delete(sessionId);
     for (const { info, parts } of batch) {
@@ -231,7 +231,7 @@ export class ProcessingMessages {
       case "message.updated": {
         const { info } = event.properties;
         if (
-          !this.#existingSessions.checkAvailable(info.sessionID) ||
+          !this.#existingSessions.check(info.sessionID) ||
           info.role !== "assistant"
         ) {
           break;
@@ -255,7 +255,7 @@ export class ProcessingMessages {
         break;
       }
       case "message.removed":
-        if (this.#existingSessions.checkAvailable(event.properties.sessionID)) {
+        if (this.#existingSessions.check(event.properties.sessionID)) {
           this.#removeStreamingMessage(
             event.properties.sessionID,
             event.properties.messageID,
@@ -263,12 +263,12 @@ export class ProcessingMessages {
         }
         break;
       case "message.part.updated":
-        if (this.#existingSessions.checkAvailable(event.properties.sessionID)) {
+        if (this.#existingSessions.check(event.properties.sessionID)) {
           this.#upsertStreamingPart(event.properties.part);
         }
         break;
       case "message.part.removed":
-        if (this.#existingSessions.checkAvailable(event.properties.sessionID)) {
+        if (this.#existingSessions.check(event.properties.sessionID)) {
           this.#removeStreamingPart(
             event.properties.sessionID,
             event.properties.messageID,
@@ -277,7 +277,7 @@ export class ProcessingMessages {
         }
         break;
       case "message.part.delta":
-        if (this.#existingSessions.checkAvailable(event.properties.sessionID)) {
+        if (this.#existingSessions.check(event.properties.sessionID)) {
           this.#applyPartDelta(
             event.properties.sessionID,
             event.properties.messageID,

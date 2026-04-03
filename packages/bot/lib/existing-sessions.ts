@@ -85,22 +85,20 @@ export class ExistingSessions {
     this.#hooks.hook(...args);
 
   check(sessionId: string): boolean {
-    return !!this.#database.query.session
-      .findFirst({
-        columns: { id: true },
-        where: eq(schema.session.id, sessionId),
-      })
-      .sync();
-  }
-
-  // For best-effort/background paths that should stop as soon as removal starts.
-  checkAvailable(sessionId: string): boolean {
-    return !this.#removing.has(sessionId) && this.check(sessionId);
+    return (
+      !this.#removing.has(sessionId) &&
+      !!this.#database.query.session
+        .findFirst({
+          columns: { id: true },
+          where: eq(schema.session.id, sessionId),
+        })
+        .sync()
+    );
   }
 
   get(
     sessionId: string,
-    options: ExistingSessions.GetOrThrowOptions,
+    options: ExistingSessions.UnsafeGetOptions,
   ): ExistingSessions.Location;
   get(
     sessionId: string,
@@ -117,21 +115,16 @@ export class ExistingSessions {
       })
       .sync();
     if (!row) {
-      if (options.throwIfNotFound) {
+      if (options.unsafe) {
         throw new ExistingSessions.NotFoundError(sessionId);
       }
       return undefined;
     }
+    if (this.#removing.has(sessionId) && !options.unsafe) return undefined;
     return {
       chatId: row.chatId,
       threadId: row.threadId || undefined,
     };
-  }
-
-  // For best-effort/background paths that should stop as soon as removal starts.
-  getAvailable(sessionId: string): ExistingSessions.Location | undefined {
-    if (this.#removing.has(sessionId)) return undefined;
-    return this.get(sessionId);
   }
 
   find(
@@ -284,11 +277,11 @@ export namespace ExistingSessions {
   }
 
   export interface GetOptions {
-    readonly throwIfNotFound?: boolean;
+    readonly unsafe?: boolean;
   }
 
-  export interface GetOrThrowOptions extends GetOptions {
-    readonly throwIfNotFound: true;
+  export interface UnsafeGetOptions extends GetOptions {
+    readonly unsafe: true;
   }
 
   export interface FindOptions {

@@ -12,12 +12,6 @@ vi.mock("~/lib/grammy-send-session-compacted");
 function mockScope() {
   const bot = {} as never;
   const existingSessions = {
-    getAvailable: vi.fn(
-      (_sessionId: string): ExistingSessions.Location | undefined => ({
-        chatId: 123,
-        threadId: 456,
-      }),
-    ),
     get: vi.fn(
       (
         _sessionId: string,
@@ -237,7 +231,7 @@ test("ignores session.error without sessionID", async () => {
 
 test("ignores session.error for removed session", async () => {
   const { scope, existingSessions } = mockScope();
-  existingSessions.getAvailable.mockReturnValue(undefined);
+  existingSessions.get.mockReturnValue(undefined);
   await opencodeHandleEvent(
     scope,
     wrap({
@@ -273,7 +267,7 @@ test("sends compacted on session.compacted", async () => {
 
 test("ignores session.compacted for removed session", async () => {
   const { scope, existingSessions } = mockScope();
-  existingSessions.getAvailable.mockReturnValue(undefined);
+  existingSessions.get.mockReturnValue(undefined);
   await opencodeHandleEvent(
     scope,
     wrap({

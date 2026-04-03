@@ -30,15 +30,13 @@ function createMockExistingSessions(
       };
     }),
     check: (sessionId: string) => sessionId in map,
-    checkAvailable: (sessionId: string) => sessionId in map,
     get: (sessionId: string, options: ExistingSessions.GetOptions = {}) => {
       const location = map[sessionId];
-      if (!location && options.throwIfNotFound) {
+      if (!location && options.unsafe) {
         throw new ExistingSessions.NotFoundError(sessionId);
       }
       return location;
     },
-    getAvailable: (sessionId: string) => map[sessionId],
     hooks,
   } as unknown as ExistingSessions & { hooks: typeof hooks };
 }

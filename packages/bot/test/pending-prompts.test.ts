@@ -1,6 +1,6 @@
 import { GrammyError } from "grammy";
 import { expect, test, vi } from "vitest";
-import type { ExistingSessions } from "~/lib/existing-sessions";
+import { ExistingSessions } from "~/lib/existing-sessions";
 import { PendingPrompts } from "~/lib/pending-prompts";
 
 vi.mock("~/lib/grammy-send-permission-message", () => ({
@@ -78,10 +78,13 @@ function createMockExistingSessions(
     }),
     find: vi.fn(),
     check: (sessionId: string) => sessionId in map,
-    checkAvailable: (sessionId: string) => sessionId in map,
-    get: (sessionId: string, _options: ExistingSessions.GetOptions) =>
-      map[sessionId],
-    getAvailable: (sessionId: string) => map[sessionId],
+    get: (sessionId: string, options: ExistingSessions.GetOptions = {}) => {
+      const location = map[sessionId];
+      if (!location && options.unsafe) {
+        throw new ExistingSessions.NotFoundError(sessionId);
+      }
+      return location;
+    },
     hooks,
   } as unknown as ExistingSessions & {
     hooks: typeof hooks;

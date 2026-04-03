@@ -22,7 +22,6 @@ function mockExistingSessions() {
       };
     }),
     check: (sessionId: string) => sessionIds.has(sessionId),
-    checkAvailable: (sessionId: string) => sessionIds.has(sessionId),
     hooks,
     sessionIds,
   } as unknown as ExistingSessions & {
