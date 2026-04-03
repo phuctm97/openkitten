@@ -236,14 +236,14 @@ export class ProcessingMessages {
     switch (event.type) {
       case "message.updated": {
         const { info } = event.properties;
-        if (!this.#existingSessions.check(info.sessionID)) return;
-        if (info.role !== "assistant") return;
+        if (!this.#existingSessions.check(info.sessionID)) break;
+        if (info.role !== "assistant") break;
         if (info.time.completed === undefined) {
           this.#setStreamingInfo(info);
-          return;
+          break;
         }
         this.#removeStreamingMessage(info.sessionID, info.id);
-        if (!this.#claim(info)) return;
+        if (!this.#claim(info)) break;
         try {
           const { data } = await this.#opencodeClient.session.message(
             { sessionID: info.sessionID, messageID: info.id },
@@ -257,33 +257,37 @@ export class ProcessingMessages {
         break;
       }
       case "message.removed":
-        if (!this.#existingSessions.check(event.properties.sessionID)) return;
-        this.#removeStreamingMessage(
-          event.properties.sessionID,
-          event.properties.messageID,
-        );
+        if (this.#existingSessions.check(event.properties.sessionID)) {
+          this.#removeStreamingMessage(
+            event.properties.sessionID,
+            event.properties.messageID,
+          );
+        }
         break;
       case "message.part.updated":
-        if (!this.#existingSessions.check(event.properties.sessionID)) return;
-        this.#upsertStreamingPart(event.properties.part);
+        if (this.#existingSessions.check(event.properties.sessionID)) {
+          this.#upsertStreamingPart(event.properties.part);
+        }
         break;
       case "message.part.removed":
-        if (!this.#existingSessions.check(event.properties.sessionID)) return;
-        this.#removeStreamingPart(
-          event.properties.sessionID,
-          event.properties.messageID,
-          event.properties.partID,
-        );
+        if (this.#existingSessions.check(event.properties.sessionID)) {
+          this.#removeStreamingPart(
+            event.properties.sessionID,
+            event.properties.messageID,
+            event.properties.partID,
+          );
+        }
         break;
       case "message.part.delta":
-        if (!this.#existingSessions.check(event.properties.sessionID)) return;
-        this.#applyPartDelta(
-          event.properties.sessionID,
-          event.properties.messageID,
-          event.properties.partID,
-          event.properties.field,
-          event.properties.delta,
-        );
+        if (this.#existingSessions.check(event.properties.sessionID)) {
+          this.#applyPartDelta(
+            event.properties.sessionID,
+            event.properties.messageID,
+            event.properties.partID,
+            event.properties.field,
+            event.properties.delta,
+          );
+        }
         break;
     }
   }
