@@ -709,7 +709,7 @@ test("uses one-item sections for plan exit and fallback summaries", () => {
 
   expect(getText(planEnterChunks)).toBe("🎯 _Entered plan mode._");
   expect(getText(planExitChunks)).toBe("🚪 _Exited plan mode._");
-  expect(getText(fallbackChunks)).toBe("🛠️ _Performed 1 other action._");
+  expect(getText(fallbackChunks)).toBe("🛠️ _Performed 1 action._");
 });
 
 test("ignores non-completed plan-enter tool parts", () => {

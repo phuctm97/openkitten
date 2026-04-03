@@ -380,6 +380,18 @@ function addAttachment(summary: ActionSummary, file: FilePart) {
 }
 
 function formatActionSummary(summary: ActionSummary): string {
+  const hasNamedActions =
+    summary.attachedFiles.size > 0 ||
+    summary.changedFiles.size > 0 ||
+    summary.readFiles.size > 0 ||
+    summary.changedActions > 0 ||
+    summary.readActions > 0 ||
+    summary.commandCount > 0 ||
+    summary.delegatedTaskCount > 0 ||
+    summary.fetchCount > 0 ||
+    summary.loadedSkillCount > 0 ||
+    summary.lookupCount > 0 ||
+    summary.searchCount > 0;
   const parts = [
     countPhrase(summary.readFiles.size + summary.readActions, "read", "file"),
     countPhrase(
@@ -394,7 +406,7 @@ function formatActionSummary(summary: ActionSummary): string {
     countPhrase(summary.attachedFiles.size, "attached", "file"),
     countPhrase(summary.delegatedTaskCount, "delegated", "task"),
     countPhrase(summary.loadedSkillCount, "loaded", "skill"),
-    otherActionPhrase(summary.otherActionCount),
+    otherActionPhrase(summary.otherActionCount, hasNamedActions),
   ].filter((part): part is string => !!part);
   return `🛠️ _${capitalize(joinNatural(parts))}._`;
 }
@@ -483,8 +495,13 @@ function urlPhrase(count: number): string | undefined {
   return `fetched ${count} ${count === 1 ? "URL" : "URLs"}`;
 }
 
-function otherActionPhrase(count: number): string | undefined {
+function otherActionPhrase(
+  count: number,
+  hasNamedActions: boolean,
+): string | undefined {
   if (count === 0) return undefined;
+  if (!hasNamedActions)
+    return `performed ${count} ${pluralize("action", count)}`;
   return `performed ${count} other ${pluralize("action", count)}`;
 }
 
