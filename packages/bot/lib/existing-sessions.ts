@@ -164,6 +164,43 @@ export class ExistingSessions {
     return options.createIfNotFound ? this.#findOrCreate(location) : undefined;
   }
 
+  async #remove(
+    sessionId: string,
+    location: ExistingSessions.Location,
+  ): Promise<void> {
+    try {
+      const abortResults = await Promise.allSettled([
+        this.#opencodeClient.session.abort(
+          { sessionID: sessionId },
+          { throwOnError: true },
+        ),
+      ]);
+      const hookResults = await this.#hooks.callHookWith(
+        (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
+        "beforeRemove",
+        [{ sessionId, ...location }],
+      );
+      let databaseResult: PromiseSettledResult<void>;
+      try {
+        this.#database
+          .delete(schema.session)
+          .where(eq(schema.session.id, sessionId))
+          .run();
+        databaseResult = { status: "fulfilled", value: undefined };
+      } catch (error) {
+        databaseResult = { status: "rejected", reason: error };
+      }
+      Errors.throwIfAny<unknown>([
+        ...abortResults,
+        ...hookResults,
+        databaseResult,
+      ]);
+    } finally {
+      this.#removingPromises.delete(sessionId);
+      logger.info("Existing session is removed", { sessionId });
+    }
+  }
+
   async remove(sessionId: string): Promise<void> {
     const current = this.#removingPromises.get(sessionId);
     if (current) return current;
@@ -178,40 +215,7 @@ export class ExistingSessions {
       chatId: row.chatId,
       threadId: row.threadId || undefined,
     };
-    const removal = (async () => {
-      try {
-        const abortResults = await Promise.allSettled([
-          this.#opencodeClient.session.abort(
-            { sessionID: sessionId },
-            { throwOnError: true },
-          ),
-        ]);
-        const hookResults = await this.#hooks.callHookWith(
-          (hooks, args) =>
-            Promise.allSettled(hooks.map((hook) => hook(...args))),
-          "beforeRemove",
-          [{ sessionId, ...location }],
-        );
-        let databaseResult: PromiseSettledResult<void>;
-        try {
-          this.#database
-            .delete(schema.session)
-            .where(eq(schema.session.id, sessionId))
-            .run();
-          databaseResult = { status: "fulfilled", value: undefined };
-        } catch (error) {
-          databaseResult = { status: "rejected", reason: error };
-        }
-        Errors.throwIfAny<unknown>([
-          ...abortResults,
-          ...hookResults,
-          databaseResult,
-        ]);
-      } finally {
-        this.#removingPromises.delete(sessionId);
-        logger.info("Existing session is removed", { sessionId });
-      }
-    })();
+    const removal = this.#remove(sessionId, location);
     this.#removingPromises.set(sessionId, removal);
     return removal;
   }
