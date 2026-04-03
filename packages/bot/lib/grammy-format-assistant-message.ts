@@ -45,7 +45,7 @@ interface ActionSummary {
   fetchCount: number;
   loadedSkillCount: number;
   lookupCount: number;
-  otherStepCount: number;
+  otherActionCount: number;
   searchCount: number;
 }
 
@@ -83,7 +83,7 @@ function createActionSummary(): ActionSummary {
     fetchCount: 0,
     loadedSkillCount: 0,
     lookupCount: 0,
-    otherStepCount: 0,
+    otherActionCount: 0,
     searchCount: 0,
   };
 }
@@ -248,7 +248,7 @@ function summarizeToolPart(
         return;
       }
 
-      summary.otherStepCount += 1;
+      summary.otherActionCount += 1;
       return;
   }
 }
@@ -394,7 +394,7 @@ function formatActionSummary(summary: ActionSummary): string {
     countPhrase(summary.attachedFiles.size, "attached", "file"),
     countPhrase(summary.delegatedTaskCount, "delegated", "task"),
     countPhrase(summary.loadedSkillCount, "loaded", "skill"),
-    otherStepPhrase(summary.otherStepCount),
+    otherActionPhrase(summary.otherActionCount),
   ].filter((part): part is string => !!part);
   return `🛠️ _${capitalize(joinNatural(parts))}._`;
 }
@@ -434,7 +434,7 @@ function hasActionSummary(summary: ActionSummary): boolean {
     summary.fetchCount > 0 ||
     summary.loadedSkillCount > 0 ||
     summary.lookupCount > 0 ||
-    summary.otherStepCount > 0 ||
+    summary.otherActionCount > 0 ||
     summary.searchCount > 0
   );
 }
@@ -483,9 +483,9 @@ function urlPhrase(count: number): string | undefined {
   return `fetched ${count} ${count === 1 ? "URL" : "URLs"}`;
 }
 
-function otherStepPhrase(count: number): string | undefined {
+function otherActionPhrase(count: number): string | undefined {
   if (count === 0) return undefined;
-  return `took ${count} other ${pluralize("step", count)}`;
+  return `performed ${count} other ${pluralize("action", count)}`;
 }
 
 function joinNatural(parts: readonly string[]): string {

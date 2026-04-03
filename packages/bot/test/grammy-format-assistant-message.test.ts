@@ -557,7 +557,7 @@ test("summarizes recognized categories and unknown tools naturally", () => {
   ]);
 
   expect(getText(chunks)).toBe(
-    "🛠️ _Read 1 file, changed 2 files, ran 1 command, made 4 lookups, did 2 searches, fetched 2 URLs, delegated 2 tasks, loaded 1 skill, and took 1 other step._",
+    "🛠️ _Read 1 file, changed 2 files, ran 1 command, made 4 lookups, did 2 searches, fetched 2 URLs, delegated 2 tasks, loaded 1 skill, and performed 1 other action._",
   );
 });
 
@@ -607,7 +607,7 @@ test("counts only actual attachments and completed tool attachments", () => {
   ]);
 
   expect(getText(chunks)).toBe(
-    "🛠️ _Read 1 file, attached 4 files, and took 1 other step._",
+    "🛠️ _Read 1 file, attached 4 files, and performed 1 other action._",
   );
 });
 
@@ -709,7 +709,7 @@ test("uses one-item sections for plan exit and fallback summaries", () => {
 
   expect(getText(planEnterChunks)).toBe("🎯 _Entered plan mode._");
   expect(getText(planExitChunks)).toBe("🚪 _Exited plan mode._");
-  expect(getText(fallbackChunks)).toBe("🛠️ _Took 1 other step._");
+  expect(getText(fallbackChunks)).toBe("🛠️ _Performed 1 other action._");
 });
 
 test("ignores non-completed plan-enter tool parts", () => {
