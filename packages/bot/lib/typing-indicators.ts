@@ -78,15 +78,20 @@ export class TypingIndicators implements Disposable {
     this.#timers.set(
       sessionId,
       setInterval(() => {
-        if (!this.#typing(sessionId)) return;
-        this.#floatingPromises.track(
-          this.#send(sessionId).catch((error) => {
-            logger.fatal("Failed to send typing indicator to Telegram", error, {
-              sessionId,
-            });
-            this.#shutdown.trigger();
-          }),
-        );
+        if (this.#typing(sessionId)) {
+          this.#floatingPromises.track(
+            this.#send(sessionId).catch((error) => {
+              logger.fatal(
+                "Failed to send typing indicator to Telegram",
+                error,
+                {
+                  sessionId,
+                },
+              );
+              this.#shutdown.trigger();
+            }),
+          );
+        }
       }, 4_000),
     );
   }
