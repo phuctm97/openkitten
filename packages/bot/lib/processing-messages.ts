@@ -205,6 +205,7 @@ export class ProcessingMessages {
       }
       limit *= 2;
     }
+    if (!this.#existingSessions.check(sessionId)) return;
     if (latest) this.#setStreamingMessage(latest);
     else this.#streaming.delete(sessionId);
     for (const { info, parts } of batch) {

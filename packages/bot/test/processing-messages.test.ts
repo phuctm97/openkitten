@@ -1328,10 +1328,11 @@ test("initialized stops when session disappears after fetching messages", async 
   const es = createMockExistingSessions(["sess-1"]);
   vi.mocked(es.check).mockReturnValueOnce(true).mockReturnValue(false);
 
-  await ProcessingMessages.create(bot, database, client, es);
+  const pm = await ProcessingMessages.create(bot, database, client, es);
 
   expect(mockSessionMessages).toHaveBeenCalledTimes(1);
   expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+  expect(pm.streaming("sess-1")).toBeUndefined();
 });
 
 test("dispose unhooks beforeRemove", async () => {
