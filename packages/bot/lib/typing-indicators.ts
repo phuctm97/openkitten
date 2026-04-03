@@ -43,14 +43,6 @@ export class TypingIndicators implements Disposable {
     ];
   }
 
-  #typing(sessionId: string): boolean {
-    return (
-      this.#existingSessions.check(sessionId) &&
-      this.#workingSessions.check(sessionId) &&
-      !this.#pendingPrompts.check(sessionId)
-    );
-  }
-
   async #send(sessionId: string): Promise<void> {
     const location = this.#existingSessions.get(sessionId);
     if (!location) return;
@@ -61,7 +53,11 @@ export class TypingIndicators implements Disposable {
   }
 
   async #sync(sessionId: string) {
-    if (this.#typing(sessionId)) {
+    const typing =
+      this.#existingSessions.check(sessionId) &&
+      this.#workingSessions.check(sessionId) &&
+      !this.#pendingPrompts.check(sessionId);
+    if (typing) {
       await this.#start(sessionId);
     } else {
       this.#stop(sessionId);
