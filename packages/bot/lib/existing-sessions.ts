@@ -257,7 +257,7 @@ export class ExistingSessions {
     );
     Errors.throwIfAny(removalResults);
 
-    logger.debug("Current sessions are synchronized", {
+    logger.debug("Existing sessions are synchronized", {
       checked: currentSessions.length,
       removed: unreachableSessions.length,
       remaining: currentSessions.length - unreachableSessions.length,

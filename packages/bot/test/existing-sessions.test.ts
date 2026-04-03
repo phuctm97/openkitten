@@ -242,7 +242,7 @@ test("create keeps reachable sessions", async () => {
 
   expect(es.sessionIds).toEqual(["s1", "s2"]);
   expect(logger.debug).toHaveBeenCalledWith(
-    "Current sessions are synchronized",
+    "Existing sessions are synchronized",
     {
       checked: 2,
       removed: 0,
@@ -333,7 +333,7 @@ test("create handles empty sessions", async () => {
 
   expect(es.sessionIds).toEqual([]);
   expect(logger.debug).toHaveBeenCalledWith(
-    "Current sessions are synchronized",
+    "Existing sessions are synchronized",
     {
       checked: 0,
       removed: 0,
