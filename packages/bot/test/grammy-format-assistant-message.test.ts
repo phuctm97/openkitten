@@ -295,6 +295,27 @@ test("formats assistant text with standalone plan-exit sections in order", () =>
   assert.isDefined(chunks[0]?.markdown);
 });
 
+test("formats assistant text with standalone plan-enter sections in order", () => {
+  const chunks = grammyFormatAssistantMessage(createInfo(), [
+    createTextPart("I can help plan this."),
+    createCompletedToolPart("plan_enter"),
+    createCompletedToolPart("task", {
+      description: "Research the codebase",
+      subagent_type: "explore",
+    }),
+    createTextPart("I have a plan ready."),
+  ]);
+
+  expect(getText(chunks)).toBe(
+    [
+      "I can help plan this.",
+      "🎯 _Entered plan mode._",
+      "🛠️ _Delegated 1 task._",
+      "I have a plan ready.",
+    ].join("\n\n"),
+  );
+});
+
 test("underlines inline file references from the first later action section", () => {
   const readmeSource: FileSource = {
     type: "file",
@@ -676,6 +697,9 @@ test("ignores the batch wrapper and counts emitted child tool parts", () => {
 });
 
 test("uses one-item sections for plan exit and fallback summaries", () => {
+  const planEnterChunks = grammyFormatAssistantMessage(createInfo(), [
+    createCompletedToolPart("plan_enter"),
+  ]);
   const planExitChunks = grammyFormatAssistantMessage(createInfo(), [
     createCompletedToolPart("plan_exit"),
   ]);
@@ -683,8 +707,18 @@ test("uses one-item sections for plan exit and fallback summaries", () => {
     createCompletedToolPart("custom_tool"),
   ]);
 
+  expect(getText(planEnterChunks)).toBe("🎯 _Entered plan mode._");
   expect(getText(planExitChunks)).toBe("🚪 _Exited plan mode._");
   expect(getText(fallbackChunks)).toBe("🛠️ _Took 1 other step._");
+});
+
+test("ignores non-completed plan-enter tool parts", () => {
+  expect(
+    grammyFormatAssistantMessage(createInfo(), [
+      createRunningToolPart("plan_enter"),
+      createErrorToolPart("plan_enter"),
+    ]),
+  ).toEqual([]);
 });
 
 test("ignores empty and ignored text parts", () => {

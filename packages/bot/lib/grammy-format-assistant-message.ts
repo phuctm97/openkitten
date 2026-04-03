@@ -23,7 +23,11 @@ interface PlanExitSection {
   readonly type: "planExit";
 }
 
-type Section = ActionSection | PlanExitSection | TextSection;
+interface PlanEnterSection {
+  readonly type: "planEnter";
+}
+
+type Section = ActionSection | PlanEnterSection | PlanExitSection | TextSection;
 
 interface TextSection {
   readonly text: string;
@@ -165,6 +169,13 @@ function buildSections(
       case "tool": {
         if (part.state.status === "pending") continue;
         if (ignoredTools.has(part.tool)) continue;
+        if (part.tool === "plan_enter") {
+          if (part.state.status !== "completed") continue;
+          flushTextGroup();
+          flushActionSection();
+          sections.push({ type: "planEnter" });
+          continue;
+        }
         if (part.tool === "plan_exit") {
           if (part.state.status !== "completed") continue;
           flushTextGroup();
@@ -392,12 +403,18 @@ function formatPlanExitSection(): string {
   return "🚪 _Exited plan mode._";
 }
 
+function formatPlanEnterSection(): string {
+  return "🎯 _Entered plan mode._";
+}
+
 function renderSection(section: Section): string | undefined {
   switch (section.type) {
     case "action":
       return hasActionSummary(section.summary)
         ? formatActionSummary(section.summary)
         : undefined;
+    case "planEnter":
+      return formatPlanEnterSection();
     case "planExit":
       return formatPlanExitSection();
     case "text":
