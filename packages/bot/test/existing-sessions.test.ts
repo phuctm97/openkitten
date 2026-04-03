@@ -649,6 +649,9 @@ test("remove throws and cleans state on abort error", async () => {
   );
   await expect(es.remove("s1")).rejects.toThrow("abort failed");
   expect(es.sessionIds).toEqual([]);
+  expect(logger.info).not.toHaveBeenCalledWith("Existing session is removed", {
+    sessionId: "s1",
+  });
 });
 
 test("remove throws and preserves session on DB error", async () => {
@@ -664,6 +667,9 @@ test("remove throws and preserves session on DB error", async () => {
   });
   await expect(es.remove("s1")).rejects.toThrow("disk full");
   expect(es.sessionIds).toEqual(["s1"]);
+  expect(logger.info).not.toHaveBeenCalledWith("Existing session is removed", {
+    sessionId: "s1",
+  });
 });
 
 test("check returns false while session is being removed", async () => {

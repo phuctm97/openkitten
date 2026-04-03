@@ -195,9 +195,9 @@ export class ExistingSessions {
         ...hookResults,
         databaseResult,
       ]);
+      logger.info("Existing session is removed", { sessionId });
     } finally {
       this.#removingPromises.delete(sessionId);
-      logger.info("Existing session is removed", { sessionId });
     }
   }
 
