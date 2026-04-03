@@ -13,7 +13,7 @@ export class ExistingSessions {
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #hooks = createHooks<ExistingSessions.Hooks>();
-  readonly #removing = new Set<string>();
+  readonly #removingPromises = new Map<string, Promise<void>>();
 
   private constructor(
     bot: Bot,
@@ -25,7 +25,7 @@ export class ExistingSessions {
     this.#opencodeClient = opencodeClient;
   }
 
-  #find(location: ExistingSessions.Location): string | undefined {
+  #findRaw(location: ExistingSessions.Location): string | undefined {
     const row = this.#database.query.session
       .findFirst({
         columns: { id: true },
@@ -36,6 +36,22 @@ export class ExistingSessions {
       })
       .sync();
     return row?.id;
+  }
+
+  async #findOrCreate(location: ExistingSessions.Location): Promise<string> {
+    for (;;) {
+      const existing = this.#findRaw(location);
+      if (existing) {
+        const removing = this.#removingPromises.get(existing);
+        if (!removing) return existing;
+        await removing;
+        continue;
+      }
+      const created = await this.#create(location);
+      const removing = this.#removingPromises.get(created);
+      if (!removing) return created;
+      await removing;
+    }
   }
 
   async #create(location: ExistingSessions.Location): Promise<string> {
@@ -67,7 +83,7 @@ export class ExistingSessions {
         { throwOnError: true },
       );
       // Return the raced winner from DB.
-      const raced = this.#find(location);
+      const raced = this.#findRaw(location);
       // No winner in DB — insert failed for a reason other than a race condition.
       if (!raced) throw error;
       return raced;
@@ -86,7 +102,7 @@ export class ExistingSessions {
 
   check(sessionId: string): boolean {
     return (
-      !this.#removing.has(sessionId) &&
+      !this.#removingPromises.has(sessionId) &&
       !!this.#database.query.session
         .findFirst({
           columns: { id: true },
@@ -120,7 +136,9 @@ export class ExistingSessions {
       }
       return undefined;
     }
-    if (this.#removing.has(sessionId) && !options.unsafe) return undefined;
+    if (this.#removingPromises.has(sessionId) && !options.unsafe) {
+      return undefined;
+    }
     return {
       chatId: row.chatId,
       threadId: row.threadId || undefined,
@@ -139,59 +157,65 @@ export class ExistingSessions {
     location: ExistingSessions.Location,
     options: ExistingSessions.FindOptions = {},
   ): string | undefined | Promise<string> {
-    const existing = this.#find(location);
-    if (existing) {
+    const existing = this.#findRaw(location);
+    if (existing && !this.#removingPromises.has(existing)) {
       if (options.createIfNotFound) return Promise.resolve(existing);
       return existing;
     }
     if (!options.createIfNotFound) return undefined;
-    return this.#create(location);
+    return this.#findOrCreate(location);
   }
 
   async remove(sessionId: string): Promise<void> {
+    const current = this.#removingPromises.get(sessionId);
+    if (current) return current;
     const row = this.#database.query.session
       .findFirst({
         columns: { chatId: true, threadId: true },
         where: eq(schema.session.id, sessionId),
       })
       .sync();
-    if (!row || this.#removing.has(sessionId)) return;
+    if (!row) return;
     const location: ExistingSessions.Location = {
       chatId: row.chatId,
       threadId: row.threadId || undefined,
     };
-    try {
-      this.#removing.add(sessionId);
-      const abortResults = await Promise.allSettled([
-        this.#opencodeClient.session.abort(
-          { sessionID: sessionId },
-          { throwOnError: true },
-        ),
-      ]);
-      const hookResults = await this.#hooks.callHookWith(
-        (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
-        "beforeRemove",
-        [{ sessionId, ...location }],
-      );
-      let databaseResult: PromiseSettledResult<void>;
+    const removal = (async () => {
       try {
-        this.#database
-          .delete(schema.session)
-          .where(eq(schema.session.id, sessionId))
-          .run();
-        databaseResult = { status: "fulfilled", value: undefined };
-      } catch (error) {
-        databaseResult = { status: "rejected", reason: error };
+        const abortResults = await Promise.allSettled([
+          this.#opencodeClient.session.abort(
+            { sessionID: sessionId },
+            { throwOnError: true },
+          ),
+        ]);
+        const hookResults = await this.#hooks.callHookWith(
+          (hooks, args) =>
+            Promise.allSettled(hooks.map((hook) => hook(...args))),
+          "beforeRemove",
+          [{ sessionId, ...location }],
+        );
+        let databaseResult: PromiseSettledResult<void>;
+        try {
+          this.#database
+            .delete(schema.session)
+            .where(eq(schema.session.id, sessionId))
+            .run();
+          databaseResult = { status: "fulfilled", value: undefined };
+        } catch (error) {
+          databaseResult = { status: "rejected", reason: error };
+        }
+        Errors.throwIfAny<unknown>([
+          ...abortResults,
+          ...hookResults,
+          databaseResult,
+        ]);
+      } finally {
+        this.#removingPromises.delete(sessionId);
+        logger.info("Existing session is removed", { sessionId });
       }
-      Errors.throwIfAny<unknown>([
-        ...abortResults,
-        ...hookResults,
-        databaseResult,
-      ]);
-    } finally {
-      this.#removing.delete(sessionId);
-      logger.info("Existing session is removed", { sessionId });
-    }
+    })();
+    this.#removingPromises.set(sessionId, removal);
+    return removal;
   }
 
   async #initialize(): Promise<void> {

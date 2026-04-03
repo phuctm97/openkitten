@@ -432,6 +432,158 @@ test("find returns undefined after session is removed", async () => {
   expect(es.find({ chatId: 123, threadId: undefined })).toBeUndefined();
 });
 
+test("find returns undefined while session is being removed", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+  const abort = Promise.withResolvers<void>();
+  opencodeClient.session.abort.mockImplementation(async () => {
+    await abort.promise;
+    return { data: undefined };
+  });
+  const { es } = await setup(undefined, opencodeClient);
+
+  await es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+  const removal = es.remove("s1");
+
+  expect(es.find({ chatId: 123, threadId: undefined })).toBeUndefined();
+
+  abort.resolve();
+  await removal;
+});
+
+test("find with createIfNotFound waits for removing session and creates replacement", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.create
+    .mockResolvedValueOnce({ data: { id: "s1" } })
+    .mockResolvedValueOnce({ data: { id: "s2" } });
+  const abort = Promise.withResolvers<void>();
+  opencodeClient.session.abort.mockImplementation(async () => {
+    await abort.promise;
+    return { data: undefined };
+  });
+  const { es } = await setup(undefined, opencodeClient);
+
+  await es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+  const removal = es.remove("s1");
+  const replacement = es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+
+  await Promise.resolve();
+  expect(opencodeClient.session.create).toHaveBeenCalledTimes(1);
+
+  abort.resolve();
+
+  await expect(replacement).resolves.toBe("s2");
+  await removal;
+  expect(es.get("s2")).toEqual({
+    chatId: 123,
+    threadId: undefined,
+  });
+});
+
+test("find with createIfNotFound retries when raced winner starts removing", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.create
+    .mockResolvedValueOnce({ data: { id: "s1" } })
+    .mockResolvedValueOnce({ data: { id: "s-loser" } })
+    .mockResolvedValueOnce({ data: { id: "s2" } });
+  const abort = Promise.withResolvers<void>();
+  opencodeClient.session.abort.mockImplementation(async () => {
+    await abort.promise;
+    return { data: undefined };
+  });
+  const orphanDeleteReached = Promise.withResolvers<void>();
+  const releaseOrphanDelete = Promise.withResolvers<void>();
+  opencodeClient.session.delete.mockImplementation(async () => {
+    orphanDeleteReached.resolve();
+    await releaseOrphanDelete.promise;
+    return {};
+  });
+  const { es } = await setup(undefined, opencodeClient);
+
+  const first = es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+  const second = es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+
+  await expect(first).resolves.toBe("s1");
+  await orphanDeleteReached.promise;
+
+  const removal = es.remove("s1");
+  releaseOrphanDelete.resolve();
+
+  await Promise.resolve();
+  expect(opencodeClient.session.create).toHaveBeenCalledTimes(2);
+
+  abort.resolve();
+
+  await expect(second).resolves.toBe("s2");
+  await removal;
+  expect(es.get("s2")).toEqual({
+    chatId: 123,
+    threadId: undefined,
+  });
+});
+
+test("find with createIfNotFound reuses replacement created during waited removal", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+  const { database, es } = await setup(undefined, opencodeClient);
+  await es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+  const abort = Promise.withResolvers<void>();
+  opencodeClient.session.abort.mockImplementation(async () => {
+    await abort.promise;
+    return { data: undefined };
+  });
+  const originalDelete = database.delete.bind(database);
+  vi.spyOn(database, "delete").mockImplementation(((
+    table: typeof schema.session,
+  ) => {
+    const query = originalDelete(table);
+    const originalWhere = query.where.bind(query);
+    query.where = ((condition: Parameters<typeof query.where>[0]) => {
+      const runner = originalWhere(condition);
+      const originalRun = runner.run.bind(runner);
+      runner.run = () => {
+        originalRun();
+        database
+          .insert(schema.session)
+          .values({ id: "s2", chatId: 123, threadId: 0 })
+          .run();
+      };
+      return runner;
+    }) as never;
+    return query;
+  }) as never);
+
+  const removal = es.remove("s1");
+  const replacement = es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+
+  abort.resolve();
+
+  await expect(replacement).resolves.toBe("s2");
+  await removal;
+  expect(opencodeClient.session.create).toHaveBeenCalledOnce();
+});
+
 // --- remove ---
 
 test("remove deletes from database", async () => {
@@ -460,6 +612,29 @@ test("remove deletes from database", async () => {
 test("remove is no-op for unknown session", async () => {
   const { es } = await setup();
   await expect(es.remove("nonexistent")).resolves.toBeUndefined();
+});
+
+test("concurrent remove shares in-flight removal", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+  const abort = Promise.withResolvers<void>();
+  opencodeClient.session.abort.mockImplementation(async () => {
+    await abort.promise;
+    return { data: undefined };
+  });
+  const { es } = await setup(undefined, opencodeClient);
+
+  await es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+  const first = es.remove("s1");
+  const second = es.remove("s1");
+
+  expect(opencodeClient.session.abort).toHaveBeenCalledTimes(1);
+
+  abort.resolve();
+  await Promise.all([first, second]);
 });
 
 test("remove throws and cleans state on abort error", async () => {
