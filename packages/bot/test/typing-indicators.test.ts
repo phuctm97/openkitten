@@ -290,12 +290,17 @@ test("start bubbles up missing session errors", async () => {
   expect(mockSendChatAction).not.toHaveBeenCalled();
 });
 
-test("interval stops when session disappears after typing has started", async () => {
+test("beforeRemove prevents further interval sends after typing has started", async () => {
   const map: Record<string, ExistingSessions.Location> = {
     "sess-1": { chatId: 123, threadId: undefined },
   };
-  const { ws, indicators, shutdown } = setup(map, new Set(["sess-1"]));
+  const { es, ws, indicators, shutdown } = setup(map, new Set(["sess-1"]));
   await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  es.hooks["beforeRemove"]?.({
+    sessionId: "sess-1",
+    chatId: 123,
+    threadId: undefined,
+  });
   delete map["sess-1"];
   await vi.advanceTimersByTimeAsync(4_000);
   expect(indicators.check("sess-1")).toBe(false);

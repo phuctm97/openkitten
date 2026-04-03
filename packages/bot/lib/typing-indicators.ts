@@ -1,5 +1,5 @@
 import type { Bot } from "grammy";
-import { ExistingSessions } from "~/lib/existing-sessions";
+import type { ExistingSessions } from "~/lib/existing-sessions";
 import type { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
 import type { PendingPrompts } from "~/lib/pending-prompts";
@@ -78,12 +78,9 @@ export class TypingIndicators implements Disposable {
     this.#timers.set(
       sessionId,
       setInterval(() => {
+        if (!this.#typing(sessionId)) return;
         this.#floatingPromises.track(
           this.#send(sessionId).catch((error) => {
-            if (error instanceof ExistingSessions.NotFoundError) {
-              this.#stop(sessionId);
-              return;
-            }
             logger.fatal("Failed to send typing indicator to Telegram", error, {
               sessionId,
             });
