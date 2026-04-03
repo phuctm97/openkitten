@@ -45,6 +45,7 @@ export class TypingIndicators implements Disposable {
 
   #typing(sessionId: string): boolean {
     return (
+      this.#existingSessions.check(sessionId) &&
       this.#workingSessions.check(sessionId) &&
       !this.#pendingPrompts.check(sessionId)
     );
