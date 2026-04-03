@@ -1713,6 +1713,41 @@ test("concurrent permission.asked events for one session only flush one prompt",
   expect(mockSendMessage).toHaveBeenCalledTimes(1);
 });
 
+test("queued asked event re-checks session existence before running", async () => {
+  const esMap = {
+    "sess-1": { chatId: 123, threadId: undefined },
+  } satisfies Record<string, ExistingSessions.Location>;
+  const { shutdown, bot, client, existingSessions } = setup(esMap);
+  const firstSendStarted = Promise.withResolvers<void>();
+  const releaseFirstSend = Promise.withResolvers<void>();
+  mockSendMessage = vi.fn(async () => {
+    firstSendStarted.resolve();
+    await releaseFirstSend.promise;
+    return { message_id: messageIdCounter++ };
+  });
+  await using prompts = PendingPrompts.create(
+    shutdown,
+    bot,
+    client,
+    existingSessions,
+  );
+
+  const first = askPermission(prompts, permissionRequest);
+  await firstSendStarted.promise;
+
+  const second = prompts.update({
+    type: "question.asked",
+    properties: questionRequest as never,
+  });
+  Reflect.deleteProperty(esMap, "sess-1");
+
+  releaseFirstSend.resolve();
+  await Promise.all([first, second]);
+
+  expect(prompts.check("sess-1")).toBe(true);
+  expect(mockSendMessage).toHaveBeenCalledTimes(1);
+});
+
 test("answer callback waits for concurrent permission.replied update", async () => {
   const { shutdown, bot, client, existingSessions } = setup();
   const permissionReplyStarted = Promise.withResolvers<void>();

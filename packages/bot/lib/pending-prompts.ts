@@ -514,13 +514,8 @@ export class PendingPrompts implements AsyncDisposable {
       this.#opencodeClient,
       event.properties.sessionID,
     );
-    if (
-      (event.type === "permission.asked" || event.type === "question.asked") &&
-      !this.#existingSessions.check(sessionID)
-    ) {
-      return;
-    }
     await this.#runSessionExclusive(sessionID, async () => {
+      if (!this.#existingSessions.check(sessionID)) return;
       if (
         event.type === "permission.replied" ||
         event.type === "question.replied" ||
