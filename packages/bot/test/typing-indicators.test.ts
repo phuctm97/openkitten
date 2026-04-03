@@ -285,12 +285,6 @@ test("start aborts when session disappears before the first send", async () => {
 
   expect(indicators.check("sess-1")).toBe(false);
   expect(mockSendChatAction).not.toHaveBeenCalled();
-  expect(logger.debug).toHaveBeenCalledWith(
-    "Skipping typing indicator for removed session",
-    {
-      sessionId: "sess-1",
-    },
-  );
 });
 
 test("interval stops when session disappears after typing has started", async () => {

@@ -1,7 +1,6 @@
 import { GrammyError } from "grammy";
 import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
-import { logger } from "~/lib/logger";
 import { PendingPrompts } from "~/lib/pending-prompts";
 
 vi.mock("~/lib/grammy-send-permission-message", () => ({
@@ -1609,14 +1608,6 @@ test("update question.asked skips removed sessions", async () => {
   });
   expect(prompts.check("sess-1")).toBe(false);
   expect(mockSendMessage).not.toHaveBeenCalled();
-  expect(logger.debug).toHaveBeenCalledWith(
-    "Skipping pending prompt for removed session",
-    {
-      sessionID: "sess-1",
-      requestID: "q1",
-      type: "question.asked",
-    },
-  );
 });
 
 test("update permission.asked skips removed sessions", async () => {
@@ -1633,14 +1624,6 @@ test("update permission.asked skips removed sessions", async () => {
   });
   expect(prompts.check("sess-1")).toBe(false);
   expect(mockSendMessage).not.toHaveBeenCalled();
-  expect(logger.debug).toHaveBeenCalledWith(
-    "Skipping pending prompt for removed session",
-    {
-      sessionID: "sess-1",
-      requestID: "p1",
-      type: "permission.asked",
-    },
-  );
 });
 
 // --- hook tests ---

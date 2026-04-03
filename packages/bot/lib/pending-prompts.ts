@@ -518,11 +518,6 @@ export class PendingPrompts implements AsyncDisposable {
       (event.type === "permission.asked" || event.type === "question.asked") &&
       !this.#existingSessions.check(sessionID)
     ) {
-      logger.debug("Skipping pending prompt for removed session", {
-        sessionID,
-        requestID: event.properties.id,
-        type: event.type,
-      });
       return;
     }
     await this.#runSessionExclusive(sessionID, async () => {

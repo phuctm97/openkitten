@@ -52,12 +52,7 @@ export class TypingIndicators implements Disposable {
 
   async #send(sessionId: string): Promise<boolean> {
     const location = this.#existingSessions.get(sessionId);
-    if (!location) {
-      logger.debug("Skipping typing indicator for removed session", {
-        sessionId,
-      });
-      return false;
-    }
+    if (!location) return false;
     const { chatId, threadId } = location;
     await this.#bot.api.sendChatAction(chatId, "typing", {
       ...(threadId && { message_thread_id: threadId }),
