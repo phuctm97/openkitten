@@ -18,7 +18,7 @@ export class ProcessingMessages {
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
-  readonly #streaming = new Map<string, StreamingMessage>();
+  readonly #streamingMessages = new Map<string, StreamingMessage>();
   readonly #unhook: () => void;
 
   private constructor(
@@ -32,7 +32,7 @@ export class ProcessingMessages {
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
     this.#unhook = existingSessions.hook("beforeRemove", ({ sessionId }) => {
-      this.#streaming.delete(sessionId);
+      this.#streamingMessages.delete(sessionId);
     });
   }
 
@@ -102,26 +102,29 @@ export class ProcessingMessages {
   }
 
   #setStreamingMessage(message: StreamingMessage): void {
-    this.#streaming.set(message.info.sessionID, structuredClone(message));
+    this.#streamingMessages.set(
+      message.info.sessionID,
+      structuredClone(message),
+    );
   }
 
   #setStreamingInfo(info: AssistantMessage): void {
-    const current = this.#streaming.get(info.sessionID);
+    const current = this.#streamingMessages.get(info.sessionID);
     if (!current || current.info.id !== info.id) {
-      this.#streaming.set(info.sessionID, {
+      this.#streamingMessages.set(info.sessionID, {
         info: structuredClone(info),
         parts: [],
       });
       return;
     }
-    this.#streaming.set(info.sessionID, {
+    this.#streamingMessages.set(info.sessionID, {
       info: structuredClone(info),
       parts: current.parts,
     });
   }
 
   #upsertStreamingPart(part: Part): void {
-    const current = this.#streaming.get(part.sessionID);
+    const current = this.#streamingMessages.get(part.sessionID);
     if (!current || current.info.id !== part.messageID) return;
     const next = structuredClone(part);
     const index = current.parts.findIndex((item) => item.id === part.id);
@@ -134,9 +137,9 @@ export class ProcessingMessages {
   }
 
   #removeStreamingMessage(sessionId: string, messageId: string): void {
-    const current = this.#streaming.get(sessionId);
+    const current = this.#streamingMessages.get(sessionId);
     if (!current || current.info.id !== messageId) return;
-    this.#streaming.delete(sessionId);
+    this.#streamingMessages.delete(sessionId);
   }
 
   #removeStreamingPart(
@@ -144,9 +147,9 @@ export class ProcessingMessages {
     messageId: string,
     partId: string,
   ): void {
-    const current = this.#streaming.get(sessionId);
+    const current = this.#streamingMessages.get(sessionId);
     if (!current || current.info.id !== messageId) return;
-    this.#streaming.set(sessionId, {
+    this.#streamingMessages.set(sessionId, {
       info: current.info,
       parts: current.parts.filter((part) => part.id !== partId),
     });
@@ -159,7 +162,7 @@ export class ProcessingMessages {
     field: string,
     delta: string,
   ): void {
-    const current = this.#streaming.get(sessionId);
+    const current = this.#streamingMessages.get(sessionId);
     if (!current || current.info.id !== messageId) return;
     const part = current.parts.find((item) => item.id === partId);
     if (!part) return;
@@ -208,7 +211,7 @@ export class ProcessingMessages {
     }
     if (!this.#existingSessions.check(sessionId)) return;
     if (latest) this.#setStreamingMessage(latest);
-    else this.#streaming.delete(sessionId);
+    else this.#streamingMessages.delete(sessionId);
     for (const { info, parts } of batch) {
       if (!this.#claim(info)) continue;
       try {
@@ -221,7 +224,7 @@ export class ProcessingMessages {
   }
 
   streaming(sessionId: string): StreamingMessage | undefined {
-    const current = this.#streaming.get(sessionId);
+    const current = this.#streamingMessages.get(sessionId);
     if (!current) return undefined;
     return structuredClone(current);
   }

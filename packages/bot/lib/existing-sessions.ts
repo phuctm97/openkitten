@@ -159,11 +159,9 @@ export class ExistingSessions {
   ): string | undefined | Promise<string> {
     const existing = this.#findOrReturn(location);
     if (existing && !this.#removingPromises.has(existing)) {
-      if (options.createIfNotFound) return Promise.resolve(existing);
-      return existing;
+      return options.createIfNotFound ? Promise.resolve(existing) : existing;
     }
-    if (!options.createIfNotFound) return undefined;
-    return this.#findOrCreate(location);
+    return options.createIfNotFound ? this.#findOrCreate(location) : undefined;
   }
 
   async remove(sessionId: string): Promise<void> {
