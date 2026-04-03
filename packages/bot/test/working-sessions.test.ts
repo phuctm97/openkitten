@@ -13,6 +13,7 @@ function statusEvent(
 function mockExistingSessions() {
   const hooks: Record<string, ((...args: unknown[]) => unknown) | undefined> =
     {};
+  const sessionIds = new Set<string>(["sess-1"]);
   return {
     hook: vi.fn((name: string, fn: (...args: unknown[]) => unknown) => {
       hooks[name] = fn;
@@ -20,8 +21,13 @@ function mockExistingSessions() {
         hooks[name] = undefined;
       };
     }),
+    check: (sessionId: string) => sessionIds.has(sessionId),
     hooks,
-  } as unknown as ExistingSessions & { hooks: typeof hooks };
+    sessionIds,
+  } as unknown as ExistingSessions & {
+    hooks: typeof hooks;
+    sessionIds: Set<string>;
+  };
 }
 
 function setup() {
@@ -49,6 +55,13 @@ test("marks session as working on retry event", async () => {
   expect(working.check("sess-1")).toBe(true);
 });
 
+test("ignores busy update for removed session", async () => {
+  const { existingSessions, working } = setup();
+  existingSessions.sessionIds.delete("sess-1");
+  await working.update(statusEvent("sess-1", { type: "busy" }));
+  expect(working.check("sess-1")).toBe(false);
+});
+
 test("does not mark uncached session as working on idle event", async () => {
   const { working } = setup();
   await working.update(statusEvent("sess-1", { type: "idle" }));
@@ -69,6 +82,18 @@ test("does not fire change hook when working state is unchanged", async () => {
   await working.update(statusEvent("sess-1", { type: "busy" }));
   onChange.mockClear();
   await working.update(statusEvent("sess-1", { type: "busy" }));
+  expect(onChange).not.toHaveBeenCalled();
+});
+
+test("silently drops stale cached state for removed session update", async () => {
+  const { existingSessions, working } = setup();
+  const onChange = vi.fn();
+  working.hook("change", onChange);
+  await working.update(statusEvent("sess-1", { type: "busy" }));
+  onChange.mockClear();
+  existingSessions.sessionIds.delete("sess-1");
+  await working.update(statusEvent("sess-1", { type: "idle" }));
+  expect(working.check("sess-1")).toBe(false);
   expect(onChange).not.toHaveBeenCalled();
 });
 

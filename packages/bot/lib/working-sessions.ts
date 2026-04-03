@@ -4,12 +4,14 @@ import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 
 export class WorkingSessions implements Disposable {
+  readonly #existingSessions: ExistingSessions;
   readonly #hooks = createHooks<WorkingSessions.Hooks>();
   readonly #cached = new Set<string>();
   readonly #locked = new Set<string>();
   readonly #unhook: () => void;
 
   private constructor(existingSessions: ExistingSessions) {
+    this.#existingSessions = existingSessions;
     this.#unhook = existingSessions.hook(
       "beforeRemove",
       async ({ sessionId }) => {
@@ -55,6 +57,10 @@ export class WorkingSessions implements Disposable {
 
   async update(event: EventSessionStatus) {
     const { sessionID, status } = event.properties;
+    if (!this.#existingSessions.check(sessionID)) {
+      this.#cached.delete(sessionID);
+      return;
+    }
     const working = status.type === "busy" || status.type === "retry";
     if (working) {
       if (this.#cached.has(sessionID)) return;
