@@ -39,6 +39,7 @@ export class ProcessingMessages {
   // Insert-or-ignore: returns true if we claimed the message first,
   // false if it was already claimed (e.g. by a previous invalidation or update).
   #claim(message: AssistantMessage): boolean {
+    if (!this.#existingSessions.check(message.sessionID)) return false;
     const rows = this.#database
       .insert(schema.message)
       .values({
@@ -178,7 +179,6 @@ export class ProcessingMessages {
   // Fetch messages with an expanding window until we overlap with
   // already-delivered messages or exhaust the history.
   async #sync(sessionId: string): Promise<void> {
-    if (!this.#existingSessions.check(sessionId)) return;
     let limit = 10;
     let latest: StreamingMessage | undefined;
     let batch: { info: AssistantMessage; parts: Part[] }[] = [];
@@ -209,7 +209,6 @@ export class ProcessingMessages {
     if (latest) this.#setStreamingMessage(latest);
     else this.#streaming.delete(sessionId);
     for (const { info, parts } of batch) {
-      if (!this.#existingSessions.check(info.sessionID)) return;
       if (!this.#claim(info)) continue;
       try {
         await this.#deliver(info, parts);

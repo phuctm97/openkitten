@@ -1272,35 +1272,6 @@ test("update skips delivery when session disappears after claim", async () => {
   expect(row).toBeDefined();
 });
 
-test("initialized skips sessions removed before sync starts", async () => {
-  mockSessionMessages = vi.fn(async () => ({
-    data: [
-      {
-        info: {
-          id: "m1",
-          sessionID: "sess-1",
-          role: "assistant",
-          time: { created: 1, completed: 2 },
-        },
-        parts: [],
-      },
-    ],
-  }));
-  const database = Database.create();
-  database
-    .insert(schema.session)
-    .values({ id: "sess-1", chatId: 123, threadId: 0 })
-    .run();
-  const bot = {} as never;
-  const client = createMockOpencodeClient({ preserveMessagesMock: true });
-  const es = createMockExistingSessions(["sess-1"]);
-  vi.mocked(es.check).mockReturnValue(false);
-
-  await ProcessingMessages.create(bot, database, client, es);
-
-  expect(mockSessionMessages).not.toHaveBeenCalled();
-});
-
 test("initialized stops when session disappears after fetching messages", async () => {
   const { grammySendAssistantMessage } = await import(
     "~/lib/grammy-send-assistant-message"
