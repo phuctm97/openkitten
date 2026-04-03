@@ -25,7 +25,7 @@ export class ExistingSessions {
     this.#opencodeClient = opencodeClient;
   }
 
-  #findRaw(location: ExistingSessions.Location): string | undefined {
+  #findOrReturn(location: ExistingSessions.Location): string | undefined {
     const row = this.#database.query.session
       .findFirst({
         columns: { id: true },
@@ -40,7 +40,7 @@ export class ExistingSessions {
 
   async #findOrCreate(location: ExistingSessions.Location): Promise<string> {
     for (;;) {
-      const existing = this.#findRaw(location);
+      const existing = this.#findOrReturn(location);
       if (existing) {
         const removing = this.#removingPromises.get(existing);
         if (!removing) return existing;
@@ -83,7 +83,7 @@ export class ExistingSessions {
         { throwOnError: true },
       );
       // Return the raced winner from DB.
-      const raced = this.#findRaw(location);
+      const raced = this.#findOrReturn(location);
       // No winner in DB — insert failed for a reason other than a race condition.
       if (!raced) throw error;
       return raced;
@@ -157,7 +157,7 @@ export class ExistingSessions {
     location: ExistingSessions.Location,
     options: ExistingSessions.FindOptions = {},
   ): string | undefined | Promise<string> {
-    const existing = this.#findRaw(location);
+    const existing = this.#findOrReturn(location);
     if (existing && !this.#removingPromises.has(existing)) {
       if (options.createIfNotFound) return Promise.resolve(existing);
       return existing;
