@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { ExistingSessions } from "~/lib/existing-sessions";
+import { ExistingSessions } from "~/lib/existing-sessions";
 import { logger } from "~/lib/logger";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import { TypingIndicators } from "~/lib/typing-indicators";
@@ -33,7 +33,7 @@ function createMockExistingSessions(
     get: (sessionId: string, options: ExistingSessions.GetOptions = {}) => {
       const location = map[sessionId];
       if (!location && options.throwIfNotFound) {
-        throw new Error(`No session found: ${sessionId}`);
+        throw new ExistingSessions.NotFoundError(sessionId);
       }
       return location;
     },
@@ -251,7 +251,7 @@ test("interval failures are tracked and trigger shutdown", async () => {
   expect(shutdown.trigger).toHaveBeenCalled();
 });
 
-test("start aborts when session disappears before the first send", async () => {
+test("start bubbles up missing session errors", async () => {
   const hooks: Record<string, ((...args: unknown[]) => unknown) | undefined> =
     {};
   const shutdown = { trigger: vi.fn() };
@@ -267,23 +267,26 @@ test("start aborts when session disappears before the first send", async () => {
       .fn<(sessionId: string) => boolean>()
       .mockReturnValueOnce(true)
       .mockReturnValue(true),
-    get: vi.fn(() => undefined),
+    get: vi.fn(
+      (
+        sessionId: string,
+        options: ExistingSessions.GetOptions = {},
+      ): ExistingSessions.Location | undefined => {
+        if (options.throwIfNotFound) {
+          throw new ExistingSessions.NotFoundError(sessionId);
+        }
+        return undefined;
+      },
+    ),
   } as unknown as ExistingSessions;
   const ws = createMockWorkingSessions(new Set(["sess-1"]));
   const pp = createMockPendingPrompts();
   const fp = createMockFloatingPromises();
-  const indicators = TypingIndicators.create(
-    shutdown as never,
-    bot,
-    es,
-    ws,
-    pp,
-    fp as never,
-  );
+  TypingIndicators.create(shutdown as never, bot, es, ws, pp, fp as never);
 
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
-
-  expect(indicators.check("sess-1")).toBe(false);
+  await expect(
+    ws.hooks["change"]?.({ sessionId: "sess-1", working: true }),
+  ).rejects.toThrow("No session found: sess-1");
   expect(mockSendChatAction).not.toHaveBeenCalled();
 });
 

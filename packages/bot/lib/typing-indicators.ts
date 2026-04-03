@@ -1,5 +1,5 @@
 import type { Bot } from "grammy";
-import type { ExistingSessions } from "~/lib/existing-sessions";
+import { ExistingSessions } from "~/lib/existing-sessions";
 import type { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
 import type { PendingPrompts } from "~/lib/pending-prompts";
@@ -51,14 +51,13 @@ export class TypingIndicators implements Disposable {
     );
   }
 
-  async #send(sessionId: string): Promise<boolean> {
-    const location = this.#existingSessions.get(sessionId);
-    if (!location) return false;
-    const { chatId, threadId } = location;
+  async #send(sessionId: string): Promise<void> {
+    const { chatId, threadId } = this.#existingSessions.get(sessionId, {
+      throwIfNotFound: true,
+    });
     await this.#bot.api.sendChatAction(chatId, "typing", {
       ...(threadId && { message_thread_id: threadId }),
     });
-    return true;
   }
 
   async #sync(sessionId: string) {
@@ -74,29 +73,22 @@ export class TypingIndicators implements Disposable {
     // Reserve the slot before the async send so concurrent calls bail out above.
     // After send, re-check: #stop may have cleared the slot while we were awaiting.
     this.#timers.set(sessionId, undefined);
-    const sent = await this.#send(sessionId);
-    if (!this.#timers.has(sessionId) || !sent) {
-      this.#stop(sessionId);
-      return;
-    }
+    await this.#send(sessionId);
+    if (!this.#timers.has(sessionId)) return;
     this.#timers.set(
       sessionId,
       setInterval(() => {
         this.#floatingPromises.track(
-          this.#send(sessionId)
-            .then((intervalSent) => {
-              if (!intervalSent) this.#stop(sessionId);
-            })
-            .catch((error) => {
-              logger.fatal(
-                "Failed to send typing indicator to Telegram",
-                error,
-                {
-                  sessionId,
-                },
-              );
-              this.#shutdown.trigger();
-            }),
+          this.#send(sessionId).catch((error) => {
+            if (error instanceof ExistingSessions.NotFoundError) {
+              this.#stop(sessionId);
+              return;
+            }
+            logger.fatal("Failed to send typing indicator to Telegram", error, {
+              sessionId,
+            });
+            this.#shutdown.trigger();
+          }),
         );
       }, 4_000),
     );
