@@ -209,6 +209,10 @@ function summarizeToolPart(
 ) {
   switch (part.tool) {
     case "read":
+      if (isDirectoryRead(part)) {
+        summary.lookupCount += 1;
+        return;
+      }
       addReadPath(summary, info, stringProp(part.state.input, "filePath"));
       return;
     case "edit":
@@ -458,6 +462,11 @@ function toolMetadata(part: ToolPart): ToolMetadata {
 function toolAttachments(part: ToolPart): readonly FilePart[] {
   if (part.state.status !== "completed") return [];
   return Array.isArray(part.state.attachments) ? part.state.attachments : [];
+}
+
+function isDirectoryRead(part: ToolPart): boolean {
+  if (part.tool !== "read" || part.state.status !== "completed") return false;
+  return part.state.output.includes("<type>directory</type>");
 }
 
 function extractApplyPatchPaths(

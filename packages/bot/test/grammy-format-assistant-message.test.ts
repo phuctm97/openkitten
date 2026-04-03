@@ -198,11 +198,12 @@ function createCompletedToolPart(
   input: Record<string, unknown> = {},
   metadata: Record<string, unknown> = {},
   attachments: readonly FilePart[] = [],
+  output = "",
 ): Part {
   return createToolPart(tool, {
     status: "completed",
     input,
-    output: "",
+    output,
     title: `${tool} complete`,
     metadata,
     time: { start: 1, end: 2 },
@@ -314,6 +315,28 @@ test("formats assistant text with standalone plan-enter sections in order", () =
       "I have a plan ready.",
     ].join("\n\n"),
   );
+});
+
+test("counts folder reads in the lookup bucket", () => {
+  const chunks = grammyFormatAssistantMessage(createInfo(), [
+    createCompletedToolPart(
+      "read",
+      { filePath: "/repo/docs" },
+      {},
+      [],
+      [
+        "<path>/repo/docs</path>",
+        "<type>directory</type>",
+        "<entries>",
+        "guide.md",
+        "(1 entries)",
+        "</entries>",
+      ].join("\n"),
+    ),
+    createCompletedToolPart("read", { filePath: "/repo/README.md" }),
+  ]);
+
+  expect(getText(chunks)).toBe("🛠️ _Read 1 file and made 1 lookup._");
 });
 
 test("underlines inline file references from the first later action section", () => {
