@@ -19,6 +19,7 @@ export class ProcessingMessages {
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #streaming = new Map<string, StreamingMessage>();
+  readonly #unhook: () => void;
 
   private constructor(
     bot: Bot,
@@ -30,6 +31,9 @@ export class ProcessingMessages {
     this.#database = database;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
+    this.#unhook = existingSessions.hook("beforeRemove", ({ sessionId }) => {
+      this.#streaming.delete(sessionId);
+    });
   }
 
   // Insert-or-ignore: returns true if we claimed the message first,
@@ -211,10 +215,7 @@ export class ProcessingMessages {
     if (latest) this.#setStreamingMessage(latest);
     else this.#streaming.delete(sessionId);
     for (const { info, parts } of batch) {
-      if (!this.#existingSessions.check(info.sessionID)) {
-        this.#streaming.delete(info.sessionID);
-        return;
-      }
+      if (!this.#existingSessions.check(info.sessionID)) return;
       if (!this.#claim(info)) continue;
       try {
         await this.#deliver(info, parts);
@@ -235,10 +236,7 @@ export class ProcessingMessages {
     switch (event.type) {
       case "message.updated": {
         const { info } = event.properties;
-        if (!this.#existingSessions.check(info.sessionID)) {
-          this.#streaming.delete(info.sessionID);
-          return;
-        }
+        if (!this.#existingSessions.check(info.sessionID)) return;
         if (info.role !== "assistant") return;
         if (info.time.completed === undefined) {
           this.#setStreamingInfo(info);
@@ -259,27 +257,18 @@ export class ProcessingMessages {
         break;
       }
       case "message.removed":
-        if (!this.#existingSessions.check(event.properties.sessionID)) {
-          this.#streaming.delete(event.properties.sessionID);
-          return;
-        }
+        if (!this.#existingSessions.check(event.properties.sessionID)) return;
         this.#removeStreamingMessage(
           event.properties.sessionID,
           event.properties.messageID,
         );
         break;
       case "message.part.updated":
-        if (!this.#existingSessions.check(event.properties.sessionID)) {
-          this.#streaming.delete(event.properties.sessionID);
-          return;
-        }
+        if (!this.#existingSessions.check(event.properties.sessionID)) return;
         this.#upsertStreamingPart(event.properties.part);
         break;
       case "message.part.removed":
-        if (!this.#existingSessions.check(event.properties.sessionID)) {
-          this.#streaming.delete(event.properties.sessionID);
-          return;
-        }
+        if (!this.#existingSessions.check(event.properties.sessionID)) return;
         this.#removeStreamingPart(
           event.properties.sessionID,
           event.properties.messageID,
@@ -287,10 +276,7 @@ export class ProcessingMessages {
         );
         break;
       case "message.part.delta":
-        if (!this.#existingSessions.check(event.properties.sessionID)) {
-          this.#streaming.delete(event.properties.sessionID);
-          return;
-        }
+        if (!this.#existingSessions.check(event.properties.sessionID)) return;
         this.#applyPartDelta(
           event.properties.sessionID,
           event.properties.messageID,
@@ -300,6 +286,10 @@ export class ProcessingMessages {
         );
         break;
     }
+  }
+
+  [Symbol.dispose]() {
+    this.#unhook();
   }
 
   async #initialize() {

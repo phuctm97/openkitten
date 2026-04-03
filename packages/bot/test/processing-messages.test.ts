@@ -32,14 +32,26 @@ function createMockOpencodeClient(
 }
 
 function createMockExistingSessions(sessionIds: readonly string[] = []) {
+  const hooks: Record<string, ((...args: unknown[]) => unknown) | undefined> =
+    {};
   return {
     sessionIds: [...sessionIds],
+    hook: vi.fn((name: string, fn: (...args: unknown[]) => unknown) => {
+      hooks[name] = fn;
+      return () => {
+        hooks[name] = undefined;
+      };
+    }),
     check: vi.fn(() => true),
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
       chatId: 123,
       threadId: undefined,
     })),
-  } as unknown as ExistingSessions & { sessionIds: string[] };
+    hooks,
+  } as unknown as ExistingSessions & {
+    hooks: typeof hooks;
+    sessionIds: string[];
+  };
 }
 
 async function setup(
@@ -772,6 +784,30 @@ test("update removes the latest streaming message", async () => {
   expect(pm.streaming("sess-1")).toBeUndefined();
 });
 
+test("beforeRemove clears streaming state", async () => {
+  const { es, pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  expect(pm.streaming("sess-1")).toBeDefined();
+
+  es.hooks["beforeRemove"]?.({
+    sessionId: "sess-1",
+    chatId: 123,
+    threadId: undefined,
+  });
+
+  expect(pm.streaming("sess-1")).toBeUndefined();
+});
+
 test("update skips user message", async () => {
   const { grammySendAssistantMessage } = await import(
     "~/lib/grammy-send-assistant-message"
@@ -1353,6 +1389,12 @@ test("initialized stops when session disappears after fetching messages", async 
 
   expect(mockSessionMessages).toHaveBeenCalledTimes(1);
   expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+});
+
+test("dispose unhooks beforeRemove", async () => {
+  const { es, pm } = await setup();
+  pm[Symbol.dispose]();
+  expect(es.hooks["beforeRemove"]).toBeUndefined();
 });
 
 test("update unclaims on delivery failure and allows retry", async () => {
