@@ -38,7 +38,7 @@ export class ProcessingMessages {
 
   // Insert-or-ignore: returns true if we claimed the message first,
   // false if the session is no longer available or the message was already
-  // claimed (e.g. by a previous invalidation or update).
+  // claimed by a previous delivery.
   #claim(message: AssistantMessage): boolean {
     if (!this.#existingSessions.check(message.sessionID)) return false;
     const rows = this.#database
