@@ -45,6 +45,7 @@ export class TypingIndicators implements Disposable {
 
   #typing(sessionId: string): boolean {
     return (
+      this.#existingSessions.check(sessionId) &&
       this.#workingSessions.check(sessionId) &&
       !this.#pendingPrompts.check(sessionId)
     );
@@ -61,10 +62,6 @@ export class TypingIndicators implements Disposable {
   }
 
   async #sync(sessionId: string) {
-    if (!this.#existingSessions.check(sessionId)) {
-      this.#stop(sessionId);
-      return;
-    }
     if (this.#typing(sessionId)) {
       await this.#start(sessionId);
     } else {
