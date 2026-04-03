@@ -236,8 +236,12 @@ export class ProcessingMessages {
     switch (event.type) {
       case "message.updated": {
         const { info } = event.properties;
-        if (!this.#existingSessions.check(info.sessionID)) break;
-        if (info.role !== "assistant") break;
+        if (
+          !this.#existingSessions.check(info.sessionID) ||
+          info.role !== "assistant"
+        ) {
+          break;
+        }
         if (info.time.completed === undefined) {
           this.#setStreamingInfo(info);
           break;
