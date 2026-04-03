@@ -18,7 +18,8 @@ export class ProcessingMessages {
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
-  readonly #streaming = new Map<string, StreamingMessage>();
+  readonly #streamingMessages = new Map<string, StreamingMessage>();
+  readonly #unhook: () => void;
 
   private constructor(
     bot: Bot,
@@ -30,11 +31,16 @@ export class ProcessingMessages {
     this.#database = database;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
+    this.#unhook = existingSessions.hook("beforeRemove", ({ sessionId }) => {
+      this.#streamingMessages.delete(sessionId);
+    });
   }
 
   // Insert-or-ignore: returns true if we claimed the message first,
-  // false if it was already claimed (e.g. by a previous invalidation or update).
+  // false if the session is no longer available or the message was already
+  // claimed by a previous delivery.
   #claim(message: AssistantMessage): boolean {
+    if (!this.#existingSessions.check(message.sessionID)) return false;
     const rows = this.#database
       .insert(schema.message)
       .values({
@@ -59,9 +65,9 @@ export class ProcessingMessages {
     info: AssistantMessage,
     parts: readonly Part[],
   ): Promise<void> {
-    const { chatId, threadId } = this.#existingSessions.get(info.sessionID, {
-      throwIfNotFound: true,
-    });
+    const location = this.#existingSessions.get(info.sessionID);
+    if (!location) return;
+    const { chatId, threadId } = location;
     await grammySendAssistantMessage({
       bot: this.#bot,
       info,
@@ -96,26 +102,29 @@ export class ProcessingMessages {
   }
 
   #setStreamingMessage(message: StreamingMessage): void {
-    this.#streaming.set(message.info.sessionID, structuredClone(message));
+    this.#streamingMessages.set(
+      message.info.sessionID,
+      structuredClone(message),
+    );
   }
 
   #setStreamingInfo(info: AssistantMessage): void {
-    const current = this.#streaming.get(info.sessionID);
+    const current = this.#streamingMessages.get(info.sessionID);
     if (!current || current.info.id !== info.id) {
-      this.#streaming.set(info.sessionID, {
+      this.#streamingMessages.set(info.sessionID, {
         info: structuredClone(info),
         parts: [],
       });
       return;
     }
-    this.#streaming.set(info.sessionID, {
+    this.#streamingMessages.set(info.sessionID, {
       info: structuredClone(info),
       parts: current.parts,
     });
   }
 
   #upsertStreamingPart(part: Part): void {
-    const current = this.#streaming.get(part.sessionID);
+    const current = this.#streamingMessages.get(part.sessionID);
     if (!current || current.info.id !== part.messageID) return;
     const next = structuredClone(part);
     const index = current.parts.findIndex((item) => item.id === part.id);
@@ -128,9 +137,9 @@ export class ProcessingMessages {
   }
 
   #removeStreamingMessage(sessionId: string, messageId: string): void {
-    const current = this.#streaming.get(sessionId);
+    const current = this.#streamingMessages.get(sessionId);
     if (!current || current.info.id !== messageId) return;
-    this.#streaming.delete(sessionId);
+    this.#streamingMessages.delete(sessionId);
   }
 
   #removeStreamingPart(
@@ -138,9 +147,9 @@ export class ProcessingMessages {
     messageId: string,
     partId: string,
   ): void {
-    const current = this.#streaming.get(sessionId);
+    const current = this.#streamingMessages.get(sessionId);
     if (!current || current.info.id !== messageId) return;
-    this.#streaming.set(sessionId, {
+    this.#streamingMessages.set(sessionId, {
       info: current.info,
       parts: current.parts.filter((part) => part.id !== partId),
     });
@@ -153,7 +162,7 @@ export class ProcessingMessages {
     field: string,
     delta: string,
   ): void {
-    const current = this.#streaming.get(sessionId);
+    const current = this.#streamingMessages.get(sessionId);
     if (!current || current.info.id !== messageId) return;
     const part = current.parts.find((item) => item.id === partId);
     if (!part) return;
@@ -200,8 +209,9 @@ export class ProcessingMessages {
       }
       limit *= 2;
     }
+    if (!this.#existingSessions.check(sessionId)) return;
     if (latest) this.#setStreamingMessage(latest);
-    else this.#streaming.delete(sessionId);
+    else this.#streamingMessages.delete(sessionId);
     for (const { info, parts } of batch) {
       if (!this.#claim(info)) continue;
       try {
@@ -214,7 +224,7 @@ export class ProcessingMessages {
   }
 
   streaming(sessionId: string): StreamingMessage | undefined {
-    const current = this.#streaming.get(sessionId);
+    const current = this.#streamingMessages.get(sessionId);
     if (!current) return undefined;
     return structuredClone(current);
   }
@@ -223,13 +233,18 @@ export class ProcessingMessages {
     switch (event.type) {
       case "message.updated": {
         const { info } = event.properties;
-        if (info.role !== "assistant") return;
+        if (
+          !this.#existingSessions.check(info.sessionID) ||
+          info.role !== "assistant"
+        ) {
+          break;
+        }
         if (info.time.completed === undefined) {
           this.#setStreamingInfo(info);
-          return;
+          break;
         }
         this.#removeStreamingMessage(info.sessionID, info.id);
-        if (!this.#claim(info)) return;
+        if (!this.#claim(info)) break;
         try {
           const { data } = await this.#opencodeClient.session.message(
             { sessionID: info.sessionID, messageID: info.id },
@@ -243,31 +258,43 @@ export class ProcessingMessages {
         break;
       }
       case "message.removed":
-        this.#removeStreamingMessage(
-          event.properties.sessionID,
-          event.properties.messageID,
-        );
+        if (this.#existingSessions.check(event.properties.sessionID)) {
+          this.#removeStreamingMessage(
+            event.properties.sessionID,
+            event.properties.messageID,
+          );
+        }
         break;
       case "message.part.updated":
-        this.#upsertStreamingPart(event.properties.part);
+        if (this.#existingSessions.check(event.properties.sessionID)) {
+          this.#upsertStreamingPart(event.properties.part);
+        }
         break;
       case "message.part.removed":
-        this.#removeStreamingPart(
-          event.properties.sessionID,
-          event.properties.messageID,
-          event.properties.partID,
-        );
+        if (this.#existingSessions.check(event.properties.sessionID)) {
+          this.#removeStreamingPart(
+            event.properties.sessionID,
+            event.properties.messageID,
+            event.properties.partID,
+          );
+        }
         break;
       case "message.part.delta":
-        this.#applyPartDelta(
-          event.properties.sessionID,
-          event.properties.messageID,
-          event.properties.partID,
-          event.properties.field,
-          event.properties.delta,
-        );
+        if (this.#existingSessions.check(event.properties.sessionID)) {
+          this.#applyPartDelta(
+            event.properties.sessionID,
+            event.properties.messageID,
+            event.properties.partID,
+            event.properties.field,
+            event.properties.delta,
+          );
+        }
         break;
     }
+  }
+
+  [Symbol.dispose]() {
+    this.#unhook();
   }
 
   async #initialize() {

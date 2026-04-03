@@ -43,24 +43,21 @@ export class TypingIndicators implements Disposable {
     ];
   }
 
-  #typing(sessionId: string): boolean {
-    return (
-      this.#workingSessions.check(sessionId) &&
-      !this.#pendingPrompts.check(sessionId)
-    );
-  }
-
-  #send(sessionId: string) {
-    const { chatId, threadId } = this.#existingSessions.get(sessionId, {
-      throwIfNotFound: true,
-    });
-    return this.#bot.api.sendChatAction(chatId, "typing", {
+  async #send(sessionId: string): Promise<void> {
+    const location = this.#existingSessions.get(sessionId);
+    if (!location) return;
+    const { chatId, threadId } = location;
+    await this.#bot.api.sendChatAction(chatId, "typing", {
       ...(threadId && { message_thread_id: threadId }),
     });
   }
 
   async #sync(sessionId: string) {
-    if (this.#typing(sessionId)) {
+    const typing =
+      this.#existingSessions.check(sessionId) &&
+      this.#workingSessions.check(sessionId) &&
+      !this.#pendingPrompts.check(sessionId);
+    if (typing) {
       await this.#start(sessionId);
     } else {
       this.#stop(sessionId);

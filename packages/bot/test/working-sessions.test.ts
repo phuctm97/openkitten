@@ -13,6 +13,7 @@ function statusEvent(
 function mockExistingSessions() {
   const hooks: Record<string, ((...args: unknown[]) => unknown) | undefined> =
     {};
+  const sessionIds = new Set<string>(["sess-1"]);
   return {
     hook: vi.fn((name: string, fn: (...args: unknown[]) => unknown) => {
       hooks[name] = fn;
@@ -20,8 +21,13 @@ function mockExistingSessions() {
         hooks[name] = undefined;
       };
     }),
+    check: (sessionId: string) => sessionIds.has(sessionId),
     hooks,
-  } as unknown as ExistingSessions & { hooks: typeof hooks };
+    sessionIds,
+  } as unknown as ExistingSessions & {
+    hooks: typeof hooks;
+    sessionIds: Set<string>;
+  };
 }
 
 function setup() {
@@ -47,6 +53,16 @@ test("marks session as working on retry event", async () => {
     statusEvent("sess-1", { type: "retry", attempt: 1, message: "", next: 0 }),
   );
   expect(working.check("sess-1")).toBe(true);
+});
+
+test("ignores busy update for removed session", async () => {
+  const { existingSessions, working } = setup();
+  const onChange = vi.fn();
+  working.hook("change", onChange);
+  existingSessions.sessionIds.delete("sess-1");
+  await working.update(statusEvent("sess-1", { type: "busy" }));
+  expect(working.check("sess-1")).toBe(false);
+  expect(onChange).not.toHaveBeenCalled();
 });
 
 test("does not mark uncached session as working on idle event", async () => {
