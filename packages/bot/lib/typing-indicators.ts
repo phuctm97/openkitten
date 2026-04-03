@@ -52,9 +52,9 @@ export class TypingIndicators implements Disposable {
   }
 
   async #send(sessionId: string): Promise<void> {
-    const { chatId, threadId } = this.#existingSessions.get(sessionId, {
-      throwIfNotFound: true,
-    });
+    const location = this.#existingSessions.get(sessionId);
+    if (!location) return;
+    const { chatId, threadId } = location;
     await this.#bot.api.sendChatAction(chatId, "typing", {
       ...(threadId && { message_thread_id: threadId }),
     });
@@ -78,20 +78,14 @@ export class TypingIndicators implements Disposable {
     this.#timers.set(
       sessionId,
       setInterval(() => {
-        if (this.#typing(sessionId)) {
-          this.#floatingPromises.track(
-            this.#send(sessionId).catch((error) => {
-              logger.fatal(
-                "Failed to send typing indicator to Telegram",
-                error,
-                {
-                  sessionId,
-                },
-              );
-              this.#shutdown.trigger();
-            }),
-          );
-        }
+        this.#floatingPromises.track(
+          this.#send(sessionId).catch((error) => {
+            logger.fatal("Failed to send typing indicator to Telegram", error, {
+              sessionId,
+            });
+            this.#shutdown.trigger();
+          }),
+        );
       }, 4_000),
     );
   }
