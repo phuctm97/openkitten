@@ -245,6 +245,40 @@ test("interval failures are tracked and trigger shutdown", async () => {
   expect(shutdown.trigger).toHaveBeenCalled();
 });
 
+test("queued interval callback ignores removed sessions", async () => {
+  let intervalCallback: (() => void) | undefined;
+  const setIntervalSpy = vi.spyOn(globalThis, "setInterval");
+  setIntervalSpy.mockImplementation(((
+    fn: Parameters<typeof setInterval>[0],
+  ) => {
+    if (typeof fn === "function") intervalCallback = fn;
+    return 1 as unknown as Timer;
+  }) as typeof setInterval);
+  const clearIntervalSpy = vi.spyOn(globalThis, "clearInterval");
+  clearIntervalSpy.mockImplementation(() => {});
+  const map: Record<string, ExistingSessions.Location> = {
+    "sess-1": { chatId: 123, threadId: undefined },
+  };
+  const { es, ws, fp, shutdown } = setup(map, new Set(["sess-1"]));
+  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  es.hooks["beforeRemove"]?.({
+    sessionId: "sess-1",
+    chatId: 123,
+    threadId: undefined,
+  });
+  delete map["sess-1"];
+
+  intervalCallback?.();
+
+  expect(fp.track).toHaveBeenCalledOnce();
+  const tracked = (fp.track as MockFn).mock.calls[0]?.[0] as Promise<void>;
+  await tracked;
+  expect(mockSendChatAction).toHaveBeenCalledTimes(1);
+  expect(shutdown.trigger).not.toHaveBeenCalled();
+  setIntervalSpy.mockRestore();
+  clearIntervalSpy.mockRestore();
+});
+
 test("beforeRemove prevents further interval sends after typing has started", async () => {
   const map: Record<string, ExistingSessions.Location> = {
     "sess-1": { chatId: 123, threadId: undefined },

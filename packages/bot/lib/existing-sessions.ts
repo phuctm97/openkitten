@@ -85,6 +85,7 @@ export class ExistingSessions {
     this.#hooks.hook(...args);
 
   check(sessionId: string): boolean {
+    if (this.#removing.has(sessionId)) return false;
     return !!this.#database.query.session
       .findFirst({
         columns: { id: true },
@@ -115,6 +116,9 @@ export class ExistingSessions {
       if (options.throwIfNotFound) {
         throw new ExistingSessions.NotFoundError(sessionId);
       }
+      return undefined;
+    }
+    if (this.#removing.has(sessionId) && !options.throwIfNotFound) {
       return undefined;
     }
     return {
