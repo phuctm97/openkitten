@@ -57,18 +57,13 @@ export class WorkingSessions implements Disposable {
 
   async update(event: EventSessionStatus) {
     const { sessionID, status } = event.properties;
-    if (!this.#existingSessions.check(sessionID)) {
-      this.#cached.delete(sessionID);
-      return;
-    }
-    const working = status.type === "busy" || status.type === "retry";
-    if (working) {
-      if (this.#cached.has(sessionID)) return;
-      this.#cached.add(sessionID);
-    } else {
-      if (!this.#cached.has(sessionID)) return;
-      this.#cached.delete(sessionID);
-    }
+    const previous = this.#cached.has(sessionID);
+    const working =
+      this.#existingSessions.check(sessionID) &&
+      (status.type === "busy" || status.type === "retry");
+    if (previous === working) return;
+    if (working) this.#cached.add(sessionID);
+    else this.#cached.delete(sessionID);
     const results = await this.#hooks.callHookWith(
       (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
       "change",

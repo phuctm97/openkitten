@@ -57,9 +57,12 @@ test("marks session as working on retry event", async () => {
 
 test("ignores busy update for removed session", async () => {
   const { existingSessions, working } = setup();
+  const onChange = vi.fn();
+  working.hook("change", onChange);
   existingSessions.sessionIds.delete("sess-1");
   await working.update(statusEvent("sess-1", { type: "busy" }));
   expect(working.check("sess-1")).toBe(false);
+  expect(onChange).not.toHaveBeenCalled();
 });
 
 test("does not mark uncached session as working on idle event", async () => {
@@ -85,7 +88,7 @@ test("does not fire change hook when working state is unchanged", async () => {
   expect(onChange).not.toHaveBeenCalled();
 });
 
-test("silently drops stale cached state for removed session update", async () => {
+test("fires change hook when stale removed session stops being working", async () => {
   const { existingSessions, working } = setup();
   const onChange = vi.fn();
   working.hook("change", onChange);
@@ -94,7 +97,10 @@ test("silently drops stale cached state for removed session update", async () =>
   existingSessions.sessionIds.delete("sess-1");
   await working.update(statusEvent("sess-1", { type: "idle" }));
   expect(working.check("sess-1")).toBe(false);
-  expect(onChange).not.toHaveBeenCalled();
+  expect(onChange).toHaveBeenCalledWith({
+    sessionId: "sess-1",
+    working: false,
+  });
 });
 
 test("fires change hook when session becomes working", async () => {
