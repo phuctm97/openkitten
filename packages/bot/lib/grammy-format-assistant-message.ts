@@ -201,6 +201,7 @@ function summarizeToolPart(
       addReadPath(summary, info, stringProp(part.state.input, "filePath"));
       return;
     case "edit":
+    case "multiedit":
     case "write":
       addChangedPaths(summary, info, [
         stringProp(part.state.input, "filePath"),

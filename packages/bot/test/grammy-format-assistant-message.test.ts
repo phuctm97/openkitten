@@ -355,6 +355,14 @@ test("underlines inline agent references from the first later action section", (
   expect(chunks[0]?.markdown).toContain("__@planner__");
 });
 
+test("treats multiedit as a changed-file action", () => {
+  const chunks = grammyFormatAssistantMessage(createInfo(), [
+    createCompletedToolPart("multiedit", { filePath: "/repo/src/app.ts" }),
+  ]);
+
+  expect(getText(chunks)).toBe("🛠️ _Changed 1 file._");
+});
+
 test("only applies inline references to the nearest earlier text section", () => {
   const fileSource: FileSource = {
     type: "file",
