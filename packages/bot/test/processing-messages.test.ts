@@ -43,7 +43,12 @@ function createMockExistingSessions(sessionIds: readonly string[] = []) {
       };
     }),
     check: vi.fn(() => true),
+    checkAvailable: vi.fn(() => true),
     get: vi.fn((_sessionId: string, _options: ExistingSessions.GetOptions) => ({
+      chatId: 123,
+      threadId: undefined,
+    })),
+    getAvailable: vi.fn((_sessionId: string) => ({
       chatId: 123,
       threadId: undefined,
     })),
@@ -285,7 +290,7 @@ test("update ignores part snapshots for removed sessions", async () => {
       },
     },
   } as never);
-  vi.mocked(es.check).mockReturnValue(false);
+  vi.mocked(es.checkAvailable).mockReturnValue(false);
   await pm.update({
     type: "message.part.updated",
     properties: {
@@ -675,7 +680,7 @@ test("update ignores part deltas for removed sessions", async () => {
       time: 2,
     },
   } as never);
-  vi.mocked(es.check).mockReturnValue(false);
+  vi.mocked(es.checkAvailable).mockReturnValue(false);
   await pm.update({
     type: "message.part.delta",
     properties: {
@@ -868,7 +873,7 @@ test("update ignores part removals for removed sessions", async () => {
       time: 2,
     },
   } as never);
-  vi.mocked(es.check).mockReturnValue(false);
+  vi.mocked(es.checkAvailable).mockReturnValue(false);
   await pm.update({
     type: "message.part.removed",
     properties: {
@@ -924,7 +929,7 @@ test("update ignores message.removed for removed sessions", async () => {
       },
     },
   } as never);
-  vi.mocked(es.check).mockReturnValue(false);
+  vi.mocked(es.checkAvailable).mockReturnValue(false);
   await pm.update({
     type: "message.removed",
     properties: {
@@ -1371,7 +1376,7 @@ test("update skips removed sessions before processing", async () => {
     "~/lib/grammy-send-assistant-message"
   );
   const { database, es, pm } = await setup();
-  vi.mocked(es.check).mockReturnValue(false);
+  vi.mocked(es.checkAvailable).mockReturnValue(false);
 
   await pm.update({
     type: "message.updated",
@@ -1398,7 +1403,7 @@ test("update skips delivery when session disappears after claim", async () => {
     "~/lib/grammy-send-assistant-message"
   );
   const { database, es, pm } = await setup();
-  vi.mocked(es.get).mockReturnValue(undefined);
+  vi.mocked(es.getAvailable).mockReturnValue(undefined);
 
   await pm.update({
     type: "message.updated",
@@ -1448,7 +1453,7 @@ test("initialized stops when session disappears after fetching messages", async 
   const bot = {} as never;
   const client = createMockOpencodeClient({ preserveMessagesMock: true });
   const es = createMockExistingSessions(["sess-1"]);
-  vi.mocked(es.check).mockReturnValueOnce(true).mockReturnValue(false);
+  vi.mocked(es.checkAvailable).mockReturnValueOnce(true).mockReturnValue(false);
 
   const pm = await ProcessingMessages.create(bot, database, client, es);
 
@@ -1479,7 +1484,7 @@ test("initialized skips streaming state when session disappears before sync comm
   const bot = {} as never;
   const client = createMockOpencodeClient({ preserveMessagesMock: true });
   const es = createMockExistingSessions(["sess-1"]);
-  vi.mocked(es.check).mockReturnValue(false);
+  vi.mocked(es.checkAvailable).mockReturnValue(false);
 
   const pm = await ProcessingMessages.create(bot, database, client, es);
 

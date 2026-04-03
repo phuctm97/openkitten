@@ -85,13 +85,17 @@ export class ExistingSessions {
     this.#hooks.hook(...args);
 
   check(sessionId: string): boolean {
-    if (this.#removing.has(sessionId)) return false;
     return !!this.#database.query.session
       .findFirst({
         columns: { id: true },
         where: eq(schema.session.id, sessionId),
       })
       .sync();
+  }
+
+  // For best-effort/background paths that should stop as soon as removal starts.
+  checkAvailable(sessionId: string): boolean {
+    return !this.#removing.has(sessionId) && this.check(sessionId);
   }
 
   get(
@@ -118,13 +122,16 @@ export class ExistingSessions {
       }
       return undefined;
     }
-    if (this.#removing.has(sessionId) && !options.throwIfNotFound) {
-      return undefined;
-    }
     return {
       chatId: row.chatId,
       threadId: row.threadId || undefined,
     };
+  }
+
+  // For best-effort/background paths that should stop as soon as removal starts.
+  getAvailable(sessionId: string): ExistingSessions.Location | undefined {
+    if (this.#removing.has(sessionId)) return undefined;
+    return this.get(sessionId);
   }
 
   find(

@@ -44,7 +44,7 @@ export class TypingIndicators implements Disposable {
   }
 
   async #send(sessionId: string): Promise<void> {
-    const location = this.#existingSessions.get(sessionId);
+    const location = this.#existingSessions.getAvailable(sessionId);
     if (!location) return;
     const { chatId, threadId } = location;
     await this.#bot.api.sendChatAction(chatId, "typing", {
@@ -54,7 +54,7 @@ export class TypingIndicators implements Disposable {
 
   async #sync(sessionId: string) {
     const typing =
-      this.#existingSessions.check(sessionId) &&
+      this.#existingSessions.checkAvailable(sessionId) &&
       this.#workingSessions.check(sessionId) &&
       !this.#pendingPrompts.check(sessionId);
     if (typing) {

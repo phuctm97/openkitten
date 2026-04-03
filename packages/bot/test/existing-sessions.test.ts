@@ -65,6 +65,21 @@ test("check returns false for non-existing session", async () => {
   expect(es.check("s1")).toBe(false);
 });
 
+test("checkAvailable returns true for existing session", async () => {
+  const { es, opencodeClient } = await setup();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+  await es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+  expect(es.checkAvailable("s1")).toBe(true);
+});
+
+test("checkAvailable returns false for non-existing session", async () => {
+  const { es } = await setup();
+  expect(es.checkAvailable("s1")).toBe(false);
+});
+
 // --- find with createIfNotFound ---
 
 test("find creates new session when createIfNotFound is true", async () => {
@@ -392,6 +407,24 @@ test("get returns undefined for unknown session when throwIfNotFound is false", 
   expect(es.get("unknown", { throwIfNotFound: false })).toBeUndefined();
 });
 
+test("getAvailable returns location for existing session", async () => {
+  const { es, opencodeClient } = await setup();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+
+  await es.find({ chatId: 123, threadId: 7 }, { createIfNotFound: true });
+
+  expect(es.getAvailable("s1")).toEqual({
+    chatId: 123,
+    threadId: 7,
+  });
+});
+
+test("getAvailable returns undefined for unknown session", async () => {
+  const { es } = await setup();
+
+  expect(es.getAvailable("unknown")).toBeUndefined();
+});
+
 // --- find ---
 
 test("find returns sessionId for existing session", async () => {
@@ -491,7 +524,7 @@ test("remove throws and preserves session on DB error", async () => {
   expect(es.sessionIds).toEqual(["s1"]);
 });
 
-test("check returns false while session is being removed", async () => {
+test("check still returns true while session is being removed", async () => {
   const { es, opencodeClient } = await setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
@@ -506,10 +539,28 @@ test("check returns false while session is being removed", async () => {
 
   await es.remove("s1");
 
+  expect(checks).toEqual([true]);
+});
+
+test("checkAvailable returns false while session is being removed", async () => {
+  const { es, opencodeClient } = await setup();
+  opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
+
+  await es.find(
+    { chatId: 123, threadId: undefined },
+    { createIfNotFound: true },
+  );
+  const checks: boolean[] = [];
+  es.hook("beforeRemove", () => {
+    checks.push(es.checkAvailable("s1"));
+  });
+
+  await es.remove("s1");
+
   expect(checks).toEqual([false]);
 });
 
-test("get returns undefined while session is being removed", async () => {
+test("get still returns location while session is being removed", async () => {
   const { es, opencodeClient } = await setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
@@ -524,10 +575,13 @@ test("get returns undefined while session is being removed", async () => {
 
   await es.remove("s1");
 
-  expect(location).toBeUndefined();
+  expect(location).toEqual({
+    chatId: 123,
+    threadId: undefined,
+  });
 });
 
-test("get with throwIfNotFound still returns location while session is being removed", async () => {
+test("getAvailable returns undefined while session is being removed", async () => {
   const { es, opencodeClient } = await setup();
   opencodeClient.session.create.mockResolvedValue({ data: { id: "s1" } });
 
@@ -537,15 +591,12 @@ test("get with throwIfNotFound still returns location while session is being rem
   );
   let location: ExistingSessions.Location | undefined;
   es.hook("beforeRemove", () => {
-    location = es.get("s1", { throwIfNotFound: true });
+    location = es.getAvailable("s1");
   });
 
   await es.remove("s1");
 
-  expect(location).toEqual({
-    chatId: 123,
-    threadId: undefined,
-  });
+  expect(location).toBeUndefined();
 });
 
 // --- hooks ---

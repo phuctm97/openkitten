@@ -91,9 +91,11 @@ function mockExistingSessions(
 ) {
   const find = vi.fn();
   const check = vi.fn((id: string) => id in getMap);
+  const checkAvailable = vi.fn((id: string) => id in getMap);
   const get = vi.fn(
     (id: string, _options: ExistingSessions.GetOptions) => getMap[id],
   );
+  const getAvailable = vi.fn((id: string) => getMap[id]);
   const hook = vi.fn(() => () => {});
   const remove = vi.fn(async () => {});
   const existingSessions = {
@@ -103,7 +105,9 @@ function mockExistingSessions(
     hook,
     find,
     check,
+    checkAvailable,
     get,
+    getAvailable,
     remove,
   };
   vi.spyOn(ExistingSessions, "create").mockImplementation(async () => {

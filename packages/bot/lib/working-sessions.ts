@@ -59,7 +59,7 @@ export class WorkingSessions implements Disposable {
     const { sessionID, status } = event.properties;
     const previous = this.#cached.has(sessionID);
     const next =
-      this.#existingSessions.check(sessionID) &&
+      this.#existingSessions.checkAvailable(sessionID) &&
       (status.type === "busy" || status.type === "retry");
     if (previous === next) return;
     if (next) this.#cached.add(sessionID);
