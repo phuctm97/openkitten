@@ -1,6 +1,7 @@
 import type { Part } from "@opencode-ai/sdk/v2";
 import { InputFile, InputMediaBuilder } from "grammy";
 import invariant from "tiny-invariant";
+import type { AttachmentKind } from "~/lib/attachment-kind";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getAttachmentName } from "~/lib/get-attachment-name";
 import { grammyBuildAssistantMessageSections } from "~/lib/grammy-build-assistant-message-sections";
@@ -24,13 +25,6 @@ interface TelegramAttachment {
   readonly name: string;
 }
 
-type AttachmentKind =
-  | "sticker"
-  | "animation"
-  | "document"
-  | "photo"
-  | "video"
-  | "audio";
 type MediaGroupKind = "audio" | "document" | "visual";
 
 export async function grammySendAssistantMessage({

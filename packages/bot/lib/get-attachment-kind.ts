@@ -1,10 +1,11 @@
+import type { AttachmentKind } from "~/lib/attachment-kind";
 import { getAttachmentMime } from "~/lib/get-attachment-mime";
 import { getFileExtension } from "~/lib/get-file-extension";
 
 export function getAttachmentKind(
   filemime: string | undefined,
   filename: string,
-): "sticker" | "animation" | "document" | "photo" | "video" | "audio" {
+): AttachmentKind {
   const mime = getAttachmentMime(filemime, filename);
   const ext = getFileExtension(filename);
 

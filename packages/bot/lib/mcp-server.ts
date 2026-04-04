@@ -9,6 +9,8 @@ import type {
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
 import zod from "zod";
+import type { AttachmentKind } from "~/lib/attachment-kind";
+import { attachmentKindSchema } from "~/lib/attachment-kind-schema";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getAttachmentName } from "~/lib/get-attachment-name";
@@ -20,32 +22,20 @@ const openkittenMetadataSchema = zod.object({
   callID: zod.string().trim().min(1),
 });
 
-const openkittenArgsSchema = zod
+const openkittenArgsSchema = zod.object({
+  __OPENKITTEN__: openkittenMetadataSchema,
+});
+
+const sendFileInputSchema = zod
   .object({
     path: zod.string().trim().min(1).describe("Absolute path to a local file."),
-    __OPENKITTEN__: openkittenMetadataSchema,
   })
-  .passthrough();
-
-const sendFileInputSchema = openkittenArgsSchema
-  .omit({ __OPENKITTEN__: true })
   .passthrough();
 
 const sendFileOutputSchema = zod.object({
   name: zod.string(),
-  kind: zod.enum([
-    "sticker",
-    "animation",
-    "document",
-    "photo",
-    "video",
-    "audio",
-  ]),
+  kind: attachmentKindSchema,
 });
-
-const attachmentKinds = sendFileOutputSchema.shape.kind.options;
-
-type AttachmentKind = (typeof attachmentKinds)[number];
 type SendFileArgs = zod.output<typeof sendFileInputSchema>;
 type SendFileOutput = zod.output<typeof sendFileOutputSchema>;
 type SendFileResult = CallToolResult & {
