@@ -1,7 +1,6 @@
 import type { PropsWithChildren } from "react";
 import {
   isRouteErrorResponse,
-  Link,
   Links,
   Meta,
   Outlet,
@@ -9,8 +8,6 @@ import {
   ScrollRestoration,
 } from "react-router";
 import type { Route } from "./+types/root";
-
-import "./root.css";
 
 export function Layout({ children }: PropsWithChildren) {
   return (
@@ -29,9 +26,6 @@ export function Layout({ children }: PropsWithChildren) {
               <p className="eyebrow">OpenKitten World</p>
               <h1 className="page-title">Framework Mode Scaffold</h1>
             </div>
-            <nav className="app-nav" aria-label="Primary">
-              <Link to="/">House</Link>
-            </nav>
           </header>
           <main className="app-main">{children}</main>
         </div>
