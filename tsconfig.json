@@ -1,18 +1,21 @@
 {
   "include": ["prepare.ts"],
-  "references": [{ "path": "./packages/bot/tsconfig.json" }],
+  "references": [
+    { "path": "./packages/bot/tsconfig.json" },
+    { "path": "./packages/world/tsconfig.json" }
+  ],
   "extends": "@tsconfig/bun/tsconfig.json",
   "compilerOptions": {
-    "types": ["bun"],
-    "composite": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noPropertyAccessFromIndexSignature": true,
     "noEmit": false,
+    "composite": true,
     "exactOptionalPropertyTypes": true,
     "allowImportingTsExtensions": false,
     "emitDeclarationOnly": true,
+    "types": ["bun"],
     "outDir": "dist"
   }
 }
