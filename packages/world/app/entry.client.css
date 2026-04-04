@@ -38,7 +38,6 @@ a {
 .app-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 24px;
   margin: 0 auto 32px;
   max-width: 960px;
@@ -62,12 +61,6 @@ a {
   margin: 0;
   font-size: clamp(2rem, 4vw, 3.2rem);
   line-height: 1;
-}
-
-.app-nav {
-  display: flex;
-  gap: 16px;
-  font-weight: 600;
 }
 
 .app-main {
