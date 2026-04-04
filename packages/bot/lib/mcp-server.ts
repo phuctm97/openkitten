@@ -102,21 +102,25 @@ export class McpServer implements Disposable {
   }> {
     const parsedArgs = openkittenArgsSchema.parse(args);
     const metadata = parsedArgs.__OPENKITTEN__;
-    const source = await this.#loadLocalFile(args);
+    const path = args.path;
+    const file = Bun.file(path);
+    if (!(await file.exists())) {
+      throw new Error(`File not found: ${path}`);
+    }
     const location = this.#existingSessions.get(metadata.sessionID);
     if (!location) {
       throw new Error(`No Telegram session found: ${metadata.sessionID}`);
     }
 
     const filename = attachmentFilename(
-      source.filename,
+      basename(path),
       undefined,
       "attachment",
     );
     const attachment = {
       filename,
       kind: attachmentKind(undefined, filename),
-      media: new InputFile(source.path, filename),
+      media: new InputFile(path, filename),
     };
     const sendOptions = {
       ...(location.threadId && { message_thread_id: location.threadId }),
@@ -167,15 +171,6 @@ export class McpServer implements Disposable {
         break;
     }
 
-    logger.info("MCP file is sent to Telegram", {
-      callId: metadata.callID,
-      chatId: location.chatId,
-      filename: attachment.filename,
-      kind: attachment.kind,
-      sessionId: metadata.sessionID,
-      threadId: location.threadId,
-    });
-
     const output = {
       name: attachment.filename,
       kind: attachment.kind,
@@ -189,23 +184,6 @@ export class McpServer implements Disposable {
         },
       ],
       structuredContent: output,
-    };
-  }
-
-  async #loadLocalFile(args: SendFileArgs): Promise<{
-    readonly filename: string;
-    readonly path: string;
-  }> {
-    const path = args.path;
-
-    const file = Bun.file(path);
-    if (!(await file.exists())) {
-      throw new Error(`File not found: ${path}`);
-    }
-
-    return {
-      filename: basename(path),
-      path,
     };
   }
 

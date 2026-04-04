@@ -47,7 +47,6 @@ export const serve = defineCommand({
     using shutdown = Shutdown.create();
     using database = Database.create(profile);
     await using opencodeServer = await OpencodeServer.create(opencodeConfig);
-    await using floatingPromises = FloatingPromises.create();
     const existingSessions = await ExistingSessions.create(
       bot,
       database,
@@ -71,6 +70,7 @@ export const serve = defineCommand({
       opencodeServer.client,
       existingSessions,
     );
+    await using floatingPromises = FloatingPromises.create();
     using typingIndicators = TypingIndicators.create(
       shutdown,
       bot,
