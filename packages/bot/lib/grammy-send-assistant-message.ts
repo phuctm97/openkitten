@@ -22,7 +22,13 @@ interface TelegramAttachment {
   readonly media: InputFile;
 }
 
-type AttachmentKind = "animation" | "audio" | "document" | "photo" | "video";
+type AttachmentKind =
+  | "animation"
+  | "audio"
+  | "document"
+  | "photo"
+  | "sticker"
+  | "video";
 type MediaGroupKind = "audio" | "document" | "visual";
 
 export async function grammySendAssistantMessage({
@@ -171,6 +177,7 @@ function mediaGroupKind(
     case "video":
       return "visual";
     case "animation":
+    case "sticker":
       return undefined;
   }
 }
@@ -204,6 +211,9 @@ async function sendSingleAttachment({
     case "photo":
       await bot.api.sendPhoto(chatId, attachment.media, sendOpts);
       return;
+    case "sticker":
+      await bot.api.sendSticker(chatId, attachment.media, sendOpts);
+      return;
     case "video":
       await bot.api.sendVideo(chatId, attachment.media, sendOpts);
       return;
@@ -234,6 +244,8 @@ function attachmentFilename(file: FilePart, index: number): string {
 function attachmentKind(file: FilePart, filename: string): AttachmentKind {
   const mime = attachmentMimeType(file, filename);
   const ext = fileExtension(filename);
+
+  if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
 
   if (mime === "image/gif" || ext === "gif") return "animation";
 

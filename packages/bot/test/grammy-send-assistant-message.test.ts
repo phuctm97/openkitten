@@ -73,6 +73,9 @@ function createBot() {
       sendPhoto: vi.fn(
         async (_chatId: number, _media: InputFile, _options?: unknown) => ({}),
       ),
+      sendSticker: vi.fn(
+        async (_chatId: number, _media: InputFile, _options?: unknown) => ({}),
+      ),
       sendVideo: vi.fn(
         async (_chatId: number, _media: InputFile, _options?: unknown) => ({}),
       ),
@@ -272,6 +275,46 @@ test("uses filename mime lookup to keep svg attachments as documents", async () 
   expect(bot.api.sendPhoto).not.toHaveBeenCalled();
 });
 
+test("routes tgs attachments through Telegram stickers", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    bot: bot as never,
+    info,
+    parts: [
+      createFilePart("application/x-tgsticker", "sticker.tgs"),
+      createFilePart("application/x-tgsticker", "sticker.bin"),
+      createFilePart("application/octet-stream", "fallback.tgs"),
+    ],
+    chatId: 123,
+    threadId: undefined,
+  });
+
+  expect(bot.api.sendSticker).toHaveBeenNthCalledWith(
+    1,
+    123,
+    expect.any(InputFile),
+    {},
+  );
+  expect(bot.api.sendSticker).toHaveBeenNthCalledWith(
+    2,
+    123,
+    expect.any(InputFile),
+    {},
+  );
+  expect(bot.api.sendSticker).toHaveBeenNthCalledWith(
+    3,
+    123,
+    expect.any(InputFile),
+    {},
+  );
+  expect(bot.api.sendDocument).not.toHaveBeenCalled();
+  expect(bot.api.sendAnimation).not.toHaveBeenCalled();
+});
+
 test("falls back to generic part mime when filename lookup has no match", async () => {
   const bot = createBot();
   vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
@@ -431,6 +474,7 @@ test("skips Telegram sends when nothing is visible or attachable", async () => {
   expect(bot.api.sendDocument).not.toHaveBeenCalled();
   expect(bot.api.sendMediaGroup).not.toHaveBeenCalled();
   expect(bot.api.sendPhoto).not.toHaveBeenCalled();
+  expect(bot.api.sendSticker).not.toHaveBeenCalled();
   expect(bot.api.sendVideo).not.toHaveBeenCalled();
 });
 
