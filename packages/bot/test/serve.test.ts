@@ -4,6 +4,7 @@ import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { Grammy } from "~/lib/grammy";
 import { McpServer } from "~/lib/mcp-server";
+import { OpencodeConfig } from "~/lib/opencode-config";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { OpencodeServer } from "~/lib/opencode-server";
 import { PendingPrompts } from "~/lib/pending-prompts";
@@ -72,6 +73,15 @@ function mockTelegramConfig() {
   vi.spyOn(TelegramConfig, "create").mockResolvedValue({
     botToken: "test-token",
     userId: 123,
+  } as never);
+}
+
+function mockOpencodeConfig() {
+  vi.spyOn(OpencodeConfig, "create").mockResolvedValue({
+    bin: "opencode",
+    cwd: "/workspace",
+    env: {},
+    authorization: "Basic dGVzdDp0ZXN0",
   } as never);
 }
 
@@ -267,6 +277,7 @@ function mockShutdown() {
 
 function mockAll() {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   const disposeOpencodeServer = mockOpencodeServer();
   const disposeMcpServer = mockMcpServer();
@@ -320,6 +331,7 @@ test("configures auto-retry on the bot api during bootstrap", async () => {
 
 test("exits on unexpected opencode server exit", async () => {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   mockMcpServer();
   const exited = Promise.reject(
@@ -350,6 +362,7 @@ test("exits on unexpected opencode server exit", async () => {
 
 test("exits on unexpected grammy stop", async () => {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();
@@ -374,6 +387,7 @@ test("exits on unexpected grammy stop", async () => {
 
 test("exits on event stream failure", async () => {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();
@@ -398,6 +412,7 @@ test("exits on event stream failure", async () => {
 
 test("awaits existing session initialization before creating working sessions", async () => {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();
@@ -425,6 +440,7 @@ test("awaits existing session initialization before creating working sessions", 
 
 test("awaits processing message initialization before connecting event stream", async () => {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();
@@ -459,6 +475,7 @@ test("awaits processing message initialization before connecting event stream", 
 
 test("onEvent returns the handler promise", async () => {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();
@@ -487,6 +504,7 @@ test("onEvent returns the handler promise", async () => {
 
 test("updates working sessions on session.status event", async () => {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();
@@ -518,8 +536,26 @@ test("updates working sessions on session.status event", async () => {
   await run;
 });
 
+test("passes yes option when yes flag is set", async () => {
+  const { triggerShutdown } = mockAll();
+  const run = runCommand(serve, { rawArgs: ["--yes"] });
+
+  await vi.waitFor(() =>
+    expect(TelegramConfig.create).toHaveBeenCalledWith(expect.anything(), {
+      yes: true,
+    }),
+  );
+  expect(OpencodeConfig.create).toHaveBeenCalledWith(expect.anything(), {
+    yes: true,
+  });
+
+  triggerShutdown();
+  await run;
+});
+
 test("updates pending prompts on question.asked event", async () => {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();
@@ -552,6 +588,7 @@ test("updates pending prompts on question.asked event", async () => {
 
 test("updates pending prompts on permission.asked event", async () => {
   mockTelegramConfig();
+  mockOpencodeConfig();
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();

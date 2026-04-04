@@ -120,6 +120,26 @@ test("installs on linux", async () => {
   );
 });
 
+test("passes yes option when yes flag is set", async () => {
+  const { TelegramConfig } = await import("~/lib/telegram-config");
+  const { OpencodeConfig } = await import("~/lib/opencode-config");
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: ["--yes"] });
+  expect(vi.mocked(TelegramConfig.create)).toHaveBeenCalledWith(
+    expect.anything(),
+    { yes: true },
+  );
+  expect(vi.mocked(OpencodeConfig.create)).toHaveBeenCalledWith(
+    expect.anything(),
+    { yes: true },
+  );
+});
+
 test("restarts on linux when already running", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))

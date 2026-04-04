@@ -270,6 +270,28 @@ test("runs providers list when tty", async () => {
   }
 });
 
+test("skips action loop when yes is true", async () => {
+  const isTTYModule = await import("~/lib/is-tty");
+  Object.defineProperty(isTTYModule, "isTTY", { value: true, writable: true });
+  const spawn = vi.spyOn(Bun, "spawn").mockImplementation((() => ({
+    exited: Promise.resolve(0),
+  })) as never);
+  try {
+    await OpencodeConfig.create(profile, { yes: true });
+    expect(select).not.toHaveBeenCalled();
+    expect(spawn).toHaveBeenCalledWith(
+      [expect.stringContaining("opencode"), "providers", "list"],
+      expect.objectContaining({
+        stdio: ["inherit", "inherit", "inherit"],
+      }),
+    );
+  } finally {
+    spawn.mockRestore();
+    vi.mocked(select).mockReset();
+    Object.defineProperty(isTTYModule, "isTTY", { value: false });
+  }
+});
+
 test("runs providers login when user selects add", async () => {
   const isTTYModule = await import("~/lib/is-tty");
   Object.defineProperty(isTTYModule, "isTTY", { value: true, writable: true });

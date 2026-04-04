@@ -59,6 +59,8 @@ To run directly in the foreground:
 bun . serve
 ```
 
+Use `-y` / `--yes` with `up` or `serve` to skip the optional config action menus when you just want to continue with the current setup.
+
 > [!NOTE]
 > The system service may appear as "Jarred Sumner" — this is the name of the Bun creator used to sign the runtime, not malware.
 

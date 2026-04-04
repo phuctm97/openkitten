@@ -185,7 +185,14 @@ async function installWin32(profile: Profile): Promise<void> {
 
 export const up = defineCommand({
   meta: { description: "Install and update OpenKitten as a system service." },
-  run: async () => {
+  args: {
+    yes: {
+      type: "boolean",
+      alias: ["y"],
+      description: "Skip optional config actions.",
+    },
+  },
+  run: async ({ args: { yes } }) => {
     process.stderr.write(
       `${boxen(styleText("bold", "Source"), { padding: 1 })}\n`,
     );
@@ -193,8 +200,8 @@ export const up = defineCommand({
     await updateSource();
     clack.outro("Processed update");
     const profile = await Profile.create();
-    await TelegramConfig.create(profile);
-    await OpencodeConfig.create(profile);
+    await TelegramConfig.create(profile, { yes });
+    await OpencodeConfig.create(profile, { yes });
     process.stderr.write(
       `${boxen(styleText("bold", "OpenKitten"), { padding: 1 })}\n`,
     );
