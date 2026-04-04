@@ -35,12 +35,16 @@ const sendFileOutputSchema = zod.object({
   name: zod.string(),
   kind: attachmentKindSchema,
 });
+
 type SendFileArgs = zod.output<typeof sendFileInputSchema>;
+
 type SendFileOutput = zod.output<typeof sendFileOutputSchema>;
+
 type SendFileResult = CallToolResult & {
   readonly content: TextContent[];
   readonly structuredContent: SendFileOutput;
 };
+
 type OpenkittenMetadata = zod.output<typeof openkittenMetadataSchema>;
 
 export class McpServer implements Disposable {
