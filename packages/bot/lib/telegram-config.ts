@@ -20,7 +20,7 @@ const schema = zod.object({
 });
 
 interface TelegramConfigCreateOptions {
-  readonly yes?: boolean;
+  readonly yes?: boolean | undefined;
 }
 
 function cancel(): never {

@@ -37,8 +37,7 @@ export const serve = defineCommand({
       description: "Skip optional config actions.",
     },
   },
-  run: async ({ args }) => {
-    const yes = args.yes === true;
+  run: async ({ args: { yes } }) => {
     const profile = await Profile.create();
     const telegramConfig = await TelegramConfig.create(profile, { yes });
     const opencodeConfig = await OpencodeConfig.create(profile, { yes });

@@ -192,8 +192,7 @@ export const up = defineCommand({
       description: "Skip optional config actions.",
     },
   },
-  run: async ({ args }) => {
-    const yes = args.yes === true;
+  run: async ({ args: { yes } }) => {
     process.stderr.write(
       `${boxen(styleText("bold", "Source"), { padding: 1 })}\n`,
     );

@@ -44,7 +44,7 @@ const opencodePluginSource = `export default {
 `;
 
 interface OpencodeConfigCreateOptions {
-  readonly yes?: boolean;
+  readonly yes?: boolean | undefined;
 }
 
 function normalizePathPattern(path: string): string {
