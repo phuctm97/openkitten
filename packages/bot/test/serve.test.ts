@@ -3,6 +3,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { Grammy } from "~/lib/grammy";
+import { GrammyEventStream } from "~/lib/grammy-event-stream";
 import { McpServer } from "~/lib/mcp-server";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
@@ -261,6 +262,27 @@ function mockGrammy() {
   return dispose;
 }
 
+function mockGrammyEventStream() {
+  let rejectClosed: (reason?: unknown) => void;
+  const closed = new Promise<void>((_, reject) => {
+    rejectClosed = reject;
+  });
+  closed.then(
+    () => {},
+    () => {},
+  );
+  const dispose = vi.fn(async () => {});
+  vi.spyOn(GrammyEventStream, "create").mockReturnValueOnce({
+    closed,
+    connect: vi.fn(() => vi.fn()),
+    [Symbol.asyncDispose]: dispose,
+  } as never);
+  return {
+    rejectClosed: (error: unknown) => rejectClosed(error),
+    dispose,
+  };
+}
+
 function mockShutdown() {
   let resolveSignaled: () => void;
   const signaled = new Promise<void>((r) => {
@@ -408,6 +430,32 @@ test("exits on event stream failure", async () => {
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
     "event stream failed",
   );
+});
+
+test("exits on grammY event stream failure", async () => {
+  mockTelegramConfig();
+  mockCreateDatabase();
+  mockOpencodeServer();
+  mockMcpServer();
+  mockExistingSessions();
+  mockTypingIndicators();
+  mockPendingPrompts();
+  mockProcessingMessages();
+  mockOpencodeEventStream();
+  const grammyEventStream = mockGrammyEventStream();
+  const disposeGrammy = mockGrammy();
+  mockShutdown();
+
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() =>
+    expect(GrammyEventStream.create).toHaveBeenCalledOnce(),
+  );
+
+  grammyEventStream.rejectClosed(new Error("grammY event stream failed"));
+
+  await expect(run).rejects.toThrow("grammY event stream failed");
+  expect(disposeGrammy).toHaveBeenCalledOnce();
+  expect(grammyEventStream.dispose).toHaveBeenCalledOnce();
 });
 
 test("awaits existing session initialization before creating working sessions", async () => {

@@ -90,6 +90,87 @@ export class ExistingSessions {
     }
   }
 
+  async #remove(
+    sessionId: string,
+    location: ExistingSessions.Location,
+  ): Promise<void> {
+    try {
+      const abortResults = await Promise.allSettled([
+        this.#opencodeClient.session.abort(
+          { sessionID: sessionId },
+          { throwOnError: true },
+        ),
+      ]);
+      const hookResults = await this.#hooks.callHookWith(
+        (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
+        "beforeRemove",
+        [{ sessionId, ...location }],
+      );
+      let databaseResult: PromiseSettledResult<void>;
+      try {
+        this.#database
+          .delete(schema.session)
+          .where(eq(schema.session.id, sessionId))
+          .run();
+        databaseResult = { status: "fulfilled", value: undefined };
+      } catch (error) {
+        databaseResult = { status: "rejected", reason: error };
+      }
+      Errors.throwIfAny<unknown>([
+        ...abortResults,
+        ...hookResults,
+        databaseResult,
+      ]);
+      logger.info("Existing session is removed", { sessionId });
+    } finally {
+      this.#removingPromises.delete(sessionId);
+    }
+  }
+
+  async #initialize(): Promise<void> {
+    const currentSessions = this.#database.query.session
+      .findMany({
+        columns: { id: true, chatId: true, threadId: true },
+      })
+      .sync()
+      .map((row) => ({
+        id: row.id,
+        chatId: row.chatId,
+        threadId: row.threadId || undefined,
+      }));
+
+    // Check reachability for all current sessions
+    const reachabilityResults = await Promise.allSettled(
+      currentSessions.map(async (session) => {
+        try {
+          await this.#bot.api.sendChatAction(session.chatId, "typing", {
+            ...(session.threadId && { message_thread_id: session.threadId }),
+          });
+          return true;
+        } catch (error) {
+          if (grammyCheckGoneError(error)) return false;
+          throw error;
+        }
+      }),
+    );
+    Errors.throwIfAny(reachabilityResults);
+
+    // Remove unreachable sessions via remove() to ensure proper cleanup
+    const unreachableSessions = currentSessions.filter(
+      (_, i) => !reachabilityResults[i]?.value,
+    );
+    const removalResults = await Promise.allSettled(
+      unreachableSessions.map((s) => this.remove(s.id)),
+    );
+    Errors.throwIfAny(removalResults);
+
+    logger.debug("Existing sessions are synchronized", {
+      checked: currentSessions.length,
+      removed: unreachableSessions.length,
+      remaining: currentSessions.length - unreachableSessions.length,
+    });
+  }
+
   get sessionIds(): readonly string[] {
     return this.#database.query.session
       .findMany({ columns: { id: true } })
@@ -164,43 +245,6 @@ export class ExistingSessions {
     return options.createIfNotFound ? this.#findOrCreate(location) : undefined;
   }
 
-  async #remove(
-    sessionId: string,
-    location: ExistingSessions.Location,
-  ): Promise<void> {
-    try {
-      const abortResults = await Promise.allSettled([
-        this.#opencodeClient.session.abort(
-          { sessionID: sessionId },
-          { throwOnError: true },
-        ),
-      ]);
-      const hookResults = await this.#hooks.callHookWith(
-        (hooks, args) => Promise.allSettled(hooks.map((hook) => hook(...args))),
-        "beforeRemove",
-        [{ sessionId, ...location }],
-      );
-      let databaseResult: PromiseSettledResult<void>;
-      try {
-        this.#database
-          .delete(schema.session)
-          .where(eq(schema.session.id, sessionId))
-          .run();
-        databaseResult = { status: "fulfilled", value: undefined };
-      } catch (error) {
-        databaseResult = { status: "rejected", reason: error };
-      }
-      Errors.throwIfAny<unknown>([
-        ...abortResults,
-        ...hookResults,
-        databaseResult,
-      ]);
-      logger.info("Existing session is removed", { sessionId });
-    } finally {
-      this.#removingPromises.delete(sessionId);
-    }
-  }
-
   async remove(sessionId: string): Promise<void> {
     const current = this.#removingPromises.get(sessionId);
     if (current) return current;
@@ -218,50 +262,6 @@ export class ExistingSessions {
     const removal = this.#remove(sessionId, location);
     this.#removingPromises.set(sessionId, removal);
     return removal;
-  }
-
-  async #initialize(): Promise<void> {
-    const currentSessions = this.#database.query.session
-      .findMany({
-        columns: { id: true, chatId: true, threadId: true },
-      })
-      .sync()
-      .map((row) => ({
-        id: row.id,
-        chatId: row.chatId,
-        threadId: row.threadId || undefined,
-      }));
-
-    // Check reachability for all current sessions
-    const reachabilityResults = await Promise.allSettled(
-      currentSessions.map(async (session) => {
-        try {
-          await this.#bot.api.sendChatAction(session.chatId, "typing", {
-            ...(session.threadId && { message_thread_id: session.threadId }),
-          });
-          return true;
-        } catch (error) {
-          if (grammyCheckGoneError(error)) return false;
-          throw error;
-        }
-      }),
-    );
-    Errors.throwIfAny(reachabilityResults);
-
-    // Remove unreachable sessions via remove() to ensure proper cleanup
-    const unreachableSessions = currentSessions.filter(
-      (_, i) => !reachabilityResults[i]?.value,
-    );
-    const removalResults = await Promise.allSettled(
-      unreachableSessions.map((s) => this.remove(s.id)),
-    );
-    Errors.throwIfAny(removalResults);
-
-    logger.debug("Existing sessions are synchronized", {
-      checked: currentSessions.length,
-      removed: unreachableSessions.length,
-      remaining: currentSessions.length - unreachableSessions.length,
-    });
   }
 
   static readonly NotFoundError = class NotFoundError extends Error {
