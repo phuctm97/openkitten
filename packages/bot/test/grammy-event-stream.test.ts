@@ -217,6 +217,25 @@ test("rejects closed when a handler rejects", async () => {
   );
 });
 
+test("rejects closed when a handler rejects with undefined", async () => {
+  await using floatingPromises = FloatingPromises.create();
+  await using grammyEventStream = GrammyEventStream.create(floatingPromises);
+  const ctx = mockMessageCtx(43, 123);
+
+  queueEvent(grammyEventStream, ctx, async () => {
+    throw undefined;
+  });
+
+  await expect(grammyEventStream.closed).rejects.toBeUndefined();
+  await vi.waitFor(() =>
+    expect(logger.fatal).toHaveBeenCalledWith(
+      "Failed to process update from Telegram",
+      undefined,
+      { update: { update_id: 43 } },
+    ),
+  );
+});
+
 test("drops updates queued after dispose", async () => {
   await using floatingPromises = FloatingPromises.create();
   const grammyEventStream = GrammyEventStream.create(floatingPromises);
