@@ -231,7 +231,7 @@ describe("McpServer", () => {
     ]);
   });
 
-  test("send_file sends a local png as a Telegram photo with caption", async () => {
+  test("send_file sends a local png as a Telegram photo", async () => {
     const dir = await mkdtemp(join(tmpdir(), "mcp-server-"));
     tempDirs.push(dir);
     const path = join(dir, "photo.png");
@@ -250,15 +250,14 @@ describe("McpServer", () => {
 
     const result = await tool.handler({
       path,
-      caption: "Look at this cat",
       __OPENKITTEN__: { sessionID: "sess-1", callID: "call-1" },
     });
 
     expect(existingSessionsGet).toHaveBeenCalledWith("sess-1");
     expect(botApi.sendPhoto).toHaveBeenCalledWith(123, expect.any(InputFile), {
-      caption: "Look at this cat",
       message_thread_id: 456,
     });
+    expect(botApi.sendMessage).not.toHaveBeenCalled();
     expect(result).toEqual({
       content: [{ type: "text", text: "Sent photo.png as photo." }],
       structuredContent: {
@@ -268,7 +267,7 @@ describe("McpServer", () => {
     });
   });
 
-  test("send_file sends sticker captions as a follow-up text message", async () => {
+  test("send_file sends local stickers without extra text messages", async () => {
     const dir = await mkdtemp(join(tmpdir(), "mcp-server-"));
     tempDirs.push(dir);
     const path = join(dir, "party.tgs");
@@ -292,7 +291,6 @@ describe("McpServer", () => {
 
     const result = await tool.handler({
       path,
-      caption: "Party time",
       __OPENKITTEN__: { sessionID: "sess-2", callID: "call-2" },
     });
 
@@ -301,7 +299,7 @@ describe("McpServer", () => {
       expect.any(InputFile),
       {},
     );
-    expect(botApi.sendMessage).toHaveBeenCalledWith(777, "Party time", {});
+    expect(botApi.sendMessage).not.toHaveBeenCalled();
     expect(result).toEqual({
       content: [{ type: "text", text: "Sent party.tgs as sticker." }],
       structuredContent: {

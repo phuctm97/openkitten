@@ -29,7 +29,6 @@ const openkittenMetadataSchema = zod.object({
 const sendFileInputSchema = zod
   .object({
     path: zod.string().trim().min(1),
-    caption: zod.string().trim().min(1).optional(),
   })
   .passthrough();
 
@@ -86,8 +85,7 @@ export class McpServer implements Disposable {
     server.registerTool(
       "send_file",
       {
-        description:
-          "Send a local file back to the Telegram chat for the current OpenKitten session. The Telegram method is chosen from the file path.",
+        description: "Send a local file to the current Telegram chat.",
         inputSchema: sendFileInputSchema,
         outputSchema: sendFileOutputSchema,
       },
@@ -110,7 +108,6 @@ export class McpServer implements Disposable {
       throw new Error(`No Telegram session found: ${metadata.sessionID}`);
     }
 
-    const caption = cleanText(parsedArgs.caption);
     const filename = attachmentFilename(
       source.filename,
       undefined,
@@ -119,14 +116,10 @@ export class McpServer implements Disposable {
     const attachment = {
       filename,
       kind: attachmentKind(undefined, filename),
-      media: new InputFile(source.bytes, filename),
+      media: new InputFile(source.path, filename),
     };
     const sendOptions = {
       ...(location.threadId && { message_thread_id: location.threadId }),
-    };
-    const captionedSendOptions = {
-      ...sendOptions,
-      ...(caption && { caption }),
     };
 
     switch (attachment.kind) {
@@ -134,28 +127,28 @@ export class McpServer implements Disposable {
         await this.#bot.api.sendAnimation(
           location.chatId,
           attachment.media,
-          captionedSendOptions,
+          sendOptions,
         );
         break;
       case "audio":
         await this.#bot.api.sendAudio(
           location.chatId,
           attachment.media,
-          captionedSendOptions,
+          sendOptions,
         );
         break;
       case "document":
         await this.#bot.api.sendDocument(
           location.chatId,
           attachment.media,
-          captionedSendOptions,
+          sendOptions,
         );
         break;
       case "photo":
         await this.#bot.api.sendPhoto(
           location.chatId,
           attachment.media,
-          captionedSendOptions,
+          sendOptions,
         );
         break;
       case "sticker":
@@ -164,26 +157,18 @@ export class McpServer implements Disposable {
           attachment.media,
           sendOptions,
         );
-        if (caption) {
-          await this.#bot.api.sendMessage(
-            location.chatId,
-            caption,
-            sendOptions,
-          );
-        }
         break;
       case "video":
         await this.#bot.api.sendVideo(
           location.chatId,
           attachment.media,
-          captionedSendOptions,
+          sendOptions,
         );
         break;
     }
 
     logger.info("MCP file is sent to Telegram", {
       callId: metadata.callID,
-      caption,
       chatId: location.chatId,
       filename: attachment.filename,
       kind: attachment.kind,
@@ -208,8 +193,8 @@ export class McpServer implements Disposable {
   }
 
   async #loadLocalFile(args: SendFileArgs): Promise<{
-    readonly bytes: Uint8Array;
     readonly filename: string;
+    readonly path: string;
   }> {
     const path = args.path;
 
@@ -219,8 +204,8 @@ export class McpServer implements Disposable {
     }
 
     return {
-      bytes: await file.bytes(),
       filename: basename(path),
+      path,
     };
   }
 
@@ -279,7 +264,7 @@ function attachmentKind(
   mimeType: string | undefined,
   filename: string,
 ): AttachmentKind {
-  const mime = attachmentMimeType(mimeType, filename);
+  const mime = attachmentMime(mimeType, filename);
   const ext = fileExtension(filename);
 
   if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
@@ -297,7 +282,7 @@ function attachmentKind(
   return "document";
 }
 
-function attachmentMimeType(
+function attachmentMime(
   mimeType: string | undefined,
   filename: string,
 ): string | undefined {
@@ -307,7 +292,7 @@ function attachmentMimeType(
   }
 
   const filenameMime = mimeLookup(filename);
-  if (typeof filenameMime === "string") return filenameMime.toLowerCase();
+  if (filenameMime) return filenameMime.toLowerCase();
 
   return cleanedMime;
 }

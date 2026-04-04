@@ -255,7 +255,7 @@ function attachmentKind(
   mimeType: string | undefined,
   filename: string,
 ): AttachmentKind {
-  const mime = attachmentMimeType(mimeType, filename);
+  const mime = attachmentMime(mimeType, filename);
   const ext = fileExtension(filename);
 
   if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
@@ -273,7 +273,7 @@ function attachmentKind(
   return "document";
 }
 
-function attachmentMimeType(
+function attachmentMime(
   mimeType: string | undefined,
   filename: string,
 ): string | undefined {
@@ -283,7 +283,7 @@ function attachmentMimeType(
   }
 
   const filenameMime = mimeLookup(filename);
-  if (typeof filenameMime === "string") return filenameMime.toLowerCase();
+  if (filenameMime) return filenameMime.toLowerCase();
 
   return cleanedMime;
 }
