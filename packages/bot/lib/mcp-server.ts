@@ -25,11 +25,9 @@ const openkittenArgsSchema = zod.object({
   __OPENKITTEN__: openkittenMetadataSchema,
 });
 
-const sendFileInputSchema = zod
-  .object({
-    path: zod.string().trim().min(1).describe("Absolute path to a local file."),
-  })
-  .passthrough();
+const sendFileInputSchema = zod.looseObject({
+  path: zod.string().trim().min(1).describe("Absolute path to a local file."),
+});
 
 const sendFileOutputSchema = zod.object({
   name: zod.string(),
