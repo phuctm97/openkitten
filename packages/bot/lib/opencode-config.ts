@@ -43,6 +43,10 @@ const opencodePluginSource = `export default {
 };
 `;
 
+interface OpencodeConfigCreateOptions {
+  readonly skipActions?: boolean;
+}
+
 function normalizePathPattern(path: string): string {
   return path.replaceAll("\\", "/");
 }
@@ -92,7 +96,10 @@ export namespace OpencodeConfig {
     }
   }
 
-  export async function create(profile: Profile): Promise<OpencodeConfig> {
+  export async function create(
+    profile: Profile,
+    options: OpencodeConfigCreateOptions = {},
+  ): Promise<OpencodeConfig> {
     const writes: Promise<unknown>[] = [];
     const configDir = join(profile.dir, ".opencode");
     const agentsDir = join(configDir, "agents");
@@ -174,66 +181,68 @@ export namespace OpencodeConfig {
         stdio: ["inherit", "inherit", "inherit"],
       });
       if ((await interactive.exited) !== 0) cancel();
-      let action: string | symbol;
-      do {
-        clack.intro("Actions");
-        action = await clack.select({
-          message: "What would you like to do?",
-          initialValue: "continue",
-          options: [
-            {
-              value: "add",
-              label: "Add credential",
-              hint: "ChatGPT, Claude, OpenAI, Anthropic, OpenRouter, etc.",
-            },
-            { value: "remove", label: "Remove credential" },
-            { value: "model", label: "Change model" },
-            { value: "continue", label: "Continue" },
-          ],
-        });
-        if (clack.isCancel(action)) cancel();
-        clack.outro("Done");
-        if (action === "add") {
-          process.stderr.write("\x1b[1A");
-          const proc = Bun.spawn([bin, "providers", "login"], {
-            cwd: config.cwd,
-            env: config.env,
-            stdio: ["inherit", "inherit", "inherit"],
+      if (!options.skipActions) {
+        let action: string | symbol;
+        do {
+          clack.intro("Actions");
+          action = await clack.select({
+            message: "What would you like to do?",
+            initialValue: "continue",
+            options: [
+              {
+                value: "add",
+                label: "Add credential",
+                hint: "ChatGPT, Claude, OpenAI, Anthropic, OpenRouter, etc.",
+              },
+              { value: "remove", label: "Remove credential" },
+              { value: "model", label: "Change model" },
+              { value: "continue", label: "Continue" },
+            ],
           });
-          if ((await proc.exited) !== 0) cancel();
-        } else if (action === "remove") {
-          process.stderr.write("\x1b[1A");
-          const proc = Bun.spawn([bin, "providers", "logout"], {
-            cwd: config.cwd,
-            env: config.env,
-            stdio: ["inherit", "inherit", "inherit"],
-          });
-          if ((await proc.exited) !== 0) cancel();
-        } else if (action === "model") {
-          clack.intro("Change model");
-          const modelsProc = Bun.spawn([bin, "models"], {
-            cwd: config.cwd,
-            env: config.env,
-            stdio: ["ignore", "pipe", "ignore"],
-          });
-          if ((await modelsProc.exited) !== 0) cancel();
-          const models = (await new Response(modelsProc.stdout).text())
-            .split("\n")
-            .map((line) => line.trim())
-            .filter(Boolean);
-          const configPath = join(configDir, "opencode.json");
-          const configJson = JSON.parse(await readFile(configPath, "utf-8"));
-          const model = await clack.autocomplete({
-            message: "Select model",
-            initialValue: configJson.model as string | undefined,
-            options: models.map((m) => ({ value: m, label: m })),
-          });
-          if (clack.isCancel(model)) cancel();
-          configJson.model = model;
-          await writeFile(configPath, JSON.stringify(configJson, null, 2));
+          if (clack.isCancel(action)) cancel();
           clack.outro("Done");
-        }
-      } while (action !== "continue");
+          if (action === "add") {
+            process.stderr.write("\x1b[1A");
+            const proc = Bun.spawn([bin, "providers", "login"], {
+              cwd: config.cwd,
+              env: config.env,
+              stdio: ["inherit", "inherit", "inherit"],
+            });
+            if ((await proc.exited) !== 0) cancel();
+          } else if (action === "remove") {
+            process.stderr.write("\x1b[1A");
+            const proc = Bun.spawn([bin, "providers", "logout"], {
+              cwd: config.cwd,
+              env: config.env,
+              stdio: ["inherit", "inherit", "inherit"],
+            });
+            if ((await proc.exited) !== 0) cancel();
+          } else if (action === "model") {
+            clack.intro("Change model");
+            const modelsProc = Bun.spawn([bin, "models"], {
+              cwd: config.cwd,
+              env: config.env,
+              stdio: ["ignore", "pipe", "ignore"],
+            });
+            if ((await modelsProc.exited) !== 0) cancel();
+            const models = (await new Response(modelsProc.stdout).text())
+              .split("\n")
+              .map((line) => line.trim())
+              .filter(Boolean);
+            const configPath = join(configDir, "opencode.json");
+            const configJson = JSON.parse(await readFile(configPath, "utf-8"));
+            const model = await clack.autocomplete({
+              message: "Select model",
+              initialValue: configJson.model as string | undefined,
+              options: models.map((m) => ({ value: m, label: m })),
+            });
+            if (clack.isCancel(model)) cancel();
+            configJson.model = model;
+            await writeFile(configPath, JSON.stringify(configJson, null, 2));
+            clack.outro("Done");
+          }
+        } while (action !== "continue");
+      }
     }
     return config;
   }

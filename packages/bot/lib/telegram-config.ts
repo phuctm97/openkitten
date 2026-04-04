@@ -19,6 +19,10 @@ const schema = zod.object({
   userId: zod.int().positive(),
 });
 
+interface TelegramConfigCreateOptions {
+  readonly skipActions?: boolean;
+}
+
 function cancel(): never {
   clack.cancel("Cancelled");
   throw new TelegramConfig.CancelledError();
@@ -100,7 +104,10 @@ export namespace TelegramConfig {
     }
   }
 
-  export async function create(profile: Profile): Promise<TelegramConfig> {
+  export async function create(
+    profile: Profile,
+    options: TelegramConfigCreateOptions = {},
+  ): Promise<TelegramConfig> {
     const path = join(profile.xdgConfig, "openkitten", "telegram.json");
 
     // Non-TTY: find, parse, validate, or throw
@@ -181,31 +188,32 @@ export namespace TelegramConfig {
     if (!userId) userId = await promptUserId();
     if (needsPrompt) clack.outro("Updated config");
 
-    // Action loop
-    let action: string | symbol;
-    do {
-      clack.intro("Actions");
-      action = await clack.select({
-        message: "What would you like to do?",
-        initialValue: "continue",
-        options: [
-          { value: "bot-token", label: "Change bot token" },
-          { value: "user-id", label: "Change user ID" },
-          { value: "continue", label: "Continue" },
-        ],
-      });
-      if (clack.isCancel(action)) cancel();
-      clack.outro("Done");
-      if (action === "bot-token") {
-        clack.intro("Change bot token");
-        botToken = await promptBotToken();
+    if (!options.skipActions) {
+      let action: string | symbol;
+      do {
+        clack.intro("Actions");
+        action = await clack.select({
+          message: "What would you like to do?",
+          initialValue: "continue",
+          options: [
+            { value: "bot-token", label: "Change bot token" },
+            { value: "user-id", label: "Change user ID" },
+            { value: "continue", label: "Continue" },
+          ],
+        });
+        if (clack.isCancel(action)) cancel();
         clack.outro("Done");
-      } else if (action === "user-id") {
-        clack.intro("Change user ID");
-        userId = await promptUserId();
-        clack.outro("Done");
-      }
-    } while (action !== "continue");
+        if (action === "bot-token") {
+          clack.intro("Change bot token");
+          botToken = await promptBotToken();
+          clack.outro("Done");
+        } else if (action === "user-id") {
+          clack.intro("Change user ID");
+          userId = await promptUserId();
+          clack.outro("Done");
+        }
+      } while (action !== "continue");
+    }
 
     // Save config
     const config = schema.parse({ botToken, userId });

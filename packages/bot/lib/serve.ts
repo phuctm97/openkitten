@@ -31,10 +31,22 @@ import { WorkingSessions } from "~/lib/working-sessions";
 
 export const serve = defineCommand({
   meta: { description: "Start the OpenKitten server." },
-  run: async () => {
+  args: {
+    yes: {
+      type: "boolean",
+      alias: ["y"],
+      description: "Skip optional config actions and continue.",
+    },
+  },
+  run: async ({ args }) => {
+    const skipActions = args.yes === true;
     const profile = await Profile.create();
-    const telegramConfig = await TelegramConfig.create(profile);
-    const opencodeConfig = await OpencodeConfig.create(profile);
+    const telegramConfig = await TelegramConfig.create(profile, {
+      skipActions,
+    });
+    const opencodeConfig = await OpencodeConfig.create(profile, {
+      skipActions,
+    });
     const bot = new Bot(telegramConfig.botToken);
     bot.api.config.use(autoRetry());
     bot.use(grammyFilterUser(telegramConfig.userId));
