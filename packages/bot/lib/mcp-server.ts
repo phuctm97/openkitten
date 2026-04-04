@@ -4,9 +4,11 @@ import { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
-import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
+import { lookup as mimeLookup } from "mime-types";
 import zod from "zod";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { getFileExtension } from "~/lib/get-file-extension";
+import { getMimeExtension } from "~/lib/get-mime-extension";
 import { logger } from "~/lib/logger";
 import { trimMime } from "~/lib/trim-mime";
 import { trimText } from "~/lib/trim-text";
@@ -232,8 +234,8 @@ function attachmentFilename(
   fallbackName: string,
 ): string {
   const name = trimText(filename);
-  const ext = mimeExtension(trimMime(mimeType) ?? "");
-  if (name) return fileExtension(name) || !ext ? name : `${name}.${ext}`;
+  const ext = getMimeExtension(mimeType);
+  if (name) return getFileExtension(name) || !ext ? name : `${name}.${ext}`;
 
   return ext ? `${fallbackName}.${ext}` : fallbackName;
 }
@@ -243,7 +245,7 @@ function attachmentKind(
   filename: string,
 ): AttachmentKind {
   const mime = attachmentMime(mimeType, filename);
-  const ext = fileExtension(filename);
+  const ext = getFileExtension(filename);
 
   if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
 
@@ -273,10 +275,4 @@ function attachmentMime(
   if (filenameMime) return filenameMime.toLowerCase();
 
   return cleanedMime;
-}
-
-function fileExtension(filename: string): string | undefined {
-  const index = filename.lastIndexOf(".");
-  if (index < 0 || index === filename.length - 1) return undefined;
-  return filename.slice(index + 1).toLowerCase();
 }

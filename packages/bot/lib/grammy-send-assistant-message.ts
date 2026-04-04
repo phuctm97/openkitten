@@ -1,7 +1,9 @@
 import type { Part } from "@opencode-ai/sdk/v2";
 import { InputFile, InputMediaBuilder } from "grammy";
-import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
+import { lookup as mimeLookup } from "mime-types";
 import invariant from "tiny-invariant";
+import { getFileExtension } from "~/lib/get-file-extension";
+import { getMimeExtension } from "~/lib/get-mime-extension";
 import { grammyBuildAssistantMessageSections } from "~/lib/grammy-build-assistant-message-sections";
 import { grammyFormatText } from "~/lib/grammy-format-text";
 import { grammyRenderAssistantMessageSection } from "~/lib/grammy-render-assistant-message-section";
@@ -245,8 +247,8 @@ function attachmentFilename(
   fallbackName: string,
 ): string {
   const name = trimText(filename);
-  const ext = mimeExtension(trimMime(mimeType) ?? "");
-  if (name) return fileExtension(name) || !ext ? name : `${name}.${ext}`;
+  const ext = getMimeExtension(mimeType);
+  if (name) return getFileExtension(name) || !ext ? name : `${name}.${ext}`;
 
   return ext ? `${fallbackName}.${ext}` : fallbackName;
 }
@@ -256,7 +258,7 @@ function attachmentKind(
   filename: string,
 ): AttachmentKind {
   const mime = attachmentMime(mimeType, filename);
-  const ext = fileExtension(filename);
+  const ext = getFileExtension(filename);
 
   if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
 
@@ -286,10 +288,4 @@ function attachmentMime(
   if (filenameMime) return filenameMime.toLowerCase();
 
   return cleanedMime;
-}
-
-function fileExtension(filename: string): string | undefined {
-  const index = filename.lastIndexOf(".");
-  if (index < 0 || index === filename.length - 1) return undefined;
-  return filename.slice(index + 1).toLowerCase();
 }
