@@ -121,15 +121,19 @@ export class McpServer implements Disposable {
     };
 
     switch (kind) {
+      case "sticker":
+        await this.#bot.api.sendSticker(
+          location.chatId,
+          inputFile,
+          sendOptions,
+        );
+        break;
       case "animation":
         await this.#bot.api.sendAnimation(
           location.chatId,
           inputFile,
           sendOptions,
         );
-        break;
-      case "audio":
-        await this.#bot.api.sendAudio(location.chatId, inputFile, sendOptions);
         break;
       case "document":
         await this.#bot.api.sendDocument(
@@ -141,15 +145,11 @@ export class McpServer implements Disposable {
       case "photo":
         await this.#bot.api.sendPhoto(location.chatId, inputFile, sendOptions);
         break;
-      case "sticker":
-        await this.#bot.api.sendSticker(
-          location.chatId,
-          inputFile,
-          sendOptions,
-        );
-        break;
       case "video":
         await this.#bot.api.sendVideo(location.chatId, inputFile, sendOptions);
+        break;
+      case "audio":
+        await this.#bot.api.sendAudio(location.chatId, inputFile, sendOptions);
         break;
     }
 
