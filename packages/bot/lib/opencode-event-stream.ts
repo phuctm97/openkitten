@@ -156,8 +156,10 @@ export class OpencodeEventStream implements AsyncDisposable {
         onAbort();
       }
     } catch (error) {
-      if (this.#abortController.signal.aborted) {
-        await this.#settleQueuedEvents();
+      const aborted = this.#abortController.signal.aborted;
+      if (!aborted) this.#abortController.abort();
+      await this.#settleQueuedEvents();
+      if (aborted) {
         if (failed) throw failure;
         return;
       }

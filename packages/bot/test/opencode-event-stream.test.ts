@@ -185,6 +185,56 @@ test("throws when the stream ends unexpectedly", async () => {
   await subscription[Symbol.asyncDispose]();
 });
 
+test("waits for in-flight handlers before rejecting when the stream ends", async () => {
+  const started = deferred();
+  const release = deferred();
+  const event = { directory: "/tmp/a", payload: { type: "a" } };
+  const opencodeClient = {
+    global: {
+      event: vi.fn(async () => {
+        let emitted = false;
+        return {
+          stream: {
+            [Symbol.asyncIterator]: () => ({
+              next: () => {
+                if (!emitted) {
+                  emitted = true;
+                  return Promise.resolve({ done: false, value: event });
+                }
+                return Promise.resolve({ done: true, value: undefined });
+              },
+            }),
+          },
+        };
+      }),
+    },
+  };
+
+  const subscription = OpencodeEventStream.create(
+    opencodeClient as never,
+    FloatingPromises.create(),
+    vi.fn(async () => {
+      started.resolve();
+      await release.promise;
+    }) as never,
+  );
+
+  await started.promise;
+  const closedState = await Promise.race([
+    subscription.closed.then(
+      () => "settled",
+      () => "settled",
+    ),
+    Bun.sleep(10).then(() => "pending"),
+  ]);
+  expect(closedState).toBe("pending");
+
+  release.resolve();
+  await expect(subscription.closed).rejects.toThrow(
+    "OpenCode event stream ended unexpectedly",
+  );
+});
+
 test("throws when onEvent fails", async () => {
   const error = new Error("handler failed");
   const event = { directory: "/tmp/a", payload: { type: "a" } };
