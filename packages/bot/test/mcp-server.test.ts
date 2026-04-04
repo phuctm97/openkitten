@@ -261,7 +261,7 @@ describe("McpServer", () => {
     expect(result).toEqual({
       content: [{ type: "text", text: "Sent photo.png as photo." }],
       structuredContent: {
-        filename: "photo.png",
+        name: "photo.png",
         kind: "photo",
       },
     });
@@ -303,7 +303,7 @@ describe("McpServer", () => {
     expect(result).toEqual({
       content: [{ type: "text", text: "Sent party.tgs as sticker." }],
       structuredContent: {
-        filename: "party.tgs",
+        name: "party.tgs",
         kind: "sticker",
       },
     });

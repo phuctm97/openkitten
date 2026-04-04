@@ -28,7 +28,7 @@ const openkittenMetadataSchema = zod.object({
 
 const sendFileInputSchema = zod
   .object({
-    path: zod.string().trim().min(1),
+    path: zod.string().trim().min(1).describe("Absolute path to a local file."),
   })
   .passthrough();
 
@@ -37,7 +37,7 @@ const openkittenArgsSchema = sendFileInputSchema.extend({
 });
 
 const sendFileOutputSchema = zod.object({
-  filename: zod.string(),
+  name: zod.string(),
   kind: zod.enum(attachmentKinds),
 });
 
@@ -85,7 +85,7 @@ export class McpServer implements Disposable {
     server.registerTool(
       "send_file",
       {
-        description: "Send a local file to the current Telegram chat.",
+        description: "Send a local file.",
         inputSchema: sendFileInputSchema,
         outputSchema: sendFileOutputSchema,
       },
@@ -177,7 +177,7 @@ export class McpServer implements Disposable {
     });
 
     const output = {
-      filename: attachment.filename,
+      name: attachment.filename,
       kind: attachment.kind,
     } satisfies SendFileOutput;
 
