@@ -70,7 +70,9 @@ describe("McpServer", () => {
   };
   const bot = { api: botApi } as never;
   const existingSessionsGet = vi.fn(
-    (_sessionId: string): { chatId: number; threadId: number | undefined } => ({
+    (
+      _sessionId: string,
+    ): { chatId: number; threadId: number | undefined } | undefined => ({
       chatId: 123,
       threadId: 456,
     }),
@@ -266,6 +268,46 @@ describe("McpServer", () => {
     });
   });
 
+  test.each([
+    ["GIF animation", "anim.gif", "animation", "sendAnimation"],
+    ["PDF document", "guide.pdf", "document", "sendDocument"],
+    ["MP4 video", "clip.mp4", "video", "sendVideo"],
+    ["MP3 audio", "song.mp3", "audio", "sendAudio"],
+  ] as const)("send_file sends a local %s with the matching Telegram method", async (_label, filename, kind, apiMethod) => {
+    const dir = await mkdtemp(join(tmpdir(), "mcp-server-"));
+    tempDirs.push(dir);
+    const path = join(dir, filename);
+    await Bun.write(path, `${kind}-bytes`);
+
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find((entry) => entry.name === "send_file");
+    if (!tool) throw new Error("send_file tool was not registered");
+
+    const result = await tool.handler({
+      path,
+      __OPENKITTEN__: { sessionID: `sess-${kind}`, callID: `call-${kind}` },
+    });
+
+    expect(botApi[apiMethod]).toHaveBeenCalledWith(123, expect.any(InputFile), {
+      message_thread_id: 456,
+    });
+    expect(botApi.sendMessage).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      content: [{ type: "text", text: `Sent ${filename} as ${kind}.` }],
+      structuredContent: {
+        name: filename,
+        kind,
+      },
+    });
+  });
+
   test("send_file sends local stickers without extra text messages", async () => {
     const dir = await mkdtemp(join(tmpdir(), "mcp-server-"));
     tempDirs.push(dir);
@@ -306,6 +348,53 @@ describe("McpServer", () => {
         kind: "sticker",
       },
     });
+  });
+
+  test("send_file rejects missing local files", async () => {
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find((entry) => entry.name === "send_file");
+    if (!tool) throw new Error("send_file tool was not registered");
+
+    await expect(
+      tool.handler({
+        path: "/tmp/does-not-exist.txt",
+        __OPENKITTEN__: { sessionID: "sess-missing-file", callID: "call-1" },
+      }),
+    ).rejects.toThrow("File not found: /tmp/does-not-exist.txt");
+  });
+
+  test("send_file rejects unknown sessions", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mcp-server-"));
+    tempDirs.push(dir);
+    const path = join(dir, "photo.png");
+    await Bun.write(path, "png-bytes");
+
+    existingSessionsGet.mockReturnValueOnce(undefined);
+
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find((entry) => entry.name === "send_file");
+    if (!tool) throw new Error("send_file tool was not registered");
+
+    await expect(
+      tool.handler({
+        path,
+        __OPENKITTEN__: { sessionID: "sess-missing-session", callID: "call-1" },
+      }),
+    ).rejects.toThrow("Session not found: sess-missing-session");
   });
 
   test("send_file rejects calls without OpenKitten metadata", async () => {
