@@ -48,7 +48,6 @@ export const serve = defineCommand({
     using database = Database.create(profile);
     await using opencodeServer = await OpencodeServer.create(opencodeConfig);
     using mcpServer = await McpServer.create(opencodeServer.client);
-    await using floatingPromises = FloatingPromises.create();
     const existingSessions = await ExistingSessions.create(
       bot,
       database,
@@ -67,6 +66,7 @@ export const serve = defineCommand({
       opencodeServer.client,
       existingSessions,
     );
+    await using floatingPromises = FloatingPromises.create();
     using typingIndicators = TypingIndicators.create(
       shutdown,
       bot,
@@ -80,11 +80,11 @@ export const serve = defineCommand({
       bot,
       database,
       opencodeClient: opencodeServer.client,
-      floatingPromises,
       existingSessions,
       workingSessions,
       pendingPrompts,
       processingMessages,
+      floatingPromises,
       typingIndicators,
     };
     await using opencodeEventStream = OpencodeEventStream.create(
