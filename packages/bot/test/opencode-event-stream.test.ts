@@ -3,6 +3,38 @@ import { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 
+function deferred() {
+  return Promise.withResolvers<void>();
+}
+
+function stalledStream(events: readonly unknown[]) {
+  let index = 0;
+  let closed = false;
+  let resolveNext: ((value: IteratorResult<unknown>) => void) | undefined;
+  return {
+    [Symbol.asyncIterator]: () => ({
+      next: () => {
+        if (closed) {
+          return Promise.resolve({ done: true, value: undefined });
+        }
+        if (index < events.length) {
+          const value = events[index];
+          index += 1;
+          return Promise.resolve({ done: false, value });
+        }
+        return new Promise<IteratorResult<unknown>>((resolve) => {
+          resolveNext = resolve;
+        });
+      },
+      return: () => {
+        closed = true;
+        resolveNext?.({ done: true, value: undefined });
+        return Promise.resolve({ done: true, value: undefined });
+      },
+    }),
+  };
+}
+
 test("logs closed after the stream loop exits", async () => {
   const onEvent = vi.fn(() => {
     dispose();
@@ -158,9 +190,9 @@ test("throws when onEvent fails", async () => {
   const opencodeClient = {
     global: {
       event: vi.fn(async () => ({
-        stream: (async function* () {
-          yield { directory: "/tmp/a", payload: { type: "a" } };
-        })(),
+        stream: stalledStream([
+          { directory: "/tmp/a", payload: { type: "a" } },
+        ]),
       })),
     },
   };
@@ -294,4 +326,171 @@ test("passes signal to subscribe", async () => {
   expect(opencodeClient.global.event).toHaveBeenCalledWith(
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
+});
+
+test("processes events from the same session sequentially", async () => {
+  const firstStarted = deferred();
+  const firstReleased = deferred();
+  const secondStarted = deferred();
+  let secondDidStart = false;
+  let dispose = () => {};
+  const onEvent = vi.fn(async (event: { payload: { type: string } }) => {
+    if (event.payload.type === "session.status") {
+      firstStarted.resolve();
+      await firstReleased.promise;
+      return;
+    }
+    secondDidStart = true;
+    secondStarted.resolve();
+    dispose();
+  });
+  const opencodeClient = {
+    global: {
+      event: vi.fn(async () => ({
+        stream: stalledStream([
+          {
+            directory: "/tmp/a",
+            payload: {
+              type: "session.status",
+              properties: {
+                sessionID: "s1",
+                status: { type: "busy" as const },
+              },
+            },
+          },
+          {
+            directory: "/tmp/a",
+            payload: {
+              type: "message.removed",
+              properties: { sessionID: "s1", messageID: "m1" },
+            },
+          },
+        ]),
+      })),
+    },
+  };
+
+  const subscription = OpencodeEventStream.create(
+    opencodeClient as never,
+    FloatingPromises.create(),
+    onEvent as never,
+  );
+  dispose = () => {
+    void subscription[Symbol.asyncDispose]();
+  };
+
+  await firstStarted.promise;
+  expect(onEvent).toHaveBeenCalledTimes(1);
+  await Bun.sleep(10);
+  expect(secondDidStart).toBe(false);
+
+  firstReleased.resolve();
+  await secondStarted.promise;
+  await subscription.closed;
+});
+
+test("processes different sessions concurrently", async () => {
+  const firstStarted = deferred();
+  const secondStarted = deferred();
+  const releaseBoth = deferred();
+  let dispose = () => {};
+  const onEvent = vi.fn(async (event: { payload: { type: string } }) => {
+    if (event.payload.type === "session.status") firstStarted.resolve();
+    else {
+      secondStarted.resolve();
+      dispose();
+    }
+    await releaseBoth.promise;
+  });
+  const opencodeClient = {
+    global: {
+      event: vi.fn(async () => ({
+        stream: stalledStream([
+          {
+            directory: "/tmp/a",
+            payload: {
+              type: "session.status",
+              properties: {
+                sessionID: "s1",
+                status: { type: "busy" as const },
+              },
+            },
+          },
+          {
+            directory: "/tmp/a",
+            payload: {
+              type: "message.removed",
+              properties: { sessionID: "s2", messageID: "m1" },
+            },
+          },
+        ]),
+      })),
+    },
+  };
+
+  const subscription = OpencodeEventStream.create(
+    opencodeClient as never,
+    FloatingPromises.create(),
+    onEvent as never,
+  );
+  dispose = () => {
+    void subscription[Symbol.asyncDispose]();
+  };
+
+  await firstStarted.promise;
+  await secondStarted.promise;
+  releaseBoth.resolve();
+  await subscription.closed;
+});
+
+test("processes unknown events through the default queue sequentially", async () => {
+  const firstStarted = deferred();
+  const firstReleased = deferred();
+  const secondStarted = deferred();
+  let secondDidStart = false;
+  let dispose = () => {};
+  const onEvent = vi.fn(async (event: { payload: { type: string } }) => {
+    if (event.payload.type === "server.connected") {
+      firstStarted.resolve();
+      await firstReleased.promise;
+      return;
+    }
+    secondDidStart = true;
+    secondStarted.resolve();
+    dispose();
+  });
+  const opencodeClient = {
+    global: {
+      event: vi.fn(async () => ({
+        stream: stalledStream([
+          {
+            directory: "/tmp/a",
+            payload: { type: "server.connected", properties: {} },
+          },
+          {
+            directory: "/tmp/a",
+            payload: { type: "installation.updated", properties: {} },
+          },
+        ]),
+      })),
+    },
+  };
+
+  const subscription = OpencodeEventStream.create(
+    opencodeClient as never,
+    FloatingPromises.create(),
+    onEvent as never,
+  );
+  dispose = () => {
+    void subscription[Symbol.asyncDispose]();
+  };
+
+  await firstStarted.promise;
+  expect(onEvent).toHaveBeenCalledTimes(1);
+  await Bun.sleep(10);
+  expect(secondDidStart).toBe(false);
+
+  firstReleased.resolve();
+  await secondStarted.promise;
+  await subscription.closed;
 });

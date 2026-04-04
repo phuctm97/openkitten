@@ -5,15 +5,16 @@ import type { Scope } from "~/lib/scope";
 export function opencodeCreateHandler(
   scope: Scope,
   fn: (scope: Scope, event: GlobalEvent, signal: AbortSignal) => Promise<void>,
-): (event: GlobalEvent, signal: AbortSignal) => void {
-  return (event, signal) => {
-    scope.floatingPromises.track(
-      fn(scope, event, signal).catch((error) => {
-        logger.fatal("Failed to process event from OpenCode", error, {
-          event,
-        });
-        scope.shutdown.trigger();
-      }),
-    );
+): (event: GlobalEvent, signal: AbortSignal) => Promise<void> {
+  return async (event, signal) => {
+    try {
+      await fn(scope, event, signal);
+    } catch (error) {
+      logger.fatal("Failed to process event from OpenCode", error, {
+        event,
+      });
+      scope.shutdown.trigger();
+      throw error;
+    }
   };
 }
