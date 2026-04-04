@@ -9,7 +9,6 @@ import type {
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
 import zod from "zod";
-import type { AttachmentKind } from "~/lib/attachment-kind";
 import { attachmentKindSchema } from "~/lib/attachment-kind-schema";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
@@ -42,6 +41,7 @@ type SendFileResult = CallToolResult & {
   readonly content: TextContent[];
   readonly structuredContent: SendFileOutput;
 };
+type OpenkittenMetadata = zod.output<typeof openkittenMetadataSchema>;
 
 export class McpServer implements Disposable {
   readonly #token: string;
@@ -95,91 +95,78 @@ export class McpServer implements Disposable {
   }
 
   async #sendFile(args: SendFileArgs): Promise<SendFileResult> {
-    const parsedArgs = openkittenArgsSchema.parse(args);
-    const metadata = parsedArgs.__OPENKITTEN__;
-    const path = args.path;
-    const file = Bun.file(path);
-    if (!(await file.exists())) {
-      throw new Error(`File not found: ${path}`);
+    const metadata = this.#getMetadata(args);
+    const bunFile = Bun.file(args.path);
+    if (!(await bunFile.exists())) {
+      throw new Error(`File not found: ${args.path}`);
     }
     const location = this.#existingSessions.get(metadata.sessionID);
     if (!location) {
-      throw new Error(`No Telegram session found: ${metadata.sessionID}`);
+      throw new Error(`Session not found: ${metadata.sessionID}`);
     }
 
-    const name = getAttachmentName(basename(path), undefined, "attachment");
-    const attachment: {
-      readonly file: InputFile;
-      readonly kind: AttachmentKind;
-      readonly name: string;
-    } = {
-      file: new InputFile(path, name),
-      name,
-      kind: getAttachmentKind(undefined, name),
-    };
+    const name = getAttachmentName(
+      basename(args.path),
+      undefined,
+      "attachment",
+    );
+    const kind = getAttachmentKind(undefined, name);
+    const inputFile = new InputFile(args.path, name);
     const sendOptions = {
       ...(location.threadId && { message_thread_id: location.threadId }),
     };
 
-    switch (attachment.kind) {
+    switch (kind) {
       case "animation":
         await this.#bot.api.sendAnimation(
           location.chatId,
-          attachment.file,
+          inputFile,
           sendOptions,
         );
         break;
       case "audio":
-        await this.#bot.api.sendAudio(
-          location.chatId,
-          attachment.file,
-          sendOptions,
-        );
+        await this.#bot.api.sendAudio(location.chatId, inputFile, sendOptions);
         break;
       case "document":
         await this.#bot.api.sendDocument(
           location.chatId,
-          attachment.file,
+          inputFile,
           sendOptions,
         );
         break;
       case "photo":
-        await this.#bot.api.sendPhoto(
-          location.chatId,
-          attachment.file,
-          sendOptions,
-        );
+        await this.#bot.api.sendPhoto(location.chatId, inputFile, sendOptions);
         break;
       case "sticker":
         await this.#bot.api.sendSticker(
           location.chatId,
-          attachment.file,
+          inputFile,
           sendOptions,
         );
         break;
       case "video":
-        await this.#bot.api.sendVideo(
-          location.chatId,
-          attachment.file,
-          sendOptions,
-        );
+        await this.#bot.api.sendVideo(location.chatId, inputFile, sendOptions);
         break;
     }
 
     const output = {
-      name: attachment.name,
-      kind: attachment.kind,
+      name,
+      kind,
     } satisfies SendFileOutput;
 
     return {
       content: [
         {
           type: "text",
-          text: `Sent ${attachment.name} as ${attachment.kind}.`,
+          text: `Sent ${name} as ${kind}.`,
         },
       ],
       structuredContent: output,
     };
+  }
+
+  #getMetadata(args: unknown): OpenkittenMetadata {
+    return openkittenArgsSchema.parse(args).__OPENKITTEN__;
   }
 
   get disconnected(): Promise<void> {
