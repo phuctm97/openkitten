@@ -187,12 +187,11 @@ test("throws when the stream ends unexpectedly", async () => {
 
 test("throws when onEvent fails", async () => {
   const error = new Error("handler failed");
+  const event = { directory: "/tmp/a", payload: { type: "a" } };
   const opencodeClient = {
     global: {
       event: vi.fn(async () => ({
-        stream: stalledStream([
-          { directory: "/tmp/a", payload: { type: "a" } },
-        ]),
+        stream: stalledStream([event]),
       })),
     },
   };
@@ -206,6 +205,11 @@ test("throws when onEvent fails", async () => {
   );
 
   await expect(subscription.closed).rejects.toBe(error);
+  expect(logger.fatal).toHaveBeenCalledWith(
+    "Failed to process event from OpenCode",
+    error,
+    { event },
+  );
   await subscription[Symbol.asyncDispose]();
 });
 
