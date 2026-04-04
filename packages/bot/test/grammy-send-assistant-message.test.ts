@@ -199,6 +199,28 @@ test("selects single-file Telegram methods for non-grouped attachments", async (
   );
 });
 
+test("falls back to filename mime lookup when part mime is generic", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    bot: bot as never,
+    info,
+    parts: [createFilePart("application/octet-stream", "fallback.png")],
+    chatId: 123,
+    threadId: undefined,
+  });
+
+  expect(bot.api.sendPhoto).toHaveBeenCalledWith(
+    123,
+    expect.any(InputFile),
+    {},
+  );
+  expect(bot.api.sendDocument).not.toHaveBeenCalled();
+});
+
 test("groups consecutive audio attachments when Telegram allows it", async () => {
   const bot = createBot();
   vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(

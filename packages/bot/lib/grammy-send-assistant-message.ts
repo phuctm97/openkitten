@@ -1,6 +1,6 @@
 import type { Part } from "@opencode-ai/sdk/v2";
 import { InputFile, InputMediaBuilder } from "grammy";
-import { extension as mimeExtension } from "mime-types";
+import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
 import invariant from "tiny-invariant";
 import { grammyBuildAssistantMessageSections } from "~/lib/grammy-build-assistant-message-sections";
 import { grammyFormatText } from "~/lib/grammy-format-text";
@@ -232,7 +232,7 @@ function attachmentFilename(file: FilePart, index: number): string {
 }
 
 function attachmentKind(file: FilePart, filename: string): AttachmentKind {
-  const mime = cleanText(file.mime)?.toLowerCase();
+  const mime = attachmentMimeType(file, filename);
   const ext = fileExtension(filename);
 
   if (mime === "image/gif" || ext === "gif") return "animation";
@@ -262,6 +262,19 @@ function attachmentKind(file: FilePart, filename: string): AttachmentKind {
   if (mime?.startsWith("audio/")) return "audio";
 
   return "document";
+}
+
+function attachmentMimeType(
+  file: FilePart,
+  filename: string,
+): string | undefined {
+  const partMime = cleanText(file.mime)?.toLowerCase();
+  if (partMime && partMime !== "application/octet-stream") return partMime;
+
+  const filenameMime = mimeLookup(filename);
+  if (typeof filenameMime === "string") return filenameMime.toLowerCase();
+
+  return partMime;
 }
 
 function fileExtension(filename: string): string | undefined {
