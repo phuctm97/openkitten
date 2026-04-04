@@ -2,7 +2,6 @@ import type { Context } from "grammy";
 import type { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
 import type { Scope } from "~/lib/scope";
-import type { Shutdown } from "~/lib/shutdown";
 
 function grammyEventStreamGetQueueId(ctx: Context): string {
   const callbackMessage =
@@ -16,16 +15,28 @@ function grammyEventStreamGetQueueId(ctx: Context): string {
 }
 
 export class GrammyEventStream implements AsyncDisposable {
-  readonly #shutdown: Shutdown;
   readonly #floatingPromises: FloatingPromises;
   readonly #abortController: AbortController;
+  readonly #closed: Promise<void>;
+  readonly #settled: Promise<void>;
+  readonly #resolveClosed: () => void;
+  readonly #rejectClosed: (reason?: unknown) => void;
   readonly #queueTails = new Map<string, Promise<void>>();
   readonly #queuedEvents = new Set<Promise<void>>();
 
-  private constructor(shutdown: Shutdown, floatingPromises: FloatingPromises) {
-    this.#shutdown = shutdown;
+  private constructor(floatingPromises: FloatingPromises) {
     this.#floatingPromises = floatingPromises;
     this.#abortController = new AbortController();
+    const { resolve, reject, promise } = Promise.withResolvers<void>();
+    this.#resolveClosed = resolve;
+    this.#rejectClosed = reject;
+    this.#closed = promise;
+    // closed may reject before the consumer awaits it. Without this handler,
+    // the rejection would be unhandled.
+    this.#settled = this.#closed.then(
+      () => {},
+      () => {},
+    );
   }
 
   #enqueue(ctx: Context, onEvent: () => void | Promise<void>) {
@@ -41,7 +52,7 @@ export class GrammyEventStream implements AsyncDisposable {
         update: ctx.update,
       });
       this.#abortController.abort();
-      this.#shutdown.trigger();
+      this.#rejectClosed(error);
     });
     const queued = current.finally(() => {
       this.#queuedEvents.delete(queued);
@@ -60,6 +71,10 @@ export class GrammyEventStream implements AsyncDisposable {
     }
   }
 
+  get closed(): Promise<void> {
+    return this.#closed;
+  }
+
   connect<C extends Context>(
     scope: Scope,
     fn: (scope: Scope, ctx: C) => Promise<void>,
@@ -72,12 +87,11 @@ export class GrammyEventStream implements AsyncDisposable {
   async [Symbol.asyncDispose]() {
     this.#abortController.abort();
     await this.#settleQueuedEvents();
+    this.#resolveClosed();
+    await this.#settled;
   }
 
-  static create(
-    shutdown: Shutdown,
-    floatingPromises: FloatingPromises,
-  ): GrammyEventStream {
-    return new GrammyEventStream(shutdown, floatingPromises);
+  static create(floatingPromises: FloatingPromises): GrammyEventStream {
+    return new GrammyEventStream(floatingPromises);
   }
 }

@@ -85,10 +85,7 @@ export const serve = defineCommand({
       floatingPromises,
       (event, signal) => opencodeHandleEvent(scope, event, signal),
     );
-    await using grammyEventStream = GrammyEventStream.create(
-      shutdown,
-      floatingPromises,
-    );
+    await using grammyEventStream = GrammyEventStream.create(floatingPromises);
     bot.command("start", grammyEventStream.connect(scope, grammyHandleStart));
     bot.command("abort", grammyEventStream.connect(scope, grammyHandleAbort));
     bot.command(
@@ -113,6 +110,7 @@ export const serve = defineCommand({
       opencodeServer.exited,
       mcpServer.disconnected,
       opencodeEventStream.closed,
+      grammyEventStream.closed,
       grammy.stopped,
     ]);
   },
