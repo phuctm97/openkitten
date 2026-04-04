@@ -242,11 +242,11 @@ async function createTelegramAttachment(
 
 function attachmentFilename(
   filename: string | undefined,
-  mimeType: string | undefined,
+  filemime: string | undefined,
   fallbackName: string,
 ): string {
   const name = trimText(filename);
-  const ext = getMimeExtension(mimeType);
+  const ext = getMimeExtension(filemime);
   if (name) return getFileExtension(name) || !ext ? name : `${name}.${ext}`;
 
   return ext ? `${fallbackName}.${ext}` : fallbackName;

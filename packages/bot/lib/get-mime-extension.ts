@@ -2,8 +2,8 @@ import { extension as mimeExtension } from "mime-types";
 import { trimMime } from "~/lib/trim-mime";
 
 export function getMimeExtension(
-  mimeType: string | undefined,
+  filemime: string | undefined,
 ): string | undefined {
-  const extension = mimeExtension(trimMime(mimeType) ?? "");
+  const extension = mimeExtension(trimMime(filemime) ?? "");
   return extension || undefined;
 }

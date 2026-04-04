@@ -2,10 +2,10 @@ import { lookup as mimeLookup } from "mime-types";
 import { trimMime } from "~/lib/trim-mime";
 
 export function getAttachmentMime(
-  mimeType: string | undefined,
+  filemime: string | undefined,
   filename: string,
 ): string | undefined {
-  const trimmedMime = trimMime(mimeType);
+  const trimmedMime = trimMime(filemime);
   if (trimmedMime && trimmedMime !== "application/octet-stream") {
     return trimmedMime;
   }

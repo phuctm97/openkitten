@@ -2,10 +2,10 @@ import { getAttachmentMime } from "~/lib/get-attachment-mime";
 import { getFileExtension } from "~/lib/get-file-extension";
 
 export function getAttachmentKind(
-  mimeType: string | undefined,
+  filemime: string | undefined,
   filename: string,
 ): "animation" | "audio" | "document" | "photo" | "sticker" | "video" {
-  const mime = getAttachmentMime(mimeType, filename);
+  const mime = getAttachmentMime(filemime, filename);
   const ext = getFileExtension(filename);
 
   if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
