@@ -14,6 +14,8 @@ vi.mock("~/lib/grammy-send-agent-list");
 vi.mock("~/lib/grammy-send-agent-not-found");
 vi.mock("~/lib/set-session-agent");
 
+const signal = new AbortController().signal;
+
 beforeEach(() => {
   vi.resetAllMocks();
 });
@@ -101,7 +103,7 @@ test("shows current agent and available agents when no argument", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx } = mockCtx(42, "");
 
-  await grammyHandleAgent(scope, ctx);
+  await grammyHandleAgent(scope, ctx, signal);
 
   expect(grammySendAgentList).toHaveBeenCalledWith({
     bot: scope.bot,
@@ -120,7 +122,7 @@ test("shows configured default agent when none is set", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx } = mockCtx(42, "");
 
-  await grammyHandleAgent(scope, ctx);
+  await grammyHandleAgent(scope, ctx, signal);
 
   expect(grammySendAgentList).toHaveBeenCalledWith({
     bot: scope.bot,
@@ -139,7 +141,7 @@ test("falls back to build when default_agent is not configured", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx } = mockCtx(42, "");
 
-  await grammyHandleAgent(scope, ctx);
+  await grammyHandleAgent(scope, ctx, signal);
 
   expect(grammySendAgentList).toHaveBeenCalledWith({
     bot: scope.bot,
@@ -157,7 +159,7 @@ test("sets valid agent and replies with agent changed", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx, react } = mockCtx(42, "build");
 
-  await grammyHandleAgent(scope, ctx);
+  await grammyHandleAgent(scope, ctx, signal);
 
   expect(setSessionAgent).toHaveBeenCalledWith(scope.database, "s1", "build");
   expect(react).not.toHaveBeenCalled();
@@ -176,7 +178,7 @@ test("replies with not found for unknown agent", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx } = mockCtx(42, "nonexistent");
 
-  await grammyHandleAgent(scope, ctx);
+  await grammyHandleAgent(scope, ctx, signal);
 
   expect(setSessionAgent).not.toHaveBeenCalled();
   expect(grammySendAgentNotFound).toHaveBeenCalledWith({
@@ -194,7 +196,7 @@ test("rejects subagent", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx } = mockCtx(42, "sub-task");
 
-  await grammyHandleAgent(scope, ctx);
+  await grammyHandleAgent(scope, ctx, signal);
 
   expect(setSessionAgent).not.toHaveBeenCalled();
   expect(grammySendAgentNotFound).toHaveBeenCalledWith({
@@ -212,7 +214,7 @@ test("rejects hidden primary agent", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx } = mockCtx(42, "summary");
 
-  await grammyHandleAgent(scope, ctx);
+  await grammyHandleAgent(scope, ctx, signal);
 
   expect(setSessionAgent).not.toHaveBeenCalled();
   expect(grammySendAgentNotFound).toHaveBeenCalledWith({
@@ -230,7 +232,7 @@ test("passes threadId when present", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx } = mockCtx(42, "build", 7);
 
-  await grammyHandleAgent(scope, ctx);
+  await grammyHandleAgent(scope, ctx, signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: 7 },

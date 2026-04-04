@@ -6,6 +6,7 @@ import { WorkingSessions } from "~/lib/working-sessions";
 export async function grammyHandleCompact(
   { bot, opencodeClient, existingSessions, workingSessions }: Scope,
   ctx: CommandContext<Context>,
+  _signal: AbortSignal,
 ): Promise<void> {
   const sessionId = await existingSessions.find(
     {

@@ -3,6 +3,8 @@ import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import type { Scope } from "~/lib/scope";
 
+const signal = new AbortController().signal;
+
 function mockCtx(
   chatId: number,
   callbackQueryId: string,
@@ -76,7 +78,7 @@ test("resolves session and forwards callback to pending prompts", async () => {
   pendingPrompts.answer.mockResolvedValue(undefined);
   const scope = mockScope({ bot, existingSessions, pendingPrompts });
 
-  await grammyHandleCallback(scope, mockCtx(42, "cb1", "po:0"));
+  await grammyHandleCallback(scope, mockCtx(42, "cb1", "po:0"), signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith({
     chatId: 42,
@@ -96,7 +98,7 @@ test("passes threadId when present", async () => {
   pendingPrompts.answer.mockResolvedValue(undefined);
   const scope = mockScope({ bot, existingSessions, pendingPrompts });
 
-  await grammyHandleCallback(scope, mockCtx(42, "cb2", "pa:1", 7));
+  await grammyHandleCallback(scope, mockCtx(42, "cb2", "pa:1", 7), signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith({
     chatId: 42,
@@ -115,7 +117,7 @@ test("answers with expired_session when no session exists", async () => {
   const pendingPrompts = mockPendingPrompts();
   const scope = mockScope({ bot, existingSessions, pendingPrompts });
 
-  await grammyHandleCallback(scope, mockCtx(42, "cb1", "po:0"));
+  await grammyHandleCallback(scope, mockCtx(42, "cb1", "po:0"), signal);
 
   expect(bot.api.answerCallbackQuery).toHaveBeenCalledWith("cb1", {
     text: "An error occurred: expired_session",
@@ -138,7 +140,7 @@ test("throws invariant error when message is missing", async () => {
     update: { update_id: 1 },
   } as never;
 
-  await expect(grammyHandleCallback(scope, ctx)).rejects.toThrow(
+  await expect(grammyHandleCallback(scope, ctx, signal)).rejects.toThrow(
     "Expected callback query to have a message",
   );
 });
@@ -152,6 +154,6 @@ test("rethrows errors from pending prompts", async () => {
   const scope = mockScope({ bot, existingSessions, pendingPrompts });
 
   await expect(
-    grammyHandleCallback(scope, mockCtx(42, "cb1", "po:0")),
+    grammyHandleCallback(scope, mockCtx(42, "cb1", "po:0"), signal),
   ).rejects.toBe(error);
 });
