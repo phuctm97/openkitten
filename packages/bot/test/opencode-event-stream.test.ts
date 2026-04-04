@@ -242,6 +242,57 @@ test("ignores handler rejection after dispose", async () => {
   );
 });
 
+test("does not start queued handlers after abort", async () => {
+  const firstStarted = deferred();
+  const firstReleased = deferred();
+  let secondDidStart = false;
+  const opencodeClient = {
+    global: {
+      event: vi.fn(async () => ({
+        stream: stalledStream([
+          {
+            directory: "/tmp/a",
+            payload: {
+              type: "session.status",
+              properties: {
+                sessionID: "s1",
+                status: { type: "busy" as const },
+              },
+            },
+          },
+          {
+            directory: "/tmp/a",
+            payload: {
+              type: "message.removed",
+              properties: { sessionID: "s1", messageID: "m1" },
+            },
+          },
+        ]),
+      })),
+    },
+  };
+
+  const subscription = OpencodeEventStream.create(
+    opencodeClient as never,
+    FloatingPromises.create(),
+    vi.fn(async (event: { payload: { type: string } }) => {
+      if (event.payload.type === "session.status") {
+        firstStarted.resolve();
+        await firstReleased.promise;
+        return;
+      }
+      secondDidStart = true;
+    }) as never,
+  );
+
+  await firstStarted.promise;
+  const dispose = subscription[Symbol.asyncDispose]();
+  firstReleased.resolve();
+  await dispose;
+
+  expect(secondDidStart).toBe(false);
+});
+
 test("logs connecting and connected", async () => {
   const onEvent = vi.fn(() => {
     dispose();
@@ -526,6 +577,74 @@ test("processes unknown events through the default queue sequentially", async ()
   firstReleased.resolve();
   await secondStarted.promise;
   await subscription.closed;
+});
+
+test("waits for other in-flight handlers before rejecting", async () => {
+  const failure = new Error("handler failed");
+  const firstStarted = deferred();
+  const secondStarted = deferred();
+  const allowFirstFailure = deferred();
+  const releaseSecond = deferred();
+  let secondSettled = false;
+  const opencodeClient = {
+    global: {
+      event: vi.fn(async () => ({
+        stream: stalledStream([
+          {
+            directory: "/tmp/a",
+            payload: {
+              type: "session.status",
+              properties: {
+                sessionID: "s1",
+                status: { type: "busy" as const },
+              },
+            },
+          },
+          {
+            directory: "/tmp/a",
+            payload: {
+              type: "message.removed",
+              properties: { sessionID: "s2", messageID: "m1" },
+            },
+          },
+        ]),
+      })),
+    },
+  };
+
+  const subscription = OpencodeEventStream.create(
+    opencodeClient as never,
+    FloatingPromises.create(),
+    vi.fn(
+      async (event: { payload: { properties?: { sessionID?: string } } }) => {
+        if (event.payload.properties?.sessionID === "s1") {
+          firstStarted.resolve();
+          await allowFirstFailure.promise;
+          throw failure;
+        }
+        secondStarted.resolve();
+        await releaseSecond.promise;
+        secondSettled = true;
+      },
+    ) as never,
+  );
+
+  await firstStarted.promise;
+  await secondStarted.promise;
+  allowFirstFailure.resolve();
+
+  const closedState = await Promise.race([
+    subscription.closed.then(
+      () => "settled",
+      () => "settled",
+    ),
+    Bun.sleep(10).then(() => "pending"),
+  ]);
+  expect(closedState).toBe("pending");
+
+  releaseSecond.resolve();
+  await expect(subscription.closed).rejects.toBe(failure);
+  expect(secondSettled).toBe(true);
 });
 
 test("routes all remaining event queue variants", async () => {

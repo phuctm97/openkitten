@@ -80,9 +80,10 @@ export class OpencodeEventStream implements AsyncDisposable {
   ): Promise<void> {
     const queueId = opencodeEventStreamGetQueueId(event);
     const previous = this.#queueTails.get(queueId) ?? Promise.resolve();
-    const current = previous.then(() =>
-      this.#onEvent(event, this.#abortController.signal),
-    );
+    const current = previous.then(async () => {
+      if (this.#abortController.signal.aborted) return;
+      await this.#onEvent(event, this.#abortController.signal);
+    });
     current.catch((error) => {
       if (this.#abortController.signal.aborted) return;
       logger.fatal("Failed to process event from OpenCode", error, {
@@ -155,9 +156,9 @@ export class OpencodeEventStream implements AsyncDisposable {
         onAbort();
       }
     } catch (error) {
-      if (failed) throw failure;
       if (this.#abortController.signal.aborted) {
         await this.#settleQueuedEvents();
+        if (failed) throw failure;
         return;
       }
       throw error;
