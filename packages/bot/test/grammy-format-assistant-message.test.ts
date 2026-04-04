@@ -584,7 +584,7 @@ test("summarizes recognized categories and unknown tools naturally", () => {
   );
 });
 
-test("counts only actual attachments and completed tool attachments", () => {
+test("omits attachment summaries once files are sent separately", () => {
   const fileSource: FileSource = {
     type: "file",
     path: "/repo/out/result.txt",
@@ -630,7 +630,7 @@ test("counts only actual attachments and completed tool attachments", () => {
   ]);
 
   expect(getText(chunks)).toBe(
-    "🛠️ _Read 1 file, attached 4 files, and performed 1 other action._",
+    ["🛠️ _Read 1 file._", "🛠️ _Performed 1 action._"].join("\n\n"),
   );
 });
 
