@@ -109,7 +109,7 @@ export const serve = defineCommand({
       opencodeServer.exited,
       mcpServer.disconnected,
       opencodeEventStream.closed,
-      grammyEventLoop.ended,
+      grammyEventLoop.stopped,
       grammy.stopped,
     ]);
   },
