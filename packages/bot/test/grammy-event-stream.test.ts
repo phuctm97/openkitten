@@ -217,6 +217,19 @@ test("rejects closed when a handler rejects", async () => {
   );
 });
 
+test("drops updates queued after dispose", async () => {
+  await using floatingPromises = FloatingPromises.create();
+  const grammyEventStream = GrammyEventStream.create(floatingPromises);
+  const onEvent = vi.fn().mockResolvedValue(undefined);
+
+  await grammyEventStream[Symbol.asyncDispose]();
+  queueEvent(grammyEventStream, mockMessageCtx(1, 42), onEvent);
+
+  await Bun.sleep(10);
+  expect(onEvent).not.toHaveBeenCalled();
+  await expect(grammyEventStream.closed).resolves.toBeUndefined();
+});
+
 test("ignores handler rejection after dispose", async () => {
   await using floatingPromises = FloatingPromises.create();
   const handler = Promise.withResolvers<void>();
@@ -284,12 +297,12 @@ test("waits for in-flight handlers before disposing", async () => {
   await dispose;
 });
 
-test("waits for in-flight handlers before rejecting during cleanup", async () => {
+test("waits for in-flight handlers before rejecting closed", async () => {
   await using floatingPromises = FloatingPromises.create();
   const grammyEventStream = GrammyEventStream.create(floatingPromises);
   const firstStarted = deferred();
   const firstReleased = deferred();
-  const secondSettled = deferred();
+  const secondStarted = deferred();
   const error = new Error("handler failed");
 
   queueEvent(grammyEventStream, mockMessageCtx(1, 42), async () => {
@@ -297,21 +310,42 @@ test("waits for in-flight handlers before rejecting during cleanup", async () =>
     await firstReleased.promise;
   });
   queueEvent(grammyEventStream, mockMessageCtx(2, 99), async () => {
+    secondStarted.resolve();
     throw error;
   });
 
   await firstStarted.promise;
-  await expect(grammyEventStream.closed).rejects.toThrow("handler failed");
+  await secondStarted.promise;
 
-  const dispose = grammyEventStream[Symbol.asyncDispose]().then(() => {
-    secondSettled.resolve();
-  });
-  const disposeState = await Promise.race([
-    secondSettled.promise.then(() => "settled"),
+  const closedState = await Promise.race([
+    grammyEventStream.closed.then(
+      () => "resolved",
+      () => "rejected",
+    ),
     Bun.sleep(10).then(() => "pending"),
   ]);
-  expect(disposeState).toBe("pending");
+  expect(closedState).toBe("pending");
 
   firstReleased.resolve();
-  await dispose;
+  await expect(grammyEventStream.closed).rejects.toThrow("handler failed");
+});
+
+test("drops updates queued after a handler failure", async () => {
+  await using floatingPromises = FloatingPromises.create();
+  const grammyEventStream = GrammyEventStream.create(floatingPromises);
+  const failed = deferred();
+  const onEvent = vi.fn().mockResolvedValue(undefined);
+
+  queueEvent(grammyEventStream, mockMessageCtx(1, 42), async () => {
+    failed.resolve();
+    throw new Error("handler failed");
+  });
+
+  await failed.promise;
+  await vi.waitFor(() => expect(logger.fatal).toHaveBeenCalledOnce());
+
+  queueEvent(grammyEventStream, mockMessageCtx(2, 42), onEvent);
+
+  await expect(grammyEventStream.closed).rejects.toThrow("handler failed");
+  expect(onEvent).not.toHaveBeenCalled();
 });

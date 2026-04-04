@@ -23,6 +23,7 @@ export class GrammyEventStream implements AsyncDisposable {
   readonly #rejectClosed: (reason?: unknown) => void;
   readonly #queueTails = new Map<string, Promise<void>>();
   readonly #queuedEvents = new Set<Promise<void>>();
+  #closing: Promise<void> | undefined;
 
   private constructor(floatingPromises: FloatingPromises) {
     this.#floatingPromises = floatingPromises;
@@ -40,6 +41,7 @@ export class GrammyEventStream implements AsyncDisposable {
   }
 
   #enqueue(ctx: Context, onEvent: () => void | Promise<void>) {
+    if (this.#abortController.signal.aborted) return;
     const queueId = grammyEventStreamGetQueueId(ctx);
     const previous = this.#queueTails.get(queueId) ?? Promise.resolve();
     const current = previous.then(async () => {
@@ -51,8 +53,7 @@ export class GrammyEventStream implements AsyncDisposable {
       logger.fatal("Failed to process update from Telegram", error, {
         update: ctx.update,
       });
-      this.#abortController.abort();
-      this.#rejectClosed(error);
+      this.#close(error);
     });
     const queued = current.finally(() => {
       this.#queuedEvents.delete(queued);
@@ -71,6 +72,19 @@ export class GrammyEventStream implements AsyncDisposable {
     }
   }
 
+  #close(error?: unknown) {
+    if (this.#closing) return;
+    this.#abortController.abort();
+    this.#closing = (async () => {
+      await this.#settleQueuedEvents();
+      if (error === undefined) {
+        this.#resolveClosed();
+        return;
+      }
+      this.#rejectClosed(error);
+    })();
+  }
+
   get closed(): Promise<void> {
     return this.#closed;
   }
@@ -85,9 +99,7 @@ export class GrammyEventStream implements AsyncDisposable {
   }
 
   async [Symbol.asyncDispose]() {
-    this.#abortController.abort();
-    await this.#settleQueuedEvents();
-    this.#resolveClosed();
+    this.#close();
     await this.#settled;
   }
 
