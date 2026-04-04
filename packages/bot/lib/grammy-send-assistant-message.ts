@@ -2,13 +2,13 @@ import type { Part } from "@opencode-ai/sdk/v2";
 import { InputFile, InputMediaBuilder } from "grammy";
 import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
 import invariant from "tiny-invariant";
-import { cleanMimeType } from "~/lib/clean-mime-type";
-import { cleanText } from "~/lib/clean-text";
 import { grammyBuildAssistantMessageSections } from "~/lib/grammy-build-assistant-message-sections";
 import { grammyFormatText } from "~/lib/grammy-format-text";
 import { grammyRenderAssistantMessageSection } from "~/lib/grammy-render-assistant-message-section";
 import type { GrammySendAssistantMessageOptions } from "~/lib/grammy-send-assistant-message-options";
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
+import { trimMime } from "~/lib/trim-mime";
+import { trimText } from "~/lib/trim-text";
 
 type AssistantMessageSection = ReturnType<
   typeof grammyBuildAssistantMessageSections
@@ -244,8 +244,8 @@ function attachmentFilename(
   mimeType: string | undefined,
   fallbackName: string,
 ): string {
-  const name = cleanText(filename);
-  const ext = mimeExtension(cleanMimeType(mimeType) ?? "");
+  const name = trimText(filename);
+  const ext = mimeExtension(trimMime(mimeType) ?? "");
   if (name) return fileExtension(name) || !ext ? name : `${name}.${ext}`;
 
   return ext ? `${fallbackName}.${ext}` : fallbackName;
@@ -277,7 +277,7 @@ function attachmentMime(
   mimeType: string | undefined,
   filename: string,
 ): string | undefined {
-  const cleanedMime = cleanMimeType(mimeType);
+  const cleanedMime = trimMime(mimeType);
   if (cleanedMime && cleanedMime !== "application/octet-stream") {
     return cleanedMime;
   }

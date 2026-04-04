@@ -6,10 +6,10 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
 import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
 import zod from "zod";
-import { cleanMimeType } from "~/lib/clean-mime-type";
-import { cleanText } from "~/lib/clean-text";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { logger } from "~/lib/logger";
+import { trimMime } from "~/lib/trim-mime";
+import { trimText } from "~/lib/trim-text";
 import { version } from "~/package.json" with { type: "json" };
 
 const attachmentKinds = [
@@ -231,8 +231,8 @@ function attachmentFilename(
   mimeType: string | undefined,
   fallbackName: string,
 ): string {
-  const name = cleanText(filename);
-  const ext = mimeExtension(cleanMimeType(mimeType) ?? "");
+  const name = trimText(filename);
+  const ext = mimeExtension(trimMime(mimeType) ?? "");
   if (name) return fileExtension(name) || !ext ? name : `${name}.${ext}`;
 
   return ext ? `${fallbackName}.${ext}` : fallbackName;
@@ -264,7 +264,7 @@ function attachmentMime(
   mimeType: string | undefined,
   filename: string,
 ): string | undefined {
-  const cleanedMime = cleanMimeType(mimeType);
+  const cleanedMime = trimMime(mimeType);
   if (cleanedMime && cleanedMime !== "application/octet-stream") {
     return cleanedMime;
   }
