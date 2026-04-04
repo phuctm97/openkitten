@@ -63,6 +63,7 @@ describe("McpServer", () => {
     sendAnimation: vi.fn(async () => ({})),
     sendAudio: vi.fn(async () => ({})),
     sendDocument: vi.fn(async () => ({})),
+    sendMessage: vi.fn(async () => ({})),
     sendPhoto: vi.fn(async () => ({})),
     sendSticker: vi.fn(async () => ({})),
     sendVideo: vi.fn(async () => ({})),
@@ -86,6 +87,7 @@ describe("McpServer", () => {
     botApi.sendAnimation.mockClear();
     botApi.sendAudio.mockClear();
     botApi.sendDocument.mockClear();
+    botApi.sendMessage.mockClear();
     botApi.sendPhoto.mockClear();
     botApi.sendSticker.mockClear();
     botApi.sendVideo.mockClear();
@@ -228,7 +230,7 @@ describe("McpServer", () => {
     ]);
   });
 
-  test("send_file sends a local png as a Telegram photo", async () => {
+  test("send_file sends a local png as a Telegram photo with caption", async () => {
     const dir = await mkdtemp(join(tmpdir(), "mcp-server-"));
     tempDirs.push(dir);
     const path = join(dir, "photo.png");
@@ -247,11 +249,13 @@ describe("McpServer", () => {
 
     const result = await tool.handler({
       path,
+      caption: "Look at this cat",
       __OPENKITTEN__: { sessionID: "sess-1", callID: "call-1" },
     });
 
     expect(existingSessionsGet).toHaveBeenCalledWith("sess-1");
     expect(botApi.sendPhoto).toHaveBeenCalledWith(123, expect.any(InputFile), {
+      caption: "Look at this cat",
       message_thread_id: 456,
     });
     expect(result).toEqual({
@@ -259,18 +263,16 @@ describe("McpServer", () => {
       structuredContent: {
         filename: "photo.png",
         kind: "photo",
-        source: "path",
       },
     });
   });
 
-  test("send_file uses URL response metadata to choose the Telegram method", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
-      new Response("svg", {
-        headers: { "content-type": "image/svg+xml; charset=utf-8" },
-        status: 200,
-      }),
-    );
+  test("send_file sends sticker captions as a follow-up text message", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "mcp-server-"));
+    tempDirs.push(dir);
+    const path = join(dir, "party.tgs");
+    await Bun.write(path, "sticker-bytes");
+
     existingSessionsGet.mockReturnValueOnce({
       chatId: 777,
       threadId: undefined,
@@ -288,21 +290,22 @@ describe("McpServer", () => {
     if (!tool) throw new Error("send_file tool was not registered");
 
     const result = await tool.handler({
-      url: "https://example.com/assets/vector",
+      path,
+      caption: "Party time",
       __OPENKITTEN__: { sessionID: "sess-2", callID: "call-2" },
     });
 
-    expect(botApi.sendDocument).toHaveBeenCalledWith(
+    expect(botApi.sendSticker).toHaveBeenCalledWith(
       777,
       expect.any(InputFile),
       {},
     );
+    expect(botApi.sendMessage).toHaveBeenCalledWith(777, "Party time", {});
     expect(result).toEqual({
-      content: [{ type: "text", text: "Sent vector.svg as document." }],
+      content: [{ type: "text", text: "Sent party.tgs as sticker." }],
       structuredContent: {
-        filename: "vector.svg",
-        kind: "document",
-        source: "url",
+        filename: "party.tgs",
+        kind: "sticker",
       },
     });
   });
@@ -319,8 +322,8 @@ describe("McpServer", () => {
     const tool = registeredTools.find((entry) => entry.name === "send_file");
     if (!tool) throw new Error("send_file tool was not registered");
 
-    await expect(
-      tool.handler({ url: "https://example.com/file.txt" }),
-    ).rejects.toThrow("OpenKitten tool metadata is missing.");
+    await expect(tool.handler({ path: "/tmp/file.txt" })).rejects.toThrow(
+      "OpenKitten tool metadata is missing.",
+    );
   });
 });

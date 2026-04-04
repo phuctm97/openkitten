@@ -3,10 +3,10 @@ import { basename } from "node:path";
 import { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
-import type { Bot } from "grammy";
+import { type Bot, InputFile } from "grammy";
+import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
 import zod from "zod";
 import type { ExistingSessions } from "~/lib/existing-sessions";
-import { grammyCreateTelegramAttachment } from "~/lib/grammy-create-telegram-attachment";
 import { logger } from "~/lib/logger";
 import { version } from "~/package.json" with { type: "json" };
 
@@ -26,28 +26,20 @@ const openkittenMetadataSchema = zod.object({
 
 const sendFileInputSchema = zod
   .object({
-    path: zod.string().trim().min(1).optional(),
-    url: zod.string().trim().url().optional(),
-    filename: zod.string().trim().min(1).optional(),
-    mimeType: zod.string().trim().min(1).optional(),
-    __OPENKITTEN__: openkittenMetadataSchema
-      .optional()
-      .describe("Internal metadata injected by OpenKitten."),
+    path: zod.string().trim().min(1),
+    caption: zod.string().trim().min(1).optional(),
   })
-  .refine(
-    ({ path, url }) => Number(!!path) + Number(!!url) === 1,
-    "Provide exactly one of path or url.",
-  );
+  .passthrough();
 
 const sendFileOutputSchema = zod.object({
   filename: zod.string(),
   kind: zod.enum(attachmentKinds),
-  source: zod.enum(["path", "url"]),
 });
 
 type OpenkittenMetadata = zod.output<typeof openkittenMetadataSchema>;
 type SendFileArgs = zod.output<typeof sendFileInputSchema>;
 type SendFileOutput = zod.output<typeof sendFileOutputSchema>;
+type AttachmentKind = (typeof attachmentKinds)[number];
 
 export class McpServer implements Disposable {
   readonly #token: string;
@@ -90,7 +82,7 @@ export class McpServer implements Disposable {
       "send_file",
       {
         description:
-          "Send a local file path or URL back to the Telegram chat for the current OpenKitten session. The file is routed to the best Telegram method automatically.",
+          "Send a local file back to the Telegram chat for the current OpenKitten session. The Telegram method is chosen from the file path.",
         inputSchema: sendFileInputSchema,
         outputSchema: sendFileOutputSchema,
       },
@@ -105,21 +97,30 @@ export class McpServer implements Disposable {
     readonly content: { readonly type: "text"; readonly text: string }[];
     readonly structuredContent: SendFileOutput;
   }> {
-    const metadata = this.#openkittenMetadata(args.__OPENKITTEN__);
-    const source = await this.#sendFileSource(args);
+    const metadata = this.#openkittenMetadata(args);
+    const source = await this.#loadLocalFile(args);
     const location = this.#existingSessions.get(metadata.sessionID);
     if (!location) {
       throw new Error(`No Telegram session found: ${metadata.sessionID}`);
     }
 
-    const attachment = grammyCreateTelegramAttachment({
-      bytes: source.bytes,
-      fallbackName: "attachment",
-      filename: source.filename,
-      mimeType: source.mimeType,
-    });
+    const caption = cleanText(args.caption);
+    const filename = attachmentFilename(
+      source.filename,
+      undefined,
+      "attachment",
+    );
+    const attachment = {
+      filename,
+      kind: attachmentKind(undefined, filename),
+      media: new InputFile(source.bytes, filename),
+    };
     const sendOptions = {
       ...(location.threadId && { message_thread_id: location.threadId }),
+    };
+    const captionedSendOptions = {
+      ...sendOptions,
+      ...(caption && { caption }),
     };
 
     switch (attachment.kind) {
@@ -127,28 +128,28 @@ export class McpServer implements Disposable {
         await this.#bot.api.sendAnimation(
           location.chatId,
           attachment.media,
-          sendOptions,
+          captionedSendOptions,
         );
         break;
       case "audio":
         await this.#bot.api.sendAudio(
           location.chatId,
           attachment.media,
-          sendOptions,
+          captionedSendOptions,
         );
         break;
       case "document":
         await this.#bot.api.sendDocument(
           location.chatId,
           attachment.media,
-          sendOptions,
+          captionedSendOptions,
         );
         break;
       case "photo":
         await this.#bot.api.sendPhoto(
           location.chatId,
           attachment.media,
-          sendOptions,
+          captionedSendOptions,
         );
         break;
       case "sticker":
@@ -157,30 +158,36 @@ export class McpServer implements Disposable {
           attachment.media,
           sendOptions,
         );
+        if (caption) {
+          await this.#bot.api.sendMessage(
+            location.chatId,
+            caption,
+            sendOptions,
+          );
+        }
         break;
       case "video":
         await this.#bot.api.sendVideo(
           location.chatId,
           attachment.media,
-          sendOptions,
+          captionedSendOptions,
         );
         break;
     }
 
     logger.info("MCP file is sent to Telegram", {
       callId: metadata.callID,
+      caption,
       chatId: location.chatId,
       filename: attachment.filename,
       kind: attachment.kind,
       sessionId: metadata.sessionID,
-      source: source.source,
       threadId: location.threadId,
     });
 
     const output = {
       filename: attachment.filename,
       kind: attachment.kind,
-      source: source.source,
     } satisfies SendFileOutput;
 
     return {
@@ -194,26 +201,11 @@ export class McpServer implements Disposable {
     };
   }
 
-  async #sendFileSource(args: SendFileArgs): Promise<{
-    readonly bytes: Uint8Array;
-    readonly filename: string | undefined;
-    readonly mimeType: string | undefined;
-    readonly source: "path" | "url";
-  }> {
-    if (args.path) return this.#loadLocalFile(args);
-    return this.#loadRemoteFile(args);
-  }
-
   async #loadLocalFile(args: SendFileArgs): Promise<{
     readonly bytes: Uint8Array;
-    readonly filename: string | undefined;
-    readonly mimeType: string | undefined;
-    readonly source: "path";
+    readonly filename: string;
   }> {
     const path = args.path;
-    if (!path) {
-      throw new Error("send_file requires a local path.");
-    }
 
     const file = Bun.file(path);
     if (!(await file.exists())) {
@@ -222,42 +214,17 @@ export class McpServer implements Disposable {
 
     return {
       bytes: await file.bytes(),
-      filename: cleanText(args.filename) ?? cleanText(basename(path)),
-      mimeType: cleanMimeType(args.mimeType) ?? cleanMimeType(file.type),
-      source: "path",
+      filename: basename(path),
     };
   }
 
-  async #loadRemoteFile(args: SendFileArgs): Promise<{
-    readonly bytes: Uint8Array;
-    readonly filename: string | undefined;
-    readonly mimeType: string | undefined;
-    readonly source: "url";
-  }> {
-    const url = args.url;
-    if (!url) {
-      throw new Error("send_file requires a URL.");
+  #openkittenMetadata(rawArgs: unknown): OpenkittenMetadata {
+    if (!isRecord(rawArgs)) {
+      throw new Error("OpenKitten tool metadata is missing.");
     }
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      throw new Error(
-        `Failed to fetch file: ${response.status} ${response.statusText}`,
-      );
-    }
-
-    return {
-      bytes: new Uint8Array(await response.arrayBuffer()),
-      filename: cleanText(args.filename) ?? filenameFromUrl(url),
-      mimeType:
-        cleanMimeType(args.mimeType) ??
-        cleanMimeType(response.headers.get("content-type") ?? undefined),
-      source: "url",
-    };
-  }
-
-  #openkittenMetadata(rawMetadata: unknown): OpenkittenMetadata {
-    const result = openkittenMetadataSchema.safeParse(rawMetadata);
+    const result = openkittenMetadataSchema.safeParse(
+      rawArgs["__OPENKITTEN__"],
+    );
     if (result.success) return result.data;
     throw new Error("OpenKitten tool metadata is missing.");
   }
@@ -301,13 +268,6 @@ export class McpServer implements Disposable {
   }
 }
 
-function filenameFromUrl(url: string): string | undefined {
-  if (url.startsWith("data:")) return undefined;
-
-  const pathname = new URL(url).pathname;
-  return cleanText(basename(decodeURIComponent(pathname)));
-}
-
 function cleanMimeType(value: string | undefined): string | undefined {
   return cleanText(value)?.split(";", 1)[0]?.trim().toLowerCase();
 }
@@ -315,4 +275,63 @@ function cleanMimeType(value: string | undefined): string | undefined {
 function cleanText(value: string | undefined): string | undefined {
   const text = value?.trim();
   return text ? text : undefined;
+}
+
+function attachmentFilename(
+  filename: string | undefined,
+  mimeType: string | undefined,
+  fallbackName: string,
+): string {
+  const name = cleanText(filename);
+  const ext = mimeExtension(cleanMimeType(mimeType) ?? "");
+  if (name) return fileExtension(name) || !ext ? name : `${name}.${ext}`;
+
+  return ext ? `${fallbackName}.${ext}` : fallbackName;
+}
+
+function attachmentKind(
+  mimeType: string | undefined,
+  filename: string,
+): AttachmentKind {
+  const mime = attachmentMimeType(mimeType, filename);
+  const ext = fileExtension(filename);
+
+  if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
+
+  if (mime === "image/gif" || ext === "gif") return "animation";
+
+  if (mime === "image/svg+xml" || ext === "svg") return "document";
+
+  if (mime?.startsWith("image/")) return "photo";
+
+  if (mime?.startsWith("video/")) return "video";
+
+  if (mime?.startsWith("audio/")) return "audio";
+
+  return "document";
+}
+
+function attachmentMimeType(
+  mimeType: string | undefined,
+  filename: string,
+): string | undefined {
+  const cleanedMime = cleanMimeType(mimeType);
+  if (cleanedMime && cleanedMime !== "application/octet-stream") {
+    return cleanedMime;
+  }
+
+  const filenameMime = mimeLookup(filename);
+  if (typeof filenameMime === "string") return filenameMime.toLowerCase();
+
+  return cleanedMime;
+}
+
+function fileExtension(filename: string): string | undefined {
+  const index = filename.lastIndexOf(".");
+  if (index < 0 || index === filename.length - 1) return undefined;
+  return filename.slice(index + 1).toLowerCase();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
