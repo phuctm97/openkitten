@@ -14,12 +14,12 @@ import { trimText } from "~/lib/trim-text";
 import { version } from "~/package.json" with { type: "json" };
 
 const attachmentKinds = [
+  "sticker",
   "animation",
-  "audio",
   "document",
   "photo",
-  "sticker",
   "video",
+  "audio",
 ] as const;
 
 const openkittenMetadataSchema = zod.object({

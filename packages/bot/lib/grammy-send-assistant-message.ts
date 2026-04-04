@@ -26,12 +26,12 @@ interface TelegramAttachment {
 }
 
 type AttachmentKind =
+  | "sticker"
   | "animation"
-  | "audio"
   | "document"
   | "photo"
-  | "sticker"
-  | "video";
+  | "video"
+  | "audio";
 type MediaGroupKind = "audio" | "document" | "visual";
 
 export async function grammySendAssistantMessage({

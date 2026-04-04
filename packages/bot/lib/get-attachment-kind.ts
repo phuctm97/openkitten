@@ -4,7 +4,7 @@ import { getFileExtension } from "~/lib/get-file-extension";
 export function getAttachmentKind(
   filemime: string | undefined,
   filename: string,
-): "animation" | "audio" | "document" | "photo" | "sticker" | "video" {
+): "sticker" | "animation" | "document" | "photo" | "video" | "audio" {
   const mime = getAttachmentMime(filemime, filename);
   const ext = getFileExtension(filename);
 
