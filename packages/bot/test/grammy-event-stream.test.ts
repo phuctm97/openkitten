@@ -1,10 +1,10 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { Grammy } from "~/lib/grammy";
+import { GrammyEventStream } from "~/lib/grammy-event-stream";
 import { logger } from "~/lib/logger";
 import type { Shutdown } from "~/lib/shutdown";
 
 interface MockControls {
-  resolveStopped: () => void;
+  resolveClosed: () => void;
 }
 
 let controls: MockControls;
@@ -15,16 +15,16 @@ let mockShutdown: Shutdown;
 
 function setupMock(options?: { startError?: Error }): void {
   controls = {
-    resolveStopped: () => {},
+    resolveClosed: () => {},
   };
-  let resolveStopped: () => void;
+  let resolveClosed: () => void;
   mockCatch = vi.fn();
-  mockStop = vi.fn(() => resolveStopped());
+  mockStop = vi.fn(() => resolveClosed());
   mockStart = vi.fn(
     (opts?: { onStart?: () => void }) =>
       new Promise<void>((resolve, reject) => {
-        resolveStopped = resolve;
-        controls.resolveStopped = resolve;
+        resolveClosed = resolve;
+        controls.resolveClosed = resolve;
         if (options?.startError) {
           reject(options.startError);
           return;
@@ -47,35 +47,51 @@ beforeEach(() => {
   mockShutdown = { trigger: vi.fn() } as never;
 });
 
-test("logs start and ready", async () => {
-  await using _grammy = await Grammy.create(mockShutdown, createMockBot());
-  expect(logger.debug).toHaveBeenCalledWith("grammY is starting…");
-  expect(logger.info).toHaveBeenCalledWith("grammY is ready");
+test("logs connecting and connected", async () => {
+  await using _grammyEventStream = await GrammyEventStream.create(
+    mockShutdown,
+    createMockBot(),
+  );
+  expect(logger.debug).toHaveBeenCalledWith(
+    "grammY event stream is connecting…",
+  );
+  expect(logger.info).toHaveBeenCalledWith("grammY event stream is connected");
 });
 
 test("is async disposable", async () => {
   {
-    await using _grammy = await Grammy.create(mockShutdown, createMockBot());
+    await using _grammyEventStream = await GrammyEventStream.create(
+      mockShutdown,
+      createMockBot(),
+    );
   }
   expect(mockStop).toHaveBeenCalledOnce();
-  expect(logger.info).toHaveBeenCalledWith("grammY is stopped");
+  expect(logger.info).toHaveBeenCalledWith("grammY event stream is closed");
 });
 
 test("propagates startup error", async () => {
   setupMock({ startError: new Error("polling failed") });
-  await expect(Grammy.create(mockShutdown, createMockBot())).rejects.toThrow(
-    "polling failed",
+  await expect(
+    GrammyEventStream.create(mockShutdown, createMockBot()),
+  ).rejects.toThrow("polling failed");
+});
+
+test("closed rejects on unexpected end", async () => {
+  const grammyEventStream = await GrammyEventStream.create(
+    mockShutdown,
+    createMockBot(),
+  );
+  controls.resolveClosed();
+  await expect(grammyEventStream.closed).rejects.toThrow(
+    "grammY event stream ended unexpectedly",
   );
 });
 
-test("stopped rejects on unexpected stop", async () => {
-  const grammy = await Grammy.create(mockShutdown, createMockBot());
-  controls.resolveStopped();
-  await expect(grammy.stopped).rejects.toThrow("grammY stopped unexpectedly");
-});
-
 test("catch handler logs error with chat and thread", async () => {
-  await using _grammy = await Grammy.create(mockShutdown, createMockBot());
+  await using _grammyEventStream = await GrammyEventStream.create(
+    mockShutdown,
+    createMockBot(),
+  );
   expect(mockCatch).toHaveBeenCalledOnce();
   const [handler] = mockCatch.mock.calls[0] as [
     (err: {
@@ -99,7 +115,7 @@ test("catch handler logs error with chat and thread", async () => {
     error,
   });
   expect(logger.fatal).toHaveBeenCalledWith(
-    "grammY caught an unhandled error",
+    "grammY event stream caught an unhandled error",
     error,
     {
       update: { update_id: 789 },
@@ -109,7 +125,10 @@ test("catch handler logs error with chat and thread", async () => {
 });
 
 test("catch handler handles missing chat and msg", async () => {
-  await using _grammy = await Grammy.create(mockShutdown, createMockBot());
+  await using _grammyEventStream = await GrammyEventStream.create(
+    mockShutdown,
+    createMockBot(),
+  );
   const [handler] = mockCatch.mock.calls[0] as [
     (err: {
       ctx: {
@@ -124,7 +143,7 @@ test("catch handler handles missing chat and msg", async () => {
   const error = new Error("unexpected");
   handler({ ctx: { update: { update_id: 1 } }, error });
   expect(logger.fatal).toHaveBeenCalledWith(
-    "grammY caught an unhandled error",
+    "grammY event stream caught an unhandled error",
     error,
     {
       update: { update_id: 1 },
@@ -136,24 +155,33 @@ test("catch handler handles missing chat and msg", async () => {
 test("dispose logs fatal and triggers shutdown when bot.stop fails", async () => {
   const error = new Error("stop failed");
   mockStop = vi.fn(() => {
-    controls.resolveStopped();
+    controls.resolveClosed();
     throw error;
   });
-  let grammyStopped: Promise<void>;
+  let grammyClosed: Promise<void>;
   {
-    await using grammy = await Grammy.create(mockShutdown, createMockBot());
-    grammyStopped = grammy.stopped;
+    await using grammyEventStream = await GrammyEventStream.create(
+      mockShutdown,
+      createMockBot(),
+    );
+    grammyClosed = grammyEventStream.closed;
   }
-  await expect(grammyStopped).resolves.toBeUndefined();
-  expect(logger.fatal).toHaveBeenCalledWith("grammY failed to stop", error);
+  await expect(grammyClosed).resolves.toBeUndefined();
+  expect(logger.fatal).toHaveBeenCalledWith(
+    "grammY event stream failed to close",
+    error,
+  );
   expect(mockShutdown.trigger).toHaveBeenCalled();
 });
 
-test("stopped does not reject after dispose", async () => {
-  let grammyStopped: Promise<void>;
+test("closed does not reject after dispose", async () => {
+  let grammyClosed: Promise<void>;
   {
-    await using grammy = await Grammy.create(mockShutdown, createMockBot());
-    grammyStopped = grammy.stopped;
+    await using grammyEventStream = await GrammyEventStream.create(
+      mockShutdown,
+      createMockBot(),
+    );
+    grammyClosed = grammyEventStream.closed;
   }
-  await expect(grammyStopped).resolves.toBeUndefined();
+  await expect(grammyClosed).resolves.toBeUndefined();
 });

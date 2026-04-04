@@ -4,8 +4,8 @@ import { Bot } from "grammy";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
-import { Grammy } from "~/lib/grammy";
 import { GrammyEventLoop } from "~/lib/grammy-event-loop";
+import { GrammyEventStream } from "~/lib/grammy-event-stream";
 import { grammyFilterUser } from "~/lib/grammy-filter-user";
 import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
@@ -103,14 +103,17 @@ export const serve = defineCommand({
     );
     bot.on("message:text", grammyEventLoop.connect(scope, grammyHandleText));
     bot.on("message:photo", grammyEventLoop.connect(scope, grammyHandlePhoto));
-    await using grammy = await Grammy.create(shutdown, bot);
+    await using grammyEventStream = await GrammyEventStream.create(
+      shutdown,
+      bot,
+    );
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,
       mcpServer.disconnected,
       opencodeEventStream.closed,
       grammyEventLoop.stopped,
-      grammy.stopped,
+      grammyEventStream.closed,
     ]);
   },
 });
