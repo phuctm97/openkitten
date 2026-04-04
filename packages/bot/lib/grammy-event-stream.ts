@@ -1,6 +1,5 @@
 import type { Context } from "grammy";
 import type { FloatingPromises } from "~/lib/floating-promises";
-import { logger } from "~/lib/logger";
 import type { Scope } from "~/lib/scope";
 
 function grammyEventStreamGetQueueId(ctx: Context): string {
@@ -52,9 +51,6 @@ export class GrammyEventStream implements AsyncDisposable {
     });
     current.catch((error) => {
       if (this.#abortController.signal.aborted) return;
-      logger.fatal("Failed to process update from Telegram", error, {
-        update: ctx.update,
-      });
       this.#fail(error);
     });
     const queued = current.finally(() => {

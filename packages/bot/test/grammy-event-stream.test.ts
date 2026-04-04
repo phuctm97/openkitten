@@ -2,7 +2,6 @@ import type { Context } from "grammy";
 import { expect, test, vi } from "vitest";
 import { FloatingPromises } from "~/lib/floating-promises";
 import { GrammyEventStream } from "~/lib/grammy-event-stream";
-import { logger } from "~/lib/logger";
 import type { Scope } from "~/lib/scope";
 
 function deferred() {
@@ -208,13 +207,6 @@ test("rejects closed when a handler rejects", async () => {
   });
 
   await expect(grammyEventStream.closed).rejects.toThrow("handler failed");
-  await vi.waitFor(() =>
-    expect(logger.fatal).toHaveBeenCalledWith(
-      "Failed to process update from Telegram",
-      error,
-      { update: { update_id: 42 } },
-    ),
-  );
 });
 
 test("rejects closed when a handler rejects with undefined", async () => {
@@ -227,13 +219,6 @@ test("rejects closed when a handler rejects with undefined", async () => {
   });
 
   await expect(grammyEventStream.closed).rejects.toBeUndefined();
-  await vi.waitFor(() =>
-    expect(logger.fatal).toHaveBeenCalledWith(
-      "Failed to process update from Telegram",
-      undefined,
-      { update: { update_id: 43 } },
-    ),
-  );
 });
 
 test("drops updates queued after dispose", async () => {
@@ -262,12 +247,6 @@ test("ignores handler rejection after dispose", async () => {
   handler.reject(new Error("late failure"));
   await dispose;
   await expect(grammyEventStream.closed).resolves.toBeUndefined();
-
-  expect(logger.fatal).not.toHaveBeenCalledWith(
-    "Failed to process update from Telegram",
-    expect.any(Error),
-    { update: { update_id: 42 } },
-  );
 });
 
 test("does not start queued handlers after dispose", async () => {
@@ -352,19 +331,16 @@ test("waits for in-flight handlers before rejecting closed", async () => {
 test("drops updates queued after a handler failure", async () => {
   await using floatingPromises = FloatingPromises.create();
   const grammyEventStream = GrammyEventStream.create(floatingPromises);
-  const failed = deferred();
   const onEvent = vi.fn().mockResolvedValue(undefined);
 
   queueEvent(grammyEventStream, mockMessageCtx(1, 42), async () => {
-    failed.resolve();
     throw new Error("handler failed");
   });
 
-  await failed.promise;
-  await vi.waitFor(() => expect(logger.fatal).toHaveBeenCalledOnce());
+  await expect(grammyEventStream.closed).rejects.toThrow("handler failed");
 
   queueEvent(grammyEventStream, mockMessageCtx(2, 42), onEvent);
 
-  await expect(grammyEventStream.closed).rejects.toThrow("handler failed");
+  await Bun.sleep(10);
   expect(onEvent).not.toHaveBeenCalled();
 });
