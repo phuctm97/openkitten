@@ -3,7 +3,7 @@ import { beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { Grammy } from "~/lib/grammy";
-import { GrammyEventStream } from "~/lib/grammy-event-stream";
+import { GrammyEventLoop } from "~/lib/grammy-event-loop";
 import { McpServer } from "~/lib/mcp-server";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
@@ -262,7 +262,7 @@ function mockGrammy() {
   return dispose;
 }
 
-function mockGrammyEventStream() {
+function mockGrammyEventLoop() {
   let rejectClosed: (reason?: unknown) => void;
   const closed = new Promise<void>((_, reject) => {
     rejectClosed = reject;
@@ -272,7 +272,7 @@ function mockGrammyEventStream() {
     () => {},
   );
   const dispose = vi.fn(async () => {});
-  vi.spyOn(GrammyEventStream, "create").mockReturnValueOnce({
+  vi.spyOn(GrammyEventLoop, "create").mockReturnValueOnce({
     closed,
     connect: vi.fn(() => vi.fn()),
     [Symbol.asyncDispose]: dispose,
@@ -432,7 +432,7 @@ test("exits on event stream failure", async () => {
   );
 });
 
-test("exits on grammY event stream failure", async () => {
+test("exits on grammY event loop failure", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
@@ -442,20 +442,18 @@ test("exits on grammY event stream failure", async () => {
   mockPendingPrompts();
   mockProcessingMessages();
   mockOpencodeEventStream();
-  const grammyEventStream = mockGrammyEventStream();
+  const grammyEventLoop = mockGrammyEventLoop();
   const disposeGrammy = mockGrammy();
   mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
-  await vi.waitFor(() =>
-    expect(GrammyEventStream.create).toHaveBeenCalledOnce(),
-  );
+  await vi.waitFor(() => expect(GrammyEventLoop.create).toHaveBeenCalledOnce());
 
-  grammyEventStream.rejectClosed(new Error("grammY event stream failed"));
+  grammyEventLoop.rejectClosed(new Error("grammY event loop failed"));
 
-  await expect(run).rejects.toThrow("grammY event stream failed");
+  await expect(run).rejects.toThrow("grammY event loop failed");
   expect(disposeGrammy).toHaveBeenCalledOnce();
-  expect(grammyEventStream.dispose).toHaveBeenCalledOnce();
+  expect(grammyEventLoop.dispose).toHaveBeenCalledOnce();
 });
 
 test("awaits existing session initialization before creating working sessions", async () => {

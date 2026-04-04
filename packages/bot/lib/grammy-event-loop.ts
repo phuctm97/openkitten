@@ -2,7 +2,7 @@ import type { Context } from "grammy";
 import type { FloatingPromises } from "~/lib/floating-promises";
 import type { Scope } from "~/lib/scope";
 
-function grammyEventStreamGetQueueId(ctx: Context): string {
+function grammyEventLoopGetQueueId(ctx: Context): string {
   const callbackMessage =
     ctx.callbackQuery?.message && typeof ctx.callbackQuery.message === "object"
       ? ctx.callbackQuery.message
@@ -13,7 +13,7 @@ function grammyEventStreamGetQueueId(ctx: Context): string {
   return `${chatId}:${threadId}`;
 }
 
-export class GrammyEventStream implements AsyncDisposable {
+export class GrammyEventLoop implements AsyncDisposable {
   readonly #floatingPromises: FloatingPromises;
   readonly #abortController: AbortController;
   readonly #closed: Promise<void>;
@@ -43,7 +43,7 @@ export class GrammyEventStream implements AsyncDisposable {
 
   #enqueue(ctx: Context, onEvent: () => void | Promise<void>) {
     if (this.#abortController.signal.aborted) return;
-    const queueId = grammyEventStreamGetQueueId(ctx);
+    const queueId = grammyEventLoopGetQueueId(ctx);
     const previous = this.#queueTails.get(queueId) ?? Promise.resolve();
     const current = previous.then(async () => {
       if (this.#abortController.signal.aborted) return;
@@ -109,7 +109,7 @@ export class GrammyEventStream implements AsyncDisposable {
     await this.#settled;
   }
 
-  static create(floatingPromises: FloatingPromises): GrammyEventStream {
-    return new GrammyEventStream(floatingPromises);
+  static create(floatingPromises: FloatingPromises): GrammyEventLoop {
+    return new GrammyEventLoop(floatingPromises);
   }
 }
