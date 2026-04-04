@@ -1,7 +1,9 @@
+import type { Context } from "grammy";
 import { expect, test, vi } from "vitest";
 import { FloatingPromises } from "~/lib/floating-promises";
 import { GrammyEventStream } from "~/lib/grammy-event-stream";
 import { logger } from "~/lib/logger";
+import type { Scope } from "~/lib/scope";
 
 function deferred() {
   return Promise.withResolvers<void>();
@@ -9,6 +11,13 @@ function deferred() {
 
 function mockShutdown() {
   return { trigger: vi.fn() };
+}
+
+function mockScope(): Scope {
+  return {
+    floatingPromises: {} as never,
+    shutdown: {} as never,
+  } as never;
 }
 
 function mockMessageCtx(updateId: number, chatId: number, threadId?: number) {
@@ -42,6 +51,16 @@ function mockUpdateCtx(updateId: number) {
   return { update: { update_id: updateId } } as never;
 }
 
+function queueEvent(
+  grammyEventStream: GrammyEventStream,
+  ctx: Context,
+  onEvent: () => void | Promise<void>,
+) {
+  grammyEventStream.connect(mockScope(), async () => {
+    await onEvent();
+  })(ctx);
+}
+
 test("calls onEvent for an update", async () => {
   await using floatingPromises = FloatingPromises.create();
   await using grammyEventStream = GrammyEventStream.create(
@@ -50,9 +69,25 @@ test("calls onEvent for an update", async () => {
   );
   const onEvent = vi.fn().mockResolvedValue(undefined);
 
-  await grammyEventStream.enqueue(mockMessageCtx(1, 42), onEvent);
+  queueEvent(grammyEventStream, mockMessageCtx(1, 42), onEvent);
 
-  expect(onEvent).toHaveBeenCalledOnce();
+  await vi.waitFor(() => expect(onEvent).toHaveBeenCalledOnce());
+});
+
+test("connect calls fn with scope and ctx", async () => {
+  await using floatingPromises = FloatingPromises.create();
+  await using grammyEventStream = GrammyEventStream.create(
+    mockShutdown() as never,
+    floatingPromises,
+  );
+  const scope = mockScope();
+  const fn = vi.fn().mockResolvedValue(undefined);
+  const ctx = mockMessageCtx(1, 42);
+  const handler = grammyEventStream.connect(scope, fn);
+
+  handler(ctx);
+
+  await vi.waitFor(() => expect(fn).toHaveBeenCalledWith(scope, ctx));
 });
 
 test("processes updates from the same chat and topic sequentially", async () => {
@@ -66,11 +101,11 @@ test("processes updates from the same chat and topic sequentially", async () => 
   const secondStarted = deferred();
   let secondDidStart = false;
 
-  void grammyEventStream.enqueue(mockMessageCtx(1, 42, 7), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(1, 42, 7), async () => {
     firstStarted.resolve();
     await firstReleased.promise;
   });
-  void grammyEventStream.enqueue(mockMessageCtx(2, 42, 7), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(2, 42, 7), async () => {
     secondDidStart = true;
     secondStarted.resolve();
   });
@@ -94,11 +129,11 @@ test("uses the fallback queue when chat and topic are missing", async () => {
   const secondStarted = deferred();
   let secondDidStart = false;
 
-  void grammyEventStream.enqueue(mockUpdateCtx(1), async () => {
+  queueEvent(grammyEventStream, mockUpdateCtx(1), async () => {
     firstStarted.resolve();
     await firstReleased.promise;
   });
-  void grammyEventStream.enqueue(mockUpdateCtx(2), async () => {
+  queueEvent(grammyEventStream, mockUpdateCtx(2), async () => {
     secondDidStart = true;
     secondStarted.resolve();
   });
@@ -121,11 +156,11 @@ test("processes updates from different chats concurrently", async () => {
   const secondStarted = deferred();
   const releaseBoth = deferred();
 
-  void grammyEventStream.enqueue(mockMessageCtx(1, 42), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(1, 42), async () => {
     firstStarted.resolve();
     await releaseBoth.promise;
   });
-  void grammyEventStream.enqueue(mockMessageCtx(2, 99), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(2, 99), async () => {
     secondStarted.resolve();
     await releaseBoth.promise;
   });
@@ -145,11 +180,11 @@ test("processes updates from different topics concurrently", async () => {
   const secondStarted = deferred();
   const releaseBoth = deferred();
 
-  void grammyEventStream.enqueue(mockMessageCtx(1, 42, 1), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(1, 42, 1), async () => {
     firstStarted.resolve();
     await releaseBoth.promise;
   });
-  void grammyEventStream.enqueue(mockMessageCtx(2, 42, 2), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(2, 42, 2), async () => {
     secondStarted.resolve();
     await releaseBoth.promise;
   });
@@ -170,11 +205,11 @@ test("uses callback query message chat and topic for queueing", async () => {
   const secondStarted = deferred();
   let secondDidStart = false;
 
-  void grammyEventStream.enqueue(mockMessageCtx(1, 42, 7), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(1, 42, 7), async () => {
     firstStarted.resolve();
     await firstReleased.promise;
   });
-  void grammyEventStream.enqueue(mockCallbackCtx(2, 42, "cb1", 7), async () => {
+  queueEvent(grammyEventStream, mockCallbackCtx(2, 42, "cb1", 7), async () => {
     secondDidStart = true;
     secondStarted.resolve();
   });
@@ -197,7 +232,7 @@ test("logs fatal and triggers shutdown when a handler rejects", async () => {
   const error = new Error("handler failed");
   const ctx = mockMessageCtx(42, 123);
 
-  void grammyEventStream.enqueue(ctx, async () => {
+  queueEvent(grammyEventStream, ctx, async () => {
     throw error;
   });
 
@@ -221,7 +256,7 @@ test("ignores handler rejection after dispose", async () => {
     floatingPromises,
   );
 
-  void grammyEventStream.enqueue(ctx, () => handler.promise);
+  queueEvent(grammyEventStream, ctx, () => handler.promise);
 
   await Bun.sleep(10);
   const dispose = grammyEventStream[Symbol.asyncDispose]();
@@ -246,11 +281,11 @@ test("does not start queued handlers after dispose", async () => {
   const firstReleased = deferred();
   let secondDidStart = false;
 
-  void grammyEventStream.enqueue(mockMessageCtx(1, 42), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(1, 42), async () => {
     firstStarted.resolve();
     await firstReleased.promise;
   });
-  void grammyEventStream.enqueue(mockMessageCtx(2, 42), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(2, 42), async () => {
     secondDidStart = true;
   });
 
@@ -271,7 +306,7 @@ test("waits for in-flight handlers before disposing", async () => {
   const started = deferred();
   const release = deferred();
 
-  void grammyEventStream.enqueue(mockMessageCtx(1, 42), async () => {
+  queueEvent(grammyEventStream, mockMessageCtx(1, 42), async () => {
     started.resolve();
     await release.promise;
   });

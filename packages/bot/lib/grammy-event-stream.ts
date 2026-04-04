@@ -1,6 +1,7 @@
 import type { Context } from "grammy";
 import type { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
+import type { Scope } from "~/lib/scope";
 import type { Shutdown } from "~/lib/shutdown";
 
 function grammyEventStreamGetQueueId(ctx: Context): string {
@@ -27,7 +28,7 @@ export class GrammyEventStream implements AsyncDisposable {
     this.#abortController = new AbortController();
   }
 
-  enqueue(ctx: Context, onEvent: () => void | Promise<void>): Promise<void> {
+  #enqueue(ctx: Context, onEvent: () => void | Promise<void>) {
     const queueId = grammyEventStreamGetQueueId(ctx);
     const previous = this.#queueTails.get(queueId) ?? Promise.resolve();
     const current = previous.then(async () => {
@@ -51,13 +52,21 @@ export class GrammyEventStream implements AsyncDisposable {
     this.#queueTails.set(queueId, queued);
     this.#queuedEvents.add(queued);
     this.#floatingPromises.track(queued);
-    return queued;
   }
 
   async #settleQueuedEvents(): Promise<void> {
     while (this.#queuedEvents.size > 0) {
       await Promise.allSettled(this.#queuedEvents);
     }
+  }
+
+  connect<C extends Context>(
+    scope: Scope,
+    fn: (scope: Scope, ctx: C) => Promise<void>,
+  ): (ctx: C) => void {
+    return (ctx) => {
+      this.#enqueue(ctx, () => fn(scope, ctx));
+    };
   }
 
   async [Symbol.asyncDispose]() {

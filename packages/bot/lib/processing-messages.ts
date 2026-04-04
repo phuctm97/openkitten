@@ -223,6 +223,15 @@ export class ProcessingMessages {
     }
   }
 
+  async #initialize() {
+    const { sessionIds } = this.#existingSessions;
+    if (sessionIds.length === 0) return;
+    const results = await Promise.allSettled(
+      sessionIds.map((sessionId) => this.#sync(sessionId)),
+    );
+    Errors.throwIfAny(results);
+  }
+
   streaming(sessionId: string): StreamingMessage | undefined {
     const current = this.#streamingMessages.get(sessionId);
     if (!current) return undefined;
@@ -295,15 +304,6 @@ export class ProcessingMessages {
 
   [Symbol.dispose]() {
     this.#unhook();
-  }
-
-  async #initialize() {
-    const { sessionIds } = this.#existingSessions;
-    if (sessionIds.length === 0) return;
-    const results = await Promise.allSettled(
-      sessionIds.map((sessionId) => this.#sync(sessionId)),
-    );
-    Errors.throwIfAny(results);
   }
 
   static async create(
