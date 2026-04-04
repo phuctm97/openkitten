@@ -104,8 +104,6 @@ export const serve = defineCommand({
     bot.on("message:text", grammyEventLoop.connect(scope, grammyHandleText));
     bot.on("message:photo", grammyEventLoop.connect(scope, grammyHandlePhoto));
     await using grammy = await Grammy.create(shutdown, bot);
-    // Shut down when: OS signal received, OpenCode server exits,
-    // OpenCode event stream ends, MCP server disconnects, or Telegram polling stops.
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,
