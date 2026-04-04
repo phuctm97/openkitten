@@ -253,15 +253,7 @@ function attachmentKind(file: FilePart, filename: string): AttachmentKind {
 
   if (mime?.startsWith("image/")) return "photo";
 
-  if (
-    mime?.startsWith("video/") ||
-    ext === "m4v" ||
-    ext === "mov" ||
-    ext === "mp4" ||
-    ext === "webm"
-  ) {
-    return "video";
-  }
+  if (mime?.startsWith("video/")) return "video";
 
   if (mime?.startsWith("audio/")) return "audio";
 
