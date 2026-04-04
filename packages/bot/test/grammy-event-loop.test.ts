@@ -198,7 +198,7 @@ test("uses callback query message chat and topic for queueing", async () => {
   await secondStarted.promise;
 });
 
-test("rejects closed when a handler rejects", async () => {
+test("rejects completed when a handler rejects", async () => {
   await using floatingPromises = FloatingPromises.create();
   await using grammyEventLoop = GrammyEventLoop.create(floatingPromises);
   const error = new Error("handler failed");
@@ -208,10 +208,10 @@ test("rejects closed when a handler rejects", async () => {
     throw error;
   });
 
-  await expect(grammyEventLoop.closed).rejects.toThrow("handler failed");
+  await expect(grammyEventLoop.completed).rejects.toThrow("handler failed");
 });
 
-test("rejects closed when a handler rejects with undefined", async () => {
+test("rejects completed when a handler rejects with undefined", async () => {
   await using floatingPromises = FloatingPromises.create();
   await using grammyEventLoop = GrammyEventLoop.create(floatingPromises);
   const ctx = mockMessageCtx(43, 123);
@@ -220,7 +220,7 @@ test("rejects closed when a handler rejects with undefined", async () => {
     throw undefined;
   });
 
-  await expect(grammyEventLoop.closed).rejects.toBeUndefined();
+  await expect(grammyEventLoop.completed).rejects.toBeUndefined();
 });
 
 test("drops updates queued after dispose", async () => {
@@ -233,7 +233,7 @@ test("drops updates queued after dispose", async () => {
 
   await Bun.sleep(10);
   expect(onEvent).not.toHaveBeenCalled();
-  await expect(grammyEventLoop.closed).resolves.toBeUndefined();
+  await expect(grammyEventLoop.completed).resolves.toBeUndefined();
 });
 
 test("ignores handler rejection after dispose", async () => {
@@ -248,7 +248,7 @@ test("ignores handler rejection after dispose", async () => {
   const dispose = grammyEventLoop[Symbol.asyncDispose]();
   handler.reject(new Error("late failure"));
   await dispose;
-  await expect(grammyEventLoop.closed).resolves.toBeUndefined();
+  await expect(grammyEventLoop.completed).resolves.toBeUndefined();
 });
 
 test("does not start queued handlers after dispose", async () => {
@@ -297,7 +297,7 @@ test("waits for in-flight handlers before disposing", async () => {
   await dispose;
 });
 
-test("waits for in-flight handlers before rejecting closed", async () => {
+test("waits for in-flight handlers before rejecting completed", async () => {
   await using floatingPromises = FloatingPromises.create();
   const grammyEventLoop = GrammyEventLoop.create(floatingPromises);
   const firstStarted = deferred();
@@ -317,17 +317,17 @@ test("waits for in-flight handlers before rejecting closed", async () => {
   await firstStarted.promise;
   await secondStarted.promise;
 
-  const closedState = await Promise.race([
-    grammyEventLoop.closed.then(
+  const completedState = await Promise.race([
+    grammyEventLoop.completed.then(
       () => "resolved",
       () => "rejected",
     ),
     Bun.sleep(10).then(() => "pending"),
   ]);
-  expect(closedState).toBe("pending");
+  expect(completedState).toBe("pending");
 
   firstReleased.resolve();
-  await expect(grammyEventLoop.closed).rejects.toThrow("handler failed");
+  await expect(grammyEventLoop.completed).rejects.toThrow("handler failed");
 });
 
 test("drops updates queued after a handler failure", async () => {
@@ -339,7 +339,7 @@ test("drops updates queued after a handler failure", async () => {
     throw new Error("handler failed");
   });
 
-  await expect(grammyEventLoop.closed).rejects.toThrow("handler failed");
+  await expect(grammyEventLoop.completed).rejects.toThrow("handler failed");
 
   queueEvent(grammyEventLoop, mockMessageCtx(2, 42), onEvent);
 

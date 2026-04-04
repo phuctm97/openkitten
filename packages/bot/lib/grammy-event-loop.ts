@@ -16,10 +16,10 @@ function grammyEventLoopGetQueueId(ctx: Context): string {
 export class GrammyEventLoop implements AsyncDisposable {
   readonly #floatingPromises: FloatingPromises;
   readonly #abortController: AbortController;
-  readonly #closed: Promise<void>;
+  readonly #completed: Promise<void>;
   readonly #settled: Promise<void>;
-  readonly #resolveClosed: () => void;
-  readonly #rejectClosed: (reason?: unknown) => void;
+  readonly #resolveCompleted: () => void;
+  readonly #rejectCompleted: (reason?: unknown) => void;
   readonly #queueTails = new Map<string, Promise<void>>();
   readonly #queuedEvents = new Set<Promise<void>>();
   #closing: Promise<void> | undefined;
@@ -30,12 +30,12 @@ export class GrammyEventLoop implements AsyncDisposable {
     this.#floatingPromises = floatingPromises;
     this.#abortController = new AbortController();
     const { resolve, reject, promise } = Promise.withResolvers<void>();
-    this.#resolveClosed = resolve;
-    this.#rejectClosed = reject;
-    this.#closed = promise;
-    // closed may reject before the consumer awaits it. Without this handler,
+    this.#resolveCompleted = resolve;
+    this.#rejectCompleted = reject;
+    this.#completed = promise;
+    // completed may reject before the consumer awaits it. Without this handler,
     // the rejection would be unhandled.
-    this.#settled = this.#closed.then(
+    this.#settled = this.#completed.then(
       () => {},
       () => {},
     );
@@ -73,9 +73,9 @@ export class GrammyEventLoop implements AsyncDisposable {
   async #finalize(): Promise<void> {
     await this.#settleQueuedEvents();
     if (this.#failed) {
-      this.#rejectClosed(this.#failure);
+      this.#rejectCompleted(this.#failure);
     } else {
-      this.#resolveClosed();
+      this.#resolveCompleted();
     }
   }
 
@@ -91,8 +91,8 @@ export class GrammyEventLoop implements AsyncDisposable {
     this.#close();
   }
 
-  get closed(): Promise<void> {
-    return this.#closed;
+  get completed(): Promise<void> {
+    return this.#completed;
   }
 
   connect<C extends Context>(
