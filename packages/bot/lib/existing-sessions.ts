@@ -268,7 +268,7 @@ export class ExistingSessions {
     readonly sessionId: string;
 
     constructor(sessionId: string) {
-      super(`No session found: ${sessionId}`);
+      super(`Session not found: ${sessionId}`);
       this.sessionId = sessionId;
     }
   };

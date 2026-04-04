@@ -1,4 +1,5 @@
 import type { AssistantMessage, Part } from "@opencode-ai/sdk/v2";
+import { trimText } from "~/lib/trim-text";
 
 type TextPart = Extract<Part, { type: "text" }>;
 type FilePart = Extract<Part, { type: "file" }>;
@@ -421,7 +422,7 @@ function extractApplyPatchPaths(
 }
 
 function isAttachment(file: FilePart): boolean {
-  return cleanText(file.url)?.startsWith("data:") ?? false;
+  return trimText(file.url)?.startsWith("data:") ?? false;
 }
 
 function normalizePath(
@@ -446,7 +447,7 @@ function normalizePath(
 }
 
 function normalizePathText(value: string | undefined): string | undefined {
-  const text = cleanText(value);
+  const text = trimText(value);
   if (!text) return undefined;
   if (text.length === 1) return text;
   return text.replace(/[\\/]+$/u, "");
@@ -458,9 +459,4 @@ function stringProp(
 ): string | undefined {
   const prop = value[key];
   return typeof prop === "string" ? prop : undefined;
-}
-
-function cleanText(value: string | undefined): string | undefined {
-  const text = value?.trim();
-  return text ? text : undefined;
 }

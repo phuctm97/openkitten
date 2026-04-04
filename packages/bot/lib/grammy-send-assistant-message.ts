@@ -1,7 +1,9 @@
 import type { Part } from "@opencode-ai/sdk/v2";
 import { InputFile, InputMediaBuilder } from "grammy";
-import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
 import invariant from "tiny-invariant";
+import type { AttachmentKind } from "~/lib/attachment-kind";
+import { getAttachmentKind } from "~/lib/get-attachment-kind";
+import { getAttachmentName } from "~/lib/get-attachment-name";
 import { grammyBuildAssistantMessageSections } from "~/lib/grammy-build-assistant-message-sections";
 import { grammyFormatText } from "~/lib/grammy-format-text";
 import { grammyRenderAssistantMessageSection } from "~/lib/grammy-render-assistant-message-section";
@@ -18,17 +20,11 @@ type AttachmentSection = Extract<
 type FilePart = Extract<Part, { type: "file" }>;
 
 interface TelegramAttachment {
+  readonly file: InputFile;
   readonly kind: AttachmentKind;
-  readonly media: InputFile;
+  readonly name: string;
 }
 
-type AttachmentKind =
-  | "animation"
-  | "audio"
-  | "document"
-  | "photo"
-  | "sticker"
-  | "video";
 type MediaGroupKind = "audio" | "document" | "visual";
 
 export async function grammySendAssistantMessage({
@@ -150,17 +146,17 @@ function createMediaGroup(
   switch (kind) {
     case "audio":
       return attachments.map((attachment) =>
-        InputMediaBuilder.audio(attachment.media),
+        InputMediaBuilder.audio(attachment.file),
       );
     case "document":
       return attachments.map((attachment) =>
-        InputMediaBuilder.document(attachment.media),
+        InputMediaBuilder.document(attachment.file),
       );
     case "visual":
       return attachments.map((attachment) =>
         attachment.kind === "photo"
-          ? InputMediaBuilder.photo(attachment.media)
-          : InputMediaBuilder.video(attachment.media),
+          ? InputMediaBuilder.photo(attachment.file)
+          : InputMediaBuilder.video(attachment.file),
       );
   }
 }
@@ -200,22 +196,22 @@ async function sendSingleAttachment({
 
   switch (attachment.kind) {
     case "animation":
-      await bot.api.sendAnimation(chatId, attachment.media, sendOpts);
+      await bot.api.sendAnimation(chatId, attachment.file, sendOpts);
       return;
     case "audio":
-      await bot.api.sendAudio(chatId, attachment.media, sendOpts);
+      await bot.api.sendAudio(chatId, attachment.file, sendOpts);
       return;
     case "document":
-      await bot.api.sendDocument(chatId, attachment.media, sendOpts);
+      await bot.api.sendDocument(chatId, attachment.file, sendOpts);
       return;
     case "photo":
-      await bot.api.sendPhoto(chatId, attachment.media, sendOpts);
+      await bot.api.sendPhoto(chatId, attachment.file, sendOpts);
       return;
     case "sticker":
-      await bot.api.sendSticker(chatId, attachment.media, sendOpts);
+      await bot.api.sendSticker(chatId, attachment.file, sendOpts);
       return;
     case "video":
-      await bot.api.sendVideo(chatId, attachment.media, sendOpts);
+      await bot.api.sendVideo(chatId, attachment.file, sendOpts);
       return;
   }
 }
@@ -226,60 +222,14 @@ async function createTelegramAttachment(
 ): Promise<TelegramAttachment> {
   const response = await fetch(file.url);
   const bytes = new Uint8Array(await response.arrayBuffer());
-  const filename = attachmentFilename(file, index);
+  const name = getAttachmentName(
+    file.filename,
+    file.mime,
+    `attachment-${index + 1}`,
+  );
   return {
-    kind: attachmentKind(file, filename),
-    media: new InputFile(bytes, filename),
+    file: new InputFile(bytes, name),
+    kind: getAttachmentKind(file.mime, name),
+    name,
   };
-}
-
-function attachmentFilename(file: FilePart, index: number): string {
-  const name = cleanText(file.filename);
-  if (name) return name;
-
-  const ext = mimeExtension(file.mime);
-  return ext ? `attachment-${index + 1}.${ext}` : `attachment-${index + 1}`;
-}
-
-function attachmentKind(file: FilePart, filename: string): AttachmentKind {
-  const mime = attachmentMimeType(file, filename);
-  const ext = fileExtension(filename);
-
-  if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
-
-  if (mime === "image/gif" || ext === "gif") return "animation";
-
-  if (mime === "image/svg+xml" || ext === "svg") return "document";
-
-  if (mime?.startsWith("image/")) return "photo";
-
-  if (mime?.startsWith("video/")) return "video";
-
-  if (mime?.startsWith("audio/")) return "audio";
-
-  return "document";
-}
-
-function attachmentMimeType(
-  file: FilePart,
-  filename: string,
-): string | undefined {
-  const partMime = cleanText(file.mime)?.toLowerCase();
-  if (partMime && partMime !== "application/octet-stream") return partMime;
-
-  const filenameMime = mimeLookup(filename);
-  if (typeof filenameMime === "string") return filenameMime.toLowerCase();
-
-  return partMime;
-}
-
-function fileExtension(filename: string): string | undefined {
-  const index = filename.lastIndexOf(".");
-  if (index < 0 || index === filename.length - 1) return undefined;
-  return filename.slice(index + 1).toLowerCase();
-}
-
-function cleanText(value: string | undefined): string | undefined {
-  const text = value?.trim();
-  return text ? text : undefined;
 }
