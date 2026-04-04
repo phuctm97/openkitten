@@ -189,7 +189,7 @@ export const up = defineCommand({
     yes: {
       type: "boolean",
       alias: ["y"],
-      description: "Skip optional config actions and continue.",
+      description: "Skip optional config actions.",
     },
   },
   run: async ({ args }) => {

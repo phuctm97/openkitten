@@ -34,18 +34,14 @@ export const serve = defineCommand({
     yes: {
       type: "boolean",
       alias: ["y"],
-      description: "Skip optional config actions and continue.",
+      description: "Skip optional config actions.",
     },
   },
   run: async ({ args }) => {
     const yes = args.yes === true;
     const profile = await Profile.create();
-    const telegramConfig = await TelegramConfig.create(profile, {
-      yes,
-    });
-    const opencodeConfig = await OpencodeConfig.create(profile, {
-      yes,
-    });
+    const telegramConfig = await TelegramConfig.create(profile, { yes });
+    const opencodeConfig = await OpencodeConfig.create(profile, { yes });
     const bot = new Bot(telegramConfig.botToken);
     bot.api.config.use(autoRetry());
     bot.use(grammyFilterUser(telegramConfig.userId));
