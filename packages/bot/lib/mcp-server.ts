@@ -112,9 +112,9 @@ export class McpServer implements Disposable {
 
     const name = getAttachmentName(basename(path), undefined, "attachment");
     const attachment = {
+      file: new InputFile(path, name),
       name,
       kind: getAttachmentKind(undefined, name),
-      media: new InputFile(path, name),
     };
     const sendOptions = {
       ...(location.threadId && { message_thread_id: location.threadId }),
@@ -124,42 +124,42 @@ export class McpServer implements Disposable {
       case "animation":
         await this.#bot.api.sendAnimation(
           location.chatId,
-          attachment.media,
+          attachment.file,
           sendOptions,
         );
         break;
       case "audio":
         await this.#bot.api.sendAudio(
           location.chatId,
-          attachment.media,
+          attachment.file,
           sendOptions,
         );
         break;
       case "document":
         await this.#bot.api.sendDocument(
           location.chatId,
-          attachment.media,
+          attachment.file,
           sendOptions,
         );
         break;
       case "photo":
         await this.#bot.api.sendPhoto(
           location.chatId,
-          attachment.media,
+          attachment.file,
           sendOptions,
         );
         break;
       case "sticker":
         await this.#bot.api.sendSticker(
           location.chatId,
-          attachment.media,
+          attachment.file,
           sendOptions,
         );
         break;
       case "video":
         await this.#bot.api.sendVideo(
           location.chatId,
-          attachment.media,
+          attachment.file,
           sendOptions,
         );
         break;

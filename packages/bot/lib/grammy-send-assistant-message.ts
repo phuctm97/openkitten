@@ -19,8 +19,8 @@ type AttachmentSection = Extract<
 type FilePart = Extract<Part, { type: "file" }>;
 
 interface TelegramAttachment {
+  readonly file: InputFile;
   readonly kind: AttachmentKind;
-  readonly media: InputFile;
   readonly name: string;
 }
 
@@ -152,17 +152,17 @@ function createMediaGroup(
   switch (kind) {
     case "audio":
       return attachments.map((attachment) =>
-        InputMediaBuilder.audio(attachment.media),
+        InputMediaBuilder.audio(attachment.file),
       );
     case "document":
       return attachments.map((attachment) =>
-        InputMediaBuilder.document(attachment.media),
+        InputMediaBuilder.document(attachment.file),
       );
     case "visual":
       return attachments.map((attachment) =>
         attachment.kind === "photo"
-          ? InputMediaBuilder.photo(attachment.media)
-          : InputMediaBuilder.video(attachment.media),
+          ? InputMediaBuilder.photo(attachment.file)
+          : InputMediaBuilder.video(attachment.file),
       );
   }
 }
@@ -202,22 +202,22 @@ async function sendSingleAttachment({
 
   switch (attachment.kind) {
     case "animation":
-      await bot.api.sendAnimation(chatId, attachment.media, sendOpts);
+      await bot.api.sendAnimation(chatId, attachment.file, sendOpts);
       return;
     case "audio":
-      await bot.api.sendAudio(chatId, attachment.media, sendOpts);
+      await bot.api.sendAudio(chatId, attachment.file, sendOpts);
       return;
     case "document":
-      await bot.api.sendDocument(chatId, attachment.media, sendOpts);
+      await bot.api.sendDocument(chatId, attachment.file, sendOpts);
       return;
     case "photo":
-      await bot.api.sendPhoto(chatId, attachment.media, sendOpts);
+      await bot.api.sendPhoto(chatId, attachment.file, sendOpts);
       return;
     case "sticker":
-      await bot.api.sendSticker(chatId, attachment.media, sendOpts);
+      await bot.api.sendSticker(chatId, attachment.file, sendOpts);
       return;
     case "video":
-      await bot.api.sendVideo(chatId, attachment.media, sendOpts);
+      await bot.api.sendVideo(chatId, attachment.file, sendOpts);
       return;
   }
 }
@@ -234,8 +234,8 @@ async function createTelegramAttachment(
     `attachment-${index + 1}`,
   );
   return {
+    file: new InputFile(bytes, name),
     kind: getAttachmentKind(file.mime, name),
-    media: new InputFile(bytes, name),
     name,
   };
 }
