@@ -7,10 +7,8 @@ import { type Bot, InputFile } from "grammy";
 import zod from "zod";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
-import { getFileExtension } from "~/lib/get-file-extension";
-import { getMimeExtension } from "~/lib/get-mime-extension";
+import { getAttachmentName } from "~/lib/get-attachment-name";
 import { logger } from "~/lib/logger";
-import { trimText } from "~/lib/trim-text";
 import { version } from "~/package.json" with { type: "json" };
 
 const attachmentKinds = [
@@ -112,15 +110,11 @@ export class McpServer implements Disposable {
       throw new Error(`No Telegram session found: ${metadata.sessionID}`);
     }
 
-    const filename = attachmentFilename(
-      basename(path),
-      undefined,
-      "attachment",
-    );
+    const name = getAttachmentName(basename(path), undefined, "attachment");
     const attachment = {
-      filename,
-      kind: getAttachmentKind(undefined, filename),
-      media: new InputFile(path, filename),
+      name,
+      kind: getAttachmentKind(undefined, name),
+      media: new InputFile(path, name),
     };
     const sendOptions = {
       ...(location.threadId && { message_thread_id: location.threadId }),
@@ -172,7 +166,7 @@ export class McpServer implements Disposable {
     }
 
     const output = {
-      name: attachment.filename,
+      name: attachment.name,
       kind: attachment.kind,
     } satisfies SendFileOutput;
 
@@ -180,7 +174,7 @@ export class McpServer implements Disposable {
       content: [
         {
           type: "text",
-          text: `Sent ${attachment.filename} as ${attachment.kind}.`,
+          text: `Sent ${attachment.name} as ${attachment.kind}.`,
         },
       ],
       structuredContent: output,
@@ -224,16 +218,4 @@ export class McpServer implements Disposable {
     }
     return server;
   }
-}
-
-function attachmentFilename(
-  filename: string | undefined,
-  filemime: string | undefined,
-  fallbackName: string,
-): string {
-  const name = trimText(filename);
-  const ext = getMimeExtension(filemime);
-  if (name) return getFileExtension(name) || !ext ? name : `${name}.${ext}`;
-
-  return ext ? `${fallbackName}.${ext}` : fallbackName;
 }

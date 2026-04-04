@@ -2,14 +2,12 @@ import type { Part } from "@opencode-ai/sdk/v2";
 import { InputFile, InputMediaBuilder } from "grammy";
 import invariant from "tiny-invariant";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
-import { getFileExtension } from "~/lib/get-file-extension";
-import { getMimeExtension } from "~/lib/get-mime-extension";
+import { getAttachmentName } from "~/lib/get-attachment-name";
 import { grammyBuildAssistantMessageSections } from "~/lib/grammy-build-assistant-message-sections";
 import { grammyFormatText } from "~/lib/grammy-format-text";
 import { grammyRenderAssistantMessageSection } from "~/lib/grammy-render-assistant-message-section";
 import type { GrammySendAssistantMessageOptions } from "~/lib/grammy-send-assistant-message-options";
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
-import { trimText } from "~/lib/trim-text";
 
 type AssistantMessageSection = ReturnType<
   typeof grammyBuildAssistantMessageSections
@@ -23,6 +21,7 @@ type FilePart = Extract<Part, { type: "file" }>;
 interface TelegramAttachment {
   readonly kind: AttachmentKind;
   readonly media: InputFile;
+  readonly name: string;
 }
 
 type AttachmentKind =
@@ -229,25 +228,14 @@ async function createTelegramAttachment(
 ): Promise<TelegramAttachment> {
   const response = await fetch(file.url);
   const bytes = new Uint8Array(await response.arrayBuffer());
-  const filename = attachmentFilename(
+  const name = getAttachmentName(
     file.filename,
     file.mime,
     `attachment-${index + 1}`,
   );
   return {
-    kind: getAttachmentKind(file.mime, filename),
-    media: new InputFile(bytes, filename),
+    kind: getAttachmentKind(file.mime, name),
+    media: new InputFile(bytes, name),
+    name,
   };
-}
-
-function attachmentFilename(
-  filename: string | undefined,
-  filemime: string | undefined,
-  fallbackName: string,
-): string {
-  const name = trimText(filename);
-  const ext = getMimeExtension(filemime);
-  if (name) return getFileExtension(name) || !ext ? name : `${name}.${ext}`;
-
-  return ext ? `${fallbackName}.${ext}` : fallbackName;
 }
