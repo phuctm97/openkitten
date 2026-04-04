@@ -127,7 +127,7 @@ export class OpencodeServer implements AsyncDisposable {
         stderr: "ignore",
         detached: true,
         onExit(_proc, exitCode, signalCode, osError) {
-          logger.info("OpenCode server is stopped", {
+          logger.info("OpenCode server is terminated", {
             signalCode,
             exitCode,
             osError,

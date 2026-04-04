@@ -16,10 +16,10 @@ function grammyEventLoopGetQueueId(ctx: Context): string {
 export class GrammyEventLoop implements AsyncDisposable {
   readonly #floatingPromises: FloatingPromises;
   readonly #abortController: AbortController;
-  readonly #stopped: Promise<void>;
+  readonly #ended: Promise<void>;
   readonly #settled: Promise<void>;
-  readonly #resolveStopped: () => void;
-  readonly #rejectStopped: (reason?: unknown) => void;
+  readonly #resolveEnded: () => void;
+  readonly #rejectEnded: (reason?: unknown) => void;
   readonly #queueTails = new Map<string, Promise<void>>();
   readonly #queuedEvents = new Set<Promise<void>>();
   #closing: Promise<void> | undefined;
@@ -30,12 +30,12 @@ export class GrammyEventLoop implements AsyncDisposable {
     this.#floatingPromises = floatingPromises;
     this.#abortController = new AbortController();
     const { resolve, reject, promise } = Promise.withResolvers<void>();
-    this.#resolveStopped = resolve;
-    this.#rejectStopped = reject;
-    this.#stopped = promise;
-    // stopped may reject before the consumer awaits it. Without this handler,
+    this.#resolveEnded = resolve;
+    this.#rejectEnded = reject;
+    this.#ended = promise;
+    // ended may reject before the consumer awaits it. Without this handler,
     // the rejection would be unhandled.
-    this.#settled = this.#stopped.then(
+    this.#settled = this.#ended.then(
       () => {},
       () => {},
     );
@@ -73,9 +73,9 @@ export class GrammyEventLoop implements AsyncDisposable {
   async #finalize(): Promise<void> {
     await this.#settleQueuedEvents();
     if (this.#failed) {
-      this.#rejectStopped(this.#failure);
+      this.#rejectEnded(this.#failure);
     } else {
-      this.#resolveStopped();
+      this.#resolveEnded();
     }
   }
 
@@ -91,8 +91,8 @@ export class GrammyEventLoop implements AsyncDisposable {
     this.#close();
   }
 
-  get stopped(): Promise<void> {
-    return this.#stopped;
+  get ended(): Promise<void> {
+    return this.#ended;
   }
 
   connect<C extends Context>(

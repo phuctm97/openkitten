@@ -28,7 +28,7 @@ export class GrammyEventStream implements AsyncDisposable {
     // Fatal: errors should never reach here — all event handlers will have
     // their own error boundaries.
     bot.catch(({ ctx, error }) => {
-      logger.fatal("grammY event stream caught an unhandled error", error, {
+      logger.fatal("grammY event stream caught an error", error, {
         update: ctx.update,
       });
       shutdown.trigger();
@@ -66,7 +66,7 @@ export class GrammyEventStream implements AsyncDisposable {
       try {
         await bot.stop();
       } catch (error) {
-        logger.fatal("grammY event stream failed to close", error);
+        logger.fatal("Failed to stop polling updates from Telegram", error);
         shutdown.trigger();
       }
       // Resolve the started promise so it can be GC'd (onStart may never fire).

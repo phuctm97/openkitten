@@ -603,7 +603,10 @@ export class PendingPrompts implements AsyncDisposable {
       );
       Errors.throwIfAny(results);
     } catch (error) {
-      logger.fatal("Failed to dismiss pending prompts", error);
+      logger.fatal(
+        "Failed to dismiss pending prompts on OpenCode & Telegram",
+        error,
+      );
       this.#shutdown.trigger();
     }
   }

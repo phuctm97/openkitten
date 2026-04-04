@@ -115,7 +115,7 @@ test("catch handler logs error with chat and thread", async () => {
     error,
   });
   expect(logger.fatal).toHaveBeenCalledWith(
-    "grammY event stream caught an unhandled error",
+    "grammY event stream caught an error",
     error,
     {
       update: { update_id: 789 },
@@ -143,7 +143,7 @@ test("catch handler handles missing chat and msg", async () => {
   const error = new Error("unexpected");
   handler({ ctx: { update: { update_id: 1 } }, error });
   expect(logger.fatal).toHaveBeenCalledWith(
-    "grammY event stream caught an unhandled error",
+    "grammY event stream caught an error",
     error,
     {
       update: { update_id: 1 },
@@ -168,7 +168,7 @@ test("dispose logs fatal and triggers shutdown when bot.stop fails", async () =>
   }
   await expect(grammyClosed).resolves.toBeUndefined();
   expect(logger.fatal).toHaveBeenCalledWith(
-    "grammY event stream failed to close",
+    "Failed to stop polling updates from Telegram",
     error,
   );
   expect(mockShutdown.trigger).toHaveBeenCalled();

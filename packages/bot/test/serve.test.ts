@@ -263,22 +263,22 @@ function mockGrammyEventStream() {
 }
 
 function mockGrammyEventLoop() {
-  let rejectStopped: (reason?: unknown) => void;
-  const stopped = new Promise<void>((_, reject) => {
-    rejectStopped = reject;
+  let rejectEnded: (reason?: unknown) => void;
+  const ended = new Promise<void>((_, reject) => {
+    rejectEnded = reject;
   });
-  stopped.then(
+  ended.then(
     () => {},
     () => {},
   );
   const dispose = vi.fn(async () => {});
   vi.spyOn(GrammyEventLoop, "create").mockReturnValueOnce({
-    stopped,
+    ended,
     connect: vi.fn(() => vi.fn()),
     [Symbol.asyncDispose]: dispose,
   } as never);
   return {
-    rejectStopped: (error: unknown) => rejectStopped(error),
+    rejectEnded: (error: unknown) => rejectEnded(error),
     dispose,
   };
 }
@@ -451,7 +451,7 @@ test("exits on grammY event loop failure", async () => {
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() => expect(GrammyEventLoop.create).toHaveBeenCalledOnce());
 
-  grammyEventLoop.rejectStopped(new Error("grammY event loop failed"));
+  grammyEventLoop.rejectEnded(new Error("grammY event loop failed"));
 
   await expect(run).rejects.toThrow("grammY event loop failed");
   expect(disposeGrammyEventStream).toHaveBeenCalledOnce();
