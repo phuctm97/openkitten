@@ -6,6 +6,8 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
 import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
 import zod from "zod";
+import { cleanMimeType } from "~/lib/clean-mime-type";
+import { cleanText } from "~/lib/clean-text";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { logger } from "~/lib/logger";
 import { version } from "~/package.json" with { type: "json" };
@@ -31,12 +33,15 @@ const sendFileInputSchema = zod
   })
   .passthrough();
 
+const openkittenArgsSchema = sendFileInputSchema.extend({
+  __OPENKITTEN__: openkittenMetadataSchema,
+});
+
 const sendFileOutputSchema = zod.object({
   filename: zod.string(),
   kind: zod.enum(attachmentKinds),
 });
 
-type OpenkittenMetadata = zod.output<typeof openkittenMetadataSchema>;
 type SendFileArgs = zod.output<typeof sendFileInputSchema>;
 type SendFileOutput = zod.output<typeof sendFileOutputSchema>;
 type AttachmentKind = (typeof attachmentKinds)[number];
@@ -97,14 +102,15 @@ export class McpServer implements Disposable {
     readonly content: { readonly type: "text"; readonly text: string }[];
     readonly structuredContent: SendFileOutput;
   }> {
-    const metadata = this.#openkittenMetadata(args);
+    const parsedArgs = openkittenArgsSchema.parse(args);
+    const metadata = parsedArgs.__OPENKITTEN__;
     const source = await this.#loadLocalFile(args);
     const location = this.#existingSessions.get(metadata.sessionID);
     if (!location) {
       throw new Error(`No Telegram session found: ${metadata.sessionID}`);
     }
 
-    const caption = cleanText(args.caption);
+    const caption = cleanText(parsedArgs.caption);
     const filename = attachmentFilename(
       source.filename,
       undefined,
@@ -218,17 +224,6 @@ export class McpServer implements Disposable {
     };
   }
 
-  #openkittenMetadata(rawArgs: unknown): OpenkittenMetadata {
-    if (!isRecord(rawArgs)) {
-      throw new Error("OpenKitten tool metadata is missing.");
-    }
-    const result = openkittenMetadataSchema.safeParse(
-      rawArgs["__OPENKITTEN__"],
-    );
-    if (result.success) return result.data;
-    throw new Error("OpenKitten tool metadata is missing.");
-  }
-
   get disconnected(): Promise<void> {
     return this.#disconnected;
   }
@@ -266,15 +261,6 @@ export class McpServer implements Disposable {
     }
     return server;
   }
-}
-
-function cleanMimeType(value: string | undefined): string | undefined {
-  return cleanText(value)?.split(";", 1)[0]?.trim().toLowerCase();
-}
-
-function cleanText(value: string | undefined): string | undefined {
-  const text = value?.trim();
-  return text ? text : undefined;
 }
 
 function attachmentFilename(
@@ -330,8 +316,4 @@ function fileExtension(filename: string): string | undefined {
   const index = filename.lastIndexOf(".");
   if (index < 0 || index === filename.length - 1) return undefined;
   return filename.slice(index + 1).toLowerCase();
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

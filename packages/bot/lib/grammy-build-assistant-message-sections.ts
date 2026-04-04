@@ -1,4 +1,5 @@
 import type { AssistantMessage, Part } from "@opencode-ai/sdk/v2";
+import { cleanText } from "~/lib/clean-text";
 
 type TextPart = Extract<Part, { type: "text" }>;
 type FilePart = Extract<Part, { type: "file" }>;
@@ -458,9 +459,4 @@ function stringProp(
 ): string | undefined {
   const prop = value[key];
   return typeof prop === "string" ? prop : undefined;
-}
-
-function cleanText(value: string | undefined): string | undefined {
-  const text = value?.trim();
-  return text ? text : undefined;
 }

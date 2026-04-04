@@ -428,6 +428,50 @@ test("infers attachment filenames from mime type when needed", async () => {
   expect(media[1]?.media).toMatchObject({ filename: "attachment-2" });
 });
 
+test("appends an inferred extension when the filename is missing one", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    bot: bot as never,
+    info,
+    parts: [createFilePart("image/png", "upload")],
+    chatId: 123,
+    threadId: undefined,
+  });
+
+  expect(bot.api.sendPhoto).toHaveBeenCalledWith(
+    123,
+    expect.objectContaining({ filename: "upload.png" }),
+    {},
+  );
+  expect(bot.api.sendDocument).not.toHaveBeenCalled();
+});
+
+test("ignores mime parameters when routing attachments", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    bot: bot as never,
+    info,
+    parts: [createFilePart("image/png; charset=utf-8", "with-params")],
+    chatId: 123,
+    threadId: undefined,
+  });
+
+  expect(bot.api.sendPhoto).toHaveBeenCalledWith(
+    123,
+    expect.objectContaining({ filename: "with-params.png" }),
+    {},
+  );
+  expect(bot.api.sendDocument).not.toHaveBeenCalled();
+});
+
 test("splits media groups after Telegram's ten-item limit", async () => {
   const bot = createBot();
   vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(

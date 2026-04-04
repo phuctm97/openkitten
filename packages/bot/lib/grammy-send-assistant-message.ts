@@ -2,6 +2,8 @@ import type { Part } from "@opencode-ai/sdk/v2";
 import { InputFile, InputMediaBuilder } from "grammy";
 import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
 import invariant from "tiny-invariant";
+import { cleanMimeType } from "~/lib/clean-mime-type";
+import { cleanText } from "~/lib/clean-text";
 import { grammyBuildAssistantMessageSections } from "~/lib/grammy-build-assistant-message-sections";
 import { grammyFormatText } from "~/lib/grammy-format-text";
 import { grammyRenderAssistantMessageSection } from "~/lib/grammy-render-assistant-message-section";
@@ -290,13 +292,4 @@ function fileExtension(filename: string): string | undefined {
   const index = filename.lastIndexOf(".");
   if (index < 0 || index === filename.length - 1) return undefined;
   return filename.slice(index + 1).toLowerCase();
-}
-
-function cleanMimeType(value: string | undefined): string | undefined {
-  return cleanText(value)?.split(";", 1)[0]?.trim().toLowerCase();
-}
-
-function cleanText(value: string | undefined): string | undefined {
-  const text = value?.trim();
-  return text ? text : undefined;
 }
