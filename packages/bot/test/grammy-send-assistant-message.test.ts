@@ -199,6 +199,35 @@ test("selects single-file Telegram methods for non-grouped attachments", async (
   );
 });
 
+test("treats non-gif images as photos and svg files as documents", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    bot: bot as never,
+    info,
+    parts: [
+      createFilePart("image/avif", "still.avif"),
+      createFilePart("image/svg+xml", "vector.svg"),
+    ],
+    chatId: 123,
+    threadId: undefined,
+  });
+
+  expect(bot.api.sendPhoto).toHaveBeenCalledWith(
+    123,
+    expect.any(InputFile),
+    {},
+  );
+  expect(bot.api.sendDocument).toHaveBeenCalledWith(
+    123,
+    expect.any(InputFile),
+    {},
+  );
+});
+
 test("falls back to filename mime lookup when part mime is generic", async () => {
   const bot = createBot();
   vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
@@ -219,6 +248,50 @@ test("falls back to filename mime lookup when part mime is generic", async () =>
     {},
   );
   expect(bot.api.sendDocument).not.toHaveBeenCalled();
+});
+
+test("uses filename mime lookup to keep svg attachments as documents", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    bot: bot as never,
+    info,
+    parts: [createFilePart("application/octet-stream", "diagram.svg")],
+    chatId: 123,
+    threadId: undefined,
+  });
+
+  expect(bot.api.sendDocument).toHaveBeenCalledWith(
+    123,
+    expect.any(InputFile),
+    {},
+  );
+  expect(bot.api.sendPhoto).not.toHaveBeenCalled();
+});
+
+test("falls back to generic part mime when filename lookup has no match", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    bot: bot as never,
+    info,
+    parts: [createFilePart("application/octet-stream", "blob")],
+    chatId: 123,
+    threadId: undefined,
+  });
+
+  expect(bot.api.sendDocument).toHaveBeenCalledWith(
+    123,
+    expect.any(InputFile),
+    {},
+  );
+  expect(bot.api.sendPhoto).not.toHaveBeenCalled();
 });
 
 test("groups consecutive audio attachments when Telegram allows it", async () => {

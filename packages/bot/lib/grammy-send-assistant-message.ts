@@ -237,17 +237,9 @@ function attachmentKind(file: FilePart, filename: string): AttachmentKind {
 
   if (mime === "image/gif" || ext === "gif") return "animation";
 
-  if (
-    mime === "image/jpeg" ||
-    mime === "image/png" ||
-    mime === "image/webp" ||
-    ext === "jpeg" ||
-    ext === "jpg" ||
-    ext === "png" ||
-    ext === "webp"
-  ) {
-    return "photo";
-  }
+  if (mime === "image/svg+xml" || ext === "svg") return "document";
+
+  if (mime?.startsWith("image/")) return "photo";
 
   if (
     mime?.startsWith("video/") ||
