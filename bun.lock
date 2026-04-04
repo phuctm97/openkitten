@@ -5,11 +5,11 @@
     "": {
       "name": "openkitten",
       "devDependencies": {
-        "@biomejs/biome": "latest",
-        "@tsconfig/bun": "latest",
-        "@types/bun": "latest",
-        "lefthook": "latest",
-        "typescript": "latest",
+        "@biomejs/biome": "^2.4.10",
+        "@tsconfig/bun": "^1.0.10",
+        "@types/bun": "^1.3.11",
+        "lefthook": "^2.1.4",
+        "typescript": "^6.0.2",
       },
     },
     "packages/bot": {
