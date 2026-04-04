@@ -5,55 +5,38 @@ import { logger } from "~/lib/logger";
 
 const defaultQueueId = "default";
 
-function asRecord(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== "object" || value === null) return;
-  return value as Record<string, unknown>;
-}
-
-function readString(
-  record: Record<string, unknown> | undefined,
-  key: string,
-): string | undefined {
-  const value = record?.[key];
-  return typeof value === "string" ? value : undefined;
-}
-
 function opencodeEventStreamGetQueueId(event: GlobalEvent): string {
-  const type: string = event.payload.type;
-  const properties = asRecord(event.payload.properties);
-  switch (type) {
+  switch (event.payload.type) {
     case "session.status":
     case "session.idle":
     case "session.compacted":
     case "session.diff":
-    case "session.error":
     case "todo.updated":
     case "command.executed":
     case "question.asked":
     case "question.replied":
     case "question.rejected":
     case "permission.asked":
-    case "permission.updated":
     case "permission.replied":
     case "message.removed":
     case "message.part.removed":
     case "message.part.delta": {
-      const sessionId = readString(properties, "sessionID");
-      return sessionId ? `session:${sessionId}` : defaultQueueId;
+      return `session:${event.payload.properties.sessionID}`;
+    }
+    case "session.error": {
+      const { sessionID } = event.payload.properties;
+      return sessionID ? `session:${sessionID}` : defaultQueueId;
     }
     case "message.updated": {
-      const sessionId = readString(asRecord(properties?.["info"]), "sessionID");
-      return sessionId ? `session:${sessionId}` : defaultQueueId;
+      return `session:${event.payload.properties.info.sessionID}`;
     }
     case "message.part.updated": {
-      const sessionId = readString(asRecord(properties?.["part"]), "sessionID");
-      return sessionId ? `session:${sessionId}` : defaultQueueId;
+      return `session:${event.payload.properties.part.sessionID}`;
     }
     case "session.created":
     case "session.updated":
     case "session.deleted": {
-      const sessionId = readString(asRecord(properties?.["info"]), "id");
-      return sessionId ? `session:${sessionId}` : defaultQueueId;
+      return `session:${event.payload.properties.info.id}`;
     }
     default:
       return defaultQueueId;
