@@ -71,11 +71,11 @@ function mockScope(overrides: {
     bot: {} as never,
     database: {} as never,
     opencodeClient: overrides.opencodeClient as never,
-    floatingPromises: {} as never,
     existingSessions: overrides.existingSessions,
     workingSessions: overrides.workingSessions as never,
     pendingPrompts: {} as never,
     processingMessages: {} as never,
+    floatingPromises: {} as never,
     typingIndicators: {} as never,
   };
 }

@@ -7,6 +7,12 @@ function deferred() {
   return Promise.withResolvers<void>();
 }
 
+async function* streamEvents(events: readonly unknown[]) {
+  for (const event of events) {
+    yield event;
+  }
+}
+
 function stalledStream(events: readonly unknown[]) {
   let index = 0;
   let closed = false;
@@ -42,9 +48,7 @@ test("logs closed after the stream loop exits", async () => {
   const opencodeClient = {
     global: {
       event: vi.fn(async () => ({
-        stream: (async function* () {
-          yield { directory: "/tmp/a", payload: { type: "a" } };
-        })(),
+        stream: streamEvents([{ directory: "/tmp/a", payload: { type: "a" } }]),
       })),
     },
   };
@@ -70,10 +74,9 @@ test("calls onEvent for each event", async () => {
   const opencodeClient = {
     global: {
       event: vi.fn(async () => ({
-        stream: (async function* () {
-          for (const event of events)
-            yield { directory: "/tmp/a", payload: event };
-        })(),
+        stream: streamEvents(
+          events.map((event) => ({ directory: "/tmp/a", payload: event })),
+        ),
       })),
     },
   };
@@ -99,9 +102,9 @@ test("passes through event without normalizing directory", async () => {
   const opencodeClient = {
     global: {
       event: vi.fn(async () => ({
-        stream: (async function* () {
-          yield { payload: { type: "server.connected", properties: {} } };
-        })(),
+        stream: streamEvents([
+          { payload: { type: "server.connected", properties: {} } },
+        ]),
       })),
     },
   };
@@ -127,8 +130,7 @@ test("stops on dispose while subscribe is pending", async () => {
       event: vi.fn(
         () =>
           new Promise<{ stream: AsyncIterable<unknown> }>((resolve) => {
-            subscribeResolve = () =>
-              resolve({ stream: (async function* () {})() });
+            subscribeResolve = () => resolve({ stream: streamEvents([]) });
           }),
       ),
     },
@@ -168,7 +170,7 @@ test("throws when the stream ends unexpectedly", async () => {
   const opencodeClient = {
     global: {
       event: vi.fn(async () => ({
-        stream: (async function* () {})(),
+        stream: streamEvents([]),
       })),
     },
   };
@@ -340,9 +342,7 @@ test("logs connecting and connected", async () => {
   const opencodeClient = {
     global: {
       event: vi.fn(async () => ({
-        stream: (async function* () {
-          yield { directory: "/tmp/a", payload: { type: "a" } };
-        })(),
+        stream: streamEvents([{ directory: "/tmp/a", payload: { type: "a" } }]),
       })),
     },
   };
@@ -430,9 +430,7 @@ test("passes signal to subscribe", async () => {
   const opencodeClient = {
     global: {
       event: vi.fn(async () => ({
-        stream: (async function* () {
-          yield { directory: "/tmp/a", payload: { type: "a" } };
-        })(),
+        stream: streamEvents([{ directory: "/tmp/a", payload: { type: "a" } }]),
       })),
     },
   };
