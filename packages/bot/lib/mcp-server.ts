@@ -198,8 +198,8 @@ export class McpServer implements Disposable {
   }
 
   static async create(
-    opencodeClient: OpencodeClient,
     bot: Bot,
+    opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
   ): Promise<McpServer> {
     logger.debug("MCP server is connecting…");

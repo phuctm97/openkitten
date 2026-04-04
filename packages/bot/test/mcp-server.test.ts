@@ -114,7 +114,7 @@ describe("McpServer", () => {
   });
 
   test("logs connecting and connected", async () => {
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     expect(logger.debug).toHaveBeenCalledWith("MCP server is connecting…");
     expect(logger.info).toHaveBeenCalledWith("MCP server is connected", {
       url: "http://127.0.0.1:12345/mcp",
@@ -122,14 +122,14 @@ describe("McpServer", () => {
   });
 
   test("starts Bun.serve on localhost with random port", async () => {
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     expect(Bun.serve).toHaveBeenCalledWith(
       expect.objectContaining({ hostname: "127.0.0.1", port: 0 }),
     );
   });
 
   test("registers with OpenCode server", async () => {
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     expect(mockMcpAdd).toHaveBeenCalledWith(
       {
         name: "openkitten",
@@ -149,33 +149,33 @@ describe("McpServer", () => {
       mcp: { add: vi.fn(async () => Promise.reject(error)) },
     } as never;
     await expect(
-      McpServer.create(failingClient, bot, existingSessions),
+      McpServer.create(bot, failingClient, existingSessions),
     ).rejects.toThrow(error);
     expect(mockStop).toHaveBeenCalledOnce();
   });
 
   test("disconnected resolves on disposal", async () => {
-    const server = await McpServer.create(mockClient, bot, existingSessions);
+    const server = await McpServer.create(bot, mockClient, existingSessions);
     server[Symbol.dispose]();
     await expect(server.disconnected).resolves.toBeUndefined();
   });
 
   test("stops HTTP server on disposal", async () => {
     {
-      using _server = await McpServer.create(mockClient, bot, existingSessions);
+      using _server = await McpServer.create(bot, mockClient, existingSessions);
     }
     expect(mockStop).toHaveBeenCalledOnce();
     expect(logger.info).toHaveBeenCalledWith("MCP server is disconnected");
   });
 
   test("returns 404 for non-MCP paths", async () => {
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     const response = await capturedFetch(new Request("http://localhost/other"));
     expect(response.status).toBe(404);
   });
 
   test("returns 401 for missing auth", async () => {
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     const response = await capturedFetch(
       new Request("http://localhost/mcp", { method: "POST" }),
     );
@@ -183,7 +183,7 @@ describe("McpServer", () => {
   });
 
   test("returns 401 for wrong auth", async () => {
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     const response = await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -194,7 +194,7 @@ describe("McpServer", () => {
   });
 
   test("creates SDK server and transport for MCP requests", async () => {
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     const req = new Request("http://localhost/mcp", {
       method: "POST",
       headers: { authorization: "Bearer test-token-abc123" },
@@ -217,7 +217,7 @@ describe("McpServer", () => {
   });
 
   test("registers the send_file tool for MCP requests", async () => {
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
 
     await capturedFetch(
       new Request("http://localhost/mcp", {
@@ -237,7 +237,7 @@ describe("McpServer", () => {
     const path = join(dir, "photo.png");
     await Bun.write(path, "png-bytes");
 
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -278,7 +278,7 @@ describe("McpServer", () => {
       threadId: undefined,
     });
 
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -310,7 +310,7 @@ describe("McpServer", () => {
   });
 
   test("send_file rejects calls without OpenKitten metadata", async () => {
-    using _server = await McpServer.create(mockClient, bot, existingSessions);
+    using _server = await McpServer.create(bot, mockClient, existingSessions);
     await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",

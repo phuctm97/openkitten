@@ -53,8 +53,8 @@ export const serve = defineCommand({
       opencodeServer.client,
     );
     using mcpServer = await McpServer.create(
-      opencodeServer.client,
       bot,
+      opencodeServer.client,
       existingSessions,
     );
     using workingSessions = WorkingSessions.create(existingSessions);
