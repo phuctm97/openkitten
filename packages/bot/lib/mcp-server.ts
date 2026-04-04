@@ -2,6 +2,10 @@ import { randomBytes } from "node:crypto";
 import { basename } from "node:path";
 import { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import type {
+  CallToolResult,
+  TextContent,
+} from "@modelcontextprotocol/sdk/types.js";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
 import zod from "zod";
@@ -11,37 +15,43 @@ import { getAttachmentName } from "~/lib/get-attachment-name";
 import { logger } from "~/lib/logger";
 import { version } from "~/package.json" with { type: "json" };
 
-const attachmentKinds = [
-  "sticker",
-  "animation",
-  "document",
-  "photo",
-  "video",
-  "audio",
-] as const;
-
 const openkittenMetadataSchema = zod.object({
   sessionID: zod.string().trim().min(1),
   callID: zod.string().trim().min(1),
 });
 
-const sendFileInputSchema = zod
+const openkittenArgsSchema = zod
   .object({
     path: zod.string().trim().min(1).describe("Absolute path to a local file."),
+    __OPENKITTEN__: openkittenMetadataSchema,
   })
   .passthrough();
 
-const openkittenArgsSchema = sendFileInputSchema.extend({
-  __OPENKITTEN__: openkittenMetadataSchema,
-});
+const sendFileInputSchema = openkittenArgsSchema
+  .omit({ __OPENKITTEN__: true })
+  .passthrough();
 
 const sendFileOutputSchema = zod.object({
   name: zod.string(),
-  kind: zod.enum(attachmentKinds),
+  kind: zod.enum([
+    "sticker",
+    "animation",
+    "document",
+    "photo",
+    "video",
+    "audio",
+  ]),
 });
 
+const attachmentKinds = sendFileOutputSchema.shape.kind.options;
+
+type AttachmentKind = (typeof attachmentKinds)[number];
 type SendFileArgs = zod.output<typeof sendFileInputSchema>;
 type SendFileOutput = zod.output<typeof sendFileOutputSchema>;
+type SendFileResult = CallToolResult & {
+  readonly content: TextContent[];
+  readonly structuredContent: SendFileOutput;
+};
 
 export class McpServer implements Disposable {
   readonly #token: string;
@@ -94,10 +104,7 @@ export class McpServer implements Disposable {
     return transport.handleRequest(req);
   }
 
-  async #sendFile(args: SendFileArgs): Promise<{
-    readonly content: { readonly type: "text"; readonly text: string }[];
-    readonly structuredContent: SendFileOutput;
-  }> {
+  async #sendFile(args: SendFileArgs): Promise<SendFileResult> {
     const parsedArgs = openkittenArgsSchema.parse(args);
     const metadata = parsedArgs.__OPENKITTEN__;
     const path = args.path;
@@ -111,7 +118,11 @@ export class McpServer implements Disposable {
     }
 
     const name = getAttachmentName(basename(path), undefined, "attachment");
-    const attachment = {
+    const attachment: {
+      readonly file: InputFile;
+      readonly kind: AttachmentKind;
+      readonly name: string;
+    } = {
       file: new InputFile(path, name),
       name,
       kind: getAttachmentKind(undefined, name),
