@@ -74,9 +74,9 @@ export class GrammyEventStream implements AsyncDisposable {
     await this.#settleQueuedEvents();
     if (this.#failed) {
       this.#rejectClosed(this.#failure);
-      return;
+    } else {
+      this.#resolveClosed();
     }
-    this.#resolveClosed();
   }
 
   #close() {
