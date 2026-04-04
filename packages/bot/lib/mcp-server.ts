@@ -153,11 +153,6 @@ export class McpServer implements Disposable {
         break;
     }
 
-    const output = {
-      name,
-      kind,
-    } satisfies SendFileOutput;
-
     return {
       content: [
         {
@@ -165,13 +160,17 @@ export class McpServer implements Disposable {
           text: `Sent ${name} as ${kind}.`,
         },
       ],
-      structuredContent: output,
+      structuredContent: {
+        name,
+        kind,
+      },
     };
   }
 
   #getMetadata(args: unknown): OpenkittenMetadata {
     const result = openkittenArgsSchema.safeParse(args);
     if (!result.success) {
+      logger.error("Failed to get OpenKitten metadata", result.error);
       throw new Error("No valid OpenKitten metadata found");
     }
     return result.data.__OPENKITTEN__;
