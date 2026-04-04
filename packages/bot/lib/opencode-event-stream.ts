@@ -3,8 +3,6 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { FloatingPromises } from "~/lib/floating-promises";
 import { logger } from "~/lib/logger";
 
-const defaultQueueId = "default";
-
 function opencodeEventStreamGetQueueId(event: GlobalEvent): string {
   switch (event.payload.type) {
     case "session.status":
@@ -25,7 +23,7 @@ function opencodeEventStreamGetQueueId(event: GlobalEvent): string {
     }
     case "session.error": {
       const { sessionID } = event.payload.properties;
-      return sessionID ? `session:${sessionID}` : defaultQueueId;
+      return sessionID ? `session:${sessionID}` : "default";
     }
     case "message.updated": {
       return `session:${event.payload.properties.info.sessionID}`;
@@ -39,7 +37,7 @@ function opencodeEventStreamGetQueueId(event: GlobalEvent): string {
       return `session:${event.payload.properties.info.id}`;
     }
     default:
-      return defaultQueueId;
+      return "default";
   }
 }
 
@@ -92,10 +90,9 @@ export class OpencodeEventStream implements AsyncDisposable {
       });
       onError(error);
     });
-    let queued: Promise<void> | undefined;
-    queued = current.finally(() => {
-      if (queued) this.#queuedEvents.delete(queued);
-      if (queued && this.#queueTails.get(queueId) === queued) {
+    const queued = current.finally(() => {
+      this.#queuedEvents.delete(queued);
+      if (this.#queueTails.get(queueId) === queued) {
         this.#queueTails.delete(queueId);
       }
     });
@@ -117,7 +114,6 @@ export class OpencodeEventStream implements AsyncDisposable {
     let failure: unknown;
     const queueFailure = Promise.withResolvers<never>();
     const fail = (error: unknown) => {
-      if (failed) return;
       failed = true;
       failure = error;
       queueFailure.reject(error);
@@ -147,10 +143,8 @@ export class OpencodeEventStream implements AsyncDisposable {
             iter.next(),
             queueFailure.promise,
           ]);
-          if (result.done) {
-            if (failed) throw failure;
+          if (result.done)
             throw new Error("OpenCode event stream ended unexpectedly");
-          }
           this.#enqueueEvent(result.value, fail);
           // Let immediately-runnable queue work observe dispose/abort before
           // we read further ahead from the event stream.
@@ -161,7 +155,8 @@ export class OpencodeEventStream implements AsyncDisposable {
         onAbort();
       }
     } catch (error) {
-      if (this.#abortController.signal.aborted && !failed) {
+      if (failed) throw failure;
+      if (this.#abortController.signal.aborted) {
         await this.#settleQueuedEvents();
         return;
       }

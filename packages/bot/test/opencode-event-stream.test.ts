@@ -213,6 +213,35 @@ test("throws when onEvent fails", async () => {
   await subscription[Symbol.asyncDispose]();
 });
 
+test("ignores handler rejection after dispose", async () => {
+  const handler = Promise.withResolvers<void>();
+  const event = { directory: "/tmp/a", payload: { type: "a" } };
+  const opencodeClient = {
+    global: {
+      event: vi.fn(async () => ({
+        stream: stalledStream([event]),
+      })),
+    },
+  };
+
+  const subscription = OpencodeEventStream.create(
+    opencodeClient as never,
+    FloatingPromises.create(),
+    vi.fn(() => handler.promise) as never,
+  );
+
+  await Bun.sleep(10);
+  const dispose = subscription[Symbol.asyncDispose]();
+  handler.reject(new Error("late failure"));
+  await dispose;
+
+  expect(logger.fatal).not.toHaveBeenCalledWith(
+    "Failed to process event from OpenCode",
+    expect.any(Error),
+    { event },
+  );
+});
+
 test("logs connecting and connected", async () => {
   const onEvent = vi.fn(() => {
     dispose();
@@ -497,4 +526,262 @@ test("processes unknown events through the default queue sequentially", async ()
   firstReleased.resolve();
   await secondStarted.promise;
   await subscription.closed;
+});
+
+test("routes all remaining event queue variants", async () => {
+  const firstReleased = deferred();
+  const handledTypes: string[] = [];
+  const events = [
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "session.idle" as const,
+        properties: { sessionID: "s1" },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "session.compacted" as const,
+        properties: { sessionID: "s1" },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "session.diff" as const,
+        properties: { sessionID: "s1", diff: [] },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "todo.updated" as const,
+        properties: { sessionID: "s1", todos: [] },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "command.executed" as const,
+        properties: {
+          sessionID: "s1",
+          name: "run",
+          arguments: "",
+          messageID: "m1",
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "question.asked" as const,
+        properties: {
+          id: "q1",
+          sessionID: "s1",
+          questions: [],
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "question.replied" as const,
+        properties: {
+          sessionID: "s1",
+          requestID: "q1",
+          answers: [["a"]],
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "question.rejected" as const,
+        properties: {
+          sessionID: "s1",
+          requestID: "q1",
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "permission.asked" as const,
+        properties: {
+          id: "p1",
+          sessionID: "s1",
+          permission: "bash",
+          patterns: [],
+          metadata: {},
+          always: [],
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "permission.replied" as const,
+        properties: {
+          sessionID: "s1",
+          requestID: "p1",
+          reply: "once" as const,
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "message.part.delta" as const,
+        properties: {
+          sessionID: "s1",
+          messageID: "m1",
+          partID: "p1",
+          field: "text",
+          delta: "hi",
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "session.error" as const,
+        properties: { sessionID: "s1" },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "session.error" as const,
+        properties: {},
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "message.updated" as const,
+        properties: {
+          info: {
+            id: "m1",
+            sessionID: "s1",
+            role: "assistant" as const,
+            time: { created: 1, completed: 2 },
+            parentID: "m0",
+            modelID: "model",
+            providerID: "provider",
+            mode: "chat",
+            path: { cwd: "/tmp/a", root: "/tmp/a" },
+            cost: 0,
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+          },
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "message.part.updated" as const,
+        properties: {
+          part: {
+            id: "p1",
+            sessionID: "s1",
+            messageID: "m1",
+            type: "text" as const,
+            text: "hello",
+          },
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "session.created" as const,
+        properties: {
+          info: {
+            id: "s1",
+            projectID: "p1",
+            directory: "/tmp/a",
+            title: "Session 1",
+            version: "1",
+            time: { created: 1, updated: 1 },
+          },
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "session.updated" as const,
+        properties: {
+          info: {
+            id: "s1",
+            projectID: "p1",
+            directory: "/tmp/a",
+            title: "Session 1",
+            version: "1",
+            time: { created: 1, updated: 2 },
+          },
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "session.deleted" as const,
+        properties: {
+          info: {
+            id: "s1",
+            projectID: "p1",
+            directory: "/tmp/a",
+            title: "Session 1",
+            version: "1",
+            time: { created: 1, updated: 3 },
+          },
+        },
+      },
+    },
+    {
+      directory: "/tmp/a",
+      payload: {
+        type: "installation.updated" as const,
+        properties: { version: "1.0.0" },
+      },
+    },
+  ];
+  let dispose = () => {};
+  const onEvent = vi.fn(
+    async (event: { payload: { type: string } & Record<string, unknown> }) => {
+      handledTypes.push(event.payload.type);
+      if (event.payload.type === "session.idle") {
+        await firstReleased.promise;
+      }
+      if (handledTypes.length === events.length) dispose();
+    },
+  );
+  const opencodeClient = {
+    global: {
+      event: vi.fn(async () => ({
+        stream: stalledStream(events),
+      })),
+    },
+  };
+
+  const subscription = OpencodeEventStream.create(
+    opencodeClient as never,
+    FloatingPromises.create(),
+    onEvent as never,
+  );
+  dispose = () => {
+    void subscription[Symbol.asyncDispose]();
+  };
+
+  await Bun.sleep(10);
+  firstReleased.resolve();
+  await subscription.closed;
+  expect(handledTypes).toHaveLength(events.length);
 });
