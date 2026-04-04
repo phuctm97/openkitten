@@ -457,7 +457,7 @@ test("awaits processing message initialization before connecting event stream", 
   await run;
 });
 
-test("onEvent is fire-and-forget", async () => {
+test("onEvent returns the handler promise", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
@@ -479,7 +479,7 @@ test("onEvent is fire-and-forget", async () => {
     { directory: "/tmp/a", payload: { type: "any-event" } } as never,
     signal,
   );
-  expect(result).toBeUndefined();
+  await expect(result).resolves.toBeUndefined();
 
   triggerShutdown();
   await run;

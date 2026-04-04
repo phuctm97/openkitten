@@ -16,7 +16,6 @@ import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { McpServer } from "~/lib/mcp-server";
 import { OpencodeConfig } from "~/lib/opencode-config";
-import { opencodeCreateHandler } from "~/lib/opencode-create-handler";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
 import { OpencodeServer } from "~/lib/opencode-server";
@@ -84,7 +83,7 @@ export const serve = defineCommand({
     await using opencodeEventStream = OpencodeEventStream.create(
       opencodeServer.client,
       floatingPromises,
-      opencodeCreateHandler(scope, opencodeHandleEvent),
+      (event, signal) => opencodeHandleEvent(scope, event, signal),
     );
     bot.command("start", grammyCreateHandler(scope, grammyHandleStart));
     bot.command("abort", grammyCreateHandler(scope, grammyHandleAbort));
