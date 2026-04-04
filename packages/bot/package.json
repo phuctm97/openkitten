@@ -6,6 +6,7 @@
   "type": "module",
   "main": "lib/main.ts",
   "scripts": {
+    "dev": "bun --hot . serve",
     "test": "bun --bun vitest run"
   },
   "dependencies": {

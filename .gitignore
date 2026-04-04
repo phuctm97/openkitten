@@ -8,5 +8,7 @@ node_modules
 .env.local
 .env.*.local
 dist
+build
 coverage
+.react-router
 .vendor
