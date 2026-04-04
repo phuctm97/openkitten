@@ -3,6 +3,8 @@ import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import type { Scope } from "~/lib/scope";
 
+const signal = new AbortController().signal;
+
 function mockCtx(chatId: number, threadId?: number) {
   const react = vi.fn(async () => true);
   return {
@@ -69,7 +71,7 @@ test("aborts session and reacts with like", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx, react } = mockCtx(42);
 
-  await grammyHandleAbort(scope, ctx);
+  await grammyHandleAbort(scope, ctx, signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: undefined },
@@ -88,7 +90,7 @@ test("passes threadId when present", async () => {
   const scope = mockScope({ existingSessions, opencodeClient });
   const { ctx } = mockCtx(42, 7);
 
-  await grammyHandleAbort(scope, ctx);
+  await grammyHandleAbort(scope, ctx, signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: 7 },

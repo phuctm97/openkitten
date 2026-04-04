@@ -7,6 +7,8 @@ import { WorkingSessions } from "~/lib/working-sessions";
 
 vi.mock("~/lib/grammy-send-session-pending");
 
+const signal = new AbortController().signal;
+
 function mockCtx(chatId: number, threadId?: number) {
   const react = vi.fn(async () => true);
   return {
@@ -89,7 +91,7 @@ test("summarizes session and reacts with like", async () => {
   });
   const { ctx, react } = mockCtx(42);
 
-  await grammyHandleCompact(scope, ctx);
+  await grammyHandleCompact(scope, ctx, signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: undefined },
@@ -113,7 +115,7 @@ test("locks session before summarizing", async () => {
   });
   const { ctx } = mockCtx(42);
 
-  await grammyHandleCompact(scope, ctx);
+  await grammyHandleCompact(scope, ctx, signal);
 
   expect(workingSessions.lock).toHaveBeenCalledWith("s1", expect.any(Function));
 });
@@ -130,7 +132,7 @@ test("sends pending message when session is locked", async () => {
   });
   const { ctx } = mockCtx(42);
 
-  await grammyHandleCompact(scope, ctx);
+  await grammyHandleCompact(scope, ctx, signal);
 
   expect(grammySendSessionPending).toHaveBeenCalledWith({
     bot: scope.bot,
@@ -154,7 +156,7 @@ test("rethrows non-LockedError from lock", async () => {
   });
   const { ctx } = mockCtx(42);
 
-  await expect(grammyHandleCompact(scope, ctx)).rejects.toBe(error);
+  await expect(grammyHandleCompact(scope, ctx, signal)).rejects.toBe(error);
 });
 
 test("passes threadId when present", async () => {
@@ -168,7 +170,7 @@ test("passes threadId when present", async () => {
   });
   const { ctx } = mockCtx(42, 7);
 
-  await grammyHandleCompact(scope, ctx);
+  await grammyHandleCompact(scope, ctx, signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: 7 },

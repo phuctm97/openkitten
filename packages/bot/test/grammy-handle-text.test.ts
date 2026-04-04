@@ -10,6 +10,8 @@ import { WorkingSessions } from "~/lib/working-sessions";
 vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
 
+const signal = new AbortController().signal;
+
 beforeEach(() => {
   vi.resetAllMocks();
 });
@@ -115,7 +117,11 @@ test("answers pending prompt when session has one", async () => {
     pendingPrompts,
   });
 
-  await grammyHandleText(scope, mockCtx(42, "my answer", undefined, 55));
+  await grammyHandleText(
+    scope,
+    mockCtx(42, "my answer", undefined, 55),
+    signal,
+  );
 
   expect(pendingPrompts.answer).toHaveBeenCalledWith({
     sessionId: "s1",
@@ -137,7 +143,7 @@ test("prompts opencode when no pending prompt", async () => {
     pendingPrompts,
   });
 
-  await grammyHandleText(scope, mockCtx(42, "hello"));
+  await grammyHandleText(scope, mockCtx(42, "hello"), signal);
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     { sessionID: "s1", parts: [{ type: "text", text: "hello" }] },
@@ -157,7 +163,7 @@ test("creates new session when none exists", async () => {
     pendingPrompts,
   });
 
-  await grammyHandleText(scope, mockCtx(42, "hello"));
+  await grammyHandleText(scope, mockCtx(42, "hello"), signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: undefined },
@@ -178,7 +184,7 @@ test("passes agent to promptAsync when set", async () => {
   vi.mocked(getSessionAgent).mockReturnValue("build");
   const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
 
-  await grammyHandleText(scope, mockCtx(42, "hello"));
+  await grammyHandleText(scope, mockCtx(42, "hello"), signal);
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
@@ -204,7 +210,7 @@ test("sends pending message when session is locked", async () => {
     workingSessions,
   });
 
-  await grammyHandleText(scope, mockCtx(42, "hello"));
+  await grammyHandleText(scope, mockCtx(42, "hello"), signal);
 
   expect(grammySendSessionPending).toHaveBeenCalledWith({
     bot: scope.bot,
@@ -227,7 +233,7 @@ test("passes threadId through the flow", async () => {
     pendingPrompts,
   });
 
-  await grammyHandleText(scope, mockCtx(42, "hello", 7));
+  await grammyHandleText(scope, mockCtx(42, "hello", 7), signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: 7 },
@@ -256,9 +262,9 @@ test("rethrows non-PendingPrompts.NotFoundError from answer", async () => {
     pendingPrompts,
   });
 
-  await expect(grammyHandleText(scope, mockCtx(42, "hello"))).rejects.toBe(
-    error,
-  );
+  await expect(
+    grammyHandleText(scope, mockCtx(42, "hello"), signal),
+  ).rejects.toBe(error);
 });
 
 test("rethrows errors from lock", async () => {
@@ -276,7 +282,7 @@ test("rethrows errors from lock", async () => {
     workingSessions,
   });
 
-  await expect(grammyHandleText(scope, mockCtx(42, "hello"))).rejects.toBe(
-    error,
-  );
+  await expect(
+    grammyHandleText(scope, mockCtx(42, "hello"), signal),
+  ).rejects.toBe(error);
 });

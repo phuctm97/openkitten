@@ -9,6 +9,7 @@ import { setSessionAgent } from "~/lib/set-session-agent";
 export async function grammyHandleAgent(
   { bot, database, opencodeClient, existingSessions }: Scope,
   ctx: CommandContext<Context>,
+  _signal: AbortSignal,
 ): Promise<void> {
   const sessionId = await existingSessions.find(
     {

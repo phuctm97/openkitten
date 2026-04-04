@@ -11,7 +11,7 @@ function deferred() {
 function mockScope(): Scope {
   return {
     floatingPromises: {} as never,
-    shutdown: {} as never,
+    shutdown: { signal: new AbortController().signal } as never,
   } as never;
 }
 
@@ -66,7 +66,7 @@ test("calls onEvent for an update", async () => {
   await vi.waitFor(() => expect(onEvent).toHaveBeenCalledOnce());
 });
 
-test("connect calls fn with scope and ctx", async () => {
+test("connect calls fn with scope, ctx, and shutdown signal", async () => {
   await using floatingPromises = FloatingPromises.create();
   await using grammyEventStream = GrammyEventStream.create(floatingPromises);
   const scope = mockScope();
@@ -76,7 +76,9 @@ test("connect calls fn with scope and ctx", async () => {
 
   handler(ctx);
 
-  await vi.waitFor(() => expect(fn).toHaveBeenCalledWith(scope, ctx));
+  await vi.waitFor(() =>
+    expect(fn).toHaveBeenCalledWith(scope, ctx, scope.shutdown.signal),
+  );
 });
 
 test("processes updates from the same chat and topic sequentially", async () => {

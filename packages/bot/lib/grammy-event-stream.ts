@@ -95,10 +95,10 @@ export class GrammyEventStream implements AsyncDisposable {
 
   connect<C extends Context>(
     scope: Scope,
-    fn: (scope: Scope, ctx: C) => Promise<void>,
+    fn: (scope: Scope, ctx: C, signal: AbortSignal) => Promise<void>,
   ): (ctx: C) => void {
     return (ctx) => {
-      this.#enqueue(ctx, () => fn(scope, ctx));
+      this.#enqueue(ctx, () => fn(scope, ctx, scope.shutdown.signal));
     };
   }
 

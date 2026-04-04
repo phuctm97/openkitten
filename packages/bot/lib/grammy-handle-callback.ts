@@ -7,6 +7,7 @@ type CallbackContext = Filter<Context, "callback_query:data">;
 export async function grammyHandleCallback(
   { bot, existingSessions, pendingPrompts }: Scope,
   ctx: CallbackContext,
+  _signal: AbortSignal,
 ): Promise<void> {
   const message = ctx.callbackQuery.message;
   invariant(message, "Expected callback query to have a message");
