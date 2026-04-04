@@ -86,9 +86,6 @@ export class OpencodeEventStream implements AsyncDisposable {
     });
     current.catch((error) => {
       if (this.#abortController.signal.aborted) return;
-      logger.fatal("Failed to process event from OpenCode", error, {
-        event,
-      });
       onError(error);
     });
     const queued = current.finally(() => {

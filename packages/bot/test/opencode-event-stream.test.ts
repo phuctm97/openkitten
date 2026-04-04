@@ -255,11 +255,6 @@ test("throws when onEvent fails", async () => {
   );
 
   await expect(subscription.closed).rejects.toBe(error);
-  expect(logger.fatal).toHaveBeenCalledWith(
-    "Failed to process event from OpenCode",
-    error,
-    { event },
-  );
   await subscription[Symbol.asyncDispose]();
 });
 
@@ -284,12 +279,7 @@ test("ignores handler rejection after dispose", async () => {
   const dispose = subscription[Symbol.asyncDispose]();
   handler.reject(new Error("late failure"));
   await dispose;
-
-  expect(logger.fatal).not.toHaveBeenCalledWith(
-    "Failed to process event from OpenCode",
-    expect.any(Error),
-    { event },
-  );
+  await expect(subscription.closed).resolves.toBeUndefined();
 });
 
 test("does not start queued handlers after abort", async () => {

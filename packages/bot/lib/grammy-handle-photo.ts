@@ -73,6 +73,7 @@ export async function grammyHandlePhoto(
     pendingPrompts,
   }: Scope,
   ctx: PhotoContext,
+  _signal: AbortSignal,
 ): Promise<void> {
   const sessionId = await existingSessions.find(
     {

@@ -5,7 +5,7 @@ import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
 import { Grammy } from "~/lib/grammy";
-import { grammyCreateHandler } from "~/lib/grammy-create-handler";
+import { GrammyEventStream } from "~/lib/grammy-event-stream";
 import { grammyFilterUser } from "~/lib/grammy-filter-user";
 import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
@@ -96,16 +96,23 @@ export const serve = defineCommand({
       floatingPromises,
       (event, signal) => opencodeHandleEvent(scope, event, signal),
     );
-    bot.command("start", grammyCreateHandler(scope, grammyHandleStart));
-    bot.command("abort", grammyCreateHandler(scope, grammyHandleAbort));
-    bot.command("compact", grammyCreateHandler(scope, grammyHandleCompact));
-    bot.command("agent", grammyCreateHandler(scope, grammyHandleAgent));
+    await using grammyEventStream = GrammyEventStream.create(floatingPromises);
+    bot.command("start", grammyEventStream.connect(scope, grammyHandleStart));
+    bot.command("abort", grammyEventStream.connect(scope, grammyHandleAbort));
+    bot.command(
+      "compact",
+      grammyEventStream.connect(scope, grammyHandleCompact),
+    );
+    bot.command("agent", grammyEventStream.connect(scope, grammyHandleAgent));
     bot.on(
       "callback_query:data",
-      grammyCreateHandler(scope, grammyHandleCallback),
+      grammyEventStream.connect(scope, grammyHandleCallback),
     );
-    bot.on("message:text", grammyCreateHandler(scope, grammyHandleText));
-    bot.on("message:photo", grammyCreateHandler(scope, grammyHandlePhoto));
+    bot.on("message:text", grammyEventStream.connect(scope, grammyHandleText));
+    bot.on(
+      "message:photo",
+      grammyEventStream.connect(scope, grammyHandlePhoto),
+    );
     await using grammy = await Grammy.create(shutdown, bot);
     // Shut down when: OS signal received, OpenCode server exits,
     // OpenCode event stream ends, MCP server disconnects, or Telegram polling stops.
@@ -114,6 +121,7 @@ export const serve = defineCommand({
       opencodeServer.exited,
       mcpServer.disconnected,
       opencodeEventStream.closed,
+      grammyEventStream.closed,
       grammy.stopped,
     ]);
   },

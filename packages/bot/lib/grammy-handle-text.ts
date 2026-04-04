@@ -17,6 +17,7 @@ export async function grammyHandleText(
     pendingPrompts,
   }: Scope,
   ctx: TextContext,
+  _signal: AbortSignal,
 ): Promise<void> {
   const sessionId = await existingSessions.find(
     {

@@ -4,6 +4,7 @@ import type { Scope } from "~/lib/scope";
 export async function grammyHandleAbort(
   { opencodeClient, existingSessions }: Scope,
   ctx: CommandContext<Context>,
+  _signal: AbortSignal,
 ): Promise<void> {
   const sessionId = await existingSessions.find(
     {

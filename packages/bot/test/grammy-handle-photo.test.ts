@@ -10,6 +10,8 @@ import { WorkingSessions } from "~/lib/working-sessions";
 
 const mimeTypesState = vi.hoisted((): { actualLookup?: typeof lookup } => ({}));
 
+const signal = new AbortController().signal;
+
 vi.mock("mime-types", async () => {
   const actual =
     await vi.importActual<typeof import("mime-types")>("mime-types");
@@ -149,7 +151,7 @@ test("prompts opencode with a photo attachment", async () => {
     pendingPrompts,
   });
 
-  await grammyHandlePhoto(scope, mockPhotoCtx(42) as never);
+  await grammyHandlePhoto(scope, mockPhotoCtx(42) as never, signal);
 
   expect(pendingPrompts.answer).not.toHaveBeenCalled();
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -200,6 +202,7 @@ test("preserves Telegram file name and download mime type", async () => {
       100,
       "photos/original-name.png",
     ) as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -247,6 +250,7 @@ test("falls back to file-path image mime when Telegram serves octet-stream", asy
       100,
       "photos/original-name.png",
     ) as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -286,6 +290,7 @@ test("prompts opencode with caption text on a photo message", async () => {
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, "describe this", undefined, 55) as never,
+    signal,
   );
 
   expect(pendingPrompts.answer).not.toHaveBeenCalled();
@@ -324,7 +329,11 @@ test("does not push an empty caption as a text part", async () => {
     pendingPrompts,
   });
 
-  await grammyHandlePhoto(scope, mockPhotoCtx(42, "", undefined, 55) as never);
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(42, "", undefined, 55) as never,
+    signal,
+  );
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
@@ -356,6 +365,7 @@ test("notifies about pending prompt for photo without caption", async () => {
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, undefined, undefined, 77) as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -380,6 +390,7 @@ test("notifies about pending prompt for photo with caption", async () => {
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, "describe this", undefined, 77) as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -408,6 +419,7 @@ test("continues with photo prompt when pending notice is already gone", async ()
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, undefined, undefined, 77) as never,
+    signal,
   );
 
   expect(pendingPrompts.answer).not.toHaveBeenCalled();
@@ -432,7 +444,7 @@ test("creates new session when none exists", async () => {
     pendingPrompts,
   });
 
-  await grammyHandlePhoto(scope, mockPhotoCtx(42) as never);
+  await grammyHandlePhoto(scope, mockPhotoCtx(42) as never, signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: undefined },
@@ -455,7 +467,7 @@ test("passes agent to promptAsync when set", async () => {
   vi.mocked(getSessionAgent).mockReturnValue("build");
   const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
 
-  await grammyHandlePhoto(scope, mockPhotoCtx(42) as never);
+  await grammyHandlePhoto(scope, mockPhotoCtx(42) as never, signal);
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
     sessionId: "s1",
@@ -491,7 +503,7 @@ test("sends pending message when session is locked", async () => {
     workingSessions,
   });
 
-  await grammyHandlePhoto(scope, mockPhotoCtx(42) as never);
+  await grammyHandlePhoto(scope, mockPhotoCtx(42) as never, signal);
 
   expect(grammySendSessionPending).toHaveBeenCalledWith({
     bot: scope.bot,
@@ -516,7 +528,11 @@ test("passes threadId through the flow", async () => {
     pendingPrompts,
   });
 
-  await grammyHandlePhoto(scope, mockPhotoCtx(42, "caption", 7) as never);
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(42, "caption", 7) as never,
+    signal,
+  );
 
   expect(existingSessions.find).toHaveBeenCalledWith(
     { chatId: 42, threadId: 7 },
@@ -562,6 +578,7 @@ test("falls back to a default file name when Telegram omits one", async () => {
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, undefined, undefined, 100, "/") as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -601,6 +618,7 @@ test("falls back to jpeg mime when file path has no extension", async () => {
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, undefined, undefined, 100, "photos/file.") as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -640,6 +658,7 @@ test("falls back to jpeg mime when file extension is unknown", async () => {
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, undefined, undefined, 100, "photos/file.bin") as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -681,6 +700,7 @@ test("falls back to jpeg mime and suffix when header is invalid", async () => {
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, undefined, undefined, 100, "/") as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -725,6 +745,7 @@ test("falls back to jpeg mime when file-path lookup throws", async () => {
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, undefined, undefined, 100, "/") as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -766,6 +787,7 @@ test("falls back to a jpeg suffix when image mime has no known extension", async
   await grammyHandlePhoto(
     scope,
     mockPhotoCtx(42, undefined, undefined, 100, "/") as never,
+    signal,
   );
 
   expect(pendingPrompts.protect).toHaveBeenCalledWith({
@@ -801,7 +823,7 @@ test("rethrows when Telegram photo has no file path", async () => {
     pendingPrompts,
   });
 
-  await expect(grammyHandlePhoto(scope, ctx as never)).rejects.toThrow(
+  await expect(grammyHandlePhoto(scope, ctx as never, signal)).rejects.toThrow(
     "Expected Telegram photo to have a file path",
   );
 });
@@ -821,7 +843,7 @@ test("rethrows when Telegram photo download fails", async () => {
   });
 
   await expect(
-    grammyHandlePhoto(scope, mockPhotoCtx(42) as never),
+    grammyHandlePhoto(scope, mockPhotoCtx(42) as never, signal),
   ).rejects.toThrow("Expected Telegram photo download to succeed");
 });
 
@@ -838,7 +860,7 @@ test("rethrows non-PendingPrompts.NotFoundError from protect", async () => {
   });
 
   await expect(
-    grammyHandlePhoto(scope, mockPhotoCtx(42) as never),
+    grammyHandlePhoto(scope, mockPhotoCtx(42) as never, signal),
   ).rejects.toBe(error);
 });
 
@@ -857,6 +879,6 @@ test("rethrows errors from lock", async () => {
   });
 
   await expect(
-    grammyHandlePhoto(scope, mockPhotoCtx(42) as never),
+    grammyHandlePhoto(scope, mockPhotoCtx(42) as never, signal),
   ).rejects.toBe(error);
 });

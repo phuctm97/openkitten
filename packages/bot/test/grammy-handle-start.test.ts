@@ -9,6 +9,8 @@ import { WorkingSessions } from "~/lib/working-sessions";
 vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
 
+const signal = new AbortController().signal;
+
 function mockCtx(chatId: number, match: string, threadId?: number) {
   return {
     chat: { id: chatId },
@@ -112,7 +114,7 @@ test("sends 'Hey' when no match text", async () => {
   });
   const ctx = mockCtx(42, "");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     { sessionID: "s-new", parts: [{ type: "text", text: "Hey" }] },
@@ -131,7 +133,7 @@ test("sends custom text when match is provided", async () => {
   });
   const ctx = mockCtx(42, "Build a website");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
@@ -153,7 +155,7 @@ test("removes existing session with messages", async () => {
   });
   const ctx = mockCtx(42, "");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(opencodeClient.session.messages).toHaveBeenCalledWith(
     { sessionID: "s-old", limit: 1 },
@@ -173,7 +175,7 @@ test("removes existing working session without checking messages", async () => {
   });
   const ctx = mockCtx(42, "");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(opencodeClient.session.messages).not.toHaveBeenCalled();
   expect(existingSessions.remove).toHaveBeenCalledWith("s-old");
@@ -192,7 +194,7 @@ test("removes existing session with pending prompt without checking messages", a
   });
   const ctx = mockCtx(42, "");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(opencodeClient.session.messages).not.toHaveBeenCalled();
   expect(existingSessions.remove).toHaveBeenCalledWith("s-old");
@@ -209,7 +211,7 @@ test("reuses existing empty session", async () => {
   });
   const ctx = mockCtx(42, "");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(existingSessions.find).toHaveBeenCalledTimes(1);
   expect(existingSessions.remove).not.toHaveBeenCalled();
@@ -230,7 +232,7 @@ test("does not remove when no existing session", async () => {
   });
   const ctx = mockCtx(42, "");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(existingSessions.remove).not.toHaveBeenCalled();
 });
@@ -246,7 +248,7 @@ test("locks session before sending prompt", async () => {
   });
   const ctx = mockCtx(42, "");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(workingSessions.lock).toHaveBeenCalledWith(
     "s-new",
@@ -265,7 +267,7 @@ test("passes threadId through the flow", async () => {
   });
   const ctx = mockCtx(42, "", 7);
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(existingSessions.find).toHaveBeenCalledWith({
     chatId: 42,
@@ -291,7 +293,7 @@ test("sends pending message when session is locked", async () => {
   });
   const ctx = mockCtx(42, "");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(grammySendSessionPending).toHaveBeenCalledWith({
     bot: scope.bot,
@@ -314,7 +316,7 @@ test("passes agent to promptAsync when set", async () => {
   });
   const ctx = mockCtx(42, "");
 
-  await grammyHandleStart(scope, ctx);
+  await grammyHandleStart(scope, ctx, signal);
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
@@ -339,5 +341,5 @@ test("rethrows non-LockedError from lock", async () => {
   });
   const ctx = mockCtx(42, "");
 
-  await expect(grammyHandleStart(scope, ctx)).rejects.toBe(error);
+  await expect(grammyHandleStart(scope, ctx, signal)).rejects.toBe(error);
 });

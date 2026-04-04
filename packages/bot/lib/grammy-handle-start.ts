@@ -38,6 +38,7 @@ async function withSession(
 export async function grammyHandleStart(
   scope: Scope,
   ctx: CommandContext<Context>,
+  _signal: AbortSignal,
 ): Promise<void> {
   const location = {
     chatId: ctx.chat.id,
