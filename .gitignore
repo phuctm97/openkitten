@@ -11,4 +11,5 @@ dist
 build
 coverage
 .react-router
+.vercel
 .vendor
