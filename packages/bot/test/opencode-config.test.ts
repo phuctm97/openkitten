@@ -270,14 +270,14 @@ test("runs providers list when tty", async () => {
   }
 });
 
-test("skips action loop when skipActions is true", async () => {
+test("skips action loop when yes is true", async () => {
   const isTTYModule = await import("~/lib/is-tty");
   Object.defineProperty(isTTYModule, "isTTY", { value: true, writable: true });
   const spawn = vi.spyOn(Bun, "spawn").mockImplementation((() => ({
     exited: Promise.resolve(0),
   })) as never);
   try {
-    await OpencodeConfig.create(profile, { skipActions: true });
+    await OpencodeConfig.create(profile, { yes: true });
     expect(select).not.toHaveBeenCalled();
     expect(spawn).toHaveBeenCalledWith(
       [expect.stringContaining("opencode"), "providers", "list"],

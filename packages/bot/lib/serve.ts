@@ -38,13 +38,13 @@ export const serve = defineCommand({
     },
   },
   run: async ({ args }) => {
-    const skipActions = args.yes === true;
+    const yes = args.yes === true;
     const profile = await Profile.create();
     const telegramConfig = await TelegramConfig.create(profile, {
-      skipActions,
+      yes,
     });
     const opencodeConfig = await OpencodeConfig.create(profile, {
-      skipActions,
+      yes,
     });
     const bot = new Bot(telegramConfig.botToken);
     bot.api.config.use(autoRetry());

@@ -44,7 +44,7 @@ const opencodePluginSource = `export default {
 `;
 
 interface OpencodeConfigCreateOptions {
-  readonly skipActions?: boolean;
+  readonly yes?: boolean;
 }
 
 function normalizePathPattern(path: string): string {
@@ -181,7 +181,7 @@ export namespace OpencodeConfig {
         stdio: ["inherit", "inherit", "inherit"],
       });
       if ((await interactive.exited) !== 0) cancel();
-      if (!options.skipActions) {
+      if (!options.yes) {
         let action: string | symbol;
         do {
           clack.intro("Actions");

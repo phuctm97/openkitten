@@ -536,17 +536,17 @@ test("updates working sessions on session.status event", async () => {
   await run;
 });
 
-test("passes skipActions when yes flag is set", async () => {
+test("passes yes option when yes flag is set", async () => {
   const { triggerShutdown } = mockAll();
   const run = runCommand(serve, { rawArgs: ["--yes"] });
 
   await vi.waitFor(() =>
     expect(TelegramConfig.create).toHaveBeenCalledWith(expect.anything(), {
-      skipActions: true,
+      yes: true,
     }),
   );
   expect(OpencodeConfig.create).toHaveBeenCalledWith(expect.anything(), {
-    skipActions: true,
+    yes: true,
   });
 
   triggerShutdown();

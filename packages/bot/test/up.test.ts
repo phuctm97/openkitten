@@ -120,7 +120,7 @@ test("installs on linux", async () => {
   );
 });
 
-test("passes skipActions when yes flag is set", async () => {
+test("passes yes option when yes flag is set", async () => {
   const { TelegramConfig } = await import("~/lib/telegram-config");
   const { OpencodeConfig } = await import("~/lib/opencode-config");
   shellMock
@@ -132,11 +132,11 @@ test("passes skipActions when yes flag is set", async () => {
   await runCommand(up, { rawArgs: ["--yes"] });
   expect(vi.mocked(TelegramConfig.create)).toHaveBeenCalledWith(
     expect.anything(),
-    { skipActions: true },
+    { yes: true },
   );
   expect(vi.mocked(OpencodeConfig.create)).toHaveBeenCalledWith(
     expect.anything(),
-    { skipActions: true },
+    { yes: true },
   );
 });
 

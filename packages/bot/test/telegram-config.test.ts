@@ -121,13 +121,13 @@ test("prompts when config file does not exist", async () => {
   expect(config.userId).toBe(456);
 });
 
-test("skips action loop when skipActions is true", async () => {
+test("skips action loop when yes is true", async () => {
   await Bun.write(
     configPath,
     JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   mockGetMe(true, { first_name: "Bot", username: "bot" });
-  const config = await TelegramConfig.create(profile, { skipActions: true });
+  const config = await TelegramConfig.create(profile, { yes: true });
   expect(select).not.toHaveBeenCalled();
   expect(config.botToken).toBe(validToken);
   expect(config.userId).toBe(123);
@@ -453,11 +453,11 @@ test("throws when action select is cancelled", async () => {
   );
 });
 
-test("still prompts for missing values when skipActions is true", async () => {
+test("still prompts for missing values when yes is true", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("456");
-  const config = await TelegramConfig.create(profile, { skipActions: true });
+  const config = await TelegramConfig.create(profile, { yes: true });
   expect(password).toHaveBeenCalled();
   expect(text).toHaveBeenCalled();
   expect(select).not.toHaveBeenCalled();

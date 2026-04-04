@@ -20,7 +20,7 @@ const schema = zod.object({
 });
 
 interface TelegramConfigCreateOptions {
-  readonly skipActions?: boolean;
+  readonly yes?: boolean;
 }
 
 function cancel(): never {
@@ -188,7 +188,7 @@ export namespace TelegramConfig {
     if (!userId) userId = await promptUserId();
     if (needsPrompt) clack.outro("Updated config");
 
-    if (!options.skipActions) {
+    if (!options.yes) {
       let action: string | symbol;
       do {
         clack.intro("Actions");
