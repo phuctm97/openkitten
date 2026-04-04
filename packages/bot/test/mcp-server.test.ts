@@ -3,7 +3,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { InputFile } from "grammy";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import zod from "zod";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
 
@@ -322,7 +321,7 @@ describe("McpServer", () => {
     if (!tool) throw new Error("send_file tool was not registered");
 
     await expect(tool.handler({ path: "/tmp/file.txt" })).rejects.toThrow(
-      zod.ZodError,
+      "No valid OpenKitten metadata found",
     );
   });
 });
