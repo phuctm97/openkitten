@@ -34,7 +34,9 @@ const sendFileOutputSchema = zod.object({
   kind: attachmentKindSchema,
 });
 
-type SendFileArgs = zod.output<typeof sendFileInputSchema>;
+type OpenkittenMetadata = zod.output<typeof openkittenMetadataSchema>;
+
+type SendFileInput = zod.output<typeof sendFileInputSchema>;
 
 type SendFileOutput = zod.output<typeof sendFileOutputSchema>;
 
@@ -42,8 +44,6 @@ type SendFileResult = CallToolResult & {
   readonly content: TextContent[];
   readonly structuredContent: SendFileOutput;
 };
-
-type OpenkittenMetadata = zod.output<typeof openkittenMetadataSchema>;
 
 export class McpServer implements Disposable {
   readonly #token: string;
@@ -96,7 +96,7 @@ export class McpServer implements Disposable {
     return transport.handleRequest(req);
   }
 
-  async #sendFile(args: SendFileArgs): Promise<SendFileResult> {
+  async #sendFile(args: SendFileInput): Promise<SendFileResult> {
     const metadata = this.#getMetadata(args);
     const bunFile = Bun.file(args.path);
     if (!(await bunFile.exists())) {
@@ -169,7 +169,7 @@ export class McpServer implements Disposable {
     const result = openkittenArgsSchema.safeParse(args);
     if (!result.success) {
       logger.error("Failed to get OpenKitten metadata", result.error);
-      throw new Error("No valid OpenKitten metadata found");
+      throw new Error("No valid OpenKitten metadata found in MCP input");
     }
     return result.data.__OPENKITTEN__;
   }

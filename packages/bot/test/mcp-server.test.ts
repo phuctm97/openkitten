@@ -321,7 +321,7 @@ describe("McpServer", () => {
     if (!tool) throw new Error("send_file tool was not registered");
 
     await expect(tool.handler({ path: "/tmp/file.txt" })).rejects.toThrow(
-      "No valid OpenKitten metadata found",
+      "No valid OpenKitten metadata found in MCP input",
     );
   });
 });
