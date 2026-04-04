@@ -4,13 +4,12 @@ import { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
-import { lookup as mimeLookup } from "mime-types";
 import zod from "zod";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getFileExtension } from "~/lib/get-file-extension";
 import { getMimeExtension } from "~/lib/get-mime-extension";
 import { logger } from "~/lib/logger";
-import { trimMime } from "~/lib/trim-mime";
 import { trimText } from "~/lib/trim-text";
 import { version } from "~/package.json" with { type: "json" };
 
@@ -45,7 +44,6 @@ const sendFileOutputSchema = zod.object({
 
 type SendFileArgs = zod.output<typeof sendFileInputSchema>;
 type SendFileOutput = zod.output<typeof sendFileOutputSchema>;
-type AttachmentKind = (typeof attachmentKinds)[number];
 
 export class McpServer implements Disposable {
   readonly #token: string;
@@ -121,7 +119,7 @@ export class McpServer implements Disposable {
     );
     const attachment = {
       filename,
-      kind: attachmentKind(undefined, filename),
+      kind: getAttachmentKind(undefined, filename),
       media: new InputFile(path, filename),
     };
     const sendOptions = {
@@ -238,41 +236,4 @@ function attachmentFilename(
   if (name) return getFileExtension(name) || !ext ? name : `${name}.${ext}`;
 
   return ext ? `${fallbackName}.${ext}` : fallbackName;
-}
-
-function attachmentKind(
-  mimeType: string | undefined,
-  filename: string,
-): AttachmentKind {
-  const mime = attachmentMime(mimeType, filename);
-  const ext = getFileExtension(filename);
-
-  if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
-
-  if (mime === "image/gif" || ext === "gif") return "animation";
-
-  if (mime === "image/svg+xml" || ext === "svg") return "document";
-
-  if (mime?.startsWith("image/")) return "photo";
-
-  if (mime?.startsWith("video/")) return "video";
-
-  if (mime?.startsWith("audio/")) return "audio";
-
-  return "document";
-}
-
-function attachmentMime(
-  mimeType: string | undefined,
-  filename: string,
-): string | undefined {
-  const cleanedMime = trimMime(mimeType);
-  if (cleanedMime && cleanedMime !== "application/octet-stream") {
-    return cleanedMime;
-  }
-
-  const filenameMime = mimeLookup(filename);
-  if (filenameMime) return filenameMime.toLowerCase();
-
-  return cleanedMime;
 }

@@ -1,7 +1,7 @@
 import type { Part } from "@opencode-ai/sdk/v2";
 import { InputFile, InputMediaBuilder } from "grammy";
-import { lookup as mimeLookup } from "mime-types";
 import invariant from "tiny-invariant";
+import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getFileExtension } from "~/lib/get-file-extension";
 import { getMimeExtension } from "~/lib/get-mime-extension";
 import { grammyBuildAssistantMessageSections } from "~/lib/grammy-build-assistant-message-sections";
@@ -9,7 +9,6 @@ import { grammyFormatText } from "~/lib/grammy-format-text";
 import { grammyRenderAssistantMessageSection } from "~/lib/grammy-render-assistant-message-section";
 import type { GrammySendAssistantMessageOptions } from "~/lib/grammy-send-assistant-message-options";
 import { grammySendChunks } from "~/lib/grammy-send-chunks";
-import { trimMime } from "~/lib/trim-mime";
 import { trimText } from "~/lib/trim-text";
 
 type AssistantMessageSection = ReturnType<
@@ -236,7 +235,7 @@ async function createTelegramAttachment(
     `attachment-${index + 1}`,
   );
   return {
-    kind: attachmentKind(file.mime, filename),
+    kind: getAttachmentKind(file.mime, filename),
     media: new InputFile(bytes, filename),
   };
 }
@@ -251,41 +250,4 @@ function attachmentFilename(
   if (name) return getFileExtension(name) || !ext ? name : `${name}.${ext}`;
 
   return ext ? `${fallbackName}.${ext}` : fallbackName;
-}
-
-function attachmentKind(
-  mimeType: string | undefined,
-  filename: string,
-): AttachmentKind {
-  const mime = attachmentMime(mimeType, filename);
-  const ext = getFileExtension(filename);
-
-  if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
-
-  if (mime === "image/gif" || ext === "gif") return "animation";
-
-  if (mime === "image/svg+xml" || ext === "svg") return "document";
-
-  if (mime?.startsWith("image/")) return "photo";
-
-  if (mime?.startsWith("video/")) return "video";
-
-  if (mime?.startsWith("audio/")) return "audio";
-
-  return "document";
-}
-
-function attachmentMime(
-  mimeType: string | undefined,
-  filename: string,
-): string | undefined {
-  const cleanedMime = trimMime(mimeType);
-  if (cleanedMime && cleanedMime !== "application/octet-stream") {
-    return cleanedMime;
-  }
-
-  const filenameMime = mimeLookup(filename);
-  if (filenameMime) return filenameMime.toLowerCase();
-
-  return cleanedMime;
 }
