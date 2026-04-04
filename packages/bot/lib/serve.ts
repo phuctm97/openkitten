@@ -6,6 +6,7 @@ import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
 import { Grammy } from "~/lib/grammy";
 import { grammyCreateHandler } from "~/lib/grammy-create-handler";
+import { GrammyEventStream } from "~/lib/grammy-event-stream";
 import { grammyFilterUser } from "~/lib/grammy-filter-user";
 import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
@@ -85,16 +86,38 @@ export const serve = defineCommand({
       floatingPromises,
       (event, signal) => opencodeHandleEvent(scope, event, signal),
     );
-    bot.command("start", grammyCreateHandler(scope, grammyHandleStart));
-    bot.command("abort", grammyCreateHandler(scope, grammyHandleAbort));
-    bot.command("compact", grammyCreateHandler(scope, grammyHandleCompact));
-    bot.command("agent", grammyCreateHandler(scope, grammyHandleAgent));
+    await using grammyEventStream = GrammyEventStream.create(
+      shutdown,
+      floatingPromises,
+    );
+    bot.command(
+      "start",
+      grammyCreateHandler(scope, grammyEventStream, grammyHandleStart),
+    );
+    bot.command(
+      "abort",
+      grammyCreateHandler(scope, grammyEventStream, grammyHandleAbort),
+    );
+    bot.command(
+      "compact",
+      grammyCreateHandler(scope, grammyEventStream, grammyHandleCompact),
+    );
+    bot.command(
+      "agent",
+      grammyCreateHandler(scope, grammyEventStream, grammyHandleAgent),
+    );
     bot.on(
       "callback_query:data",
-      grammyCreateHandler(scope, grammyHandleCallback),
+      grammyCreateHandler(scope, grammyEventStream, grammyHandleCallback),
     );
-    bot.on("message:text", grammyCreateHandler(scope, grammyHandleText));
-    bot.on("message:photo", grammyCreateHandler(scope, grammyHandlePhoto));
+    bot.on(
+      "message:text",
+      grammyCreateHandler(scope, grammyEventStream, grammyHandleText),
+    );
+    bot.on(
+      "message:photo",
+      grammyCreateHandler(scope, grammyEventStream, grammyHandlePhoto),
+    );
     await using grammy = await Grammy.create(shutdown, bot);
     // Shut down when: OS signal received, OpenCode server exits,
     // OpenCode event stream ends, MCP server disconnects, or Telegram polling stops.

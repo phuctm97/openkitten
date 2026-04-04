@@ -1,0 +1,74 @@
+import type { Context } from "grammy";
+import type { FloatingPromises } from "~/lib/floating-promises";
+import { logger } from "~/lib/logger";
+import type { Shutdown } from "~/lib/shutdown";
+
+function grammyEventStreamGetQueueId(ctx: Context): string {
+  const callbackMessage =
+    ctx.callbackQuery?.message && typeof ctx.callbackQuery.message === "object"
+      ? ctx.callbackQuery.message
+      : undefined;
+  const chatId = ctx.chat?.id ?? callbackMessage?.chat.id ?? 0;
+  const threadId =
+    ctx.msg?.message_thread_id ?? callbackMessage?.message_thread_id ?? 0;
+  return `${chatId}:${threadId}`;
+}
+
+export class GrammyEventStream implements AsyncDisposable {
+  readonly #shutdown: Shutdown;
+  readonly #floatingPromises: FloatingPromises;
+  readonly #abortController: AbortController;
+  readonly #queueTails = new Map<string, Promise<void>>();
+  readonly #queuedEvents = new Set<Promise<void>>();
+
+  private constructor(shutdown: Shutdown, floatingPromises: FloatingPromises) {
+    this.#shutdown = shutdown;
+    this.#floatingPromises = floatingPromises;
+    this.#abortController = new AbortController();
+  }
+
+  enqueue(ctx: Context, onEvent: () => void | Promise<void>): Promise<void> {
+    const queueId = grammyEventStreamGetQueueId(ctx);
+    const previous = this.#queueTails.get(queueId) ?? Promise.resolve();
+    const current = previous.then(async () => {
+      if (this.#abortController.signal.aborted) return;
+      await onEvent();
+    });
+    current.catch((error) => {
+      if (this.#abortController.signal.aborted) return;
+      logger.fatal("Failed to process update from Telegram", error, {
+        update: ctx.update,
+      });
+      this.#abortController.abort();
+      this.#shutdown.trigger();
+    });
+    const queued = current.finally(() => {
+      this.#queuedEvents.delete(queued);
+      if (this.#queueTails.get(queueId) === queued) {
+        this.#queueTails.delete(queueId);
+      }
+    });
+    this.#queueTails.set(queueId, queued);
+    this.#queuedEvents.add(queued);
+    this.#floatingPromises.track(queued);
+    return queued;
+  }
+
+  async #settleQueuedEvents(): Promise<void> {
+    while (this.#queuedEvents.size > 0) {
+      await Promise.allSettled(this.#queuedEvents);
+    }
+  }
+
+  async [Symbol.asyncDispose]() {
+    this.#abortController.abort();
+    await this.#settleQueuedEvents();
+  }
+
+  static create(
+    shutdown: Shutdown,
+    floatingPromises: FloatingPromises,
+  ): GrammyEventStream {
+    return new GrammyEventStream(shutdown, floatingPromises);
+  }
+}
