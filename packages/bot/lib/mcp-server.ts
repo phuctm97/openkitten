@@ -168,7 +168,10 @@ export class McpServer implements Disposable {
   #getMetadata(args: unknown): OpenkittenMetadata {
     const result = openkittenArgsSchema.safeParse(args);
     if (!result.success) {
-      logger.error("Failed to get OpenKitten metadata", result.error);
+      logger.error(
+        "Failed to retrieve OpenKitten metadata from MCP input",
+        result.error,
+      );
       throw new Error("No valid OpenKitten metadata found in MCP input");
     }
     return result.data.__OPENKITTEN__;
