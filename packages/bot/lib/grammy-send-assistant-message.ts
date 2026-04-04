@@ -1,8 +1,8 @@
 import type { Part } from "@opencode-ai/sdk/v2";
-import { InputFile, InputMediaBuilder } from "grammy";
-import { extension as mimeExtension, lookup as mimeLookup } from "mime-types";
+import { type InputFile, InputMediaBuilder } from "grammy";
 import invariant from "tiny-invariant";
 import { grammyBuildAssistantMessageSections } from "~/lib/grammy-build-assistant-message-sections";
+import { grammyCreateTelegramAttachment } from "~/lib/grammy-create-telegram-attachment";
 import { grammyFormatText } from "~/lib/grammy-format-text";
 import { grammyRenderAssistantMessageSection } from "~/lib/grammy-render-assistant-message-section";
 import type { GrammySendAssistantMessageOptions } from "~/lib/grammy-send-assistant-message-options";
@@ -226,60 +226,11 @@ async function createTelegramAttachment(
 ): Promise<TelegramAttachment> {
   const response = await fetch(file.url);
   const bytes = new Uint8Array(await response.arrayBuffer());
-  const filename = attachmentFilename(file, index);
-  return {
-    kind: attachmentKind(file, filename),
-    media: new InputFile(bytes, filename),
-  };
-}
-
-function attachmentFilename(file: FilePart, index: number): string {
-  const name = cleanText(file.filename);
-  if (name) return name;
-
-  const ext = mimeExtension(file.mime);
-  return ext ? `attachment-${index + 1}.${ext}` : `attachment-${index + 1}`;
-}
-
-function attachmentKind(file: FilePart, filename: string): AttachmentKind {
-  const mime = attachmentMimeType(file, filename);
-  const ext = fileExtension(filename);
-
-  if (mime === "application/x-tgsticker" || ext === "tgs") return "sticker";
-
-  if (mime === "image/gif" || ext === "gif") return "animation";
-
-  if (mime === "image/svg+xml" || ext === "svg") return "document";
-
-  if (mime?.startsWith("image/")) return "photo";
-
-  if (mime?.startsWith("video/")) return "video";
-
-  if (mime?.startsWith("audio/")) return "audio";
-
-  return "document";
-}
-
-function attachmentMimeType(
-  file: FilePart,
-  filename: string,
-): string | undefined {
-  const partMime = cleanText(file.mime)?.toLowerCase();
-  if (partMime && partMime !== "application/octet-stream") return partMime;
-
-  const filenameMime = mimeLookup(filename);
-  if (typeof filenameMime === "string") return filenameMime.toLowerCase();
-
-  return partMime;
-}
-
-function fileExtension(filename: string): string | undefined {
-  const index = filename.lastIndexOf(".");
-  if (index < 0 || index === filename.length - 1) return undefined;
-  return filename.slice(index + 1).toLowerCase();
-}
-
-function cleanText(value: string | undefined): string | undefined {
-  const text = value?.trim();
-  return text ? text : undefined;
+  const attachment = grammyCreateTelegramAttachment({
+    bytes,
+    fallbackName: `attachment-${index + 1}`,
+    filename: file.filename,
+    mimeType: file.mime,
+  });
+  return { kind: attachment.kind, media: attachment.media };
 }
