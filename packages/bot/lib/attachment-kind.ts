@@ -1,5 +1,4 @@
-import type { output } from "zod";
+import type zod from "zod";
+import type { attachmentKindSchema } from "~/lib/attachment-kind-schema";
 
-export type AttachmentKind = output<
-  typeof import("~/lib/attachment-kind-schema").attachmentKindSchema
->;
+export type AttachmentKind = zod.output<typeof attachmentKindSchema>;
