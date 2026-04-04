@@ -127,12 +127,12 @@ function mockScope(overrides: {
     bot: {} as never,
     database: {} as never,
     opencodeClient: (overrides.opencodeClient ?? mockOpencodeClient()) as never,
-    floatingPromises: {} as never,
     existingSessions: overrides.existingSessions ?? mockExistingSessions(),
     workingSessions: (overrides.workingSessions ??
       mockWorkingSessions()) as never,
     pendingPrompts: (overrides.pendingPrompts ?? mockPendingPrompts()) as never,
     processingMessages: {} as never,
+    floatingPromises: {} as never,
     typingIndicators: {} as never,
   };
 }

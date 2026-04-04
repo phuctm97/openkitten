@@ -2,7 +2,7 @@ import { runCommand } from "citty";
 import { beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
-import { Grammy } from "~/lib/grammy";
+import { GrammyEventLoop } from "~/lib/grammy-event-loop";
 import { GrammyEventStream } from "~/lib/grammy-event-stream";
 import { McpServer } from "~/lib/mcp-server";
 import { OpencodeConfig } from "~/lib/opencode-config";
@@ -243,42 +243,42 @@ function mockMcpServer() {
   return dispose;
 }
 
-function mockGrammy() {
-  let resolveStopped: () => void;
-  const stopped = new Promise<void>((r) => {
-    resolveStopped = r;
-  });
-  stopped.then(
-    () => {},
-    () => {},
-  );
-  const dispose = vi.fn(async () => {
-    resolveStopped();
-  });
-  vi.spyOn(Grammy, "create").mockResolvedValue({
-    stopped,
-    [Symbol.asyncDispose]: dispose,
-  } as never);
-  return dispose;
-}
-
 function mockGrammyEventStream() {
-  let rejectClosed: (reason?: unknown) => void;
-  const closed = new Promise<void>((_, reject) => {
-    rejectClosed = reject;
+  let resolveClosed: () => void;
+  const closed = new Promise<void>((r) => {
+    resolveClosed = r;
   });
   closed.then(
     () => {},
     () => {},
   );
-  const dispose = vi.fn(async () => {});
-  vi.spyOn(GrammyEventStream, "create").mockReturnValueOnce({
+  const dispose = vi.fn(async () => {
+    resolveClosed();
+  });
+  vi.spyOn(GrammyEventStream, "create").mockResolvedValue({
     closed,
+    [Symbol.asyncDispose]: dispose,
+  } as never);
+  return dispose;
+}
+
+function mockGrammyEventLoop() {
+  let rejectEnded: (reason?: unknown) => void;
+  const ended = new Promise<void>((_, reject) => {
+    rejectEnded = reject;
+  });
+  ended.then(
+    () => {},
+    () => {},
+  );
+  const dispose = vi.fn(async () => {});
+  vi.spyOn(GrammyEventLoop, "create").mockReturnValueOnce({
+    ended,
     connect: vi.fn(() => vi.fn()),
     [Symbol.asyncDispose]: dispose,
   } as never);
   return {
-    rejectClosed: (error: unknown) => rejectClosed(error),
+    rejectEnded: (error: unknown) => rejectEnded(error),
     dispose,
   };
 }
@@ -309,7 +309,7 @@ function mockAll() {
   const prompts = mockPendingPrompts();
   const processing = mockProcessingMessages();
   const stream = mockOpencodeEventStream();
-  const disposeGrammy = mockGrammy();
+  const disposeGrammyEventStream = mockGrammyEventStream();
   const triggerShutdown = mockShutdown();
   return {
     disposeOpencodeServer,
@@ -320,7 +320,7 @@ function mockAll() {
     prompts,
     processing,
     stream,
-    disposeGrammy,
+    disposeGrammyEventStream,
     triggerShutdown,
   };
 }
@@ -329,7 +329,7 @@ test("disposes on shutdown", async () => {
   const {
     disposeOpencodeServer,
     disposeMcpServer,
-    disposeGrammy,
+    disposeGrammyEventStream,
     triggerShutdown,
   } = mockAll();
   const run = runCommand(serve, { rawArgs: [] });
@@ -338,7 +338,7 @@ test("disposes on shutdown", async () => {
   await run;
   expect(disposeOpencodeServer).toHaveBeenCalledOnce();
   expect(disposeMcpServer).toHaveBeenCalledOnce();
-  expect(disposeGrammy).toHaveBeenCalledOnce();
+  expect(disposeGrammyEventStream).toHaveBeenCalledOnce();
 });
 
 test("configures auto-retry on the bot api during bootstrap", async () => {
@@ -375,14 +375,14 @@ test("exits on unexpected opencode server exit", async () => {
   mockTypingIndicators();
   mockPendingPrompts();
   mockOpencodeEventStream();
-  mockGrammy();
+  mockGrammyEventStream();
   mockShutdown();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
     "OpenCode server exited unexpectedly (1)",
   );
 });
 
-test("exits on unexpected grammy stop", async () => {
+test("exits on unexpected grammY event stream end", async () => {
   mockTelegramConfig();
   mockOpencodeConfig();
   mockCreateDatabase();
@@ -392,18 +392,20 @@ test("exits on unexpected grammy stop", async () => {
   mockTypingIndicators();
   mockPendingPrompts();
   mockOpencodeEventStream();
-  const stopped = Promise.reject(new Error("grammY stopped unexpectedly"));
-  stopped.then(
+  const closed = Promise.reject(
+    new Error("grammY event stream ended unexpectedly"),
+  );
+  closed.then(
     () => {},
     () => {},
   );
-  vi.spyOn(Grammy, "create").mockResolvedValue({
-    stopped,
+  vi.spyOn(GrammyEventStream, "create").mockResolvedValue({
+    closed,
     [Symbol.asyncDispose]: async () => {},
   } as never);
   mockShutdown();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "grammY stopped unexpectedly",
+    "grammY event stream ended unexpectedly",
   );
 });
 
@@ -425,14 +427,14 @@ test("exits on event stream failure", async () => {
     closed,
     async [Symbol.asyncDispose]() {},
   } as never);
-  mockGrammy();
+  mockGrammyEventStream();
   mockShutdown();
   await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
     "event stream failed",
   );
 });
 
-test("exits on grammY event stream failure", async () => {
+test("exits on grammY event loop failure", async () => {
   mockTelegramConfig();
   mockCreateDatabase();
   mockOpencodeServer();
@@ -442,20 +444,18 @@ test("exits on grammY event stream failure", async () => {
   mockPendingPrompts();
   mockProcessingMessages();
   mockOpencodeEventStream();
-  const grammyEventStream = mockGrammyEventStream();
-  const disposeGrammy = mockGrammy();
+  const grammyEventLoop = mockGrammyEventLoop();
+  const disposeGrammyEventStream = mockGrammyEventStream();
   mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
-  await vi.waitFor(() =>
-    expect(GrammyEventStream.create).toHaveBeenCalledOnce(),
-  );
+  await vi.waitFor(() => expect(GrammyEventLoop.create).toHaveBeenCalledOnce());
 
-  grammyEventStream.rejectClosed(new Error("grammY event stream failed"));
+  grammyEventLoop.rejectEnded(new Error("grammY event loop failed"));
 
-  await expect(run).rejects.toThrow("grammY event stream failed");
-  expect(disposeGrammy).toHaveBeenCalledOnce();
-  expect(grammyEventStream.dispose).toHaveBeenCalledOnce();
+  await expect(run).rejects.toThrow("grammY event loop failed");
+  expect(disposeGrammyEventStream).toHaveBeenCalledOnce();
+  expect(grammyEventLoop.dispose).toHaveBeenCalledOnce();
 });
 
 test("awaits existing session initialization before creating working sessions", async () => {
@@ -471,7 +471,7 @@ test("awaits existing session initialization before creating working sessions", 
   mockPendingPrompts();
   mockProcessingMessages();
   mockOpencodeEventStream();
-  mockGrammy();
+  mockGrammyEventStream();
   const triggerShutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
@@ -506,7 +506,7 @@ test("awaits processing message initialization before connecting event stream", 
     } as never;
   });
   mockOpencodeEventStream();
-  mockGrammy();
+  mockGrammyEventStream();
   const triggerShutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
@@ -533,7 +533,7 @@ test("onEvent returns the handler promise", async () => {
   mockPendingPrompts();
   mockProcessingMessages();
   const stream = mockOpencodeEventStream();
-  mockGrammy();
+  mockGrammyEventStream();
   const triggerShutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
@@ -563,7 +563,7 @@ test("updates working sessions on session.status event", async () => {
   mockPendingPrompts();
   const { update } = mockWorkingSessions();
   const stream = mockOpencodeEventStream();
-  mockGrammy();
+  mockGrammyEventStream();
   const triggerShutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
@@ -613,7 +613,7 @@ test("updates pending prompts on question.asked event", async () => {
   mockTypingIndicators();
   const { update } = mockPendingPrompts();
   const stream = mockOpencodeEventStream();
-  mockGrammy();
+  mockGrammyEventStream();
   const triggerShutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
@@ -646,7 +646,7 @@ test("updates pending prompts on permission.asked event", async () => {
   mockTypingIndicators();
   const { update } = mockPendingPrompts();
   const stream = mockOpencodeEventStream();
-  mockGrammy();
+  mockGrammyEventStream();
   const triggerShutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });

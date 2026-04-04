@@ -4,7 +4,7 @@ import { Bot } from "grammy";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
-import { Grammy } from "~/lib/grammy";
+import { GrammyEventLoop } from "~/lib/grammy-event-loop";
 import { GrammyEventStream } from "~/lib/grammy-event-stream";
 import { grammyFilterUser } from "~/lib/grammy-filter-user";
 import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
@@ -48,7 +48,6 @@ export const serve = defineCommand({
     using database = Database.create(profile);
     await using opencodeServer = await OpencodeServer.create(opencodeConfig);
     using mcpServer = await McpServer.create(opencodeServer.client);
-    await using floatingPromises = FloatingPromises.create();
     const existingSessions = await ExistingSessions.create(
       bot,
       database,
@@ -67,6 +66,7 @@ export const serve = defineCommand({
       opencodeServer.client,
       existingSessions,
     );
+    await using floatingPromises = FloatingPromises.create();
     using typingIndicators = TypingIndicators.create(
       shutdown,
       bot,
@@ -80,11 +80,11 @@ export const serve = defineCommand({
       bot,
       database,
       opencodeClient: opencodeServer.client,
-      floatingPromises,
       existingSessions,
       workingSessions,
       pendingPrompts,
       processingMessages,
+      floatingPromises,
       typingIndicators,
     };
     await using opencodeEventStream = OpencodeEventStream.create(
@@ -92,33 +92,28 @@ export const serve = defineCommand({
       floatingPromises,
       (event, signal) => opencodeHandleEvent(scope, event, signal),
     );
-    await using grammyEventStream = GrammyEventStream.create(floatingPromises);
-    bot.command("start", grammyEventStream.connect(scope, grammyHandleStart));
-    bot.command("abort", grammyEventStream.connect(scope, grammyHandleAbort));
-    bot.command(
-      "compact",
-      grammyEventStream.connect(scope, grammyHandleCompact),
-    );
-    bot.command("agent", grammyEventStream.connect(scope, grammyHandleAgent));
+    await using grammyEventLoop = GrammyEventLoop.create(floatingPromises);
+    bot.command("start", grammyEventLoop.connect(scope, grammyHandleStart));
+    bot.command("abort", grammyEventLoop.connect(scope, grammyHandleAbort));
+    bot.command("compact", grammyEventLoop.connect(scope, grammyHandleCompact));
+    bot.command("agent", grammyEventLoop.connect(scope, grammyHandleAgent));
     bot.on(
       "callback_query:data",
-      grammyEventStream.connect(scope, grammyHandleCallback),
+      grammyEventLoop.connect(scope, grammyHandleCallback),
     );
-    bot.on("message:text", grammyEventStream.connect(scope, grammyHandleText));
-    bot.on(
-      "message:photo",
-      grammyEventStream.connect(scope, grammyHandlePhoto),
+    bot.on("message:text", grammyEventLoop.connect(scope, grammyHandleText));
+    bot.on("message:photo", grammyEventLoop.connect(scope, grammyHandlePhoto));
+    await using grammyEventStream = await GrammyEventStream.create(
+      shutdown,
+      bot,
     );
-    await using grammy = await Grammy.create(shutdown, bot);
-    // Shut down when: OS signal received, OpenCode server exits,
-    // OpenCode event stream ends, MCP server disconnects, or Telegram polling stops.
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,
       mcpServer.disconnected,
       opencodeEventStream.closed,
+      grammyEventLoop.ended,
       grammyEventStream.closed,
-      grammy.stopped,
     ]);
   },
 });

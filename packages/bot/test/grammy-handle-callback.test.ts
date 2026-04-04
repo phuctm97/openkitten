@@ -62,11 +62,11 @@ function mockScope(overrides: {
     bot: overrides.bot as never,
     database: {} as never,
     opencodeClient: {} as never,
-    floatingPromises: {} as never,
     existingSessions: overrides.existingSessions,
     workingSessions: {} as never,
     pendingPrompts: overrides.pendingPrompts as never,
     processingMessages: {} as never,
+    floatingPromises: {} as never,
     typingIndicators: {} as never,
   };
 }

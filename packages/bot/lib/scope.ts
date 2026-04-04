@@ -14,10 +14,10 @@ export interface Scope {
   readonly bot: Bot;
   readonly database: Database;
   readonly opencodeClient: OpencodeClient;
-  readonly floatingPromises: FloatingPromises;
   readonly existingSessions: ExistingSessions;
   readonly workingSessions: WorkingSessions;
   readonly pendingPrompts: PendingPrompts;
   readonly processingMessages: ProcessingMessages;
+  readonly floatingPromises: FloatingPromises;
   readonly typingIndicators: TypingIndicators;
 }
