@@ -29,6 +29,25 @@ import { TelegramConfig } from "~/lib/telegram-config";
 import { TypingIndicators } from "~/lib/typing-indicators";
 import { WorkingSessions } from "~/lib/working-sessions";
 
+class ContinuousError extends Error {
+  constructor() {
+    super("OpenKitten server ended continuously too many times");
+  }
+}
+
+const abnormalRestartLimit = 5;
+const abnormalRestartWindowMs = 30_000;
+
+function isContinuouslyFailing(abnormalRestarts: number[]): boolean {
+  const now = Date.now();
+  const activeRestarts = abnormalRestarts.filter(
+    (time) => now - time < abnormalRestartWindowMs,
+  );
+  activeRestarts.push(now);
+  abnormalRestarts.splice(0, abnormalRestarts.length, ...activeRestarts);
+  return abnormalRestarts.length >= abnormalRestartLimit;
+}
+
 export const serve = defineCommand({
   meta: { description: "Start the OpenKitten server." },
   args: {
@@ -39,6 +58,7 @@ export const serve = defineCommand({
     },
   },
   run: async ({ args }) => {
+    const abnormalRestarts: number[] = [];
     for (let i = 0; ; i++) {
       let shouldShutdown = false;
       const skipActions = args.yes || i > 0;
@@ -140,11 +160,15 @@ export const serve = defineCommand({
         ]);
         shouldShutdown = result === Shutdown.symbol;
         if (shouldShutdown) break;
+        if (isContinuouslyFailing(abnormalRestarts))
+          throw new ContinuousError();
         logger.fatal("OpenKitten server stopped unexpectedly, restarting…");
       } catch (error) {
         if (shouldShutdown) break;
+        if (error instanceof ContinuousError) throw error;
+        if (isContinuouslyFailing(abnormalRestarts)) throw error;
         logger.fatal(
-          "OpenKitten server crashed abnormally, restarting…",
+          "OpenKitten server crashed unexpectedly, restarting…",
           error,
         );
       }

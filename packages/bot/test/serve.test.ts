@@ -497,7 +497,7 @@ test("restarts on unexpected opencode server exit", async () => {
   await vi.waitFor(() => expect(triggerShutdown.count()).toBe(2));
   expect(logger.fatal).toHaveBeenCalledOnce();
   expect(logger.fatal).toHaveBeenCalledWith(
-    "OpenKitten server crashed abnormally, restarting…",
+    "OpenKitten server crashed unexpectedly, restarting…",
     expect.any(Error),
   );
 
@@ -533,6 +533,42 @@ test("restarts on unexpected grammY event stream end", async () => {
   await run;
 });
 
+test("stops after too many unexpected stops within 30 seconds", async () => {
+  let now = 0;
+  vi.spyOn(Date, "now").mockImplementation(() => now);
+  mockTelegramConfig();
+  mockOpencodeConfig();
+  mockCreateDatabase();
+  mockOpencodeServer();
+  mockMcpServer();
+  mockExistingSessions();
+  mockTypingIndicators();
+  mockPendingPrompts();
+  mockOpencodeEventStream();
+  const grammyEventStream = mockGrammyEventStream();
+
+  const run = runCommand(serve, { rawArgs: [] });
+
+  for (let i = 1; i < 5; i++) {
+    await vi.waitFor(() => expect(grammyEventStream.count()).toBe(i));
+    now = i * 1_000;
+    grammyEventStream.end();
+  }
+
+  await vi.waitFor(() => expect(grammyEventStream.count()).toBe(5));
+  now = 5_000;
+  grammyEventStream.end();
+
+  await expect(run).rejects.toThrow(
+    "OpenKitten server ended continuously too many times",
+  );
+  expect(grammyEventStream.count()).toBe(5);
+  expect(logger.fatal).toHaveBeenCalledTimes(4);
+  expect(logger.fatal).toHaveBeenLastCalledWith(
+    "OpenKitten server stopped unexpectedly, restarting…",
+  );
+});
+
 test("restarts on event stream failure", async () => {
   mockTelegramConfig();
   mockOpencodeConfig();
@@ -555,12 +591,48 @@ test("restarts on event stream failure", async () => {
   await vi.waitFor(() => expect(triggerShutdown.count()).toBe(2));
   expect(logger.fatal).toHaveBeenCalledOnce();
   expect(logger.fatal).toHaveBeenCalledWith(
-    "OpenKitten server crashed abnormally, restarting…",
+    "OpenKitten server crashed unexpectedly, restarting…",
     expect.any(Error),
   );
 
   triggerShutdown("SIGTERM");
   await run;
+});
+
+test("stops after too many abnormal crashes within 30 seconds", async () => {
+  let now = 0;
+  vi.spyOn(Date, "now").mockImplementation(() => now);
+  mockTelegramConfig();
+  mockOpencodeConfig();
+  mockCreateDatabase();
+  mockOpencodeServer();
+  mockMcpServer();
+  mockExistingSessions();
+  mockTypingIndicators();
+  mockPendingPrompts();
+  mockProcessingMessages();
+  const stream = mockOpencodeEventStream();
+  mockGrammyEventStream();
+
+  const run = runCommand(serve, { rawArgs: [] });
+
+  for (let i = 1; i < 5; i++) {
+    await vi.waitFor(() => expect(stream.count()).toBe(i));
+    now = i * 1_000;
+    stream.rejectEnded(new Error(`event stream failed ${i}`));
+  }
+
+  await vi.waitFor(() => expect(stream.count()).toBe(5));
+  now = 5_000;
+  stream.rejectEnded(new Error("event stream failed 5"));
+
+  await expect(run).rejects.toThrow("event stream failed 5");
+  expect(stream.count()).toBe(5);
+  expect(logger.fatal).toHaveBeenCalledTimes(4);
+  expect(logger.fatal).toHaveBeenLastCalledWith(
+    "OpenKitten server crashed unexpectedly, restarting…",
+    expect.any(Error),
+  );
 });
 
 test("restarts on grammY event loop failure", async () => {
@@ -586,7 +658,7 @@ test("restarts on grammY event loop failure", async () => {
   await vi.waitFor(() => expect(triggerShutdown.count()).toBe(2));
   expect(logger.fatal).toHaveBeenCalledOnce();
   expect(logger.fatal).toHaveBeenCalledWith(
-    "OpenKitten server crashed abnormally, restarting…",
+    "OpenKitten server crashed unexpectedly, restarting…",
     expect.any(Error),
   );
 
