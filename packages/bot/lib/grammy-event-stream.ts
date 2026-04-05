@@ -3,16 +3,16 @@ import { logger } from "~/lib/logger";
 import type { Shutdown } from "~/lib/shutdown";
 
 export class GrammyEventStream implements AsyncDisposable {
-  readonly #closed: Promise<void>;
+  readonly #ended: Promise<void>;
   readonly #dispose: () => Promise<void>;
 
-  private constructor(closed: Promise<void>, dispose: () => Promise<void>) {
-    this.#closed = closed;
+  private constructor(ended: Promise<void>, dispose: () => Promise<void>) {
+    this.#ended = ended;
     this.#dispose = dispose;
   }
 
-  get closed(): Promise<void> {
-    return this.#closed;
+  get ended(): Promise<void> {
+    return this.#ended;
   }
 
   async [Symbol.asyncDispose]() {
@@ -42,7 +42,7 @@ export class GrammyEventStream implements AsyncDisposable {
 
     // Only reject if polling stops on its own, not when we stop it.
     let disposed = false;
-    const closed = polling
+    const ended = polling
       .then(() => {
         if (disposed) return;
         throw new Error("grammY event stream ended unexpectedly");
@@ -51,17 +51,17 @@ export class GrammyEventStream implements AsyncDisposable {
         logger.info("grammY event stream is closed");
       });
 
-    // closed rejects on unexpected end but may not be awaited immediately by
-    // the consumer. Without this handler, closed's rejection would be unhandled.
-    // So settled always resolves regardless of closed's outcome.
-    const settled = closed.then(
+    // ended rejects on unexpected end but may not be awaited immediately by
+    // the consumer. Without this handler, ended's rejection would be unhandled.
+    // So settled always resolves regardless of ended's outcome.
+    const settled = ended.then(
       () => {},
       () => {},
     );
 
     logger.info("grammY event stream is connected");
 
-    return new GrammyEventStream(closed, async () => {
+    return new GrammyEventStream(ended, async () => {
       disposed = true;
       try {
         await bot.stop();

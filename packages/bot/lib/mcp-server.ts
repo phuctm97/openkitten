@@ -46,25 +46,25 @@ type SendFileResult = CallToolResult & {
 };
 
 export class McpServer implements Disposable {
-  readonly #token: string;
-  readonly #server: Bun.Server<undefined>;
   readonly #bot: Bot;
   readonly #existingSessions: ExistingSessions;
-  readonly #disconnected: Promise<void>;
-  readonly #resolve: () => void;
+  readonly #token: string;
+  readonly #server: Bun.Server<undefined>;
+  readonly #exited: Promise<void>;
+  readonly #resolveExited: () => void;
 
   private constructor(bot: Bot, existingSessions: ExistingSessions) {
-    this.#token = randomBytes(32).toString("base64url");
     this.#bot = bot;
     this.#existingSessions = existingSessions;
+    this.#token = randomBytes(32).toString("base64url");
     this.#server = Bun.serve({
       hostname: "127.0.0.1",
       port: 0,
       fetch: (req) => this.#fetch(req),
     });
     const { resolve, promise } = Promise.withResolvers<void>();
-    this.#disconnected = promise;
-    this.#resolve = resolve;
+    this.#resolveExited = resolve;
+    this.#exited = promise;
   }
 
   async #fetch(req: Request): Promise<Response> {
@@ -179,14 +179,14 @@ export class McpServer implements Disposable {
     return result.data.__OPENKITTEN__;
   }
 
-  get disconnected(): Promise<void> {
-    return this.#disconnected;
+  get exited(): Promise<void> {
+    return this.#exited;
   }
 
   [Symbol.dispose]() {
     this.#server[Symbol.dispose]();
-    this.#resolve();
-    logger.info("MCP server is disconnected");
+    logger.info("MCP server is terminated");
+    this.#resolveExited();
   }
 
   static async create(
@@ -194,7 +194,7 @@ export class McpServer implements Disposable {
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
   ): Promise<McpServer> {
-    logger.debug("MCP server is connecting…");
+    logger.debug("MCP server is starting…");
     const server = new McpServer(bot, existingSessions);
     try {
       await opencodeClient.mcp.add(
@@ -208,7 +208,7 @@ export class McpServer implements Disposable {
         },
         { throwOnError: true },
       );
-      logger.info("MCP server is connected");
+      logger.info("MCP server is ready");
     } catch (error) {
       server[Symbol.dispose]();
       throw error;

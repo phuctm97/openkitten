@@ -118,10 +118,10 @@ describe("McpServer", () => {
     );
   });
 
-  test("logs connecting and connected", async () => {
+  test("logs starting and ready", async () => {
     using _server = await McpServer.create(bot, mockClient, existingSessions);
-    expect(logger.debug).toHaveBeenCalledWith("MCP server is connecting…");
-    expect(logger.info).toHaveBeenCalledWith("MCP server is connected");
+    expect(logger.debug).toHaveBeenCalledWith("MCP server is starting…");
+    expect(logger.info).toHaveBeenCalledWith("MCP server is ready");
   });
 
   test("starts Bun.serve on localhost with random port", async () => {
@@ -157,10 +157,10 @@ describe("McpServer", () => {
     expect(mockStop).toHaveBeenCalledOnce();
   });
 
-  test("disconnected resolves on disposal", async () => {
+  test("exited resolves on disposal", async () => {
     const server = await McpServer.create(bot, mockClient, existingSessions);
     server[Symbol.dispose]();
-    await expect(server.disconnected).resolves.toBeUndefined();
+    await expect(server.exited).resolves.toBeUndefined();
   });
 
   test("stops HTTP server on disposal", async () => {
@@ -168,7 +168,7 @@ describe("McpServer", () => {
       using _server = await McpServer.create(bot, mockClient, existingSessions);
     }
     expect(mockStop).toHaveBeenCalledOnce();
-    expect(logger.info).toHaveBeenCalledWith("MCP server is disconnected");
+    expect(logger.info).toHaveBeenCalledWith("MCP server is terminated");
   });
 
   test("returns 404 for non-MCP paths", async () => {

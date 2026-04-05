@@ -114,10 +114,10 @@ export const serve = defineCommand({
     await Promise.race([
       shutdown.signaled,
       opencodeServer.exited,
-      mcpServer.disconnected,
-      opencodeEventStream.closed,
+      mcpServer.exited,
+      opencodeEventStream.ended,
       grammyEventLoop.ended,
-      grammyEventStream.closed,
+      grammyEventStream.ended,
     ]);
   },
 });

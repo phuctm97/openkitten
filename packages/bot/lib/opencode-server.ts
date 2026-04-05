@@ -135,7 +135,6 @@ export class OpencodeServer implements AsyncDisposable {
         },
       },
     );
-
     const { port, stdout } = await readPort(proc);
 
     // Aborted in dispose to stop draining the stdout stream in case it doesn't

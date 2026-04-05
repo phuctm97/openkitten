@@ -60,7 +60,7 @@ test("logs closed after the stream loop exits", async () => {
   );
   const dispose = () => subscription[Symbol.asyncDispose]();
 
-  await subscription.closed;
+  await subscription.ended;
   expect(logger.info).toHaveBeenCalledWith("OpenCode event stream is closed");
 });
 
@@ -88,7 +88,7 @@ test("calls onEvent for each event", async () => {
   );
   const dispose = () => subscription[Symbol.asyncDispose]();
 
-  await subscription.closed;
+  await subscription.ended;
   expect(received).toEqual([
     { directory: "/tmp/a", payload: events[0] },
     { directory: "/tmp/a", payload: events[1] },
@@ -116,7 +116,7 @@ test("passes through event without normalizing directory", async () => {
   );
   const dispose = () => subscription[Symbol.asyncDispose]();
 
-  await subscription.closed;
+  await subscription.ended;
   expect(onEvent).toHaveBeenCalledWith(
     { payload: { type: "server.connected", properties: {} } },
     expect.any(AbortSignal),
@@ -162,7 +162,7 @@ test("throws when subscribe fails", async () => {
     vi.fn() as never,
   );
 
-  await expect(subscription.closed).rejects.toThrow("disconnect");
+  await expect(subscription.ended).rejects.toThrow("disconnect");
   await subscription[Symbol.asyncDispose]();
 });
 
@@ -181,7 +181,7 @@ test("throws when the stream ends unexpectedly", async () => {
     vi.fn() as never,
   );
 
-  await expect(subscription.closed).rejects.toThrow(
+  await expect(subscription.ended).rejects.toThrow(
     "OpenCode event stream ended unexpectedly",
   );
   await subscription[Symbol.asyncDispose]();
@@ -222,17 +222,17 @@ test("waits for in-flight handlers before rejecting when the stream ends", async
   );
 
   await started.promise;
-  const closedState = await Promise.race([
-    subscription.closed.then(
+  const endedState = await Promise.race([
+    subscription.ended.then(
       () => "settled",
       () => "settled",
     ),
     Bun.sleep(10).then(() => "pending"),
   ]);
-  expect(closedState).toBe("pending");
+  expect(endedState).toBe("pending");
 
   release.resolve();
-  await expect(subscription.closed).rejects.toThrow(
+  await expect(subscription.ended).rejects.toThrow(
     "OpenCode event stream ended unexpectedly",
   );
 });
@@ -256,7 +256,7 @@ test("throws when onEvent fails", async () => {
     }) as never,
   );
 
-  await expect(subscription.closed).rejects.toBe(error);
+  await expect(subscription.ended).rejects.toBe(error);
   await subscription[Symbol.asyncDispose]();
 });
 
@@ -281,7 +281,7 @@ test("ignores handler rejection after dispose", async () => {
   const dispose = subscription[Symbol.asyncDispose]();
   handler.reject(new Error("late failure"));
   await dispose;
-  await expect(subscription.closed).resolves.toBeUndefined();
+  await expect(subscription.ended).resolves.toBeUndefined();
 });
 
 test("does not start queued handlers after abort", async () => {
@@ -354,7 +354,7 @@ test("logs connecting and connected", async () => {
   );
   const dispose = () => subscription[Symbol.asyncDispose]();
 
-  await subscription.closed;
+  await subscription.ended;
   expect(logger.debug).toHaveBeenCalledWith(
     "OpenCode event stream is connecting…",
   );
@@ -363,7 +363,7 @@ test("logs connecting and connected", async () => {
   );
 });
 
-test("closed resolves when disposed mid-stream", async () => {
+test("ended resolves when disposed mid-stream", async () => {
   let resolveNext: ((value: IteratorResult<unknown>) => void) | undefined;
   const opencodeClient = {
     global: {
@@ -444,7 +444,7 @@ test("passes signal to subscribe", async () => {
   );
   const dispose = () => subscription[Symbol.asyncDispose]();
 
-  await subscription.closed;
+  await subscription.ended;
   expect(opencodeClient.global.event).toHaveBeenCalledWith(
     expect.objectContaining({ signal: expect.any(AbortSignal) }),
   );
@@ -508,7 +508,7 @@ test("processes events from the same session sequentially", async () => {
 
   firstReleased.resolve();
   await secondStarted.promise;
-  await subscription.closed;
+  await subscription.ended;
 });
 
 test("processes different sessions concurrently", async () => {
@@ -562,7 +562,7 @@ test("processes different sessions concurrently", async () => {
   await firstStarted.promise;
   await secondStarted.promise;
   releaseBoth.resolve();
-  await subscription.closed;
+  await subscription.ended;
 });
 
 test("processes unknown events through the default queue sequentially", async () => {
@@ -614,7 +614,7 @@ test("processes unknown events through the default queue sequentially", async ()
 
   firstReleased.resolve();
   await secondStarted.promise;
-  await subscription.closed;
+  await subscription.ended;
 });
 
 test("waits for other in-flight handlers before rejecting", async () => {
@@ -671,17 +671,17 @@ test("waits for other in-flight handlers before rejecting", async () => {
   await secondStarted.promise;
   allowFirstFailure.resolve();
 
-  const closedState = await Promise.race([
-    subscription.closed.then(
+  const endedState = await Promise.race([
+    subscription.ended.then(
       () => "settled",
       () => "settled",
     ),
     Bun.sleep(10).then(() => "pending"),
   ]);
-  expect(closedState).toBe("pending");
+  expect(endedState).toBe("pending");
 
   releaseSecond.resolve();
-  await expect(subscription.closed).rejects.toBe(failure);
+  await expect(subscription.ended).rejects.toBe(failure);
   expect(secondSettled).toBe(true);
 });
 
@@ -939,6 +939,6 @@ test("routes all remaining event queue variants", async () => {
 
   await Bun.sleep(10);
   firstReleased.resolve();
-  await subscription.closed;
+  await subscription.ended;
   expect(handledTypes).toHaveLength(events.length);
 });

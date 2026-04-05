@@ -312,7 +312,7 @@ test("beforeRemove stops typing", async () => {
 });
 
 test("beforeRemove during initial send prevents the interval from starting", async () => {
-  const { promise, resolve } = Promise.withResolvers<void>();
+  const { resolve, promise } = Promise.withResolvers<void>();
   mockSendChatAction = vi.fn(async () => {
     await promise;
   });

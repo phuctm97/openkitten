@@ -44,15 +44,15 @@ function opencodeEventStreamGetQueueId(event: GlobalEvent): string {
 export class OpencodeEventStream implements AsyncDisposable {
   readonly #opencodeClient: OpencodeClient;
   readonly #floatingPromises: FloatingPromises;
-  readonly #abortController: AbortController;
-  readonly #closed: Promise<void>;
-  readonly #settled: Promise<void>;
-  readonly #queueTails = new Map<string, Promise<void>>();
-  readonly #queuedEvents = new Set<Promise<void>>();
   readonly #onEvent: (
     event: GlobalEvent,
     signal: AbortSignal,
   ) => void | Promise<void>;
+  readonly #abortController = new AbortController();
+  readonly #ended: Promise<void>;
+  readonly #settled: Promise<void>;
+  readonly #queueTails = new Map<string, Promise<void>>();
+  readonly #queuedEvents = new Set<Promise<void>>();
 
   private constructor(
     opencodeClient: OpencodeClient,
@@ -60,15 +60,14 @@ export class OpencodeEventStream implements AsyncDisposable {
     onEvent: (event: GlobalEvent, signal: AbortSignal) => void | Promise<void>,
   ) {
     this.#opencodeClient = opencodeClient;
-    this.#abortController = new AbortController();
     this.#floatingPromises = floatingPromises;
     this.#onEvent = onEvent;
 
-    this.#closed = this.#run();
+    this.#ended = this.#run();
 
-    // closed may reject before the consumer awaits it. Without this handler,
+    // ended may reject before the consumer awaits it. Without this handler,
     // the rejection would be unhandled.
-    this.#settled = this.#closed.then(
+    this.#settled = this.#ended.then(
       () => {},
       () => {},
     );
@@ -166,8 +165,8 @@ export class OpencodeEventStream implements AsyncDisposable {
     }
   }
 
-  get closed(): Promise<void> {
-    return this.#closed;
+  get ended(): Promise<void> {
+    return this.#ended;
   }
 
   async [Symbol.asyncDispose]() {
