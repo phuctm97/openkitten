@@ -19,14 +19,14 @@ export function Layout({ children }: PropsWithChildren) {
         <Meta />
         <Links />
       </head>
-      <body className="m-0 min-h-full bg-[radial-gradient(circle_at_top,_#fff9ef_0%,_#f7f1e5_52%,_#efe5d0_100%)] font-sans text-[#1f1f1f] antialiased">
+      <body className="m-0 min-h-full bg-[radial-gradient(circle_at_top,var(--card)_0%,var(--muted)_52%,var(--secondary)_100%)] text-foreground antialiased">
         <div className="min-h-screen px-5 py-5 md:px-8 md:py-8">
           <header className="mx-auto mb-8 flex max-w-[960px] flex-col items-start gap-6">
             <div className="grid gap-1">
-              <p className="m-0 text-sm font-bold uppercase tracking-[0.08em] text-[#8f6d3d]">
+              <p className="m-0 text-sm font-bold uppercase tracking-[0.08em] text-primary/80">
                 OpenKitten World
               </p>
-              <h1 className="m-0 text-[clamp(2rem,4vw,3.2rem)] leading-none">
+              <h1 className="m-0 font-heading text-[clamp(2rem,4vw,3.2rem)] leading-none">
                 Framework Mode Scaffold
               </h1>
             </div>
@@ -42,11 +42,11 @@ export function Layout({ children }: PropsWithChildren) {
 
 export function HydrateFallback(_: Route.HydrateFallbackProps) {
   return (
-    <section className="rounded-3xl border border-[rgba(143,109,61,0.18)] bg-[rgba(255,251,244,0.92)] p-8 shadow-[0_24px_48px_rgba(64,42,18,0.08)]">
-      <p className="mb-2 mt-0 text-sm font-bold uppercase tracking-[0.06em] text-[#8f6d3d]">
+    <section className="rounded-3xl border border-border bg-card p-8 text-card-foreground shadow-xl shadow-primary/5">
+      <p className="mb-2 mt-0 text-sm font-bold uppercase tracking-[0.06em] text-primary/80">
         Waking Up
       </p>
-      <h2 className="mb-4 mt-0 text-[clamp(1.6rem,2.8vw,2.4rem)] leading-[1.1]">
+      <h2 className="mb-4 mt-0 font-heading text-[clamp(1.6rem,2.8vw,2.4rem)] leading-[1.1]">
         Opening your House...
       </h2>
       <p className="m-0 max-w-[64ch] text-base leading-[1.6]">
@@ -70,16 +70,16 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <section className="rounded-3xl border border-[rgba(143,109,61,0.18)] bg-[rgba(255,251,244,0.92)] p-8 shadow-[0_24px_48px_rgba(64,42,18,0.08)]">
-      <p className="mb-2 mt-0 text-sm font-bold uppercase tracking-[0.06em] text-[#8f6d3d]">
+    <section className="rounded-3xl border border-border bg-card p-8 text-card-foreground shadow-xl shadow-primary/5">
+      <p className="mb-2 mt-0 text-sm font-bold uppercase tracking-[0.06em] text-primary/80">
         Error
       </p>
-      <h2 className="mb-4 mt-0 text-[clamp(1.6rem,2.8vw,2.4rem)] leading-[1.1]">
+      <h2 className="mb-4 mt-0 font-heading text-[clamp(1.6rem,2.8vw,2.4rem)] leading-[1.1]">
         {message}
       </h2>
       <p className="m-0 max-w-[64ch] text-base leading-[1.6]">{details}</p>
       {stack ? (
-        <pre className="mt-6 overflow-auto rounded-2xl bg-[rgba(31,31,31,0.08)] p-4 font-mono text-sm leading-[1.5] whitespace-pre-wrap">
+        <pre className="mt-6 overflow-auto rounded-2xl bg-muted p-4 font-mono text-sm leading-[1.5] whitespace-pre-wrap">
           {stack}
         </pre>
       ) : null}

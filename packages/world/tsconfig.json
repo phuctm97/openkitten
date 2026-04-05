@@ -5,7 +5,9 @@
     "vite.config.ts",
     ".react-router/types",
     "app",
-    "lib"
+    "lib",
+    "hooks",
+    "components"
   ],
   "references": [],
   "extends": "../../tsconfig.json",
