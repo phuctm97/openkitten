@@ -196,20 +196,19 @@ export class McpServer implements Disposable {
   ): Promise<McpServer> {
     logger.debug("MCP server is connecting…");
     const server = new McpServer(bot, existingSessions);
-    const url = new URL("/mcp", server.#server.url).href;
     try {
       await opencodeClient.mcp.add(
         {
           name: "openkitten",
           config: {
             type: "remote",
-            url,
+            url: new URL("/mcp", server.#server.url).href,
             headers: { authorization: `Bearer ${server.#token}` },
           },
         },
         { throwOnError: true },
       );
-      logger.info("MCP server is connected", { url });
+      logger.info("MCP server is connected");
     } catch (error) {
       server[Symbol.dispose]();
       throw error;
