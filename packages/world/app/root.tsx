@@ -7,6 +7,7 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
+import { ThemeConnector } from "~/lib/theme-connector";
 import type { Route } from "./+types/root";
 
 export function Layout({ children }: PropsWithChildren) {
@@ -20,6 +21,7 @@ export function Layout({ children }: PropsWithChildren) {
         <Links />
       </head>
       <body className="m-0 min-h-full bg-[radial-gradient(circle_at_top,var(--card)_0%,var(--muted)_52%,var(--secondary)_100%)] text-foreground antialiased">
+        <ThemeConnector />
         <div className="min-h-screen px-5 py-5 md:px-8 md:py-8">
           <header className="mx-auto mb-8 flex max-w-[960px] flex-col items-start gap-6">
             <div className="grid gap-1">
