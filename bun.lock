@@ -56,7 +56,7 @@
         "tailwind-merge": "^3.5.0",
       },
       "devDependencies": {
-        "@fontsource-variable/jetbrains-mono": "^5.2.8",
+        "@fontsource-variable/azeret-mono": "^5.2.11",
         "@fontsource-variable/oxanium": "^5.2.8",
         "@react-router/dev": "^7.14.0",
         "@tailwindcss/vite": "^4.2.2",
@@ -238,7 +238,7 @@
 
     "@exodus/bytes": ["@exodus/bytes@1.15.0", "", { "peerDependencies": { "@noble/hashes": "^1.8.0 || ^2.0.0" }, "optionalPeers": ["@noble/hashes"] }, "sha512-UY0nlA+feH81UGSHv92sLEPLCeZFjXOuHhrIo0HQydScuQc8s0A7kL/UdgwgDq8g8ilksmuoF35YVTNphV2aBQ=="],
 
-    "@fontsource-variable/jetbrains-mono": ["@fontsource-variable/jetbrains-mono@5.2.8", "", {}, "sha512-WBA9elru6Jdp5df2mES55wuOO0WIrn3kpXnI4+W2ek5u3ZgLS9XS4gmIlcQhiZOWEKl95meYdvK7xI+ETLCq/Q=="],
+    "@fontsource-variable/azeret-mono": ["@fontsource-variable/azeret-mono@5.2.11", "", {}, "sha512-C2lkE7Pg0yg46ze3+AaJkolyldWBxluGiRG4pB5vHSdQRApOdQME6WbdsfYyy6wFDn/zPNx+1mwRJPnMRnovpA=="],
 
     "@fontsource-variable/oxanium": ["@fontsource-variable/oxanium@5.2.8", "", {}, "sha512-W3HWxRLXVB6yox3dgm1DIGOp98pz8KglwiM6/2BsMopvZrg98mXI9citFWz2pUX0FOOLwf8fmHxX+KrIn+6BoA=="],
 
