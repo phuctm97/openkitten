@@ -3,11 +3,13 @@
     "package.json",
     "react-router.config.ts",
     "vite.config.ts",
+    "vitest.config.ts",
     ".react-router/types",
     "app",
     "lib",
     "hooks",
-    "components"
+    "components",
+    "test"
   ],
   "references": [],
   "extends": "../../tsconfig.json",
