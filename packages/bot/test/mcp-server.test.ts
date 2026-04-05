@@ -121,9 +121,7 @@ describe("McpServer", () => {
   test("logs connecting and connected", async () => {
     using _server = await McpServer.create(bot, mockClient, existingSessions);
     expect(logger.debug).toHaveBeenCalledWith("MCP server is connecting…");
-    expect(logger.info).toHaveBeenCalledWith("MCP server is connected", {
-      url: "http://127.0.0.1:12345/mcp",
-    });
+    expect(logger.info).toHaveBeenCalledWith("MCP server is connected");
   });
 
   test("starts Bun.serve on localhost with random port", async () => {
