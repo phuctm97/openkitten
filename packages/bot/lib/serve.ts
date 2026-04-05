@@ -35,17 +35,17 @@ class ContinuousError extends Error {
   }
 }
 
-const abnormalRestartLimit = 5;
-const abnormalRestartWindowMs = 30_000;
+const restartLimit = 5;
+const restartWindowMs = 30_000;
 
-function isContinuouslyFailing(abnormalRestarts: number[]): boolean {
+function isContinuouslyFailing(restartTimes: number[]): boolean {
   const now = Date.now();
-  const activeRestarts = abnormalRestarts.filter(
-    (time) => now - time < abnormalRestartWindowMs,
+  const activeRestarts = restartTimes.filter(
+    (time) => now - time < restartWindowMs,
   );
   activeRestarts.push(now);
-  abnormalRestarts.splice(0, abnormalRestarts.length, ...activeRestarts);
-  return abnormalRestarts.length >= abnormalRestartLimit;
+  restartTimes.splice(0, restartTimes.length, ...activeRestarts);
+  return restartTimes.length >= restartLimit;
 }
 
 export const serve = defineCommand({
@@ -58,7 +58,7 @@ export const serve = defineCommand({
     },
   },
   run: async ({ args }) => {
-    const abnormalRestarts: number[] = [];
+    const restartTimes: number[] = [];
     for (let i = 0; ; i++) {
       let shouldShutdown = false;
       const skipActions = args.yes || i > 0;
@@ -160,13 +160,12 @@ export const serve = defineCommand({
         ]);
         shouldShutdown = result === Shutdown.symbol;
         if (shouldShutdown) break;
-        if (isContinuouslyFailing(abnormalRestarts))
-          throw new ContinuousError();
+        if (isContinuouslyFailing(restartTimes)) throw new ContinuousError();
         logger.fatal("OpenKitten server stopped unexpectedly, restarting…");
       } catch (error) {
         if (shouldShutdown) break;
         if (error instanceof ContinuousError) throw error;
-        if (isContinuouslyFailing(abnormalRestarts)) throw error;
+        if (isContinuouslyFailing(restartTimes)) throw error;
         logger.fatal(
           "OpenKitten server crashed unexpectedly, restarting…",
           error,
