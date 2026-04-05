@@ -5,7 +5,6 @@ import { createHooks, type Hookable } from "hookable";
 import type { Database } from "~/lib/database";
 import { Errors } from "~/lib/errors";
 import { grammyCheckGoneError } from "~/lib/grammy-check-gone-error";
-import { logger } from "~/lib/logger";
 import * as schema from "~/lib/schema";
 
 export class ExistingSessions {
@@ -73,7 +72,6 @@ export class ExistingSessions {
           threadId: normalized.threadId || 0,
         })
         .run();
-      logger.info("New session is created", { sessionId, ...normalized });
       return sessionId;
     } catch (error) {
       // Race condition: another concurrent call created the session first.
@@ -121,7 +119,6 @@ export class ExistingSessions {
         ...hookResults,
         databaseResult,
       ]);
-      logger.info("Existing session is removed", { sessionId });
     } finally {
       this.#removingPromises.delete(sessionId);
     }
@@ -163,12 +160,6 @@ export class ExistingSessions {
       unreachableSessions.map((s) => this.remove(s.id)),
     );
     Errors.throwIfAny(removalResults);
-
-    logger.debug("Existing sessions are synchronized", {
-      checked: currentSessions.length,
-      removed: unreachableSessions.length,
-      remaining: currentSessions.length - unreachableSessions.length,
-    });
   }
 
   get sessionIds(): readonly string[] {

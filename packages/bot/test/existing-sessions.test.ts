@@ -78,11 +78,6 @@ test("find creates new session when createIfNotFound is true", async () => {
 
   expect(sessionId).toBe("s1");
   expect(opencodeClient.session.create).toHaveBeenCalledOnce();
-  expect(logger.info).toHaveBeenCalledWith("New session is created", {
-    sessionId: "s1",
-    chatId: 123,
-    threadId: undefined,
-  });
   expect(es.get("s1")).toEqual({
     chatId: 123,
     threadId: undefined,
@@ -241,14 +236,6 @@ test("create keeps reachable sessions", async () => {
   );
 
   expect(es.sessionIds).toEqual(["s1", "s2"]);
-  expect(logger.debug).toHaveBeenCalledWith(
-    "Existing sessions are synchronized",
-    {
-      checked: 2,
-      removed: 0,
-      remaining: 2,
-    },
-  );
 });
 
 test("create removes unreachable sessions", async () => {
@@ -332,14 +319,6 @@ test("create handles empty sessions", async () => {
   );
 
   expect(es.sessionIds).toEqual([]);
-  expect(logger.debug).toHaveBeenCalledWith(
-    "Existing sessions are synchronized",
-    {
-      checked: 0,
-      removed: 0,
-      remaining: 0,
-    },
-  );
 });
 
 // --- get ---
@@ -604,9 +583,6 @@ test("remove deletes from database", async () => {
     .where(eq(schema.session.id, "s1"))
     .get();
   expect(row).toBeUndefined();
-  expect(logger.info).toHaveBeenCalledWith("Existing session is removed", {
-    sessionId: "s1",
-  });
 });
 
 test("remove is no-op for unknown session", async () => {

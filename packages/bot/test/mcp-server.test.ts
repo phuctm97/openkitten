@@ -14,12 +14,14 @@ vi.mock("node:crypto", () => ({
 
 const {
   mockStop,
+  mockTimeout,
   mockConnect,
   mockHandleRequest,
   registeredTools,
   sdkConstructorArgs,
 } = vi.hoisted(() => ({
   mockStop: vi.fn(),
+  mockTimeout: vi.fn(),
   mockConnect: vi.fn(async () => {}),
   mockHandleRequest: vi.fn(async () => new Response("mcp-ok")),
   registeredTools: [] as {
@@ -82,6 +84,7 @@ describe("McpServer", () => {
 
   beforeEach(() => {
     mockStop.mockClear();
+    mockTimeout.mockClear();
     mockConnect.mockClear();
     mockHandleRequest.mockClear();
     mockMcpAdd.mockClear();
@@ -100,6 +103,7 @@ describe("McpServer", () => {
     }) => {
       capturedFetch = options.fetch;
       return {
+        timeout: mockTimeout,
         url: new URL("http://127.0.0.1:12345"),
         [Symbol.dispose]: mockStop,
       };
@@ -117,9 +121,7 @@ describe("McpServer", () => {
   test("logs connecting and connected", async () => {
     using _server = await McpServer.create(bot, mockClient, existingSessions);
     expect(logger.debug).toHaveBeenCalledWith("MCP server is connecting…");
-    expect(logger.info).toHaveBeenCalledWith("MCP server is connected", {
-      url: "http://127.0.0.1:12345/mcp",
-    });
+    expect(logger.info).toHaveBeenCalledWith("MCP server is connected");
   });
 
   test("starts Bun.serve on localhost with random port", async () => {
@@ -213,6 +215,7 @@ describe("McpServer", () => {
       },
     ]);
     expect(mockConnect).toHaveBeenCalledOnce();
+    expect(mockTimeout).toHaveBeenCalledWith(req, 0);
     expect(mockHandleRequest).toHaveBeenCalledWith(req);
     expect(await response.text()).toBe("mcp-ok");
   });

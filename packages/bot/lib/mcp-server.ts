@@ -74,6 +74,8 @@ export class McpServer implements Disposable {
     if (req.headers.get("authorization") !== `Bearer ${this.#token}`) {
       return new Response("Unauthorized", { status: 401 });
     }
+    // MCP requests can remain open while tools run or streams stay quiet.
+    this.#server.timeout(req, 0);
     const server = new Server({
       name: "openkitten",
       version,
@@ -194,20 +196,19 @@ export class McpServer implements Disposable {
   ): Promise<McpServer> {
     logger.debug("MCP server is connecting…");
     const server = new McpServer(bot, existingSessions);
-    const url = new URL("/mcp", server.#server.url).href;
     try {
       await opencodeClient.mcp.add(
         {
           name: "openkitten",
           config: {
             type: "remote",
-            url,
+            url: new URL("/mcp", server.#server.url).href,
             headers: { authorization: `Bearer ${server.#token}` },
           },
         },
         { throwOnError: true },
       );
-      logger.info("MCP server is connected", { url });
+      logger.info("MCP server is connected");
     } catch (error) {
       server[Symbol.dispose]();
       throw error;
