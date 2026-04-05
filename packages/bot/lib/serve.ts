@@ -37,13 +37,13 @@ export const serve = defineCommand({
       description: "Skip optional config actions.",
     },
   },
-  run: async ({ args: { yes } }) => {
+  run: async ({ args }) => {
     const profile = await Profile.create();
     const telegramConfig = await TelegramConfig.create(profile, {
-      skipActions: yes,
+      skipActions: args.yes,
     });
     const opencodeConfig = await OpencodeConfig.create(profile, {
-      skipActions: yes,
+      skipActions: args.yes,
     });
     const bot = new Bot(telegramConfig.botToken);
     bot.api.config.use(autoRetry());
