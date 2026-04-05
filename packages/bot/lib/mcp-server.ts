@@ -74,6 +74,8 @@ export class McpServer implements Disposable {
     if (req.headers.get("authorization") !== `Bearer ${this.#token}`) {
       return new Response("Unauthorized", { status: 401 });
     }
+    // MCP requests can remain open while tools run or streams stay quiet.
+    this.#server.timeout(req, 0);
     const server = new Server({
       name: "openkitten",
       version,
