@@ -1,0 +1,4 @@
+interface:
+  display_name: "shadcn/ui"
+  short_description: "Generate and integrate shadcn/ui in packages/world"
+  default_prompt: "Use $shadcn-ui to add or update shadcn/ui components in packages/world."
