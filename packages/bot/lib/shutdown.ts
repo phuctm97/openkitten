@@ -2,12 +2,14 @@ import { logger } from "~/lib/logger";
 
 export class Shutdown implements Disposable {
   readonly #controller = new AbortController();
-  readonly #signaled: Promise<void>;
+  readonly #signaled: Promise<typeof Shutdown.symbol | undefined>;
   readonly #onSignal: (event?: string) => void;
   readonly #onMessage: (message: unknown) => void;
 
   private constructor() {
-    const { resolve, promise: signaled } = Promise.withResolvers<void>();
+    const { resolve, promise: signaled } = Promise.withResolvers<
+      typeof Shutdown.symbol | undefined
+    >();
     this.#signaled = signaled;
 
     this.#onSignal = (event?: string) => {
@@ -16,7 +18,7 @@ export class Shutdown implements Disposable {
       logger.info("Shutdown is triggered", { event });
       for (const e of Shutdown.events) process.off(e, this.#onSignal);
       process.off("message", this.#onMessage);
-      resolve();
+      resolve(event ? Shutdown.symbol : undefined);
     };
 
     this.#onMessage = (message: unknown) => {
@@ -31,7 +33,7 @@ export class Shutdown implements Disposable {
     return this.#controller.signal;
   }
 
-  get signaled(): Promise<void> {
+  get signaled(): Promise<typeof Shutdown.symbol | undefined> {
     return this.#signaled;
   }
 
@@ -53,6 +55,8 @@ export class Shutdown implements Disposable {
     "SIGBREAK",
     "SIGUSR2",
   ] as const;
+
+  static readonly symbol = Symbol("shutdown");
 
   static create(): Shutdown {
     return new Shutdown();
