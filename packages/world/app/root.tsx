@@ -20,7 +20,7 @@ export function Layout({ children }: PropsWithChildren) {
         <Meta />
         <Links />
       </head>
-      <body className="m-0 min-h-full bg-[radial-gradient(circle_at_top,var(--card)_0%,var(--muted)_52%,var(--secondary)_100%)] text-foreground antialiased">
+      <body className="m-0 min-h-full bg-background text-foreground antialiased">
         <ThemeConnector />
         <div className="min-h-screen px-5 py-5 md:px-8 md:py-8">
           <header className="mx-auto mb-8 flex max-w-[960px] flex-col items-start gap-6">

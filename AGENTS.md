@@ -26,6 +26,10 @@ Always prefer Bun-native APIs (`Bun.*`) over Node.js equivalents. Use Node.js AP
 
 Each file has only 1 export (camelCase/PascalCase for export name, kebab-case for file name).
 
+Exception: generated files may keep the generator's original structure, including multiple exports.
+
+For `shadcn/ui`, generate components with `bun --bun shadcn add ...` from the relevant package directory, prefer regenerating/overwriting over hand-recreating, and keep the generated export structure intact.
+
 ## No Hacks
 
 No dirty hacks: no suppression comments (`@ts-ignore`, `@ts-expect-error`, `biome-ignore`, `istanbul ignore`), no hacky type casts (`as unknown as`, `as any`), no non-null assertions (`!`). The only exception is `as never` when mocking in tests.
