@@ -39,8 +39,12 @@ export const serve = defineCommand({
   },
   run: async ({ args: { yes } }) => {
     const profile = await Profile.create();
-    const telegramConfig = await TelegramConfig.create(profile, { yes });
-    const opencodeConfig = await OpencodeConfig.create(profile, { yes });
+    const telegramConfig = await TelegramConfig.create(profile, {
+      skipActions: yes,
+    });
+    const opencodeConfig = await OpencodeConfig.create(profile, {
+      skipActions: yes,
+    });
     const bot = new Bot(telegramConfig.botToken);
     bot.api.config.use(autoRetry());
     bot.use(grammyFilterUser(telegramConfig.userId));

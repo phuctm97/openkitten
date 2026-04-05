@@ -200,8 +200,8 @@ export const up = defineCommand({
     await updateSource();
     clack.outro("Processed update");
     const profile = await Profile.create();
-    await TelegramConfig.create(profile, { yes });
-    await OpencodeConfig.create(profile, { yes });
+    await TelegramConfig.create(profile, { skipActions: yes });
+    await OpencodeConfig.create(profile, { skipActions: yes });
     process.stderr.write(
       `${boxen(styleText("bold", "OpenKitten"), { padding: 1 })}\n`,
     );
