@@ -132,11 +132,11 @@ test("passes yes option when yes flag is set", async () => {
   await runCommand(up, { rawArgs: ["--yes"] });
   expect(vi.mocked(TelegramConfig.create)).toHaveBeenCalledWith(
     expect.anything(),
-    { yes: true },
+    { skipActions: true },
   );
   expect(vi.mocked(OpencodeConfig.create)).toHaveBeenCalledWith(
     expect.anything(),
-    { yes: true },
+    { skipActions: true },
   );
 });
 

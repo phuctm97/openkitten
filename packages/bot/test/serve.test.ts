@@ -590,11 +590,11 @@ test("passes yes option when yes flag is set", async () => {
 
   await vi.waitFor(() =>
     expect(TelegramConfig.create).toHaveBeenCalledWith(expect.anything(), {
-      yes: true,
+      skipActions: true,
     }),
   );
   expect(OpencodeConfig.create).toHaveBeenCalledWith(expect.anything(), {
-    yes: true,
+    skipActions: true,
   });
 
   triggerShutdown();

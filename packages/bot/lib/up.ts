@@ -192,7 +192,7 @@ export const up = defineCommand({
       description: "Skip optional config actions.",
     },
   },
-  run: async ({ args: { yes } }) => {
+  run: async ({ args }) => {
     process.stderr.write(
       `${boxen(styleText("bold", "Source"), { padding: 1 })}\n`,
     );
@@ -200,8 +200,8 @@ export const up = defineCommand({
     await updateSource();
     clack.outro("Processed update");
     const profile = await Profile.create();
-    await TelegramConfig.create(profile, { yes });
-    await OpencodeConfig.create(profile, { yes });
+    await TelegramConfig.create(profile, { skipActions: args.yes });
+    await OpencodeConfig.create(profile, { skipActions: args.yes });
     process.stderr.write(
       `${boxen(styleText("bold", "OpenKitten"), { padding: 1 })}\n`,
     );
