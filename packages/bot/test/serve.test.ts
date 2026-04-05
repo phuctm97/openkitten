@@ -198,11 +198,11 @@ function mockProcessingMessages() {
 }
 
 function mockOpencodeEventStream() {
-  let resolveClosed: () => void;
-  const closed = new Promise<void>((r) => {
-    resolveClosed = r;
+  let resolveEnded: () => void;
+  const ended = new Promise<void>((r) => {
+    resolveEnded = r;
   });
-  closed.then(
+  ended.then(
     () => {},
     () => {},
   );
@@ -211,52 +211,52 @@ function mockOpencodeEventStream() {
     (_client, _floatingPromises, event) => {
       onEvent = event as never;
       return {
-        closed,
+        ended,
         async [Symbol.asyncDispose]() {
-          resolveClosed();
+          resolveEnded();
         },
       } as never;
     },
   );
   return {
     onEvent: () => onEvent,
-    resolveClosed: () => resolveClosed(),
+    resolveEnded: () => resolveEnded(),
   };
 }
 
 function mockMcpServer() {
-  let resolveDisconnected: () => void;
-  const disconnected = new Promise<void>((r) => {
-    resolveDisconnected = r;
+  let resolveExited: () => void;
+  const exited = new Promise<void>((r) => {
+    resolveExited = r;
   });
-  disconnected.then(
+  exited.then(
     () => {},
     () => {},
   );
   const dispose = vi.fn(() => {
-    resolveDisconnected();
+    resolveExited();
   });
   vi.spyOn(McpServer, "create").mockResolvedValue({
-    disconnected,
+    exited,
     [Symbol.dispose]: dispose,
   } as never);
   return dispose;
 }
 
 function mockGrammyEventStream() {
-  let resolveClosed: () => void;
-  const closed = new Promise<void>((r) => {
-    resolveClosed = r;
+  let resolveEnded: () => void;
+  const ended = new Promise<void>((r) => {
+    resolveEnded = r;
   });
-  closed.then(
+  ended.then(
     () => {},
     () => {},
   );
   const dispose = vi.fn(async () => {
-    resolveClosed();
+    resolveEnded();
   });
   vi.spyOn(GrammyEventStream, "create").mockResolvedValue({
-    closed,
+    ended,
     [Symbol.asyncDispose]: dispose,
   } as never);
   return dispose;
@@ -392,15 +392,15 @@ test("exits on unexpected grammY event stream end", async () => {
   mockTypingIndicators();
   mockPendingPrompts();
   mockOpencodeEventStream();
-  const closed = Promise.reject(
+  const ended = Promise.reject(
     new Error("grammY event stream ended unexpectedly"),
   );
-  closed.then(
+  ended.then(
     () => {},
     () => {},
   );
   vi.spyOn(GrammyEventStream, "create").mockResolvedValue({
-    closed,
+    ended,
     [Symbol.asyncDispose]: async () => {},
   } as never);
   mockShutdown();
@@ -418,13 +418,13 @@ test("exits on event stream failure", async () => {
   mockExistingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
-  const closed = Promise.reject(new Error("event stream failed"));
-  closed.then(
+  const ended = Promise.reject(new Error("event stream failed"));
+  ended.then(
     () => {},
     () => {},
   );
   vi.spyOn(OpencodeEventStream, "create").mockReturnValue({
-    closed,
+    ended,
     async [Symbol.asyncDispose]() {},
   } as never);
   mockGrammyEventStream();
@@ -464,7 +464,7 @@ test("awaits existing session initialization before creating working sessions", 
   mockCreateDatabase();
   mockOpencodeServer();
   mockMcpServer();
-  const { promise, resolve } = Promise.withResolvers<void>();
+  const { resolve, promise } = Promise.withResolvers<void>();
   mockExistingSessions([], {}, { create: promise });
   mockWorkingSessions();
   mockTypingIndicators();
@@ -496,7 +496,7 @@ test("awaits processing message initialization before connecting event stream", 
   mockWorkingSessions();
   mockTypingIndicators();
   mockPendingPrompts();
-  const { promise, resolve } = Promise.withResolvers<void>();
+  const { resolve, promise } = Promise.withResolvers<void>();
   const update = vi.fn();
   vi.spyOn(ProcessingMessages, "create").mockImplementation(async () => {
     await promise;

@@ -1,21 +1,19 @@
 import { logger } from "~/lib/logger";
 
 export class Shutdown implements Disposable {
-  readonly #controller: AbortController;
+  readonly #controller = new AbortController();
   readonly #signaled: Promise<void>;
   readonly #onSignal: (event?: string) => void;
   readonly #onMessage: (message: unknown) => void;
 
   private constructor() {
-    this.#controller = new AbortController();
-
     const { resolve, promise: signaled } = Promise.withResolvers<void>();
     this.#signaled = signaled;
 
     this.#onSignal = (event?: string) => {
       if (this.#controller.signal.aborted) return;
       this.#controller.abort();
-      logger.info("Shutdown is signaled", { event });
+      logger.info("Shutdown is triggered", { event });
       for (const e of Shutdown.events) process.off(e, this.#onSignal);
       process.off("message", this.#onMessage);
       resolve();

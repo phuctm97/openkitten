@@ -15,7 +15,7 @@ function grammyEventLoopGetQueueId(ctx: Context): string {
 
 export class GrammyEventLoop implements AsyncDisposable {
   readonly #floatingPromises: FloatingPromises;
-  readonly #abortController: AbortController;
+  readonly #abortController = new AbortController();
   readonly #ended: Promise<void>;
   readonly #settled: Promise<void>;
   readonly #resolveEnded: () => void;
@@ -28,7 +28,6 @@ export class GrammyEventLoop implements AsyncDisposable {
 
   private constructor(floatingPromises: FloatingPromises) {
     this.#floatingPromises = floatingPromises;
-    this.#abortController = new AbortController();
     const { resolve, reject, promise } = Promise.withResolvers<void>();
     this.#resolveEnded = resolve;
     this.#rejectEnded = reject;

@@ -153,7 +153,7 @@ test("lock throws when session is already working", async () => {
 
 test("lock throws on concurrent lock for the same session", async () => {
   const { working } = setup();
-  const { promise, resolve } = Promise.withResolvers<void>();
+  const { resolve, promise } = Promise.withResolvers<void>();
   const first = working.lock("sess-1", async () => {
     await promise;
   });

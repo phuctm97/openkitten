@@ -4,7 +4,7 @@ import { logger } from "~/lib/logger";
 import type { Shutdown } from "~/lib/shutdown";
 
 interface MockControls {
-  resolveClosed: () => void;
+  resolveEnded: () => void;
 }
 
 let controls: MockControls;
@@ -15,16 +15,16 @@ let mockShutdown: Shutdown;
 
 function setupMock(options?: { startError?: Error }): void {
   controls = {
-    resolveClosed: () => {},
+    resolveEnded: () => {},
   };
-  let resolveClosed: () => void;
+  let resolveEnded: () => void;
   mockCatch = vi.fn();
-  mockStop = vi.fn(() => resolveClosed());
+  mockStop = vi.fn(() => resolveEnded());
   mockStart = vi.fn(
     (opts?: { onStart?: () => void }) =>
       new Promise<void>((resolve, reject) => {
-        resolveClosed = resolve;
-        controls.resolveClosed = resolve;
+        resolveEnded = resolve;
+        controls.resolveEnded = resolve;
         if (options?.startError) {
           reject(options.startError);
           return;
@@ -76,13 +76,13 @@ test("propagates startup error", async () => {
   ).rejects.toThrow("polling failed");
 });
 
-test("closed rejects on unexpected end", async () => {
+test("ended rejects on unexpected end", async () => {
   const grammyEventStream = await GrammyEventStream.create(
     mockShutdown,
     createMockBot(),
   );
-  controls.resolveClosed();
-  await expect(grammyEventStream.closed).rejects.toThrow(
+  controls.resolveEnded();
+  await expect(grammyEventStream.ended).rejects.toThrow(
     "grammY event stream ended unexpectedly",
   );
 });
@@ -155,18 +155,18 @@ test("catch handler handles missing chat and msg", async () => {
 test("dispose logs fatal and triggers shutdown when bot.stop fails", async () => {
   const error = new Error("stop failed");
   mockStop = vi.fn(() => {
-    controls.resolveClosed();
+    controls.resolveEnded();
     throw error;
   });
-  let grammyClosed: Promise<void>;
+  let grammyEnded: Promise<void>;
   {
     await using grammyEventStream = await GrammyEventStream.create(
       mockShutdown,
       createMockBot(),
     );
-    grammyClosed = grammyEventStream.closed;
+    grammyEnded = grammyEventStream.ended;
   }
-  await expect(grammyClosed).resolves.toBeUndefined();
+  await expect(grammyEnded).resolves.toBeUndefined();
   expect(logger.fatal).toHaveBeenCalledWith(
     "Failed to stop polling updates from Telegram",
     error,
@@ -174,14 +174,14 @@ test("dispose logs fatal and triggers shutdown when bot.stop fails", async () =>
   expect(mockShutdown.trigger).toHaveBeenCalled();
 });
 
-test("closed does not reject after dispose", async () => {
-  let grammyClosed: Promise<void>;
+test("ended does not reject after dispose", async () => {
+  let grammyEnded: Promise<void>;
   {
     await using grammyEventStream = await GrammyEventStream.create(
       mockShutdown,
       createMockBot(),
     );
-    grammyClosed = grammyEventStream.closed;
+    grammyEnded = grammyEventStream.ended;
   }
-  await expect(grammyClosed).resolves.toBeUndefined();
+  await expect(grammyEnded).resolves.toBeUndefined();
 });

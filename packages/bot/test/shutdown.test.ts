@@ -30,7 +30,7 @@ for (const event of Shutdown.events) {
     using shutdown = Shutdown.create();
     handlers.get(event)?.(event);
     await expect(shutdown.signaled).resolves.toBeUndefined();
-    expect(logger.info).toHaveBeenCalledWith("Shutdown is signaled", {
+    expect(logger.info).toHaveBeenCalledWith("Shutdown is triggered", {
       event,
     });
   });
@@ -72,7 +72,7 @@ test("resolves signaled on trigger()", async () => {
   using shutdown = Shutdown.create();
   shutdown.trigger();
   await expect(shutdown.signaled).resolves.toBeUndefined();
-  expect(logger.info).toHaveBeenCalledWith("Shutdown is signaled", {
+  expect(logger.info).toHaveBeenCalledWith("Shutdown is triggered", {
     event: undefined,
   });
 });
