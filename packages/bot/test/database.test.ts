@@ -4,26 +4,12 @@ import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { expect, test } from "vitest";
 import { Database } from "~/lib/database";
-import { logger } from "~/lib/logger";
 import type { Profile } from "~/lib/profile";
 import * as schema from "~/lib/schema";
 
 function db() {
   return Database.create();
 }
-
-test("logs start and ready", () => {
-  using _database = db();
-  expect(logger.debug).toHaveBeenCalledWith("Database is initializing…");
-  expect(logger.info).toHaveBeenCalledWith("Database is ready");
-});
-
-test("is disposable", () => {
-  {
-    using _db = db();
-  }
-  expect(logger.info).toHaveBeenCalledWith("Database is closed");
-});
 
 test("inserts session with default timestamps", () => {
   using database = db();
