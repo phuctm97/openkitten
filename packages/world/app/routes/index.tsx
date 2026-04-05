@@ -1,5 +1,5 @@
+import { ThemeSwitcher } from "~/components/kibo-ui/theme-switcher";
 import { Badge } from "~/components/ui/badge";
-import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
 import { useTheme } from "~/lib/use-theme";
 
@@ -34,42 +34,7 @@ export default function Component() {
             </p>
           </div>
 
-          <fieldset className="flex flex-wrap gap-2">
-            <legend className="sr-only">Theme preference</legend>
-            <Button
-              type="button"
-              aria-pressed={theme === "auto"}
-              variant={theme === "auto" ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setTheme("auto");
-              }}
-            >
-              Auto
-            </Button>
-            <Button
-              type="button"
-              aria-pressed={theme === "light"}
-              variant={theme === "light" ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setTheme("light");
-              }}
-            >
-              Light
-            </Button>
-            <Button
-              type="button"
-              aria-pressed={theme === "dark"}
-              variant={theme === "dark" ? "default" : "outline"}
-              size="sm"
-              onClick={() => {
-                setTheme("dark");
-              }}
-            >
-              Dark
-            </Button>
-          </fieldset>
+          <ThemeSwitcher value={theme} onChange={setTheme} />
         </div>
 
         <Separator />
