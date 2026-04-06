@@ -1,15 +1,15 @@
 # OpenKitten World
 
-This package contains the current canonical product and architecture specs for OpenKitten World.
+This package contains both the canonical product documents and the runnable browser client for OpenKitten World.
 
 ## Documents
 
-- [Vision](/Users/phuctm97/Projects/openkitten-1/packages/world/VISION.md)
-- [Spec](/Users/phuctm97/Projects/openkitten-1/packages/world/SPEC.md)
-- [Client Strategy](/Users/phuctm97/Projects/openkitten-1/packages/world/CLIENT_STRATEGY.md)
-- [Visual Direction](/Users/phuctm97/Projects/openkitten-1/packages/world/VISUAL_DIRECTION.md)
-- [MVP](/Users/phuctm97/Projects/openkitten-1/packages/world/MVP.md)
-- [Implementation Plan](/Users/phuctm97/Projects/openkitten-1/packages/world/IMPLEMENTATION_PLAN.md)
+- [Vision](./VISION.md)
+- [Spec](./SPEC.md)
+- [Client Strategy](./CLIENT_STRATEGY.md)
+- [Visual Direction](./VISUAL_DIRECTION.md)
+- [MVP](./MVP.md)
+- [Implementation Plan](./IMPLEMENTATION_PLAN.md)
 
 Read the vision first for the product north star.
 
@@ -22,3 +22,11 @@ Read the visual direction for the current reference stack, art constraints, char
 Read the MVP doc for the first vertical slice, scope boundaries, and success criteria.
 
 Read the implementation plan for the recommended Pixi + React client architecture and phased build path.
+
+## Commands
+
+Run these from `packages/world`:
+
+- `bun run dev` starts the local browser client
+- `bun run build` creates the production build
+- `bun run test` runs the test suite (`--coverage` for coverage report)
