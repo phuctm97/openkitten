@@ -1,71 +1,221 @@
-import { act, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { expect, test } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import Component from "~/app/routes/index";
-import { stubMatchMedia } from "~/test/stub-match-media";
 
-function getThemeValue(label: string, value: string) {
-  return screen.getByText((_content, node) => {
-    return node?.textContent === `${label} = "${value}"`;
-  });
-}
+type MockSceneProps = {
+  onShowCabinet: () => void;
+  onShowCat: (catId: string) => void;
+  onShowInbox: () => void;
+  onShowThread: (threadId: string) => void;
+  onShowWhiteboard: () => void;
+  reactionMessage: string | null;
+  unreadNoticeCount: number;
+};
 
-test("renders the house placeholder and both font previews", () => {
-  render(<Component />);
-  const monoCard = screen.getByText("Mono").closest("article");
+const routeMocks = vi.hoisted(() => ({
+  houseScene: vi.fn((props: MockSceneProps) => {
+    return (
+      <section data-testid="mock-scene">
+        <p>{`Scene unread: ${props.unreadNoticeCount}`}</p>
+        <p>{`Scene reaction: ${props.reactionMessage ?? "quiet"}`}</p>
+        <button onClick={() => props.onShowInbox()} type="button">
+          Scene inbox
+        </button>
+        <button onClick={() => props.onShowCat("cat-mochi")} type="button">
+          Scene Mochi
+        </button>
+        <button onClick={() => props.onShowCat("cat-pepper")} type="button">
+          Scene Pepper
+        </button>
+        <button
+          onClick={() => props.onShowThread("thread-pricing")}
+          type="button"
+        >
+          Scene thread
+        </button>
+        <button onClick={() => props.onShowWhiteboard()} type="button">
+          Scene whiteboard
+        </button>
+        <button onClick={() => props.onShowCabinet()} type="button">
+          Scene cabinet
+        </button>
+      </section>
+    );
+  }),
+}));
 
-  expect(screen.getByText("House Route Placeholder")).toBeInTheDocument();
-  expect(
-    screen.getByText(
-      "Oxanium gives OpenKitten World its playful, futuristic house voice.",
-    ),
-  ).toBeInTheDocument();
-  expect(screen.getByText("Sans")).toBeInTheDocument();
-  expect(screen.getByText("Mono")).toBeInTheDocument();
-  expect(getThemeValue("theme", "auto")).toBeInTheDocument();
-  expect(getThemeValue("colorScheme", "light")).toBeInTheDocument();
-  expect(monoCard).toHaveTextContent(
-    'session.claimedThreads[0] = "pricing-review"',
-  );
-  expect(monoCard).toHaveTextContent(
-    'cat.memory.append("Keep pricing practical and human-readable.")',
-  );
+vi.mock("~/app/world/house-scene", () => ({
+  HouseScene: routeMocks.houseScene,
+}));
+
+beforeEach(() => {
+  vi.useFakeTimers();
 });
 
-test("switches between auto, light, and dark themes", async () => {
-  const user = userEvent.setup();
-  const matchMedia = stubMatchMedia("light");
+afterEach(() => {
+  vi.runOnlyPendingTimers();
+  vi.useRealTimers();
+});
 
+test("renders the Lantern House overview and quick actions", () => {
   render(<Component />);
 
+  expect(screen.getByText("Lantern House")).toBeInTheDocument();
+  expect(
+    screen.getByText("A warm study where serious async work feels alive."),
+  ).toBeInTheDocument();
+  expect(screen.getByText("House overview")).toBeInTheDocument();
+  expect(screen.getByText("Scene unread: 2")).toBeInTheDocument();
+  expect(screen.getByText("Ship a human pricing review")).toBeInTheDocument();
+
+  const inboxButtons = screen.getAllByRole("button", { name: "Inbox" });
+  const inboxButton =
+    inboxButtons[1] ?? screen.getByRole("button", { name: "Inbox" });
+
+  fireEvent.click(inboxButton);
+
+  expect(
+    screen.getByText(
+      "Notices are the House's calm way of surfacing what deserves human attention.",
+    ),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Current thread" }));
+
+  expect(screen.getByText("Thread view")).toBeInTheDocument();
+  expect(
+    screen.getByText("Pricing review for launch page"),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Open linked session" }));
+  expect(screen.getByText("Mochi's active session")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Open cat" }));
+  expect(screen.getByText("Mochi")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Watch session" }));
+  expect(screen.getByText("Session view")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Active session" }));
+  expect(screen.getByText("Mochi's active session")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open Mochi" }));
+  expect(screen.getByText("Cat detail")).toBeInTheDocument();
+});
+
+test("navigates through the MVP flow, streams the session, and reacts to a new comment", () => {
+  render(<Component />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Scene Mochi" }));
+
+  expect(screen.getByText("Cat detail")).toBeInTheDocument();
+  expect(screen.getByText("Research cat")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Open active session" }));
+
+  expect(screen.getByText("Session view")).toBeInTheDocument();
+  expect(screen.getByText("Live transcript")).toBeInTheDocument();
+  expect(
+    screen.getByText("More transcript lines are still arriving..."),
+  ).toBeInTheDocument();
+
   act(() => {
-    matchMedia.setColorScheme("dark");
+    vi.advanceTimersByTime(3_600);
   });
 
-  expect(getThemeValue("colorScheme", "dark")).toBeInTheDocument();
-
-  await user.click(screen.getByRole("button", { name: "Light theme" }));
-
-  expect(getThemeValue("theme", "light")).toBeInTheDocument();
-  expect(getThemeValue("colorScheme", "light")).toBeInTheDocument();
-  expect(localStorage.getItem("openkitten-world-theme")).toBe("light");
-
-  await user.click(screen.getByRole("button", { name: "Dark theme" }));
-
-  expect(getThemeValue("theme", "dark")).toBeInTheDocument();
-  expect(getThemeValue("colorScheme", "dark")).toBeInTheDocument();
-  expect(localStorage.getItem("openkitten-world-theme")).toBe("dark");
+  expect(
+    screen.getByText(
+      "Preparing a recommendation that explains the tradeoff in plain language for Mina.",
+    ),
+  ).toBeInTheDocument();
 
   act(() => {
-    matchMedia.setColorScheme("light");
+    vi.advanceTimersByTime(1_200);
   });
 
-  expect(getThemeValue("colorScheme", "dark")).toBeInTheDocument();
+  expect(
+    screen.queryByText("More transcript lines are still arriving..."),
+  ).not.toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "System theme" }));
+  fireEvent.click(screen.getByRole("button", { name: "Open thread" }));
 
-  expect(getThemeValue("theme", "auto")).toBeInTheDocument();
-  expect(getThemeValue("colorScheme", "light")).toBeInTheDocument();
-  expect(localStorage.getItem("openkitten-world-theme")).toBe("auto");
+  expect(screen.getByText("Thread view")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Add comment" }));
+  expect(screen.queryByText("just now")).not.toBeInTheDocument();
+
+  fireEvent.change(
+    screen.getByLabelText("Leave one steering note for the House"),
+    {
+      target: {
+        value: "Keep the recommendation plain and welcoming.",
+      },
+    },
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Add comment" }));
+
+  expect(
+    screen.getByText("Keep the recommendation plain and welcoming."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Scene reaction: Pricing review for launch page stirred the room.",
+    ),
+  ).toBeInTheDocument();
+  expect(screen.getByDisplayValue("")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Scene whiteboard" }));
+  expect(screen.getByText("Whiteboard")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Scene cabinet" }));
+  expect(screen.getByText("Cabinet")).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Scene inbox" }));
+  const relatedWorkButtons = screen.getAllByRole("button", {
+    name: "Open related work",
+  });
+  fireEvent.click(
+    relatedWorkButtons[0] ??
+      screen.getByRole("button", { name: "Open related work" }),
+  );
+  expect(
+    screen.getByText("Pricing review for launch page"),
+  ).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole("button", { name: "Overview" }));
+  fireEvent.click(screen.getByRole("button", { name: "Scene Pepper" }));
+  expect(
+    screen.getByText(
+      "Pepper is present in the room but not actively running a session right now.",
+    ),
+  ).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "First-run house onboarding Open" }),
+  );
+  expect(screen.getByText("No live session")).toBeInTheDocument();
+});
+
+test("shows the closed thread comment guardrail", () => {
+  render(<Component />);
+
+  fireEvent.click(screen.getByRole("button", { name: "Scene Mochi" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Post-launch check-in rhythm Closed" }),
+  );
+
+  expect(
+    screen.getByText("Closed threads cannot take new notes in the MVP."),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByLabelText("Leave one steering note for the House"),
+  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Add comment" })).toBeDisabled();
 });

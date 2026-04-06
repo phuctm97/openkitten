@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@mantine/hooks": "^9.0.0",
+    "@pixi/react": "^8.0.5",
     "@react-router/node": "^7.14.0",
     "@vercel/react-router": "^1.2.6",
     "class-variance-authority": "^0.7.1",
@@ -18,6 +19,7 @@
     "jotai": "^2.19.0",
     "lucide-react": "^1.7.0",
     "motion": "^12.38.0",
+    "pixi.js": "^8.17.1",
     "radix-ui": "^1.4.3",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

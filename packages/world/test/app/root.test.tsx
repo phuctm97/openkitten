@@ -54,7 +54,8 @@ test("renders the document shell and shared layout", async () => {
   );
 
   expect(markup).toContain("OpenKitten World");
-  expect(markup).toContain("Framework Mode Scaffold");
+  expect(markup).toContain("One small House, alive and readable.");
+  expect(markup).toContain("Lantern House slice");
   expect(markup).toContain("Child Content");
   expect(markup).toContain("links-placeholder");
   expect(markup).toContain("meta-placeholder");
@@ -66,9 +67,11 @@ test("renders the hydrate fallback", async () => {
 
   render(<HydrateFallback {...rootHydrateFallbackProps} />);
 
-  expect(screen.getByText("Opening your House...")).toBeInTheDocument();
+  expect(screen.getByText("Lighting the room...")).toBeInTheDocument();
   expect(
-    screen.getByText("OpenKitten World is getting the house ready."),
+    screen.getByText(
+      "OpenKitten World is setting the desk lamp, the whiteboard, and the first cats in place.",
+    ),
   ).toBeInTheDocument();
 });
 
