@@ -4,18 +4,13 @@ import { drawScene } from "~/lib/draw-scene";
 
 extend({ Container, Graphics });
 
-const sceneSize = {
+const size = {
   height: 800,
   width: 1280,
 };
 
 function draw(graphics: Graphics) {
-  drawScene(
-    graphics,
-    sceneSize.width,
-    sceneSize.height,
-    performance.now() / 1000,
-  );
+  drawScene(graphics, size.width, size.height, performance.now() / 1000);
 }
 
 export function Scene() {
@@ -32,8 +27,8 @@ export function Scene() {
             autoDensity
             backgroundAlpha={0}
             className="absolute inset-0 size-full"
-            height={sceneSize.height}
-            width={sceneSize.width}
+            height={size.height}
+            width={size.width}
           >
             <pixiContainer>
               <pixiGraphics draw={draw} />
