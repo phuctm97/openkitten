@@ -1,3 +1,4 @@
+import { resolve } from "node:path";
 import { runCommand } from "citty";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { up } from "~/lib/up";
@@ -73,6 +74,7 @@ let shellMock: ReturnType<typeof vi.fn>;
 const originalShell = Bun.$;
 const originalPlatform = process.platform;
 const originalGetuid = process.getuid;
+const botDir = resolve(import.meta.dirname, "..");
 
 beforeEach(() => {
   shellMock = vi.fn(() => chainable(shellResult(0, "")));
@@ -116,7 +118,7 @@ test("installs on linux", async () => {
   );
   expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
     "/mock-home/.config/systemd/user/openkitten-default-profile.service",
-    expect.stringContaining("OPENKITTEN_PROFILE=default"),
+    expect.stringContaining(`WorkingDirectory=${botDir}`),
   );
 });
 
@@ -165,7 +167,9 @@ test("installs on darwin with default profile", async () => {
   expect(vi.mocked(mkdir)).toHaveBeenCalled();
   expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
     "/mock-home/Library/LaunchAgents/com.openkitten.profiles.default.plist",
-    expect.stringContaining("<key>OPENKITTEN_PROFILE</key>"),
+    expect.stringContaining(
+      `<key>WorkingDirectory</key>\n  <string>${botDir}</string>`,
+    ),
   );
   const clack = await import("@clack/prompts");
   const spinnerInstance = vi.mocked(clack.spinner).mock.results[0]
@@ -185,7 +189,9 @@ test("installs on darwin with custom profile", async () => {
   await runCommand(up, { rawArgs: [] });
   expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
     "/mock-home/Library/LaunchAgents/com.openkitten.profiles.work.plist",
-    expect.stringContaining("<string>work</string>"),
+    expect.stringContaining(
+      `<key>WorkingDirectory</key>\n  <string>${botDir}</string>`,
+    ),
   );
 });
 
@@ -220,7 +226,9 @@ test("proceeds after darwin bootout timeout", async () => {
   await runCommand(up, { rawArgs: [] });
   expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
     "/mock-home/Library/LaunchAgents/com.openkitten.profiles.default.plist",
-    expect.stringContaining("<key>OPENKITTEN_PROFILE</key>"),
+    expect.stringContaining(
+      `<key>WorkingDirectory</key>\n  <string>${botDir}</string>`,
+    ),
   );
 });
 
@@ -242,6 +250,7 @@ test("installs on win32", async () => {
     expect.stringContaining("stderr.log"),
     "Next steps",
   );
+  expect(shellMock.mock.lastCall?.[2]).toContain(`cd /D \\"${botDir}\\"`);
 });
 
 test("skips update when not on main branch", async () => {
