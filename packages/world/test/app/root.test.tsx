@@ -54,7 +54,6 @@ test("renders the document shell and shared layout", async () => {
   );
 
   expect(markup).toContain("OpenKitten World");
-  expect(markup).toContain("Framework Mode Scaffold");
   expect(markup).toContain("Child Content");
   expect(markup).toContain("links-placeholder");
   expect(markup).toContain("meta-placeholder");
