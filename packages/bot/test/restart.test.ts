@@ -6,14 +6,14 @@ import { Shutdown } from "~/lib/shutdown";
 import { TelegramConfig } from "~/lib/telegram-config";
 
 test("restarts until the callback returns the shutdown symbol", async () => {
-  const calls: restart.Context[] = [];
+  const calls: number[] = [];
 
-  await restart(async (context) => {
-    calls.push(context);
-    return context.restarted ? Shutdown.symbol : undefined;
+  await restart(async (attempt) => {
+    calls.push(attempt);
+    return attempt > 1 ? Shutdown.symbol : undefined;
   });
 
-  expect(calls).toEqual([{ restarted: false }, { restarted: true }]);
+  expect(calls).toEqual([1, 2]);
   expect(logger.warn).toHaveBeenCalledWith(
     "OpenKitten stopped unexpectedly, restarting",
     {

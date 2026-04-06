@@ -38,10 +38,10 @@ export const serve = defineCommand({
       description: "Skip optional config actions.",
     },
   },
-  run: async ({ args }) => {
-    return restart(async ({ restarted }) => {
+  run: ({ args }) =>
+    restart(async (attempt) => {
       const profile = await Profile.create();
-      const skipActions = args.yes || restarted;
+      const skipActions = args.yes || attempt > 1;
       const telegramConfig = await TelegramConfig.create(profile, {
         skipActions,
       });
@@ -133,6 +133,5 @@ export const serve = defineCommand({
         grammyEventStream.ended,
       ]);
       return result;
-    });
-  },
+    }),
 });

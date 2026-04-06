@@ -32,16 +32,13 @@ function restartGetLogMeta(retryCount: number) {
 }
 
 export async function restart(
-  fn: (context: restart.Context) => Promise<unknown>,
+  fn: (attempt: number) => Promise<unknown>,
 ): Promise<void> {
   const retryTimestamps: number[] = [];
 
   for (let attempt = 1; ; attempt += 1) {
-    const context: restart.Context = {
-      restarted: attempt > 1,
-    };
     try {
-      const result = await fn(context);
+      const result = await fn(attempt);
       if (result === Shutdown.symbol) return;
       const retryCount = restartTrackRetry(retryTimestamps);
       if (retryCount >= restartRetryLimit) {
@@ -79,11 +76,5 @@ export async function restart(
         restartGetLogMeta(retryCount),
       );
     }
-  }
-}
-
-export namespace restart {
-  export interface Context {
-    readonly restarted: boolean;
   }
 }
