@@ -201,6 +201,13 @@ test("returns opencode config dir in env", async () => {
   });
 });
 
+test("injects default runtime OpenCode plugins", async () => {
+  const config = await OpencodeConfig.create(profile);
+  expect(config.env.OPENCODE_CONFIG_CONTENT).toBeDefined();
+  const runtimeConfig = JSON.parse(config.env.OPENCODE_CONFIG_CONTENT!);
+  expect(runtimeConfig.plugin).toEqual(["opencode-claude-auth"]);
+});
+
 test("disables autoupdate", async () => {
   const config = await OpencodeConfig.create(profile);
   expect(config.env).toMatchObject({

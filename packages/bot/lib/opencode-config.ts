@@ -149,6 +149,7 @@ export namespace OpencodeConfig {
         OPENCODE_CONFIG_DIR: configDir,
         OPENCODE_CONFIG_CONTENT: JSON.stringify({
           autoupdate: false,
+          plugin: ["opencode-claude-auth"],
           share: "disabled",
           server: {
             mdns: false,
