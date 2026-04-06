@@ -10,6 +10,7 @@ import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { OpencodeServer } from "~/lib/opencode-server";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import { ProcessingMessages } from "~/lib/processing-messages";
+import { Profile } from "~/lib/profile";
 import { serve } from "~/lib/serve";
 import { Shutdown } from "~/lib/shutdown";
 import { TelegramConfig } from "~/lib/telegram-config";
@@ -124,28 +125,33 @@ function mockExistingSessions(
   return { existingSessions, get };
 }
 
-function mockOpencodeServer() {
-  let resolveExited: () => void;
-  const exited = new Promise<void>((r) => {
-    resolveExited = r;
-  });
-  exited.then(
-    () => {},
-    () => {},
-  );
-  const dispose = vi.fn(async () => {
-    resolveExited();
-  });
-  const client = {
+function createMockOpencodeClient() {
+  return {
     question: { list: vi.fn(async () => ({ data: [] })) },
     permission: { list: vi.fn(async () => ({ data: [] })) },
     session: { messages: vi.fn(async () => ({ data: [] })) },
   };
-  vi.spyOn(OpencodeServer, "create").mockResolvedValue({
-    exited,
-    client: client as never,
-    [Symbol.asyncDispose]: dispose,
-  } as never);
+}
+
+function mockOpencodeServer() {
+  const dispose = vi.fn(async () => {
+    return;
+  });
+  vi.spyOn(OpencodeServer, "create").mockImplementation(async () => {
+    const { resolve, promise: exited } = Promise.withResolvers<void>();
+    exited.then(
+      () => {},
+      () => {},
+    );
+    return {
+      exited,
+      client: createMockOpencodeClient() as never,
+      [Symbol.asyncDispose]: async () => {
+        dispose();
+        resolve();
+      },
+    } as never;
+  });
   return dispose;
 }
 
@@ -198,103 +204,135 @@ function mockProcessingMessages() {
 }
 
 function mockOpencodeEventStream() {
-  let resolveEnded: () => void;
-  const ended = new Promise<void>((r) => {
-    resolveEnded = r;
-  });
-  ended.then(
-    () => {},
-    () => {},
-  );
-  let onEvent: (event: never, signal: AbortSignal) => void;
+  const onEvents: Array<(event: never, signal: AbortSignal) => void> = [];
+  const resolves: Array<() => void> = [];
   vi.spyOn(OpencodeEventStream, "create").mockImplementation(
     (_client, _floatingPromises, event) => {
-      onEvent = event as never;
+      const { resolve, promise: ended } = Promise.withResolvers<void>();
+      ended.then(
+        () => {},
+        () => {},
+      );
+      onEvents.push(event as never);
+      resolves.push(resolve);
       return {
         ended,
         async [Symbol.asyncDispose]() {
-          resolveEnded();
+          resolve();
         },
       } as never;
     },
   );
   return {
-    onEvent: () => onEvent,
-    resolveEnded: () => resolveEnded(),
+    onEvent: () => onEvents.at(-1),
+    resolveEnded: () => {
+      const resolve = resolves.at(-1);
+      if (resolve) resolve();
+    },
   };
 }
 
 function mockMcpServer() {
-  let resolveExited: () => void;
-  const exited = new Promise<void>((r) => {
-    resolveExited = r;
-  });
-  exited.then(
-    () => {},
-    () => {},
-  );
   const dispose = vi.fn(() => {
-    resolveExited();
+    return;
   });
-  vi.spyOn(McpServer, "create").mockResolvedValue({
-    exited,
-    [Symbol.dispose]: dispose,
-  } as never);
+  vi.spyOn(McpServer, "create").mockImplementation(async () => {
+    const { resolve, promise: exited } = Promise.withResolvers<void>();
+    exited.then(
+      () => {},
+      () => {},
+    );
+    return {
+      exited,
+      [Symbol.dispose]: () => {
+        dispose();
+        resolve();
+      },
+    } as never;
+  });
   return dispose;
 }
 
 function mockGrammyEventStream() {
-  let resolveEnded: () => void;
-  const ended = new Promise<void>((r) => {
-    resolveEnded = r;
-  });
-  ended.then(
-    () => {},
-    () => {},
-  );
   const dispose = vi.fn(async () => {
-    resolveEnded();
+    return;
   });
-  vi.spyOn(GrammyEventStream, "create").mockResolvedValue({
-    ended,
-    [Symbol.asyncDispose]: dispose,
-  } as never);
+  vi.spyOn(GrammyEventStream, "create").mockImplementation(async () => {
+    const { resolve, promise: ended } = Promise.withResolvers<void>();
+    ended.then(
+      () => {},
+      () => {},
+    );
+    return {
+      ended,
+      [Symbol.asyncDispose]: async () => {
+        dispose();
+        resolve();
+      },
+    } as never;
+  });
   return dispose;
 }
 
 function mockGrammyEventLoop() {
-  let rejectEnded: (reason?: unknown) => void;
-  const ended = new Promise<void>((_, reject) => {
-    rejectEnded = reject;
-  });
-  ended.then(
-    () => {},
-    () => {},
-  );
+  const rejects: Array<(reason?: unknown) => void> = [];
   const dispose = vi.fn(async () => {});
-  vi.spyOn(GrammyEventLoop, "create").mockReturnValueOnce({
-    ended,
-    connect: vi.fn(() => vi.fn()),
-    [Symbol.asyncDispose]: dispose,
-  } as never);
+  vi.spyOn(GrammyEventLoop, "create").mockImplementation(() => {
+    const ended = new Promise<void>((_, reject) => {
+      rejects.push(reject);
+    });
+    ended.then(
+      () => {},
+      () => {},
+    );
+    return {
+      ended,
+      connect: vi.fn(() => vi.fn()),
+      [Symbol.asyncDispose]: dispose,
+    } as never;
+  });
   return {
-    rejectEnded: (error: unknown) => rejectEnded(error),
+    rejectEnded: (error: unknown) => {
+      const reject = rejects.at(-1);
+      if (reject) reject(error);
+    },
     dispose,
   };
 }
 
 function mockShutdown() {
-  let resolveSignaled: () => void;
-  const signaled = new Promise<void>((r) => {
-    resolveSignaled = r;
+  const triggers: Array<(event?: string) => void> = [];
+  vi.spyOn(Shutdown, "create").mockImplementation(() => {
+    const controller = new AbortController();
+    let resolveSignaled: (value: typeof Shutdown.symbol | undefined) => void;
+    const signaled = new Promise<typeof Shutdown.symbol | undefined>((r) => {
+      resolveSignaled = r;
+    });
+    const trigger = (event?: string) => {
+      if (controller.signal.aborted) return;
+      controller.abort();
+      resolveSignaled(event ? Shutdown.symbol : undefined);
+    };
+    triggers.push(trigger);
+    return {
+      signal: controller.signal,
+      signaled,
+      trigger,
+      [Symbol.dispose]() {
+        trigger();
+      },
+    } as never;
   });
-  vi.spyOn(Shutdown, "create").mockReturnValue({
-    signaled,
-    [Symbol.dispose]() {
-      resolveSignaled();
+  return {
+    triggerLatest(event = "SIGINT") {
+      const trigger = triggers.at(-1);
+      if (trigger) trigger(event);
     },
-  } as never);
-  return () => resolveSignaled();
+    triggerLatestEmpty() {
+      const trigger = triggers.at(-1);
+      if (trigger) trigger();
+    },
+  };
 }
 
 function mockAll() {
@@ -309,8 +347,9 @@ function mockAll() {
   const prompts = mockPendingPrompts();
   const processing = mockProcessingMessages();
   const stream = mockOpencodeEventStream();
+  const grammyEventLoop = mockGrammyEventLoop();
   const disposeGrammyEventStream = mockGrammyEventStream();
-  const triggerShutdown = mockShutdown();
+  const shutdown = mockShutdown();
   return {
     disposeOpencodeServer,
     disposeMcpServer,
@@ -320,8 +359,9 @@ function mockAll() {
     prompts,
     processing,
     stream,
+    grammyEventLoop,
     disposeGrammyEventStream,
-    triggerShutdown,
+    shutdown,
   };
 }
 
@@ -330,11 +370,11 @@ test("disposes on shutdown", async () => {
     disposeOpencodeServer,
     disposeMcpServer,
     disposeGrammyEventStream,
-    triggerShutdown,
+    shutdown,
   } = mockAll();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() => expect(Shutdown.create).toHaveBeenCalled());
-  triggerShutdown();
+  shutdown.triggerLatest();
   await run;
   expect(disposeOpencodeServer).toHaveBeenCalledOnce();
   expect(disposeMcpServer).toHaveBeenCalledOnce();
@@ -342,20 +382,18 @@ test("disposes on shutdown", async () => {
 });
 
 test("configures auto-retry on the bot api during bootstrap", async () => {
-  const { triggerShutdown } = mockAll();
+  const { shutdown } = mockAll();
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() => expect(BotMock).toHaveBeenCalledOnce());
   expect(mockAutoRetry).toHaveBeenCalledOnce();
   expect(mockBotApiConfigUse).toHaveBeenCalledWith(mockAutoRetryTransformer);
-  triggerShutdown();
+  shutdown.triggerLatest();
   await run;
 });
 
-test("exits on unexpected opencode server exit", async () => {
-  mockTelegramConfig();
-  mockOpencodeConfig();
-  mockCreateDatabase();
-  mockMcpServer();
+test("restarts on unexpected opencode server exit", async () => {
+  vi.spyOn(Profile, "create");
+  const { shutdown } = mockAll();
   const exited = Promise.reject(
     new Error("OpenCode server exited unexpectedly (1)"),
   );
@@ -363,35 +401,34 @@ test("exits on unexpected opencode server exit", async () => {
     () => {},
     () => {},
   );
-  vi.spyOn(OpencodeServer, "create").mockResolvedValue({
+  vi.mocked(OpencodeServer.create).mockResolvedValueOnce({
     exited,
-    client: {
-      question: { list: vi.fn(async () => ({ data: [] })) },
-      permission: { list: vi.fn(async () => ({ data: [] })) },
-    } as never,
+    client: createMockOpencodeClient() as never,
     [Symbol.asyncDispose]: async () => {},
   } as never);
-  mockExistingSessions();
-  mockTypingIndicators();
-  mockPendingPrompts();
-  mockOpencodeEventStream();
-  mockGrammyEventStream();
-  mockShutdown();
-  await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "OpenCode server exited unexpectedly (1)",
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() =>
+    expect(OpencodeServer.create).toHaveBeenCalledTimes(2),
   );
+  expect(Profile.create).toHaveBeenCalledTimes(2);
+  expect(TelegramConfig.create).toHaveBeenNthCalledWith(1, expect.anything(), {
+    skipActions: false,
+  });
+  expect(TelegramConfig.create).toHaveBeenNthCalledWith(2, expect.anything(), {
+    skipActions: true,
+  });
+  expect(OpencodeConfig.create).toHaveBeenNthCalledWith(1, expect.anything(), {
+    skipActions: false,
+  });
+  expect(OpencodeConfig.create).toHaveBeenNthCalledWith(2, expect.anything(), {
+    skipActions: true,
+  });
+  shutdown.triggerLatest();
+  await run;
 });
 
-test("exits on unexpected grammY event stream end", async () => {
-  mockTelegramConfig();
-  mockOpencodeConfig();
-  mockCreateDatabase();
-  mockOpencodeServer();
-  mockMcpServer();
-  mockExistingSessions();
-  mockTypingIndicators();
-  mockPendingPrompts();
-  mockOpencodeEventStream();
+test("restarts on unexpected grammY event stream end", async () => {
+  const { shutdown } = mockAll();
   const ended = Promise.reject(
     new Error("grammY event stream ended unexpectedly"),
   );
@@ -399,63 +436,88 @@ test("exits on unexpected grammY event stream end", async () => {
     () => {},
     () => {},
   );
-  vi.spyOn(GrammyEventStream, "create").mockResolvedValue({
+  vi.mocked(GrammyEventStream.create).mockResolvedValueOnce({
     ended,
     [Symbol.asyncDispose]: async () => {},
   } as never);
-  mockShutdown();
-  await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "grammY event stream ended unexpectedly",
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() =>
+    expect(GrammyEventStream.create).toHaveBeenCalledTimes(2),
   );
+  shutdown.triggerLatest();
+  await run;
 });
 
-test("exits on event stream failure", async () => {
-  mockTelegramConfig();
-  mockOpencodeConfig();
-  mockCreateDatabase();
-  mockOpencodeServer();
-  mockMcpServer();
-  mockExistingSessions();
-  mockTypingIndicators();
-  mockPendingPrompts();
+test("restarts on event stream failure", async () => {
+  const { shutdown } = mockAll();
   const ended = Promise.reject(new Error("event stream failed"));
   ended.then(
     () => {},
     () => {},
   );
-  vi.spyOn(OpencodeEventStream, "create").mockReturnValue({
+  vi.mocked(OpencodeEventStream.create).mockReturnValueOnce({
     ended,
     async [Symbol.asyncDispose]() {},
   } as never);
-  mockGrammyEventStream();
-  mockShutdown();
-  await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
-    "event stream failed",
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() =>
+    expect(OpencodeEventStream.create).toHaveBeenCalledTimes(2),
   );
+  shutdown.triggerLatest();
+  await run;
 });
 
-test("exits on grammY event loop failure", async () => {
-  mockTelegramConfig();
-  mockCreateDatabase();
-  mockOpencodeServer();
-  mockMcpServer();
-  mockExistingSessions();
-  mockTypingIndicators();
-  mockPendingPrompts();
-  mockProcessingMessages();
-  mockOpencodeEventStream();
-  const grammyEventLoop = mockGrammyEventLoop();
-  const disposeGrammyEventStream = mockGrammyEventStream();
-  mockShutdown();
+test("restarts on grammY event loop failure", async () => {
+  const { grammyEventLoop, disposeGrammyEventStream, shutdown } = mockAll();
 
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() => expect(GrammyEventLoop.create).toHaveBeenCalledOnce());
 
   grammyEventLoop.rejectEnded(new Error("grammY event loop failed"));
 
-  await expect(run).rejects.toThrow("grammY event loop failed");
-  expect(disposeGrammyEventStream).toHaveBeenCalledOnce();
-  expect(grammyEventLoop.dispose).toHaveBeenCalledOnce();
+  await vi.waitFor(() =>
+    expect(GrammyEventLoop.create).toHaveBeenCalledTimes(2),
+  );
+  shutdown.triggerLatest();
+  await run;
+  expect(disposeGrammyEventStream).toHaveBeenCalledTimes(2);
+  expect(grammyEventLoop.dispose).toHaveBeenCalledTimes(2);
+});
+
+test("restarts when shutdown resolves without a signal", async () => {
+  const { shutdown } = mockAll();
+
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(Shutdown.create).toHaveBeenCalledOnce());
+
+  shutdown.triggerLatestEmpty();
+
+  await vi.waitFor(() => expect(Shutdown.create).toHaveBeenCalledTimes(2));
+
+  shutdown.triggerLatest();
+  await run;
+});
+
+test("stops restarting after repeated unexpected failures", async () => {
+  const error = new Error("OpenCode server exited unexpectedly (1)");
+  mockAll();
+  vi.mocked(OpencodeServer.create).mockImplementation(async () => {
+    const exited = Promise.reject(error);
+    exited.then(
+      () => {},
+      () => {},
+    );
+    return {
+      exited,
+      client: createMockOpencodeClient() as never,
+      [Symbol.asyncDispose]: async () => {},
+    } as never;
+  });
+
+  await expect(runCommand(serve, { rawArgs: [] })).rejects.toThrow(
+    "OpenCode server exited unexpectedly (1)",
+  );
+  expect(OpencodeServer.create).toHaveBeenCalledTimes(5);
 });
 
 test("awaits existing session initialization before creating working sessions", async () => {
@@ -471,8 +533,9 @@ test("awaits existing session initialization before creating working sessions", 
   mockPendingPrompts();
   mockProcessingMessages();
   mockOpencodeEventStream();
+  mockGrammyEventLoop();
   mockGrammyEventStream();
-  const triggerShutdown = mockShutdown();
+  const shutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
 
@@ -482,7 +545,7 @@ test("awaits existing session initialization before creating working sessions", 
   resolve();
   await vi.waitFor(() => expect(WorkingSessions.create).toHaveBeenCalledOnce());
 
-  triggerShutdown();
+  shutdown.triggerLatest();
   await run;
 });
 
@@ -506,8 +569,9 @@ test("awaits processing message initialization before connecting event stream", 
     } as never;
   });
   mockOpencodeEventStream();
+  mockGrammyEventLoop();
   mockGrammyEventStream();
-  const triggerShutdown = mockShutdown();
+  const shutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
 
@@ -517,7 +581,7 @@ test("awaits processing message initialization before connecting event stream", 
   resolve();
   await vi.waitFor(() => expect(OpencodeEventStream.create).toHaveBeenCalled());
 
-  triggerShutdown();
+  shutdown.triggerLatest();
   await run;
 });
 
@@ -533,20 +597,23 @@ test("onEvent returns the handler promise", async () => {
   mockPendingPrompts();
   mockProcessingMessages();
   const stream = mockOpencodeEventStream();
+  mockGrammyEventLoop();
   mockGrammyEventStream();
-  const triggerShutdown = mockShutdown();
+  const shutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() => expect(stream.onEvent()).toBeDefined());
 
   const signal = new AbortController().signal;
-  const result = stream.onEvent()(
+  const onEvent = stream.onEvent();
+  if (!onEvent) throw new Error("Expected OpenCode event handler");
+  const result = onEvent(
     { directory: "/tmp/a", payload: { type: "any-event" } } as never,
     signal,
   );
   await expect(result).resolves.toBeUndefined();
 
-  triggerShutdown();
+  shutdown.triggerLatest();
   await run;
 });
 
@@ -562,9 +629,11 @@ test("updates working sessions on session.status event", async () => {
   mockTypingIndicators();
   mockPendingPrompts();
   const { update } = mockWorkingSessions();
+  mockProcessingMessages();
   const stream = mockOpencodeEventStream();
+  mockGrammyEventLoop();
   mockGrammyEventStream();
-  const triggerShutdown = mockShutdown();
+  const shutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() => expect(stream.onEvent()).toBeDefined());
@@ -576,16 +645,18 @@ test("updates working sessions on session.status event", async () => {
       properties: { sessionID: "s1", status: { type: "busy" } },
     },
   };
-  stream.onEvent()(event as never, new AbortController().signal);
+  const onEvent = stream.onEvent();
+  if (!onEvent) throw new Error("Expected OpenCode event handler");
+  onEvent(event as never, new AbortController().signal);
 
   await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event.payload));
 
-  triggerShutdown();
+  shutdown.triggerLatest();
   await run;
 });
 
 test("passes yes option when yes flag is set", async () => {
-  const { triggerShutdown } = mockAll();
+  const { shutdown } = mockAll();
   const run = runCommand(serve, { rawArgs: ["--yes"] });
 
   await vi.waitFor(() =>
@@ -597,7 +668,7 @@ test("passes yes option when yes flag is set", async () => {
     skipActions: true,
   });
 
-  triggerShutdown();
+  shutdown.triggerLatest();
   await run;
 });
 
@@ -610,11 +681,14 @@ test("updates pending prompts on question.asked event", async () => {
   mockExistingSessions(["s1"], {
     s1: { chatId: 100, threadId: undefined },
   });
+  mockWorkingSessions();
   mockTypingIndicators();
   const { update } = mockPendingPrompts();
+  mockProcessingMessages();
   const stream = mockOpencodeEventStream();
+  mockGrammyEventLoop();
   mockGrammyEventStream();
-  const triggerShutdown = mockShutdown();
+  const shutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() => expect(stream.onEvent()).toBeDefined());
@@ -626,11 +700,13 @@ test("updates pending prompts on question.asked event", async () => {
       properties: { id: "q1", sessionID: "s1", questions: [] },
     },
   };
-  stream.onEvent()(event as never, new AbortController().signal);
+  const onEvent = stream.onEvent();
+  if (!onEvent) throw new Error("Expected OpenCode event handler");
+  onEvent(event as never, new AbortController().signal);
 
   await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event.payload));
 
-  triggerShutdown();
+  shutdown.triggerLatest();
   await run;
 });
 
@@ -643,11 +719,14 @@ test("updates pending prompts on permission.asked event", async () => {
   mockExistingSessions(["s1"], {
     s1: { chatId: 100, threadId: undefined },
   });
+  mockWorkingSessions();
   mockTypingIndicators();
   const { update } = mockPendingPrompts();
+  mockProcessingMessages();
   const stream = mockOpencodeEventStream();
+  mockGrammyEventLoop();
   mockGrammyEventStream();
-  const triggerShutdown = mockShutdown();
+  const shutdown = mockShutdown();
 
   const run = runCommand(serve, { rawArgs: [] });
   await vi.waitFor(() => expect(stream.onEvent()).toBeDefined());
@@ -666,10 +745,12 @@ test("updates pending prompts on permission.asked event", async () => {
       },
     },
   };
-  stream.onEvent()(event as never, new AbortController().signal);
+  const onEvent = stream.onEvent();
+  if (!onEvent) throw new Error("Expected OpenCode event handler");
+  onEvent(event as never, new AbortController().signal);
 
   await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event.payload));
 
-  triggerShutdown();
+  shutdown.triggerLatest();
   await run;
 });

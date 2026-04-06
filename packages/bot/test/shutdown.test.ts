@@ -29,7 +29,7 @@ for (const event of Shutdown.events) {
   test(`resolves on ${event}`, async () => {
     using shutdown = Shutdown.create();
     handlers.get(event)?.(event);
-    await expect(shutdown.signaled).resolves.toBeUndefined();
+    await expect(shutdown.signaled).resolves.toBe(Shutdown.symbol);
     expect(logger.info).toHaveBeenCalledWith("Shutdown is triggered", {
       event,
     });
@@ -39,7 +39,7 @@ for (const event of Shutdown.events) {
 test("resolves on PM2 shutdown message", async () => {
   using shutdown = Shutdown.create();
   for (const handler of messageHandlers) handler("shutdown");
-  await expect(shutdown.signaled).resolves.toBeUndefined();
+  await expect(shutdown.signaled).resolves.toBe(Shutdown.symbol);
 });
 
 test("ignores non-shutdown messages", async () => {
@@ -74,6 +74,24 @@ test("resolves signaled on trigger()", async () => {
   await expect(shutdown.signaled).resolves.toBeUndefined();
   expect(logger.info).toHaveBeenCalledWith("Shutdown is triggered", {
     event: undefined,
+  });
+});
+
+test("resolves signaled to symbol on trigger(event)", async () => {
+  using shutdown = Shutdown.create();
+  shutdown.trigger("manual");
+  await expect(shutdown.signaled).resolves.toBe(Shutdown.symbol);
+  expect(logger.info).toHaveBeenCalledWith("Shutdown is triggered", {
+    event: "manual",
+  });
+});
+
+test("treats empty trigger event as non-intentional", async () => {
+  using shutdown = Shutdown.create();
+  shutdown.trigger("");
+  await expect(shutdown.signaled).resolves.toBeUndefined();
+  expect(logger.info).toHaveBeenCalledWith("Shutdown is triggered", {
+    event: "",
   });
 });
 

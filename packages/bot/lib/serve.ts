@@ -22,6 +22,7 @@ import { OpencodeServer } from "~/lib/opencode-server";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import { Profile } from "~/lib/profile";
+import { restart } from "~/lib/restart";
 import type { Scope } from "~/lib/scope";
 import { Shutdown } from "~/lib/shutdown";
 import { TelegramConfig } from "~/lib/telegram-config";
@@ -38,90 +39,100 @@ export const serve = defineCommand({
     },
   },
   run: async ({ args }) => {
-    const profile = await Profile.create();
-    const telegramConfig = await TelegramConfig.create(profile, {
-      skipActions: args.yes,
+    return restart(async ({ restarted }) => {
+      const profile = await Profile.create();
+      const skipActions = args.yes || restarted;
+      const telegramConfig = await TelegramConfig.create(profile, {
+        skipActions,
+      });
+      const opencodeConfig = await OpencodeConfig.create(profile, {
+        skipActions,
+      });
+      const bot = new Bot(telegramConfig.botToken);
+      bot.api.config.use(autoRetry());
+      bot.use(grammyFilterUser(telegramConfig.userId));
+      using shutdown = Shutdown.create();
+      using database = Database.create(profile);
+      await using opencodeServer = await OpencodeServer.create(opencodeConfig);
+      const existingSessions = await ExistingSessions.create(
+        bot,
+        database,
+        opencodeServer.client,
+      );
+      using mcpServer = await McpServer.create(
+        bot,
+        opencodeServer.client,
+        existingSessions,
+      );
+      using workingSessions = WorkingSessions.create(existingSessions);
+      await using pendingPrompts = PendingPrompts.create(
+        shutdown,
+        bot,
+        opencodeServer.client,
+        existingSessions,
+      );
+      using processingMessages = await ProcessingMessages.create(
+        bot,
+        database,
+        opencodeServer.client,
+        existingSessions,
+      );
+      await using floatingPromises = FloatingPromises.create();
+      using typingIndicators = TypingIndicators.create(
+        shutdown,
+        bot,
+        existingSessions,
+        workingSessions,
+        pendingPrompts,
+        floatingPromises,
+      );
+      const scope: Scope = {
+        shutdown,
+        bot,
+        database,
+        opencodeClient: opencodeServer.client,
+        existingSessions,
+        workingSessions,
+        pendingPrompts,
+        processingMessages,
+        floatingPromises,
+        typingIndicators,
+      };
+      await using opencodeEventStream = OpencodeEventStream.create(
+        opencodeServer.client,
+        floatingPromises,
+        (event, signal) => opencodeHandleEvent(scope, event, signal),
+      );
+      await using grammyEventLoop = GrammyEventLoop.create(floatingPromises);
+      bot.command("start", grammyEventLoop.connect(scope, grammyHandleStart));
+      bot.command("abort", grammyEventLoop.connect(scope, grammyHandleAbort));
+      bot.command(
+        "compact",
+        grammyEventLoop.connect(scope, grammyHandleCompact),
+      );
+      bot.command("agent", grammyEventLoop.connect(scope, grammyHandleAgent));
+      bot.on(
+        "callback_query:data",
+        grammyEventLoop.connect(scope, grammyHandleCallback),
+      );
+      bot.on("message:text", grammyEventLoop.connect(scope, grammyHandleText));
+      bot.on(
+        "message:photo",
+        grammyEventLoop.connect(scope, grammyHandlePhoto),
+      );
+      await using grammyEventStream = await GrammyEventStream.create(
+        shutdown,
+        bot,
+      );
+      const result = await Promise.race([
+        shutdown.signaled,
+        opencodeServer.exited,
+        mcpServer.exited,
+        opencodeEventStream.ended,
+        grammyEventLoop.ended,
+        grammyEventStream.ended,
+      ]);
+      return result;
     });
-    const opencodeConfig = await OpencodeConfig.create(profile, {
-      skipActions: args.yes,
-    });
-    const bot = new Bot(telegramConfig.botToken);
-    bot.api.config.use(autoRetry());
-    bot.use(grammyFilterUser(telegramConfig.userId));
-    using shutdown = Shutdown.create();
-    using database = Database.create(profile);
-    await using opencodeServer = await OpencodeServer.create(opencodeConfig);
-    const existingSessions = await ExistingSessions.create(
-      bot,
-      database,
-      opencodeServer.client,
-    );
-    using mcpServer = await McpServer.create(
-      bot,
-      opencodeServer.client,
-      existingSessions,
-    );
-    using workingSessions = WorkingSessions.create(existingSessions);
-    await using pendingPrompts = PendingPrompts.create(
-      shutdown,
-      bot,
-      opencodeServer.client,
-      existingSessions,
-    );
-    using processingMessages = await ProcessingMessages.create(
-      bot,
-      database,
-      opencodeServer.client,
-      existingSessions,
-    );
-    await using floatingPromises = FloatingPromises.create();
-    using typingIndicators = TypingIndicators.create(
-      shutdown,
-      bot,
-      existingSessions,
-      workingSessions,
-      pendingPrompts,
-      floatingPromises,
-    );
-    const scope: Scope = {
-      shutdown,
-      bot,
-      database,
-      opencodeClient: opencodeServer.client,
-      existingSessions,
-      workingSessions,
-      pendingPrompts,
-      processingMessages,
-      floatingPromises,
-      typingIndicators,
-    };
-    await using opencodeEventStream = OpencodeEventStream.create(
-      opencodeServer.client,
-      floatingPromises,
-      (event, signal) => opencodeHandleEvent(scope, event, signal),
-    );
-    await using grammyEventLoop = GrammyEventLoop.create(floatingPromises);
-    bot.command("start", grammyEventLoop.connect(scope, grammyHandleStart));
-    bot.command("abort", grammyEventLoop.connect(scope, grammyHandleAbort));
-    bot.command("compact", grammyEventLoop.connect(scope, grammyHandleCompact));
-    bot.command("agent", grammyEventLoop.connect(scope, grammyHandleAgent));
-    bot.on(
-      "callback_query:data",
-      grammyEventLoop.connect(scope, grammyHandleCallback),
-    );
-    bot.on("message:text", grammyEventLoop.connect(scope, grammyHandleText));
-    bot.on("message:photo", grammyEventLoop.connect(scope, grammyHandlePhoto));
-    await using grammyEventStream = await GrammyEventStream.create(
-      shutdown,
-      bot,
-    );
-    await Promise.race([
-      shutdown.signaled,
-      opencodeServer.exited,
-      mcpServer.exited,
-      opencodeEventStream.ended,
-      grammyEventLoop.ended,
-      grammyEventStream.ended,
-    ]);
   },
 });
