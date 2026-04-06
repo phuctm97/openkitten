@@ -28,12 +28,12 @@ interface TelegramAttachment {
 type MediaGroupKind = "audio" | "document" | "visual";
 
 export async function grammySendAssistantMessage({
+  actions,
   bot,
   chatId,
   info,
   parts,
   replyToMessageId,
-  skipActions,
   threadId,
 }: GrammySendAssistantMessageOptions): Promise<void> {
   const sections = grammyBuildAssistantMessageSections(info, parts);
@@ -57,7 +57,7 @@ export async function grammySendAssistantMessage({
   }
 
   for (const section of sections) {
-    if (skipActions && section.type === "action") continue;
+    if (!actions && section.type === "action") continue;
 
     if (section.type === "attachment") {
       await flushRenderedSections();

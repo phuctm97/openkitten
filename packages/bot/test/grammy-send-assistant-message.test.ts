@@ -181,7 +181,7 @@ test("uses the first attachment as the reply target when it is sent before text"
   });
 });
 
-test("skipActions omits action summaries while preserving text plans and files", async () => {
+test("omits action summaries by default while preserving text plans and files", async () => {
   const bot = createBot();
   vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
     undefined,
@@ -199,7 +199,6 @@ test("skipActions omits action summaries while preserving text plans and files",
       createTextPart("After"),
     ],
     chatId: 123,
-    skipActions: true,
     threadId: 456,
     replyToMessageId: 101,
   });
@@ -208,6 +207,50 @@ test("skipActions omits action summaries while preserving text plans and files",
     bot,
     chatId: 123,
     chunks: grammyFormatText("Before\n\n🎯 _Entered plan mode._"),
+    replyToMessageId: 101,
+    threadId: 456,
+  });
+  expect(bot.api.sendPhoto).toHaveBeenCalledWith(123, expect.any(InputFile), {
+    message_thread_id: 456,
+  });
+  expect(grammySendChunksModule.grammySendChunks).toHaveBeenNthCalledWith(2, {
+    bot,
+    chatId: 123,
+    chunks: grammyFormatText("🚪 _Exited plan mode._\n\nAfter"),
+    replyToMessageId: undefined,
+    threadId: 456,
+  });
+});
+
+test("includes action summaries only when actions is true", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    actions: true,
+    bot: bot as never,
+    info,
+    parts: [
+      createTextPart("Before"),
+      createCompletedToolPart("bash"),
+      createCompletedToolPart("plan_enter"),
+      createFilePart("image/png", "one.png"),
+      createCompletedToolPart("plan_exit"),
+      createTextPart("After"),
+    ],
+    chatId: 123,
+    threadId: 456,
+    replyToMessageId: 101,
+  });
+
+  expect(grammySendChunksModule.grammySendChunks).toHaveBeenNthCalledWith(1, {
+    bot,
+    chatId: 123,
+    chunks: grammyFormatText(
+      "Before\n\n🛠️ _Ran 1 command._\n\n🎯 _Entered plan mode._",
+    ),
     replyToMessageId: 101,
     threadId: 456,
   });
