@@ -51,8 +51,8 @@ export const serve = defineCommand({
       const bot = new Bot(telegramConfig.botToken);
       bot.api.config.use(autoRetry());
       bot.use(grammyFilterUser(telegramConfig.userId));
-      using shutdown = Shutdown.create();
       using database = Database.create(profile);
+      using shutdown = Shutdown.create();
       await using opencodeServer = await OpencodeServer.create(opencodeConfig);
       const existingSessions = await ExistingSessions.create(
         bot,
@@ -87,9 +87,9 @@ export const serve = defineCommand({
         floatingPromises,
       );
       const scope: Scope = {
-        shutdown,
         bot,
         database,
+        shutdown,
         opencodeClient: opencodeServer.client,
         existingSessions,
         workingSessions,

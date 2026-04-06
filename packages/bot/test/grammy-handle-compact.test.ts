@@ -67,9 +67,9 @@ function mockScope(overrides: {
   workingSessions: ReturnType<typeof mockWorkingSessions>;
 }): Scope {
   return {
-    shutdown: {} as never,
     bot: {} as never,
     database: {} as never,
+    shutdown: {} as never,
     opencodeClient: overrides.opencodeClient as never,
     existingSessions: overrides.existingSessions,
     workingSessions: overrides.workingSessions as never,
