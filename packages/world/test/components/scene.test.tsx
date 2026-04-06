@@ -48,9 +48,10 @@ test("renders the scene shell and boots the pixi application", async () => {
   render(<Scene />);
 
   expect(screen.getByTestId("scene")).toBeInTheDocument();
-  expect(screen.getByText("World Screen")).toBeInTheDocument();
-  expect(screen.getByText("Phase 1")).toBeInTheDocument();
-  expect(screen.getByText("two cats / one room")).toBeInTheDocument();
+  expect(screen.queryByText("two cats, one room")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("A tiny house slice lives inside the app shell now."),
+  ).not.toBeInTheDocument();
   expect(await screen.findByTestId("pixi-application")).toBeInTheDocument();
   expect(sceneMocks.application).toHaveBeenCalledTimes(1);
   expect(sceneMocks.extend).toHaveBeenCalledWith({

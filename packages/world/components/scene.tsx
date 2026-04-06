@@ -33,25 +33,6 @@ export function Scene() {
             <pixiGraphics draw={draw} />
           </pixiContainer>
         </Application>
-        <div className="pointer-events-none absolute left-4 top-4 flex items-center gap-3 rounded-full border border-white/10 bg-black/18 px-3 py-1.5 backdrop-blur-sm">
-          <span className="size-2 rounded-full bg-emerald-300 shadow-[0_0_18px_rgba(110,231,183,0.9)]" />
-          <span className="font-mono text-[0.65rem] font-medium uppercase tracking-[0.28em] text-white/72">
-            World Screen
-          </span>
-        </div>
-        <div className="pointer-events-none absolute inset-x-4 bottom-4 flex flex-col gap-3 rounded-[1.4rem] border border-white/10 bg-[linear-gradient(180deg,rgba(7,15,24,0.3),rgba(7,15,24,0.5))] px-4 py-3 text-white/82 backdrop-blur-md sm:flex-row sm:items-end sm:justify-between">
-          <div className="space-y-1">
-            <p className="m-0 font-mono text-[0.68rem] uppercase tracking-[0.26em] text-white/55">
-              Phase 1
-            </p>
-            <p className="m-0 text-sm font-medium sm:text-base">
-              A tiny house slice lives inside the app shell now.
-            </p>
-          </div>
-          <p className="m-0 font-mono text-[0.72rem] uppercase tracking-[0.18em] text-white/60">
-            two cats / one room
-          </p>
-        </div>
       </div>
     </div>
   );

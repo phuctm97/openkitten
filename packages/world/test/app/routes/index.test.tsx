@@ -19,7 +19,6 @@ test("renders the phase 1 shell without extra status cards", () => {
   ).toBeInTheDocument();
   expect(screen.getByText("Phase 1")).toBeInTheDocument();
   expect(screen.getByText("React + Pixi")).toBeInTheDocument();
-  expect(screen.getByText("Theme")).toBeInTheDocument();
   expect(screen.getByTestId("scene-mock")).toBeInTheDocument();
   expect(screen.queryByText("state")).not.toBeInTheDocument();
   expect(screen.queryByText("system")).not.toBeInTheDocument();

@@ -8,8 +8,8 @@ function drawWorkingCat(
   pulse: number,
 ) {
   graphics
-    .ellipse(x - scale * 0.04, y + scale * 0.44, scale * 1.08, scale * 0.22)
-    .fill({ color: 0x20140f, alpha: 0.2 });
+    .ellipse(x - scale * 0.02, y + scale * 0.28, scale * 0.92, scale * 0.14)
+    .fill({ color: 0x20140f, alpha: 0.15 });
 
   graphics
     .ellipse(x - scale * 0.14, y, scale * 0.8, scale * 0.46)
@@ -268,17 +268,17 @@ function drawDesk(
   pulse: number,
 ) {
   graphics
-    .ellipse(x + width * 0.48, y + height * 0.88, width * 0.52, unit * 0.05)
-    .fill({ color: 0x050b11, alpha: 0.32 });
+    .ellipse(x + width * 0.5, y + height * 0.78, width * 0.46, unit * 0.045)
+    .fill({ color: 0x050b11, alpha: 0.28 });
   graphics
     .circle(x + width * 0.48, y - height * 0.32, unit * 0.08)
     .fill({ color: 0x52c8ff, alpha: 0.1 + pulse * 0.03 });
   graphics
     .roundRect(
       x + width * 0.23,
-      y - height * 0.46,
+      y - height * 0.4,
       width * 0.33,
-      height * 0.3,
+      height * 0.28,
       18,
     )
     .fill({ color: 0x102437 })
@@ -286,18 +286,27 @@ function drawDesk(
   graphics
     .roundRect(
       x + width * 0.27,
-      y - height * 0.42,
+      y - height * 0.36,
       width * 0.25,
-      height * 0.2,
+      height * 0.18,
       14,
     )
     .fill({ color: 0x3d789c, alpha: 0.92 });
   graphics
-    .circle(x + width * 0.5, y - height * 0.2, unit * 0.005)
+    .circle(x + width * 0.5, y - height * 0.17, unit * 0.005)
     .fill({ color: 0x9ce2ff, alpha: 0.9 });
   graphics
-    .rect(x + width * 0.39, y - height * 0.16, width * 0.02, height * 0.08)
-    .fill({ color: 0x81562f });
+    .rect(x + width * 0.385, y - height * 0.12, width * 0.03, height * 0.13)
+    .fill({ color: 0x6d5336, alpha: 0.98 });
+  graphics
+    .roundRect(
+      x + width * 0.33,
+      y + height * 0.01,
+      width * 0.14,
+      unit * 0.016,
+      10,
+    )
+    .fill({ color: 0x324b63, alpha: 0.92 });
   graphics
     .roundRect(
       x + width * 0.24,
@@ -308,14 +317,39 @@ function drawDesk(
     )
     .fill({ color: 0x22384d, alpha: 0.88 });
   graphics
-    .circle(x + width * 0.72, y - height * 0.16, unit * 0.016)
+    .circle(x + width * 0.72, y - height * 0.1, unit * 0.016)
     .fill({ color: 0xffb05d, alpha: 0.86 });
   graphics
-    .circle(x + width * 0.72, y - height * 0.16, unit * 0.05)
+    .circle(x + width * 0.72, y - height * 0.1, unit * 0.05)
     .fill({ color: 0xffa452, alpha: 0.12 });
   graphics
-    .rect(x + width * 0.69, y - height * 0.1, unit * 0.008, unit * 0.06)
+    .rect(x + width * 0.69, y - height * 0.04, unit * 0.01, height * 0.12)
     .fill({ color: 0xb27038 });
+  graphics
+    .roundRect(
+      x + width * 0.65,
+      y + height * 0.01,
+      width * 0.12,
+      unit * 0.016,
+      10,
+    )
+    .fill({ color: 0x8c643b, alpha: 0.94 });
+  drawDeskTop(graphics, x, y, width, height);
+  graphics
+    .rect(x + width * 0.12, y + height * 0.16, unit * 0.022, height * 0.56)
+    .fill({ color: 0x694120 });
+  graphics
+    .rect(x + width * 0.82, y + height * 0.16, unit * 0.022, height * 0.56)
+    .fill({ color: 0x694120 });
+}
+
+function drawDeskTop(
+  graphics: Graphics,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+) {
   graphics
     .roundRect(x, y, width, height * 0.16, 20)
     .fill({ color: 0x8d633a, alpha: 0.98 });
@@ -328,12 +362,6 @@ function drawDesk(
       14,
     )
     .fill({ color: 0xa07447, alpha: 0.4 });
-  graphics
-    .rect(x + width * 0.12, y + height * 0.16, unit * 0.022, height * 0.56)
-    .fill({ color: 0x694120 });
-  graphics
-    .rect(x + width * 0.82, y + height * 0.16, unit * 0.022, height * 0.56)
-    .fill({ color: 0x694120 });
 }
 
 export function drawScene(
@@ -461,9 +489,9 @@ export function drawScene(
 
   drawWorkingCat(
     graphics,
-    width * 0.755,
-    floorY - unit * 0.005,
-    unit * 0.088,
+    deskX + deskWidth * 0.5,
+    deskY + deskHeight * 0.58,
+    unit * 0.076,
     pulse,
   );
   drawSleepingCat(
