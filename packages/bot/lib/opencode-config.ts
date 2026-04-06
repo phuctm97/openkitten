@@ -149,13 +149,13 @@ export namespace OpencodeConfig {
         OPENCODE_CONFIG_DIR: configDir,
         OPENCODE_CONFIG_CONTENT: JSON.stringify({
           autoupdate: false,
-          plugin: ["opencode-claude-auth"],
           share: "disabled",
           server: {
             mdns: false,
             mdnsDomain: "opencode.local",
             cors: ["https://opencode.local"],
           },
+          plugin: ["opencode-claude-auth"],
         }),
         OPENCODE_SERVER_USERNAME: username,
         OPENCODE_SERVER_PASSWORD: password,
