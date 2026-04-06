@@ -6,6 +6,8 @@
     "vitest.config.ts",
     ".react-router/types",
     "app",
+    "domain",
+    "fixtures",
     "lib",
     "hooks",
     "components",

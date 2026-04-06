@@ -11,6 +11,7 @@ export default defineConfig({
       provider: "istanbul",
       include: [
         "app/**/*.{ts,tsx}",
+        "fixtures/**/*.{ts,tsx}",
         "lib/**/*.{ts,tsx}",
         "hooks/**/*.{ts,tsx}",
         "components/**/*.{ts,tsx}",

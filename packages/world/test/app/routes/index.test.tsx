@@ -14,15 +14,26 @@ test("renders the phase 1 shell without extra status cards", () => {
   expect(screen.getByText("OpenKitten World")).toBeInTheDocument();
   expect(
     screen.getByText(
-      "The home page is now a real browser-client demo: React Router drives shell, Jotai powers state, and a Pixi room sits at the center like a tiny screen inside the app.",
+      "The home page now pulls from one fixed House scenario. Mochi is awake, Pepper is keeping watch, and the world shell has stable cats, threads, notices, and a running transcript ready for the next slice.",
     ),
   ).toBeInTheDocument();
-  expect(screen.getByText("Phase 1")).toBeInTheDocument();
-  expect(screen.getByText("React + Pixi")).toBeInTheDocument();
+  expect(screen.getByText("Phase 2")).toBeInTheDocument();
+  expect(screen.getByText("Fixture-driven House")).toBeInTheDocument();
+  expect(screen.getByText("Lantern House")).toBeInTheDocument();
+  expect(screen.getByText("Mochi")).toBeInTheDocument();
+  expect(screen.getByText("Pepper")).toBeInTheDocument();
+  expect(
+    screen.getByText("Draft the first readable session panel flow"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText("Mochi asked for a quick panel-flow review"),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByText(
+      "Drafting a fixture-driven overview so the next phase can open real panels without rewriting the story.",
+    ),
+  ).toBeInTheDocument();
   expect(screen.getByTestId("scene-mock")).toBeInTheDocument();
-  expect(screen.queryByText("state")).not.toBeInTheDocument();
-  expect(screen.queryByText("system")).not.toBeInTheDocument();
-  expect(screen.queryByText("stack")).not.toBeInTheDocument();
 });
 
 test("switches between auto, light, and dark themes", async () => {
