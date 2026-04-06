@@ -3,34 +3,34 @@ import { OpencodeConfig } from "~/lib/opencode-config";
 import { Shutdown } from "~/lib/shutdown";
 import { TelegramConfig } from "~/lib/telegram-config";
 
-const restartRetryLimit = 5;
-const restartRetryWindowMs = 60_000;
+const restartWindowLimit = 5;
+const restartRetryWindowMs = 30_000;
 
-class TooManyRetryError extends Error {
-  constructor(retryCount: number) {
+class TooManyRestartError extends Error {
+  constructor(restartWindowCount: number) {
     super(
-      `OpenKitten stopped unexpectedly ${retryCount} times within ${restartRetryWindowMs / 1000} seconds`,
+      `OpenKitten stopped unexpectedly ${restartWindowCount} times within ${restartRetryWindowMs / 1000} seconds`,
     );
   }
 }
 
-function restartTrack(retryTimestamps: number[], now = Date.now()) {
-  retryTimestamps.push(now);
+function restartTrack(restartTimestamps: number[], now = Date.now()) {
+  restartTimestamps.push(now);
   while (
-    retryTimestamps[0] !== undefined &&
-    now - retryTimestamps[0] > restartRetryWindowMs
+    restartTimestamps[0] !== undefined &&
+    now - restartTimestamps[0] > restartRetryWindowMs
   ) {
-    retryTimestamps.shift();
+    restartTimestamps.shift();
   }
-  return retryTimestamps.length;
+  return restartTimestamps.length;
 }
 
-function restartLog(retryCount: number, ...restArgs: unknown[]) {
+function restartLog(restartWindowCount: number, ...restArgs: unknown[]) {
   const args: unknown[] = ["OpenKitten stopped unexpectedly, restarting…"];
   args.push(...restArgs);
   args.push({
-    restartCount: retryCount,
-    restartLimit: restartRetryLimit,
+    restartWindowCount,
+    restartWindowLimit,
     restartWindowMs: restartRetryWindowMs,
   });
   logger.error(...args);
@@ -39,30 +39,30 @@ function restartLog(retryCount: number, ...restArgs: unknown[]) {
 export async function restart(
   fn: (attempt: number) => Promise<unknown>,
 ): Promise<void> {
-  const retryTimestamps: number[] = [];
+  const restartTimestamps: number[] = [];
 
   for (let attempt = 1; ; attempt += 1) {
     try {
       const result = await fn(attempt);
       if (result === Shutdown.symbol) return;
-      const retryCount = restartTrack(retryTimestamps);
-      if (retryCount >= restartRetryLimit) {
-        throw new TooManyRetryError(retryCount);
+      const restartWindowCount = restartTrack(restartTimestamps);
+      if (restartWindowCount >= restartWindowLimit) {
+        throw new TooManyRestartError(restartWindowCount);
       }
-      restartLog(retryCount);
+      restartLog(restartWindowCount);
     } catch (error) {
       if (
-        error instanceof TooManyRetryError ||
+        error instanceof TooManyRestartError ||
         error instanceof TelegramConfig.CancelledError ||
         error instanceof OpencodeConfig.CancelledError
       ) {
         throw error;
       }
-      const retryCount = restartTrack(retryTimestamps);
-      if (retryCount >= restartRetryLimit) {
+      const restartWindowCount = restartTrack(restartTimestamps);
+      if (restartWindowCount >= restartWindowLimit) {
         throw error;
       }
-      restartLog(retryCount, error);
+      restartLog(restartWindowCount, error);
     }
   }
 }

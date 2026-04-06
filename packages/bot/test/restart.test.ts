@@ -17,9 +17,9 @@ test("restarts until the callback returns the shutdown symbol", async () => {
   expect(logger.error).toHaveBeenCalledWith(
     "OpenKitten stopped unexpectedly, restarting…",
     {
-      restartCount: 1,
-      restartLimit: 5,
-      restartWindowMs: 60_000,
+      restartWindowCount: 1,
+      restartWindowLimit: 5,
+      restartWindowMs: 30_000,
     },
   );
 });
@@ -37,9 +37,9 @@ test("retries unexpected errors until the callback succeeds", async () => {
     "OpenKitten stopped unexpectedly, restarting…",
     expect.any(Error),
     {
-      restartCount: 1,
-      restartLimit: 5,
-      restartWindowMs: 60_000,
+      restartWindowCount: 1,
+      restartWindowLimit: 5,
+      restartWindowMs: 30_000,
     },
   );
 });
@@ -70,7 +70,7 @@ test("does not retry OpenCode config cancellation", async () => {
 
 test("gives up after repeated unexpected stops", async () => {
   await expect(restart(async () => undefined)).rejects.toThrow(
-    "OpenKitten stopped unexpectedly 5 times within 60 seconds",
+    "OpenKitten stopped unexpectedly 5 times within 30 seconds",
   );
 
   expect(logger.error).toHaveBeenCalledTimes(4);
@@ -98,7 +98,7 @@ test("forgets old retries once they fall outside the retry window", async () => 
 
     await restart(async () => {
       attempts += 1;
-      if (attempts === 2) vi.setSystemTime(60_001);
+      if (attempts === 2) vi.setSystemTime(30_001);
       if (attempts === 3) return Shutdown.symbol;
       return undefined;
     });
@@ -107,18 +107,18 @@ test("forgets old retries once they fall outside the retry window", async () => 
       1,
       "OpenKitten stopped unexpectedly, restarting…",
       {
-        restartCount: 1,
-        restartLimit: 5,
-        restartWindowMs: 60_000,
+        restartWindowCount: 1,
+        restartWindowLimit: 5,
+        restartWindowMs: 30_000,
       },
     );
     expect(logger.error).toHaveBeenNthCalledWith(
       2,
       "OpenKitten stopped unexpectedly, restarting…",
       {
-        restartCount: 1,
-        restartLimit: 5,
-        restartWindowMs: 60_000,
+        restartWindowCount: 1,
+        restartWindowLimit: 5,
+        restartWindowMs: 30_000,
       },
     );
   } finally {
