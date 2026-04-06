@@ -26,12 +26,9 @@ function restartTrack(restartTimestamps: number[]) {
   return restartTimestamps.length;
 }
 
-function restartLog(
-  restartWindowCount: number,
-  ...additionalLogArgs: unknown[]
-) {
+function restartLog(restartWindowCount: number, ...restartLogArgs: unknown[]) {
   const args: unknown[] = ["OpenKitten stopped unexpectedly, restarting…"];
-  args.push(...additionalLogArgs);
+  args.push(...restartLogArgs);
   args.push({
     restartWindowCount,
     restartWindowLimit,
