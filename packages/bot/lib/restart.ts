@@ -14,7 +14,8 @@ class TooManyRestartError extends Error {
   }
 }
 
-function restartTrack(restartTimestamps: number[], now = Date.now()) {
+function restartTrack(restartTimestamps: number[]) {
+  const now = Date.now();
   restartTimestamps.push(now);
   while (
     restartTimestamps[0] !== undefined &&
