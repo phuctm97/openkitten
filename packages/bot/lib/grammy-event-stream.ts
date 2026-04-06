@@ -20,8 +20,8 @@ export class GrammyEventStream implements AsyncDisposable {
   }
 
   static async create(
-    shutdown: Shutdown,
     bot: Bot,
+    shutdown: Shutdown,
   ): Promise<GrammyEventStream> {
     logger.debug("grammY event stream is connecting…");
 

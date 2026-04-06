@@ -10,9 +10,9 @@ import type { TypingIndicators } from "~/lib/typing-indicators";
 import type { WorkingSessions } from "~/lib/working-sessions";
 
 export interface Scope {
-  readonly shutdown: Shutdown;
   readonly bot: Bot;
   readonly database: Database;
+  readonly shutdown: Shutdown;
   readonly opencodeClient: OpencodeClient;
   readonly existingSessions: ExistingSessions;
   readonly workingSessions: WorkingSessions;

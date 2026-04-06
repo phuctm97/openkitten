@@ -1,29 +1,42 @@
 import { logger } from "~/lib/logger";
 
+const shutdownEvents = [
+  "beforeExit",
+  "disconnect",
+  "SIGINT",
+  "SIGTERM",
+  "SIGHUP",
+  "SIGQUIT",
+  "SIGBREAK",
+  "SIGUSR2",
+] as const;
+
+const shutdownSymbol = Symbol("shutdown");
+
 export class Shutdown implements Disposable {
+  readonly #handlers = new Map(
+    shutdownEvents.map((event) => [event, () => this.#onSignal(event)]),
+  );
   readonly #controller = new AbortController();
-  readonly #signaled: Promise<void>;
-  readonly #onSignal: (event?: string) => void;
-  readonly #onMessage: (message: unknown) => void;
+  readonly #signaled = Promise.withResolvers<unknown>();
+  readonly #onSignal = (event?: string) => {
+    if (this.#controller.signal.aborted) return;
+    this.#controller.abort();
+    logger.info("Shutdown is triggered", { event });
+    for (const [name, handler] of this.#handlers) {
+      process.off(name, handler);
+    }
+    process.off("message", this.#onMessage);
+    this.#signaled.resolve(event ? shutdownSymbol : undefined);
+  };
+  readonly #onMessage = (message: unknown) => {
+    if (message === "shutdown") this.#onSignal("shutdown");
+  };
 
   private constructor() {
-    const { resolve, promise: signaled } = Promise.withResolvers<void>();
-    this.#signaled = signaled;
-
-    this.#onSignal = (event?: string) => {
-      if (this.#controller.signal.aborted) return;
-      this.#controller.abort();
-      logger.info("Shutdown is triggered", { event });
-      for (const e of Shutdown.events) process.off(e, this.#onSignal);
-      process.off("message", this.#onMessage);
-      resolve();
-    };
-
-    this.#onMessage = (message: unknown) => {
-      if (message === "shutdown") this.#onSignal("shutdown");
-    };
-
-    for (const event of Shutdown.events) process.once(event, this.#onSignal);
+    for (const [event, handler] of this.#handlers) {
+      process.once(event, handler);
+    }
     process.on("message", this.#onMessage);
   }
 
@@ -31,8 +44,8 @@ export class Shutdown implements Disposable {
     return this.#controller.signal;
   }
 
-  get signaled(): Promise<void> {
-    return this.#signaled;
+  get signaled(): Promise<unknown> {
+    return this.#signaled.promise;
   }
 
   trigger(event?: string) {
@@ -43,16 +56,9 @@ export class Shutdown implements Disposable {
     this.#onSignal();
   }
 
-  static readonly events = [
-    "beforeExit",
-    "disconnect",
-    "SIGINT",
-    "SIGTERM",
-    "SIGHUP",
-    "SIGQUIT",
-    "SIGBREAK",
-    "SIGUSR2",
-  ] as const;
+  static readonly events = shutdownEvents;
+
+  static readonly symbol = shutdownSymbol;
 
   static create(): Shutdown {
     return new Shutdown();

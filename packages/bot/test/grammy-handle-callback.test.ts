@@ -58,9 +58,9 @@ function mockScope(overrides: {
   pendingPrompts: ReturnType<typeof mockPendingPrompts>;
 }): Scope {
   return {
-    shutdown: {} as never,
     bot: overrides.bot as never,
     database: {} as never,
+    shutdown: {} as never,
     opencodeClient: {} as never,
     existingSessions: overrides.existingSessions,
     workingSessions: {} as never,
