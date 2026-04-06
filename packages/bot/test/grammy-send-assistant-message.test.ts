@@ -51,6 +51,26 @@ function createFilePart(
   };
 }
 
+function createCompletedToolPart(tool: string): Part {
+  return {
+    id: `tool-${tool}`,
+    sessionID: "sess-1",
+    messageID: "m1",
+    type: "tool",
+    callID: `call-${tool}`,
+    tool,
+    state: {
+      status: "completed",
+      input: {},
+      output: "",
+      title: `${tool} complete`,
+      time: { start: 1, end: 2 },
+      metadata: {},
+      attachments: [],
+    },
+  } as never;
+}
+
 function createBot() {
   return {
     api: {
@@ -156,6 +176,91 @@ test("uses the first attachment as the reply target when it is sent before text"
     bot,
     chatId: 123,
     chunks: grammyFormatText("Done"),
+    replyToMessageId: undefined,
+    threadId: 456,
+  });
+});
+
+test("omits action summaries by default while preserving text plans and files", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    bot: bot as never,
+    info,
+    parts: [
+      createTextPart("Before"),
+      createCompletedToolPart("bash"),
+      createCompletedToolPart("plan_enter"),
+      createFilePart("image/png", "one.png"),
+      createCompletedToolPart("plan_exit"),
+      createTextPart("After"),
+    ],
+    chatId: 123,
+    threadId: 456,
+    replyToMessageId: 101,
+  });
+
+  expect(grammySendChunksModule.grammySendChunks).toHaveBeenNthCalledWith(1, {
+    bot,
+    chatId: 123,
+    chunks: grammyFormatText("Before\n\n🎯 _Entered plan mode._"),
+    replyToMessageId: 101,
+    threadId: 456,
+  });
+  expect(bot.api.sendPhoto).toHaveBeenCalledWith(123, expect.any(InputFile), {
+    message_thread_id: 456,
+  });
+  expect(grammySendChunksModule.grammySendChunks).toHaveBeenNthCalledWith(2, {
+    bot,
+    chatId: 123,
+    chunks: grammyFormatText("🚪 _Exited plan mode._\n\nAfter"),
+    replyToMessageId: undefined,
+    threadId: 456,
+  });
+});
+
+test("includes action summaries only when actions is true", async () => {
+  const bot = createBot();
+  vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
+    undefined,
+  );
+
+  await grammySendAssistantMessage({
+    actions: true,
+    bot: bot as never,
+    info,
+    parts: [
+      createTextPart("Before"),
+      createCompletedToolPart("bash"),
+      createCompletedToolPart("plan_enter"),
+      createFilePart("image/png", "one.png"),
+      createCompletedToolPart("plan_exit"),
+      createTextPart("After"),
+    ],
+    chatId: 123,
+    threadId: 456,
+    replyToMessageId: 101,
+  });
+
+  expect(grammySendChunksModule.grammySendChunks).toHaveBeenNthCalledWith(1, {
+    bot,
+    chatId: 123,
+    chunks: grammyFormatText(
+      "Before\n\n🛠️ _Ran 1 command._\n\n🎯 _Entered plan mode._",
+    ),
+    replyToMessageId: 101,
+    threadId: 456,
+  });
+  expect(bot.api.sendPhoto).toHaveBeenCalledWith(123, expect.any(InputFile), {
+    message_thread_id: 456,
+  });
+  expect(grammySendChunksModule.grammySendChunks).toHaveBeenNthCalledWith(2, {
+    bot,
+    chatId: 123,
+    chunks: grammyFormatText("🚪 _Exited plan mode._\n\nAfter"),
     replyToMessageId: undefined,
     threadId: 456,
   });
@@ -522,13 +627,14 @@ test("skips Telegram sends when nothing is visible or attachable", async () => {
   expect(bot.api.sendVideo).not.toHaveBeenCalled();
 });
 
-test("skips invisible inline-reference sections while still sending text", async () => {
+test("skips invisible inline-reference action sections while still sending text", async () => {
   const bot = createBot();
   vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
     undefined,
   );
 
   await grammySendAssistantMessage({
+    actions: true,
     bot: bot as never,
     info,
     parts: [

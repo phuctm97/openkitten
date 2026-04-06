@@ -32,6 +32,7 @@ export async function grammySendAssistantMessage({
   chatId,
   info,
   parts,
+  actions,
   replyToMessageId,
   threadId,
 }: GrammySendAssistantMessageOptions): Promise<void> {
@@ -56,6 +57,8 @@ export async function grammySendAssistantMessage({
   }
 
   for (const section of sections) {
+    if (!actions && section.type === "action") continue;
+
     if (section.type === "attachment") {
       await flushRenderedSections();
       await sendAttachmentSection({

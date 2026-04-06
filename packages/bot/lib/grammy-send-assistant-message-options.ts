@@ -4,4 +4,5 @@ import type { GrammySendOptions } from "~/lib/grammy-send-options";
 export interface GrammySendAssistantMessageOptions extends GrammySendOptions {
   readonly info: AssistantMessage;
   readonly parts: readonly Part[];
+  readonly actions?: boolean;
 }
