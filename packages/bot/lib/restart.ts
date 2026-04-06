@@ -9,7 +9,7 @@ const restartWindowDuration = 30_000;
 class TooManyRestartError extends Error {
   constructor(restartWindowCount: number) {
     super(
-      `OpenKitten stopped unexpectedly ${restartWindowCount} times within ${restartWindowDuration / 1000} seconds`,
+      `OpenKitten server stopped unexpectedly ${restartWindowCount} times within ${restartWindowDuration / 1000} seconds`,
     );
   }
 }
@@ -27,7 +27,9 @@ function restartTrack(restartTimestamps: number[]) {
 }
 
 function restartLog(restartWindowCount: number, ...restartLogArgs: unknown[]) {
-  const args: unknown[] = ["OpenKitten stopped unexpectedly, restarting…"];
+  const args: unknown[] = [
+    "OpenKitten server stopped unexpectedly, restarting…",
+  ];
   args.push(...restartLogArgs);
   args.push({
     restartWindowCount,

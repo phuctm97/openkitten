@@ -15,7 +15,7 @@ test("restarts until the callback returns the shutdown symbol", async () => {
 
   expect(calls).toEqual([1, 2]);
   expect(logger.error).toHaveBeenCalledWith(
-    "OpenKitten stopped unexpectedly, restarting…",
+    "OpenKitten server stopped unexpectedly, restarting…",
     {
       restartWindowCount: 1,
       restartWindowLimit: 5,
@@ -34,7 +34,7 @@ test("retries unexpected errors until the callback succeeds", async () => {
   });
 
   expect(logger.error).toHaveBeenCalledWith(
-    "OpenKitten stopped unexpectedly, restarting…",
+    "OpenKitten server stopped unexpectedly, restarting…",
     expect.any(Error),
     {
       restartWindowCount: 1,
@@ -70,7 +70,7 @@ test("does not retry OpenCode config cancellation", async () => {
 
 test("gives up after repeated unexpected stops", async () => {
   await expect(restart(async () => undefined)).rejects.toThrow(
-    "OpenKitten stopped unexpectedly 5 times within 30 seconds",
+    "OpenKitten server stopped unexpectedly 5 times within 30 seconds",
   );
 
   expect(logger.error).toHaveBeenCalledTimes(4);
@@ -105,7 +105,7 @@ test("forgets old retries once they fall outside the retry window", async () => 
 
     expect(logger.error).toHaveBeenNthCalledWith(
       1,
-      "OpenKitten stopped unexpectedly, restarting…",
+      "OpenKitten server stopped unexpectedly, restarting…",
       {
         restartWindowCount: 1,
         restartWindowLimit: 5,
@@ -114,7 +114,7 @@ test("forgets old retries once they fall outside the retry window", async () => 
     );
     expect(logger.error).toHaveBeenNthCalledWith(
       2,
-      "OpenKitten stopped unexpectedly, restarting…",
+      "OpenKitten server stopped unexpectedly, restarting…",
       {
         restartWindowCount: 1,
         restartWindowLimit: 5,
