@@ -45,13 +45,13 @@ test("switches between auto, light, and dark themes", async () => {
 
   expect(getThemeValue("colorScheme", "dark")).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "Light" }));
+  await user.click(screen.getByRole("button", { name: "Light theme" }));
 
   expect(getThemeValue("theme", "light")).toBeInTheDocument();
   expect(getThemeValue("colorScheme", "light")).toBeInTheDocument();
   expect(localStorage.getItem("openkitten-world-theme")).toBe("light");
 
-  await user.click(screen.getByRole("button", { name: "Dark" }));
+  await user.click(screen.getByRole("button", { name: "Dark theme" }));
 
   expect(getThemeValue("theme", "dark")).toBeInTheDocument();
   expect(getThemeValue("colorScheme", "dark")).toBeInTheDocument();
@@ -63,7 +63,7 @@ test("switches between auto, light, and dark themes", async () => {
 
   expect(getThemeValue("colorScheme", "dark")).toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "Auto" }));
+  await user.click(screen.getByRole("button", { name: "System theme" }));
 
   expect(getThemeValue("theme", "auto")).toBeInTheDocument();
   expect(getThemeValue("colorScheme", "light")).toBeInTheDocument();
