@@ -33,6 +33,7 @@ export async function grammySendAssistantMessage({
   info,
   parts,
   replyToMessageId,
+  skipActions,
   threadId,
 }: GrammySendAssistantMessageOptions): Promise<void> {
   const sections = grammyBuildAssistantMessageSections(info, parts);
@@ -56,6 +57,8 @@ export async function grammySendAssistantMessage({
   }
 
   for (const section of sections) {
+    if (skipActions && section.type === "action") continue;
+
     if (section.type === "attachment") {
       await flushRenderedSections();
       await sendAttachmentSection({
