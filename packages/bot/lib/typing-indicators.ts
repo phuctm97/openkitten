@@ -7,8 +7,8 @@ import type { Shutdown } from "~/lib/shutdown";
 import type { WorkingSessions } from "~/lib/working-sessions";
 
 export class TypingIndicators implements Disposable {
-  readonly #shutdown: Shutdown;
   readonly #bot: Bot;
+  readonly #shutdown: Shutdown;
   readonly #existingSessions: ExistingSessions;
   readonly #workingSessions: WorkingSessions;
   readonly #pendingPrompts: PendingPrompts;
@@ -17,15 +17,15 @@ export class TypingIndicators implements Disposable {
   readonly #unhooks: (() => void)[];
 
   private constructor(
-    shutdown: Shutdown,
     bot: Bot,
+    shutdown: Shutdown,
     existingSessions: ExistingSessions,
     workingSessions: WorkingSessions,
     pendingPrompts: PendingPrompts,
     floatingPromises: FloatingPromises,
   ) {
-    this.#shutdown = shutdown;
     this.#bot = bot;
+    this.#shutdown = shutdown;
     this.#existingSessions = existingSessions;
     this.#workingSessions = workingSessions;
     this.#pendingPrompts = pendingPrompts;
@@ -102,16 +102,16 @@ export class TypingIndicators implements Disposable {
   }
 
   static create(
-    shutdown: Shutdown,
     bot: Bot,
+    shutdown: Shutdown,
     existingSessions: ExistingSessions,
     workingSessions: WorkingSessions,
     pendingPrompts: PendingPrompts,
     floatingPromises: FloatingPromises,
   ): TypingIndicators {
     return new TypingIndicators(
-      shutdown,
       bot,
+      shutdown,
       existingSessions,
       workingSessions,
       pendingPrompts,

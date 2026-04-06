@@ -28,8 +28,8 @@ import { opencodeResolveRootSessionId } from "~/lib/opencode-resolve-root-sessio
 import type { Shutdown } from "~/lib/shutdown";
 
 export class PendingPrompts implements AsyncDisposable {
-  readonly #shutdown: Shutdown;
   readonly #bot: Bot;
+  readonly #shutdown: Shutdown;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #hooks = createHooks<PendingPrompts.Hooks>();
@@ -39,13 +39,13 @@ export class PendingPrompts implements AsyncDisposable {
   #keyCounter = 0;
 
   private constructor(
-    shutdown: Shutdown,
     bot: Bot,
+    shutdown: Shutdown,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
   ) {
-    this.#shutdown = shutdown;
     this.#bot = bot;
+    this.#shutdown = shutdown;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
     this.#unhook = existingSessions.hook(
@@ -627,12 +627,12 @@ export class PendingPrompts implements AsyncDisposable {
   };
 
   static create(
-    shutdown: Shutdown,
     bot: Bot,
+    shutdown: Shutdown,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
   ): PendingPrompts {
-    return new PendingPrompts(shutdown, bot, opencodeClient, existingSessions);
+    return new PendingPrompts(bot, shutdown, opencodeClient, existingSessions);
   }
 }
 

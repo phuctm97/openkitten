@@ -88,15 +88,15 @@ function setup(
   workingIds = new Set<string>(),
   pendingIds = new Set<string>(),
 ) {
-  const shutdown = { trigger: vi.fn() };
   const bot = createMockBot();
+  const shutdown = { trigger: vi.fn() };
   const es = createMockExistingSessions(esMap);
   const ws = createMockWorkingSessions(workingIds);
   const pp = createMockPendingPrompts(pendingIds);
   const fp = createMockFloatingPromises();
   const indicators = TypingIndicators.create(
-    shutdown as never,
     bot,
+    shutdown as never,
     es,
     ws,
     pp,

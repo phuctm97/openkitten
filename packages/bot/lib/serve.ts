@@ -66,8 +66,8 @@ export const serve = defineCommand({
       );
       using workingSessions = WorkingSessions.create(existingSessions);
       await using pendingPrompts = PendingPrompts.create(
-        shutdown,
         bot,
+        shutdown,
         opencodeServer.client,
         existingSessions,
       );
@@ -79,8 +79,8 @@ export const serve = defineCommand({
       );
       await using floatingPromises = FloatingPromises.create();
       using typingIndicators = TypingIndicators.create(
-        shutdown,
         bot,
+        shutdown,
         existingSessions,
         workingSessions,
         pendingPrompts,
@@ -121,8 +121,8 @@ export const serve = defineCommand({
         grammyEventLoop.connect(scope, grammyHandlePhoto),
       );
       await using grammyEventStream = await GrammyEventStream.create(
-        shutdown,
         bot,
+        shutdown,
       );
       const result = await Promise.race([
         shutdown.signaled,

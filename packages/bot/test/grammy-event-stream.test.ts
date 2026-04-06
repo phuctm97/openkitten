@@ -49,8 +49,8 @@ beforeEach(() => {
 
 test("logs connecting and connected", async () => {
   await using _grammyEventStream = await GrammyEventStream.create(
-    mockShutdown,
     createMockBot(),
+    mockShutdown,
   );
   expect(logger.debug).toHaveBeenCalledWith(
     "grammY event stream is connecting…",
@@ -61,8 +61,8 @@ test("logs connecting and connected", async () => {
 test("is async disposable", async () => {
   {
     await using _grammyEventStream = await GrammyEventStream.create(
-      mockShutdown,
       createMockBot(),
+      mockShutdown,
     );
   }
   expect(mockStop).toHaveBeenCalledOnce();
@@ -72,14 +72,14 @@ test("is async disposable", async () => {
 test("propagates startup error", async () => {
   setupMock({ startError: new Error("polling failed") });
   await expect(
-    GrammyEventStream.create(mockShutdown, createMockBot()),
+    GrammyEventStream.create(createMockBot(), mockShutdown),
   ).rejects.toThrow("polling failed");
 });
 
 test("ended rejects on unexpected end", async () => {
   const grammyEventStream = await GrammyEventStream.create(
-    mockShutdown,
     createMockBot(),
+    mockShutdown,
   );
   controls.resolveEnded();
   await expect(grammyEventStream.ended).rejects.toThrow(
@@ -89,8 +89,8 @@ test("ended rejects on unexpected end", async () => {
 
 test("catch handler logs error with chat and thread", async () => {
   await using _grammyEventStream = await GrammyEventStream.create(
-    mockShutdown,
     createMockBot(),
+    mockShutdown,
   );
   expect(mockCatch).toHaveBeenCalledOnce();
   const [handler] = mockCatch.mock.calls[0] as [
@@ -126,8 +126,8 @@ test("catch handler logs error with chat and thread", async () => {
 
 test("catch handler handles missing chat and msg", async () => {
   await using _grammyEventStream = await GrammyEventStream.create(
-    mockShutdown,
     createMockBot(),
+    mockShutdown,
   );
   const [handler] = mockCatch.mock.calls[0] as [
     (err: {
@@ -161,8 +161,8 @@ test("dispose logs fatal and triggers shutdown when bot.stop fails", async () =>
   let grammyEnded: Promise<void>;
   {
     await using grammyEventStream = await GrammyEventStream.create(
-      mockShutdown,
       createMockBot(),
+      mockShutdown,
     );
     grammyEnded = grammyEventStream.ended;
   }
@@ -178,8 +178,8 @@ test("ended does not reject after dispose", async () => {
   let grammyEnded: Promise<void>;
   {
     await using grammyEventStream = await GrammyEventStream.create(
-      mockShutdown,
       createMockBot(),
+      mockShutdown,
     );
     grammyEnded = grammyEventStream.ended;
   }
