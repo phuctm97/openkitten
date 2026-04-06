@@ -147,9 +147,9 @@ The first implementation should likely grow `packages/world` into something like
 - `packages/world/components/`
 - `packages/world/domain/`
 - `packages/world/fixtures/`
-- `packages/world/state/`
 - `packages/world/scene/`
 - `packages/world/panels/`
+- `packages/world/state/`
 - `packages/world/lib/`
 - `packages/world/test/`
 - `packages/world/public/`
