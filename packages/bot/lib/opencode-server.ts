@@ -45,7 +45,7 @@ async function readPort(proc: Proc): Promise<ReadPortResult> {
         if (match) return { port: Number(match[1]), stdout: proc.stdout };
       }
     }
-    throw new Error("OpenCode server exited without announcing port");
+    throw new Error("OpenCode server exited unexpectedly (no port)");
   } catch (error) {
     await killProc(proc);
     throw error;

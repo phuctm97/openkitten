@@ -26,16 +26,12 @@ function restartTrack(restartTimestamps: number[]) {
   return restartTimestamps.length;
 }
 
-function restartLog(restartWindowCount: number, ...restartLogArgs: unknown[]) {
+function restartLog(count: number, ...errors: unknown[]) {
   const args: unknown[] = [
     "OpenKitten server exited unexpectedly, restarting…",
   ];
-  args.push(...restartLogArgs);
-  args.push({
-    restartWindowCount,
-    restartWindowLimit,
-    restartWindowDuration,
-  });
+  args.push(...errors);
+  args.push({ count });
   logger.error(...args);
 }
 

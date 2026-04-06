@@ -17,9 +17,7 @@ test("restarts until the callback returns the shutdown symbol", async () => {
   expect(logger.error).toHaveBeenCalledWith(
     "OpenKitten server exited unexpectedly, restarting…",
     {
-      restartWindowCount: 1,
-      restartWindowLimit: 5,
-      restartWindowDuration: 30_000,
+      count: 1,
     },
   );
 });
@@ -37,9 +35,7 @@ test("retries unexpected errors until the callback succeeds", async () => {
     "OpenKitten server exited unexpectedly, restarting…",
     expect.any(Error),
     {
-      restartWindowCount: 1,
-      restartWindowLimit: 5,
-      restartWindowDuration: 30_000,
+      count: 1,
     },
   );
 });
@@ -107,18 +103,14 @@ test("forgets old retries once they fall outside the retry window", async () => 
       1,
       "OpenKitten server exited unexpectedly, restarting…",
       {
-        restartWindowCount: 1,
-        restartWindowLimit: 5,
-        restartWindowDuration: 30_000,
+        count: 1,
       },
     );
     expect(logger.error).toHaveBeenNthCalledWith(
       2,
       "OpenKitten server exited unexpectedly, restarting…",
       {
-        restartWindowCount: 1,
-        restartWindowLimit: 5,
-        restartWindowDuration: 30_000,
+        count: 1,
       },
     );
   } finally {
