@@ -1,71 +1,44 @@
-import { act, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, test } from "vitest";
+import { expect, test, vi } from "vitest";
+
+vi.mock("~/components/scene", () => ({
+  Scene: () => <div data-testid="scene-mock">Scene Mock</div>,
+}));
 
 import Component from "~/app/routes/index";
-import { stubMatchMedia } from "~/test/stub-match-media";
 
-function getThemeValue(label: string, value: string) {
-  return screen.getByText((_content, node) => {
-    return node?.textContent === `${label} = "${value}"`;
-  });
-}
-
-test("renders the house placeholder and both font previews", () => {
+test("renders the phase 1 shell without extra status cards", () => {
   render(<Component />);
-  const monoCard = screen.getByText("Mono").closest("article");
 
-  expect(screen.getByText("House Route Placeholder")).toBeInTheDocument();
+  expect(screen.getByText("OpenKitten World")).toBeInTheDocument();
   expect(
     screen.getByText(
-      "Oxanium gives OpenKitten World its playful, futuristic house voice.",
+      "The home page is now a real browser-client demo: React Router drives shell, Jotai powers state, and a Pixi room sits at the center like a tiny screen inside the app.",
     ),
   ).toBeInTheDocument();
-  expect(screen.getByText("Sans")).toBeInTheDocument();
-  expect(screen.getByText("Mono")).toBeInTheDocument();
-  expect(getThemeValue("theme", "auto")).toBeInTheDocument();
-  expect(getThemeValue("colorScheme", "light")).toBeInTheDocument();
-  expect(monoCard).toHaveTextContent(
-    'session.claimedThreads[0] = "pricing-review"',
-  );
-  expect(monoCard).toHaveTextContent(
-    'cat.memory.append("Keep pricing practical and human-readable.")',
-  );
+  expect(screen.getByText("Phase 1")).toBeInTheDocument();
+  expect(screen.getByText("React + Pixi")).toBeInTheDocument();
+  expect(screen.getByTestId("scene-mock")).toBeInTheDocument();
+  expect(screen.queryByText("state")).not.toBeInTheDocument();
+  expect(screen.queryByText("system")).not.toBeInTheDocument();
+  expect(screen.queryByText("stack")).not.toBeInTheDocument();
 });
 
 test("switches between auto, light, and dark themes", async () => {
   const user = userEvent.setup();
-  const matchMedia = stubMatchMedia("light");
 
   render(<Component />);
 
-  act(() => {
-    matchMedia.setColorScheme("dark");
-  });
-
-  expect(getThemeValue("colorScheme", "dark")).toBeInTheDocument();
-
   await user.click(screen.getByRole("button", { name: "Light theme" }));
 
-  expect(getThemeValue("theme", "light")).toBeInTheDocument();
-  expect(getThemeValue("colorScheme", "light")).toBeInTheDocument();
   expect(localStorage.getItem("openkitten-world-theme")).toBe("light");
 
   await user.click(screen.getByRole("button", { name: "Dark theme" }));
 
-  expect(getThemeValue("theme", "dark")).toBeInTheDocument();
-  expect(getThemeValue("colorScheme", "dark")).toBeInTheDocument();
   expect(localStorage.getItem("openkitten-world-theme")).toBe("dark");
-
-  act(() => {
-    matchMedia.setColorScheme("light");
-  });
-
-  expect(getThemeValue("colorScheme", "dark")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "System theme" }));
 
-  expect(getThemeValue("theme", "auto")).toBeInTheDocument();
-  expect(getThemeValue("colorScheme", "light")).toBeInTheDocument();
   expect(localStorage.getItem("openkitten-world-theme")).toBe("auto");
 });

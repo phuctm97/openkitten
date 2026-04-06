@@ -22,18 +22,11 @@ export function Layout({ children }: PropsWithChildren) {
       </head>
       <body className="m-0 min-h-full bg-background text-foreground antialiased">
         <ThemeConnector />
-        <div className="min-h-screen px-5 py-5 md:px-8 md:py-8">
-          <header className="mx-auto mb-8 flex max-w-[960px] flex-col items-start gap-6">
-            <div className="grid gap-1">
-              <p className="m-0 text-sm font-bold uppercase tracking-[0.08em] text-primary/80">
-                OpenKitten World
-              </p>
-              <h1 className="m-0 font-heading text-[clamp(2rem,4vw,3.2rem)] leading-none">
-                Framework Mode Scaffold
-              </h1>
-            </div>
-          </header>
-          <main className="mx-auto max-w-[960px]">{children}</main>
+        <div className="relative min-h-screen overflow-hidden">
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(56,189,248,0.12),_transparent_28%)] dark:bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.24),_transparent_36%),radial-gradient(circle_at_bottom_right,_rgba(96,165,250,0.16),_transparent_30%)]" />
+          <main className="relative mx-auto flex min-h-screen w-full max-w-[1280px] items-center justify-center px-4 py-6 sm:px-6 lg:px-10">
+            {children}
+          </main>
         </div>
         <ScrollRestoration />
         <Scripts />

@@ -1,77 +1,38 @@
 import { ThemeSwitcher } from "~/components/kibo-ui/theme-switcher";
+import { Scene } from "~/components/scene";
 import { Badge } from "~/components/ui/badge";
-import { Separator } from "~/components/ui/separator";
 import { useTheme } from "~/lib/use-theme";
 
 export default function Component() {
-  const { theme, setTheme, colorScheme } = useTheme();
+  const { theme, setTheme } = useTheme();
 
   return (
-    <section className="space-y-6">
-      <div className="rounded-3xl border border-border bg-card p-8 text-card-foreground shadow-xl shadow-primary/5">
-        <Badge variant="outline" className="mb-3">
-          House
-        </Badge>
-        <h2 className="mb-4 mt-0 font-heading text-[clamp(1.6rem,2.8vw,2.4rem)] leading-[1.1]">
-          House Route Placeholder
-        </h2>
-        <p className="m-0 max-w-[64ch] text-base leading-[1.6]">
-          This route will eventually become the first playable House slice with
-          cats, notices, threads, and an active session view.
-        </p>
-      </div>
-
-      <article className="space-y-6 rounded-3xl border border-border bg-card/90 p-8 text-card-foreground shadow-xl shadow-primary/5">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
-          <div className="space-y-3">
-            <Badge variant="secondary">Theme</Badge>
-            <h2 className="m-0 font-heading text-[clamp(1.6rem,2.8vw,2.4rem)] leading-[1.1]">
-              Tune the House for day, night, or whatever your system prefers.
-            </h2>
-            <p className="m-0 max-w-[64ch] text-base leading-[1.6] text-muted-foreground">
-              OpenKitten World keeps your theme in local storage so the House
-              feels familiar every time you come back.
-            </p>
+    <section className="mx-auto flex w-full max-w-[1180px] flex-col gap-6">
+      <header className="rounded-[2rem] border border-border/60 bg-card/72 p-6 shadow-[0_28px_80px_-52px_rgba(249,115,22,0.5)] backdrop-blur-sm">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <Badge variant="secondary">Phase 1</Badge>
+            <Badge variant="outline">React + Pixi</Badge>
           </div>
 
-          <ThemeSwitcher value={theme} onChange={setTheme} />
+          <div className="flex items-start sm:items-end">
+            <ThemeSwitcher value={theme} onChange={setTheme} />
+          </div>
         </div>
 
-        <Separator />
-
-        <div className="grid gap-3 rounded-2xl border border-border bg-muted/60 p-4 font-mono text-sm leading-6 text-muted-foreground sm:grid-cols-2">
-          <p className="m-0">
-            <span className="font-semibold text-foreground">theme</span>
-            {` = "${theme}"`}
-          </p>
-          <p className="m-0">
-            <span className="font-semibold text-foreground">colorScheme</span>
-            {` = "${colorScheme}"`}
+        <div className="mt-5 space-y-2">
+          <h1 className="m-0 font-heading text-[clamp(2.2rem,5vw,4.4rem)] leading-none">
+            OpenKitten World
+          </h1>
+          <p className="m-0 max-w-[60ch] text-base leading-[1.65] text-muted-foreground">
+            The home page is now a real browser-client demo: React Router drives
+            shell, Jotai powers state, and a Pixi room sits at the center like a
+            tiny screen inside the app.
           </p>
         </div>
-      </article>
+      </header>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <article className="rounded-3xl border border-border bg-card/80 p-6 shadow-lg shadow-primary/5">
-          <Badge variant="outline" className="mb-3">
-            Sans
-          </Badge>
-          <p className="m-0 font-heading text-2xl leading-tight">
-            Oxanium gives OpenKitten World its playful, futuristic house voice.
-          </p>
-        </article>
-
-        <article className="rounded-3xl border border-border bg-muted/60 p-6 shadow-lg shadow-primary/5">
-          <Badge variant="outline" className="mb-3">
-            Mono
-          </Badge>
-          <p className="m-0 font-mono text-sm leading-6 text-muted-foreground">
-            session.claimedThreads[0] = "pricing-review"
-            <br />
-            cat.memory.append("Keep pricing practical and human-readable.")
-          </p>
-        </article>
-      </div>
+      <Scene />
     </section>
   );
 }
