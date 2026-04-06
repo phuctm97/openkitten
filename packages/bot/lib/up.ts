@@ -10,7 +10,8 @@ import { OpencodeConfig } from "~/lib/opencode-config";
 import { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
 
-const projectDir = resolve(import.meta.dirname, "../../..");
+const repoDir = resolve(import.meta.dirname, "../../..");
+const botDir = resolve(import.meta.dirname, "..");
 
 async function runTask(
   title: string,
@@ -19,7 +20,7 @@ async function runTask(
 ): Promise<void> {
   const tl = clack.taskLog({ title });
   const proc = Bun.spawn(cmd, {
-    cwd: projectDir,
+    cwd: repoDir,
     stdout: "pipe",
     stderr: "pipe",
   });
@@ -43,14 +44,14 @@ async function runTask(
 
 async function updateSource(): Promise<void> {
   const branch = (
-    await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(projectDir).text()
+    await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(repoDir).text()
   ).trim();
   if (branch !== "main") {
     clack.log.warn(`Skipped update\n${styleText("dim", "Non-main branch")}`);
     return;
   }
   const status = (
-    await Bun.$`git status --porcelain`.cwd(projectDir).text()
+    await Bun.$`git status --porcelain`.cwd(repoDir).text()
   ).trim();
   if (status !== "") {
     clack.log.warn(`Skipped update\n${styleText("dim", "Dirty worktree")}`);
@@ -75,7 +76,7 @@ After=network.target
 Environment=NODE_ENV=production
 Environment=OPENKITTEN_PROFILE=${profile.name}
 ExecStart=${process.execPath} . serve
-WorkingDirectory=${projectDir}
+WorkingDirectory=${botDir}
 Restart=always
 RestartSec=3
 
@@ -128,7 +129,7 @@ async function installDarwin(profile: Profile): Promise<void> {
     <string>serve</string>
   </array>
   <key>WorkingDirectory</key>
-  <string>${projectDir}</string>
+  <string>${botDir}</string>
   <key>KeepAlive</key>
   <true/>
   <key>RunAtLoad</key>
@@ -174,7 +175,7 @@ async function installWin32(profile: Profile): Promise<void> {
   const s = clack.spinner();
   s.start("Updating service");
   await mkdir(logsDir, { recursive: true });
-  const tr = `cmd /C "cd /D \\"${projectDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
+  const tr = `cmd /C "cd /D \\"${botDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
   s.stop("Updated service");
   clack.note(
