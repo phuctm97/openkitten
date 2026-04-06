@@ -26,9 +26,12 @@ function restartTrack(restartTimestamps: number[]) {
   return restartTimestamps.length;
 }
 
-function restartLog(restartWindowCount: number, ...restArgs: unknown[]) {
+function restartLog(
+  restartWindowCount: number,
+  ...additionalLogArgs: unknown[]
+) {
   const args: unknown[] = ["OpenKitten stopped unexpectedly, restarting…"];
-  args.push(...restArgs);
+  args.push(...additionalLogArgs);
   args.push({
     restartWindowCount,
     restartWindowLimit,
@@ -45,7 +48,7 @@ export async function restart(
   for (let attempt = 1; ; attempt += 1) {
     try {
       const result = await fn(attempt);
-      if (result === Shutdown.symbol) return;
+      if (result === Shutdown.symbol) break;
       const restartWindowCount = restartTrack(restartTimestamps);
       if (restartWindowCount >= restartWindowLimit) {
         throw new TooManyRestartError(restartWindowCount);
