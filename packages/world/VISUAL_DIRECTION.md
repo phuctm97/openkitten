@@ -14,9 +14,9 @@ It answers these questions:
 
 This document is a companion to:
 
-- [VISION](/Users/phuctm97/Projects/openkitten-1/packages/world/VISION.md)
-- [SPEC](/Users/phuctm97/Projects/openkitten-1/packages/world/SPEC.md)
-- [CLIENT_STRATEGY](/Users/phuctm97/Projects/openkitten-1/packages/world/CLIENT_STRATEGY.md)
+- [Vision](./VISION.md)
+- [Spec](./SPEC.md)
+- [Client Strategy](./CLIENT_STRATEGY.md)
 
 ## Core Visual Thesis
 

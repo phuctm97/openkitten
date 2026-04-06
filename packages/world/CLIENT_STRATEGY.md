@@ -11,7 +11,7 @@ It exists to answer these questions clearly:
 - what client/game framework best fits that path
 - what tradeoffs are accepted now versus deferred for later
 
-This document is intentionally narrower than [VISION](/Users/phuctm97/Projects/openkitten-1/packages/world/VISION.md) and [SPEC](/Users/phuctm97/Projects/openkitten-1/packages/world/SPEC.md).
+This document is intentionally narrower than [Vision](./VISION.md) and [Spec](./SPEC.md).
 It focuses on client strategy, framework choice, and presentation direction.
 
 ## Product Context

@@ -139,15 +139,19 @@ The first implementation should likely grow `packages/world` into something like
 - `packages/world/MVP.md`
 - `packages/world/IMPLEMENTATION_PLAN.md`
 - `packages/world/package.json`
-- `packages/world/index.html`
-- `packages/world/src/main.tsx`
-- `packages/world/src/app/`
-- `packages/world/src/domain/`
-- `packages/world/src/fixtures/`
-- `packages/world/src/state/`
-- `packages/world/src/world/`
-- `packages/world/src/panels/`
-- `packages/world/src/lib/`
+- `packages/world/react-router.config.ts`
+- `packages/world/vite.config.ts`
+- `packages/world/vitest.config.ts`
+- `packages/world/app/`
+- `packages/world/hooks/`
+- `packages/world/components/`
+- `packages/world/domain/`
+- `packages/world/fixtures/`
+- `packages/world/state/`
+- `packages/world/scene/`
+- `packages/world/panels/`
+- `packages/world/lib/`
+- `packages/world/test/`
 - `packages/world/public/`
 
 The exact folder split can change, but the conceptual layering should stay stable.
