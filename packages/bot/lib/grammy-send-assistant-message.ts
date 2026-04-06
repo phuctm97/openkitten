@@ -28,11 +28,11 @@ interface TelegramAttachment {
 type MediaGroupKind = "audio" | "document" | "visual";
 
 export async function grammySendAssistantMessage({
-  actions,
   bot,
   chatId,
   info,
   parts,
+  actions,
   replyToMessageId,
   threadId,
 }: GrammySendAssistantMessageOptions): Promise<void> {
