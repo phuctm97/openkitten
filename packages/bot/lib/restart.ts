@@ -4,12 +4,12 @@ import { Shutdown } from "~/lib/shutdown";
 import { TelegramConfig } from "~/lib/telegram-config";
 
 const restartWindowLimit = 5;
-const restartRetryWindowMs = 30_000;
+const restartWindowMs = 30_000;
 
 class TooManyRestartError extends Error {
   constructor(restartWindowCount: number) {
     super(
-      `OpenKitten stopped unexpectedly ${restartWindowCount} times within ${restartRetryWindowMs / 1000} seconds`,
+      `OpenKitten stopped unexpectedly ${restartWindowCount} times within ${restartWindowMs / 1000} seconds`,
     );
   }
 }
@@ -18,7 +18,7 @@ function restartTrack(restartTimestamps: number[], now = Date.now()) {
   restartTimestamps.push(now);
   while (
     restartTimestamps[0] !== undefined &&
-    now - restartTimestamps[0] > restartRetryWindowMs
+    now - restartTimestamps[0] > restartWindowMs
   ) {
     restartTimestamps.shift();
   }
@@ -31,7 +31,7 @@ function restartLog(restartWindowCount: number, ...restArgs: unknown[]) {
   args.push({
     restartWindowCount,
     restartWindowLimit,
-    restartWindowMs: restartRetryWindowMs,
+    restartWindowMs,
   });
   logger.error(...args);
 }
