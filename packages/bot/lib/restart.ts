@@ -6,6 +6,15 @@ import { TelegramConfig } from "~/lib/telegram-config";
 const restartRetryLimit = 5;
 const restartRetryWindowMs = 60_000;
 
+class TooManyRestartError extends Error {
+  constructor(retryCount: number) {
+    super(
+      `OpenKitten stopped unexpectedly ${retryCount} times within ${restartRetryWindowMs / 1000} seconds`,
+    );
+    this.name = "TooManyRestartError";
+  }
+}
+
 function restartTrackRetry(retryTimestamps: number[], now = Date.now()) {
   retryTimestamps.push(now);
   while (
@@ -17,13 +26,7 @@ function restartTrackRetry(retryTimestamps: number[], now = Date.now()) {
   return retryTimestamps.length;
 }
 
-function restartCreateResultError(retryCount: number) {
-  return new Error(
-    `OpenKitten stopped unexpectedly ${retryCount} times within ${restartRetryWindowMs / 1000} seconds`,
-  );
-}
-
-function restartGetLogMeta(retryCount: number) {
+function restartLogMeta(retryCount: number) {
   return {
     restartCount: retryCount,
     restartLimit: restartRetryLimit,
@@ -42,19 +45,20 @@ export async function restart(
       if (result === Shutdown.symbol) return;
       const retryCount = restartTrackRetry(retryTimestamps);
       if (retryCount >= restartRetryLimit) {
-        const error = restartCreateResultError(retryCount);
+        const error = new TooManyRestartError(retryCount);
         logger.fatal(
-          "OpenKitten stopped unexpectedly too many times, giving up",
+          "OpenKitten stopped unexpectedly too many times, giving up…",
           error,
-          restartGetLogMeta(retryCount),
+          restartLogMeta(retryCount),
         );
         throw error;
       }
       logger.warn(
-        "OpenKitten stopped unexpectedly, restarting",
-        restartGetLogMeta(retryCount),
+        "OpenKitten stopped unexpectedly, restarting…",
+        restartLogMeta(retryCount),
       );
     } catch (error) {
+      if (error instanceof TooManyRestartError) throw error;
       if (
         error instanceof TelegramConfig.CancelledError ||
         error instanceof OpencodeConfig.CancelledError
@@ -64,16 +68,16 @@ export async function restart(
       const retryCount = restartTrackRetry(retryTimestamps);
       if (retryCount >= restartRetryLimit) {
         logger.fatal(
-          "OpenKitten failed unexpectedly too many times, giving up",
+          "OpenKitten crashed unexpectedly too many times, giving up…",
           error,
-          restartGetLogMeta(retryCount),
+          restartLogMeta(retryCount),
         );
         throw error;
       }
       logger.error(
-        "OpenKitten failed unexpectedly, restarting",
+        "OpenKitten crashed unexpectedly, restarting…",
         error,
-        restartGetLogMeta(retryCount),
+        restartLogMeta(retryCount),
       );
     }
   }

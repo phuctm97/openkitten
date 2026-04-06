@@ -15,7 +15,7 @@ test("restarts until the callback returns the shutdown symbol", async () => {
 
   expect(calls).toEqual([1, 2]);
   expect(logger.warn).toHaveBeenCalledWith(
-    "OpenKitten stopped unexpectedly, restarting",
+    "OpenKitten stopped unexpectedly, restarting…",
     {
       restartCount: 1,
       restartLimit: 5,
@@ -34,7 +34,7 @@ test("retries unexpected errors until the callback succeeds", async () => {
   });
 
   expect(logger.error).toHaveBeenCalledWith(
-    "OpenKitten failed unexpectedly, restarting",
+    "OpenKitten crashed unexpectedly, restarting…",
     expect.any(Error),
     {
       restartCount: 1,
@@ -69,13 +69,14 @@ test("does not retry OpenCode config cancellation", async () => {
 });
 
 test("gives up after repeated unexpected stops", async () => {
-  await expect(restart(async () => undefined)).rejects.toThrow(
-    "OpenKitten stopped unexpectedly 5 times within 60 seconds",
-  );
+  await expect(restart(async () => undefined)).rejects.toMatchObject({
+    name: "TooManyRestartError",
+    message: "OpenKitten stopped unexpectedly 5 times within 60 seconds",
+  });
 
   expect(logger.warn).toHaveBeenCalledTimes(4);
   expect(logger.fatal).toHaveBeenCalledWith(
-    "OpenKitten stopped unexpectedly too many times, giving up",
+    "OpenKitten stopped unexpectedly too many times, giving up…",
     expect.any(Error),
     {
       restartCount: 5,
@@ -85,7 +86,7 @@ test("gives up after repeated unexpected stops", async () => {
   );
 });
 
-test("gives up with the original error after repeated failures", async () => {
+test("gives up with the original error after repeated crashes", async () => {
   const error = new Error("persistent");
 
   await expect(
@@ -96,7 +97,7 @@ test("gives up with the original error after repeated failures", async () => {
 
   expect(logger.error).toHaveBeenCalledTimes(4);
   expect(logger.fatal).toHaveBeenCalledWith(
-    "OpenKitten failed unexpectedly too many times, giving up",
+    "OpenKitten crashed unexpectedly too many times, giving up…",
     error,
     {
       restartCount: 5,
@@ -121,7 +122,7 @@ test("forgets old retries once they fall outside the retry window", async () => 
 
     expect(logger.warn).toHaveBeenNthCalledWith(
       1,
-      "OpenKitten stopped unexpectedly, restarting",
+      "OpenKitten stopped unexpectedly, restarting…",
       {
         restartCount: 1,
         restartLimit: 5,
@@ -130,7 +131,7 @@ test("forgets old retries once they fall outside the retry window", async () => 
     );
     expect(logger.warn).toHaveBeenNthCalledWith(
       2,
-      "OpenKitten stopped unexpectedly, restarting",
+      "OpenKitten stopped unexpectedly, restarting…",
       {
         restartCount: 1,
         restartLimit: 5,
