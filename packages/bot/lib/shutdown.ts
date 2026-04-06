@@ -18,9 +18,7 @@ export class Shutdown implements Disposable {
     shutdownEvents.map((event) => [event, () => this.#onSignal(event)]),
   );
   readonly #controller = new AbortController();
-  readonly #signaled = Promise.withResolvers<
-    typeof shutdownSymbol | undefined
-  >();
+  readonly #signaled = Promise.withResolvers<unknown>();
   readonly #onSignal = (event?: string) => {
     if (this.#controller.signal.aborted) return;
     this.#controller.abort();
@@ -46,7 +44,7 @@ export class Shutdown implements Disposable {
     return this.#controller.signal;
   }
 
-  get signaled(): Promise<typeof Shutdown.symbol | undefined> {
+  get signaled(): Promise<unknown> {
     return this.#signaled.promise;
   }
 
