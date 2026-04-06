@@ -627,13 +627,14 @@ test("skips Telegram sends when nothing is visible or attachable", async () => {
   expect(bot.api.sendVideo).not.toHaveBeenCalled();
 });
 
-test("skips invisible inline-reference sections while still sending text", async () => {
+test("skips invisible inline-reference action sections while still sending text", async () => {
   const bot = createBot();
   vi.spyOn(grammySendChunksModule, "grammySendChunks").mockResolvedValue(
     undefined,
   );
 
   await grammySendAssistantMessage({
+    actions: true,
     bot: bot as never,
     info,
     parts: [
