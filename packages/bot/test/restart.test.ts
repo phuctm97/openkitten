@@ -19,7 +19,7 @@ test("restarts until the callback returns the shutdown symbol", async () => {
     {
       restartWindowCount: 1,
       restartWindowLimit: 5,
-      restartWindowMs: 30_000,
+      restartWindowDuration: 30_000,
     },
   );
 });
@@ -39,7 +39,7 @@ test("retries unexpected errors until the callback succeeds", async () => {
     {
       restartWindowCount: 1,
       restartWindowLimit: 5,
-      restartWindowMs: 30_000,
+      restartWindowDuration: 30_000,
     },
   );
 });
@@ -109,7 +109,7 @@ test("forgets old retries once they fall outside the retry window", async () => 
       {
         restartWindowCount: 1,
         restartWindowLimit: 5,
-        restartWindowMs: 30_000,
+        restartWindowDuration: 30_000,
       },
     );
     expect(logger.error).toHaveBeenNthCalledWith(
@@ -118,7 +118,7 @@ test("forgets old retries once they fall outside the retry window", async () => 
       {
         restartWindowCount: 1,
         restartWindowLimit: 5,
-        restartWindowMs: 30_000,
+        restartWindowDuration: 30_000,
       },
     );
   } finally {
