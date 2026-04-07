@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm";
 import { beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { grammyBuildDraftId } from "~/lib/grammy-build-draft-id";
+import { grammyFormatDraft } from "~/lib/grammy-format-draft";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import * as schema from "~/lib/schema";
 
@@ -11,6 +13,7 @@ vi.mock("~/lib/grammy-send-assistant-message", () => ({
 
 type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 
+let mockSendMessageDraft: MockFn;
 let mockSessionMessage: MockFn;
 let mockSessionMessages: MockFn;
 
@@ -54,6 +57,15 @@ function createMockExistingSessions(sessionIds: readonly string[] = []) {
   };
 }
 
+function createMockBot() {
+  mockSendMessageDraft = vi.fn(async () => true);
+  return {
+    api: {
+      sendMessageDraft: (...args: unknown[]) => mockSendMessageDraft(...args),
+    },
+  } as never;
+}
+
 async function setup(
   sessionIds: readonly string[] = [],
   options: {
@@ -77,11 +89,21 @@ async function setup(
       )
       .run();
   }
-  const bot = {} as never;
+  const bot = createMockBot();
   const client = createMockOpencodeClient(options);
   const es = createMockExistingSessions(sessionIds);
   const pm = await ProcessingMessages.create(bot, database, client, es);
   return { database, bot, client, es, pm };
+}
+
+function expectLatestDraft(messageId: string, text: string) {
+  const chunk = grammyFormatDraft(text);
+  expect(mockSendMessageDraft).toHaveBeenLastCalledWith(
+    123,
+    grammyBuildDraftId(messageId),
+    chunk.markdown ?? chunk.text,
+    chunk.markdown ? { parse_mode: "MarkdownV2" } : {},
+  );
 }
 
 beforeEach(() => {
@@ -137,7 +159,23 @@ test("update clears the streaming message once it completes", async () => {
       },
     },
   } as never);
-  expect(pm.streaming("sess-1")).toBeDefined();
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+
+  mockSendMessageDraft.mockClear();
+
   await pm.update({
     type: "message.updated",
     properties: {
@@ -149,7 +187,21 @@ test("update clears the streaming message once it completes", async () => {
       },
     },
   } as never);
-  expect(pm.streaming("sess-1")).toBeUndefined();
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "world",
+      },
+      time: 3,
+    },
+  } as never);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update skips incomplete assistant message", async () => {
@@ -170,9 +222,10 @@ test("update skips incomplete assistant message", async () => {
   } as never);
   expect(mockSessionMessage).not.toHaveBeenCalled();
   expect(grammySendAssistantMessage).not.toHaveBeenCalled();
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
-test("update stores incomplete assistant message as latest streaming state", async () => {
+test("update sends a draft when streaming text appears", async () => {
   const { pm } = await setup();
   await pm.update({
     type: "message.updated",
@@ -185,15 +238,109 @@ test("update stores incomplete assistant message as latest streaming state", asy
       },
     },
   } as never);
-  expect(pm.streaming("sess-1")).toEqual({
-    info: {
-      id: "m1",
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
       sessionID: "sess-1",
-      role: "assistant",
-      time: { created: 1 },
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
     },
-    parts: [],
-  });
+  } as never);
+  expectLatestDraft("m1", "hello");
+});
+
+test("update refreshes the draft with the same draft id after text deltas", async () => {
+  const { pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hel",
+      },
+      time: 2,
+    },
+  } as never);
+
+  mockSendMessageDraft.mockClear();
+
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: "lo",
+    },
+  } as never);
+  expectLatestDraft("m1", "hello");
+});
+
+test("update skips resending an unchanged draft", async () => {
+  const { pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+
+  mockSendMessageDraft.mockClear();
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update refreshes streaming message info without dropping parts", async () => {
@@ -223,6 +370,7 @@ test("update refreshes streaming message info without dropping parts", async () 
       time: 2,
     },
   } as never);
+  mockSendMessageDraft.mockClear();
   await pm.update({
     type: "message.updated",
     properties: {
@@ -234,23 +382,18 @@ test("update refreshes streaming message info without dropping parts", async () 
       },
     },
   } as never);
-  expect(pm.streaming("sess-1")).toEqual({
-    info: {
-      id: "m1",
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
       sessionID: "sess-1",
-      role: "assistant",
-      time: { created: 1 },
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: " world",
     },
-    parts: [
-      {
-        id: "p1",
-        sessionID: "sess-1",
-        messageID: "m1",
-        type: "text",
-        text: "hello",
-      },
-    ],
-  });
+  } as never);
+  expectLatestDraft("m1", "hello world");
 });
 
 test("update ignores part snapshots without an active streaming message", async () => {
@@ -269,7 +412,7 @@ test("update ignores part snapshots without an active streaming message", async 
       time: 1,
     },
   } as never);
-  expect(pm.streaming("sess-1")).toBeUndefined();
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update ignores part snapshots for removed sessions", async () => {
@@ -300,7 +443,18 @@ test("update ignores part snapshots for removed sessions", async () => {
       time: 1,
     },
   } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([]);
+  vi.mocked(es.check).mockReturnValue(true);
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: " world",
+    },
+  } as never);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update replaces an existing part snapshot", async () => {
@@ -330,6 +484,7 @@ test("update replaces an existing part snapshot", async () => {
       time: 2,
     },
   } as never);
+  mockSendMessageDraft.mockClear();
   await pm.update({
     type: "message.part.updated",
     properties: {
@@ -344,18 +499,10 @@ test("update replaces an existing part snapshot", async () => {
       time: 3,
     },
   } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([
-    {
-      id: "p1",
-      sessionID: "sess-1",
-      messageID: "m1",
-      type: "text",
-      text: "world",
-    },
-  ]);
+  expectLatestDraft("m1", "world");
 });
 
-test("update stores latest parts for the streaming assistant message", async () => {
+test("update joins text parts in id order for the draft", async () => {
   const { pm } = await setup();
   await pm.update({
     type: "message.updated",
@@ -366,6 +513,20 @@ test("update stores latest parts for the streaming assistant message", async () 
         role: "assistant",
         time: { created: 1 },
       },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p3",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "world",
+      },
+      time: 2,
     },
   } as never);
   await pm.update({
@@ -384,69 +545,10 @@ test("update stores latest parts for the streaming assistant message", async () 
           input: {},
           raw: "echo hello",
         },
-      },
-      time: 2,
-    },
-  } as never);
-  await pm.update({
-    type: "message.part.updated",
-    properties: {
-      sessionID: "sess-1",
-      part: {
-        id: "p1",
-        sessionID: "sess-1",
-        messageID: "m1",
-        type: "text",
-        text: "hello",
       },
       time: 3,
     },
   } as never);
-  expect(pm.streaming("sess-1")).toEqual({
-    info: {
-      id: "m1",
-      sessionID: "sess-1",
-      role: "assistant",
-      time: { created: 1 },
-    },
-    parts: [
-      {
-        id: "p1",
-        sessionID: "sess-1",
-        messageID: "m1",
-        type: "text",
-        text: "hello",
-      },
-      {
-        id: "p2",
-        sessionID: "sess-1",
-        messageID: "m1",
-        type: "tool",
-        callID: "call-1",
-        tool: "bash",
-        state: {
-          status: "pending",
-          input: {},
-          raw: "echo hello",
-        },
-      },
-    ],
-  });
-});
-
-test("update appends deltas onto text parts in streaming state", async () => {
-  const { pm } = await setup();
-  await pm.update({
-    type: "message.updated",
-    properties: {
-      info: {
-        id: "m1",
-        sessionID: "sess-1",
-        role: "assistant",
-        time: { created: 1 },
-      },
-    },
-  } as never);
   await pm.update({
     type: "message.part.updated",
     properties: {
@@ -456,33 +558,15 @@ test("update appends deltas onto text parts in streaming state", async () => {
         sessionID: "sess-1",
         messageID: "m1",
         type: "text",
-        text: "hel",
+        text: "hello",
       },
-      time: 2,
+      time: 4,
     },
   } as never);
-  await pm.update({
-    type: "message.part.delta",
-    properties: {
-      sessionID: "sess-1",
-      messageID: "m1",
-      partID: "p1",
-      field: "text",
-      delta: "lo",
-    },
-  } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([
-    {
-      id: "p1",
-      sessionID: "sess-1",
-      messageID: "m1",
-      type: "text",
-      text: "hello",
-    },
-  ]);
+  expectLatestDraft("m1", "hello\n\nworld");
 });
 
-test("update appends deltas onto reasoning parts in streaming state", async () => {
+test("update ignores reasoning-only deltas when building drafts", async () => {
   const { pm } = await setup();
   await pm.update({
     type: "message.updated",
@@ -510,6 +594,7 @@ test("update appends deltas onto reasoning parts in streaming state", async () =
       time: 2,
     },
   } as never);
+  mockSendMessageDraft.mockClear();
   await pm.update({
     type: "message.part.delta",
     properties: {
@@ -520,16 +605,7 @@ test("update appends deltas onto reasoning parts in streaming state", async () =
       delta: "ing",
     },
   } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([
-    {
-      id: "p1",
-      sessionID: "sess-1",
-      messageID: "m1",
-      type: "reasoning",
-      text: "thinking",
-      time: { start: 2 },
-    },
-  ]);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update ignores deltas for unsupported fields", async () => {
@@ -569,15 +645,7 @@ test("update ignores deltas for unsupported fields", async () => {
       delta: "ignored",
     },
   } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([
-    {
-      id: "p1",
-      sessionID: "sess-1",
-      messageID: "m1",
-      type: "text",
-      text: "hello",
-    },
-  ]);
+  expect(mockSendMessageDraft).toHaveBeenCalledOnce();
 });
 
 test("update ignores deltas for missing parts", async () => {
@@ -603,15 +671,7 @@ test("update ignores deltas for missing parts", async () => {
       delta: "ignored",
     },
   } as never);
-  expect(pm.streaming("sess-1")).toEqual({
-    info: {
-      id: "m1",
-      sessionID: "sess-1",
-      role: "assistant",
-      time: { created: 1 },
-    },
-    parts: [],
-  });
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update ignores deltas for a different message", async () => {
@@ -637,15 +697,7 @@ test("update ignores deltas for a different message", async () => {
       delta: "ignored",
     },
   } as never);
-  expect(pm.streaming("sess-1")).toEqual({
-    info: {
-      id: "m1",
-      sessionID: "sess-1",
-      role: "assistant",
-      time: { created: 1 },
-    },
-    parts: [],
-  });
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update ignores part deltas for removed sessions", async () => {
@@ -675,6 +727,7 @@ test("update ignores part deltas for removed sessions", async () => {
       time: 2,
     },
   } as never);
+  mockSendMessageDraft.mockClear();
   vi.mocked(es.check).mockReturnValue(false);
   await pm.update({
     type: "message.part.delta",
@@ -686,15 +739,7 @@ test("update ignores part deltas for removed sessions", async () => {
       delta: " world",
     },
   } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([
-    {
-      id: "p1",
-      sessionID: "sess-1",
-      messageID: "m1",
-      type: "text",
-      text: "hello",
-    },
-  ]);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update ignores text deltas for non-text parts", async () => {
@@ -740,21 +785,7 @@ test("update ignores text deltas for non-text parts", async () => {
       delta: "ignored",
     },
   } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([
-    {
-      id: "p1",
-      sessionID: "sess-1",
-      messageID: "m1",
-      type: "tool",
-      callID: "call-1",
-      tool: "bash",
-      state: {
-        status: "pending",
-        input: {},
-        raw: "echo hello",
-      },
-    },
-  ]);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update removes parts from the latest streaming message", async () => {
@@ -784,6 +815,7 @@ test("update removes parts from the latest streaming message", async () => {
       time: 2,
     },
   } as never);
+  mockSendMessageDraft.mockClear();
   await pm.update({
     type: "message.part.removed",
     properties: {
@@ -792,7 +824,18 @@ test("update removes parts from the latest streaming message", async () => {
       partID: "p1",
     },
   } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([]);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: " world",
+    },
+  } as never);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update ignores part removals for a different message", async () => {
@@ -822,6 +865,7 @@ test("update ignores part removals for a different message", async () => {
       time: 2,
     },
   } as never);
+  mockSendMessageDraft.mockClear();
   await pm.update({
     type: "message.part.removed",
     properties: {
@@ -830,15 +874,19 @@ test("update ignores part removals for a different message", async () => {
       partID: "p1",
     },
   } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([
-    {
-      id: "p1",
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+  mockSendMessageDraft.mockClear();
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
       sessionID: "sess-1",
       messageID: "m1",
-      type: "text",
-      text: "hello",
+      partID: "p1",
+      field: "text",
+      delta: " world",
     },
-  ]);
+  } as never);
+  expectLatestDraft("m1", "hello world");
 });
 
 test("update ignores part removals for removed sessions", async () => {
@@ -868,6 +916,7 @@ test("update ignores part removals for removed sessions", async () => {
       time: 2,
     },
   } as never);
+  mockSendMessageDraft.mockClear();
   vi.mocked(es.check).mockReturnValue(false);
   await pm.update({
     type: "message.part.removed",
@@ -877,15 +926,19 @@ test("update ignores part removals for removed sessions", async () => {
       partID: "p1",
     },
   } as never);
-  expect(pm.streaming("sess-1")?.parts).toEqual([
-    {
-      id: "p1",
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+  vi.mocked(es.check).mockReturnValue(true);
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
       sessionID: "sess-1",
       messageID: "m1",
-      type: "text",
-      text: "hello",
+      partID: "p1",
+      field: "text",
+      delta: " world",
     },
-  ]);
+  } as never);
+  expectLatestDraft("m1", "hello world");
 });
 
 test("update removes the latest streaming message", async () => {
@@ -902,13 +955,43 @@ test("update removes the latest streaming message", async () => {
     },
   } as never);
   await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  mockSendMessageDraft.mockClear();
+  await pm.update({
     type: "message.removed",
     properties: {
       sessionID: "sess-1",
       messageID: "m1",
     },
   } as never);
-  expect(pm.streaming("sess-1")).toBeUndefined();
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "world",
+      },
+      time: 3,
+    },
+  } as never);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update ignores message.removed for removed sessions", async () => {
@@ -924,6 +1007,21 @@ test("update ignores message.removed for removed sessions", async () => {
       },
     },
   } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  mockSendMessageDraft.mockClear();
   vi.mocked(es.check).mockReturnValue(false);
   await pm.update({
     type: "message.removed",
@@ -932,7 +1030,19 @@ test("update ignores message.removed for removed sessions", async () => {
       messageID: "m1",
     },
   } as never);
-  expect(pm.streaming("sess-1")?.info.id).toBe("m1");
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+  vi.mocked(es.check).mockReturnValue(true);
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: " world",
+    },
+  } as never);
+  expectLatestDraft("m1", "hello world");
 });
 
 test("beforeRemove clears streaming state", async () => {
@@ -948,7 +1058,21 @@ test("beforeRemove clears streaming state", async () => {
       },
     },
   } as never);
-  expect(pm.streaming("sess-1")).toBeDefined();
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  mockSendMessageDraft.mockClear();
 
   es.hooks["beforeRemove"]?.({
     sessionId: "sess-1",
@@ -956,7 +1080,17 @@ test("beforeRemove clears streaming state", async () => {
     threadId: undefined,
   });
 
-  expect(pm.streaming("sess-1")).toBeUndefined();
+  await pm.update({
+    type: "message.part.delta",
+    properties: {
+      sessionID: "sess-1",
+      messageID: "m1",
+      partID: "p1",
+      field: "text",
+      delta: " world",
+    },
+  } as never);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("update skips user message", async () => {
@@ -1116,24 +1250,8 @@ test("initialized seeds the latest assistant streaming state", async () => {
       },
     ],
   }));
-  const { pm } = await setup(["sess-1"], { preserveMessagesMock: true });
-  expect(pm.streaming("sess-1")).toEqual({
-    info: {
-      id: "m1",
-      sessionID: "sess-1",
-      role: "assistant",
-      time: { created: 2 },
-    },
-    parts: [
-      {
-        id: "p1",
-        sessionID: "sess-1",
-        messageID: "m1",
-        type: "text",
-        text: "streaming",
-      },
-    ],
-  });
+  await setup(["sess-1"], { preserveMessagesMock: true });
+  expectLatestDraft("m1", "streaming");
 });
 
 test("initialized picks the newest streaming assistant message by creation time", async () => {
@@ -1146,7 +1264,15 @@ test("initialized picks the newest streaming assistant message by creation time"
           role: "assistant",
           time: { created: 1 },
         },
-        parts: [],
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m1",
+            type: "text",
+            text: "older",
+          },
+        ],
       },
       {
         info: {
@@ -1155,12 +1281,20 @@ test("initialized picks the newest streaming assistant message by creation time"
           role: "assistant",
           time: { created: 2 },
         },
-        parts: [],
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m2",
+            type: "text",
+            text: "newer",
+          },
+        ],
       },
     ],
   }));
-  const { pm } = await setup(["sess-1"], { preserveMessagesMock: true });
-  expect(pm.streaming("sess-1")?.info.id).toBe("m2");
+  await setup(["sess-1"], { preserveMessagesMock: true });
+  expectLatestDraft("m2", "newer");
 });
 
 test("initialized keeps the newer streaming message when a later candidate is older", async () => {
@@ -1173,7 +1307,15 @@ test("initialized keeps the newer streaming message when a later candidate is ol
           role: "assistant",
           time: { created: 2 },
         },
-        parts: [],
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m2",
+            type: "text",
+            text: "newer",
+          },
+        ],
       },
       {
         info: {
@@ -1182,12 +1324,20 @@ test("initialized keeps the newer streaming message when a later candidate is ol
           role: "assistant",
           time: { created: 1 },
         },
-        parts: [],
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m1",
+            type: "text",
+            text: "older",
+          },
+        ],
       },
     ],
   }));
-  const { pm } = await setup(["sess-1"], { preserveMessagesMock: true });
-  expect(pm.streaming("sess-1")?.info.id).toBe("m2");
+  await setup(["sess-1"], { preserveMessagesMock: true });
+  expectLatestDraft("m2", "newer");
 });
 
 test("initialized breaks streaming-message ties by higher message id", async () => {
@@ -1200,7 +1350,15 @@ test("initialized breaks streaming-message ties by higher message id", async () 
           role: "assistant",
           time: { created: 2 },
         },
-        parts: [],
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m2",
+            type: "text",
+            text: "middle",
+          },
+        ],
       },
       {
         info: {
@@ -1209,7 +1367,15 @@ test("initialized breaks streaming-message ties by higher message id", async () 
           role: "assistant",
           time: { created: 2 },
         },
-        parts: [],
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m1",
+            type: "text",
+            text: "lower",
+          },
+        ],
       },
       {
         info: {
@@ -1218,12 +1384,20 @@ test("initialized breaks streaming-message ties by higher message id", async () 
           role: "assistant",
           time: { created: 2 },
         },
-        parts: [],
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m3",
+            type: "text",
+            text: "higher",
+          },
+        ],
       },
     ],
   }));
-  const { pm } = await setup(["sess-1"], { preserveMessagesMock: true });
-  expect(pm.streaming("sess-1")?.info.id).toBe("m3");
+  await setup(["sess-1"], { preserveMessagesMock: true });
+  expectLatestDraft("m3", "higher");
 });
 
 test("initialized skips messages already in database", async () => {
@@ -1359,7 +1533,7 @@ test("initialized skips user messages", async () => {
 
 test("initialized with no sessions skips processing", async () => {
   const database = Database.create();
-  const bot = {} as never;
+  const bot = createMockBot();
   const client = createMockOpencodeClient();
   const es = createMockExistingSessions([]);
   await ProcessingMessages.create(bot, database, client, es);
@@ -1445,16 +1619,16 @@ test("initialized stops when session disappears after fetching messages", async 
     .insert(schema.session)
     .values({ id: "sess-1", chatId: 123, threadId: 0 })
     .run();
-  const bot = {} as never;
+  const bot = createMockBot();
   const client = createMockOpencodeClient({ preserveMessagesMock: true });
   const es = createMockExistingSessions(["sess-1"]);
   vi.mocked(es.check).mockReturnValueOnce(true).mockReturnValue(false);
 
-  const pm = await ProcessingMessages.create(bot, database, client, es);
+  await ProcessingMessages.create(bot, database, client, es);
 
   expect(mockSessionMessages).toHaveBeenCalledTimes(1);
   expect(grammySendAssistantMessage).not.toHaveBeenCalled();
-  expect(pm.streaming("sess-1")).toBeUndefined();
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("initialized skips streaming state when session disappears before sync commits", async () => {
@@ -1476,15 +1650,15 @@ test("initialized skips streaming state when session disappears before sync comm
     .insert(schema.session)
     .values({ id: "sess-1", chatId: 123, threadId: 0 })
     .run();
-  const bot = {} as never;
+  const bot = createMockBot();
   const client = createMockOpencodeClient({ preserveMessagesMock: true });
   const es = createMockExistingSessions(["sess-1"]);
   vi.mocked(es.check).mockReturnValue(false);
 
-  const pm = await ProcessingMessages.create(bot, database, client, es);
+  await ProcessingMessages.create(bot, database, client, es);
 
   expect(mockSessionMessages).toHaveBeenCalledTimes(1);
-  expect(pm.streaming("sess-1")).toBeUndefined();
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("dispose unhooks beforeRemove", async () => {
@@ -1540,7 +1714,7 @@ test("initialized unclaims on delivery failure and allows retry", async () => {
     .insert(schema.session)
     .values({ id: "sess-1", chatId: 123, threadId: 0 })
     .run();
-  const bot = {} as never;
+  const bot = createMockBot();
   const client = createMockOpencodeClient({ preserveMessagesMock: true });
   const es = createMockExistingSessions(["sess-1"]);
   await expect(

@@ -5,12 +5,21 @@ import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
 import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { grammyBuildDraftId } from "~/lib/grammy-build-draft-id";
+import { grammyFormatDraft } from "~/lib/grammy-format-draft";
 import { grammySendAssistantMessage } from "~/lib/grammy-send-assistant-message";
+import { logger } from "~/lib/logger";
 import * as schema from "~/lib/schema";
 
 interface StreamingMessage {
   readonly info: AssistantMessage;
   readonly parts: Part[];
+}
+
+interface SentDraft {
+  readonly markdown?: string | undefined;
+  readonly messageId: string;
+  readonly text: string;
 }
 
 export class ProcessingMessages {
@@ -19,6 +28,7 @@ export class ProcessingMessages {
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #streamingMessages = new Map<string, StreamingMessage>();
+  readonly #sentDrafts = new Map<string, SentDraft>();
   readonly #unhook: () => void;
 
   private constructor(
@@ -33,6 +43,7 @@ export class ProcessingMessages {
     this.#existingSessions = existingSessions;
     this.#unhook = existingSessions.hook("beforeRemove", ({ sessionId }) => {
       this.#streamingMessages.delete(sessionId);
+      this.#sentDrafts.delete(sessionId);
     });
   }
 
@@ -106,6 +117,97 @@ export class ProcessingMessages {
       message.info.sessionID,
       structuredClone(message),
     );
+  }
+
+  async #sendDraft(message: StreamingMessage): Promise<void> {
+    const location = this.#existingSessions.get(message.info.sessionID);
+    if (!location) {
+      this.#sentDrafts.delete(message.info.sessionID);
+      return;
+    }
+
+    const chunk = grammyFormatDraft(
+      message.parts
+        .filter(
+          (part): part is Extract<Part, { type: "text" }> =>
+            part.type === "text",
+        )
+        .map((part) => part.text)
+        .join("\n\n"),
+    );
+    if (!chunk.text) {
+      this.#sentDrafts.delete(message.info.sessionID);
+      return;
+    }
+
+    const previous = this.#sentDrafts.get(message.info.sessionID);
+    if (
+      previous &&
+      previous.messageId === message.info.id &&
+      previous.text === chunk.text &&
+      previous.markdown === chunk.markdown
+    ) {
+      return;
+    }
+
+    const draftId = grammyBuildDraftId(message.info.id);
+    const options = {
+      ...(location.threadId && { message_thread_id: location.threadId }),
+    };
+
+    if (chunk.markdown) {
+      try {
+        await this.#bot.api.sendMessageDraft(
+          location.chatId,
+          draftId,
+          chunk.markdown,
+          {
+            parse_mode: "MarkdownV2",
+            ...options,
+          },
+        );
+      } catch (error) {
+        logger.warn(
+          "Failed to send MarkdownV2 draft, falling back to text",
+          error,
+          {
+            chatId: location.chatId,
+            draftId,
+            markdown: chunk.markdown,
+            text: chunk.text,
+            threadId: location.threadId,
+          },
+        );
+        await this.#bot.api.sendMessageDraft(
+          location.chatId,
+          draftId,
+          chunk.text,
+          options,
+        );
+      }
+    } else {
+      await this.#bot.api.sendMessageDraft(
+        location.chatId,
+        draftId,
+        chunk.text,
+        options,
+      );
+    }
+
+    this.#sentDrafts.set(message.info.sessionID, {
+      messageId: message.info.id,
+      text: chunk.text,
+      markdown: chunk.markdown,
+    });
+  }
+
+  async #syncDraft(sessionId: string): Promise<void> {
+    const message = this.#streamingMessages.get(sessionId);
+    if (!message) {
+      this.#sentDrafts.delete(sessionId);
+      return;
+    }
+    await this.#sendDraft(message);
   }
 
   #setStreamingInfo(info: AssistantMessage): void {
@@ -221,6 +323,7 @@ export class ProcessingMessages {
         throw error;
       }
     }
+    await this.#syncDraft(sessionId);
   }
 
   async #initialize() {
@@ -230,12 +333,6 @@ export class ProcessingMessages {
       sessionIds.map((sessionId) => this.#sync(sessionId)),
     );
     Errors.throwIfAny(results);
-  }
-
-  streaming(sessionId: string): StreamingMessage | undefined {
-    const current = this.#streamingMessages.get(sessionId);
-    if (!current) return undefined;
-    return structuredClone(current);
   }
 
   async update(event: Event) {
@@ -250,9 +347,11 @@ export class ProcessingMessages {
         }
         if (info.time.completed === undefined) {
           this.#setStreamingInfo(info);
+          await this.#syncDraft(info.sessionID);
           break;
         }
         this.#removeStreamingMessage(info.sessionID, info.id);
+        this.#sentDrafts.delete(info.sessionID);
         if (!this.#claim(info)) break;
         try {
           const { data } = await this.#opencodeClient.session.message(
@@ -272,11 +371,13 @@ export class ProcessingMessages {
             event.properties.sessionID,
             event.properties.messageID,
           );
+          await this.#syncDraft(event.properties.sessionID);
         }
         break;
       case "message.part.updated":
         if (this.#existingSessions.check(event.properties.sessionID)) {
           this.#upsertStreamingPart(event.properties.part);
+          await this.#syncDraft(event.properties.sessionID);
         }
         break;
       case "message.part.removed":
@@ -286,6 +387,7 @@ export class ProcessingMessages {
             event.properties.messageID,
             event.properties.partID,
           );
+          await this.#syncDraft(event.properties.sessionID);
         }
         break;
       case "message.part.delta":
@@ -297,6 +399,7 @@ export class ProcessingMessages {
             event.properties.field,
             event.properties.delta,
           );
+          await this.#syncDraft(event.properties.sessionID);
         }
         break;
     }
