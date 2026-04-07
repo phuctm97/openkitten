@@ -15,6 +15,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "^1.3.17",
     "boxen": "^8.0.1",
+    "bunqueue": "^2.6.113",
     "citty": "^0.2.2",
     "content-type": "^1.0.5",
     "drizzle-orm": "^0.45.2",

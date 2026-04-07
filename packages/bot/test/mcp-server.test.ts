@@ -80,6 +80,7 @@ describe("McpServer", () => {
     }),
   );
   const existingSessions = { get: existingSessionsGet } as never;
+  const mockScheduler = {} as never;
   const tempDirs: string[] = [];
 
   beforeEach(() => {
@@ -119,20 +120,35 @@ describe("McpServer", () => {
   });
 
   test("logs starting and ready", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     expect(logger.debug).toHaveBeenCalledWith("MCP server is starting…");
     expect(logger.info).toHaveBeenCalledWith("MCP server is ready");
   });
 
   test("starts Bun.serve on localhost with random port", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     expect(Bun.serve).toHaveBeenCalledWith(
       expect.objectContaining({ hostname: "127.0.0.1", port: 0 }),
     );
   });
 
   test("registers with OpenCode server", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     expect(mockMcpAdd).toHaveBeenCalledWith(
       {
         name: "openkitten",
@@ -152,33 +168,53 @@ describe("McpServer", () => {
       mcp: { add: vi.fn(async () => Promise.reject(error)) },
     } as never;
     await expect(
-      McpServer.create(bot, failingClient, existingSessions),
+      McpServer.create(bot, failingClient, existingSessions, mockScheduler),
     ).rejects.toThrow(error);
     expect(mockStop).toHaveBeenCalledOnce();
   });
 
   test("exited resolves on disposal", async () => {
-    const server = await McpServer.create(bot, mockClient, existingSessions);
+    const server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     server[Symbol.dispose]();
     await expect(server.exited).resolves.toBeUndefined();
   });
 
   test("stops HTTP server on disposal", async () => {
     {
-      using _server = await McpServer.create(bot, mockClient, existingSessions);
+      using _server = await McpServer.create(
+        bot,
+        mockClient,
+        existingSessions,
+        mockScheduler,
+      );
     }
     expect(mockStop).toHaveBeenCalledOnce();
     expect(logger.info).toHaveBeenCalledWith("MCP server is terminated");
   });
 
   test("returns 404 for non-MCP paths", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     const response = await capturedFetch(new Request("http://localhost/other"));
     expect(response.status).toBe(404);
   });
 
   test("returns 401 for missing auth", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     const response = await capturedFetch(
       new Request("http://localhost/mcp", { method: "POST" }),
     );
@@ -186,7 +222,12 @@ describe("McpServer", () => {
   });
 
   test("returns 401 for wrong auth", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     const response = await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -197,7 +238,12 @@ describe("McpServer", () => {
   });
 
   test("creates SDK server and transport for MCP requests", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     const req = new Request("http://localhost/mcp", {
       method: "POST",
       headers: { authorization: "Bearer test-token-abc123" },
@@ -221,7 +267,12 @@ describe("McpServer", () => {
   });
 
   test("registers the send_file tool for MCP requests", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
 
     await capturedFetch(
       new Request("http://localhost/mcp", {
@@ -230,9 +281,42 @@ describe("McpServer", () => {
       }),
     );
 
-    expect(registeredTools).toEqual([
-      expect.objectContaining({ name: "send_file" }),
-    ]);
+    const toolNames = registeredTools.map((t: { name: string }) => t.name);
+    expect(toolNames).toContain("send_file");
+    expect(toolNames).toContain("schedule_create");
+    expect(toolNames).toContain("schedule_list");
+    expect(toolNames).toContain("schedule_delete");
+    expect(toolNames).toContain("schedule_trigger");
+    expect(toolNames).toContain("get_server_time");
+  });
+
+  test("schedule tools receive getMetadata from McpServer", async () => {
+    const scheduler = {
+      list: vi.fn(async () => []),
+    };
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      scheduler as never,
+    );
+
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find(
+      (t: { name: string }) => t.name === "schedule_list",
+    );
+    if (!tool) throw new Error("Expected schedule_list tool");
+    const result = (await tool.handler({
+      __OPENKITTEN__: { sessionID: "sess-1", callID: "call-1" },
+    })) as { structuredContent: { tasks: unknown[] } };
+    expect(result.structuredContent.tasks).toEqual([]);
+    expect(scheduler.list).toHaveBeenCalledOnce();
   });
 
   test("send_file sends a local png as a Telegram photo", async () => {
@@ -241,7 +325,12 @@ describe("McpServer", () => {
     const path = join(dir, "photo.png");
     await Bun.write(path, "png-bytes");
 
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -282,7 +371,12 @@ describe("McpServer", () => {
     const path = join(dir, filename);
     await Bun.write(path, `${kind}-bytes`);
 
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -322,7 +416,12 @@ describe("McpServer", () => {
       threadId: undefined,
     });
 
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -354,7 +453,12 @@ describe("McpServer", () => {
   });
 
   test("send_file rejects missing local files", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -381,7 +485,12 @@ describe("McpServer", () => {
 
     existingSessionsGet.mockReturnValueOnce(undefined);
 
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",
@@ -401,7 +510,12 @@ describe("McpServer", () => {
   });
 
   test("send_file rejects calls without OpenKitten metadata", async () => {
-    using _server = await McpServer.create(bot, mockClient, existingSessions);
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
     await capturedFetch(
       new Request("http://localhost/mcp", {
         method: "POST",

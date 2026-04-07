@@ -58,24 +58,43 @@ test("copies agent files", async () => {
   ).resolves.toBeDefined();
 });
 
-test("copies AGENTS.md to workspace", async () => {
+test("copies default-agents to XDG_CONFIG_HOME/opencode", async () => {
   await OpencodeConfig.create(profile);
-  const content = await readFile(join(profile.workspace, "AGENTS.md"), "utf-8");
-  expect(content).toContain("# Communication");
+  const content = await readFile(
+    join(profile.xdgConfig, "opencode", "AGENTS.md"),
+    "utf-8",
+  );
   expect(content).toContain("# Professional objectivity");
+  expect(content).toContain("# Working with files");
   expect(content).toContain("# Tool usage");
-  expect(content).toContain("# Skills");
-  expect(content).toContain("$XDG_CONFIG_HOME/openkitten/skills/");
-  expect(content).not.toContain("__OPENKITTEN_AGENT_");
+  expect(content).toContain("# Proactiveness");
+  expect(content).toContain("# Memory update rules");
+  expect(content).not.toContain("# Communication");
 });
 
-test("does not overwrite existing AGENTS.md in workspace", async () => {
+test("copies system-agents to OPENCODE_CONFIG_DIR", async () => {
   await OpencodeConfig.create(profile);
-  const agentsMdPath = join(profile.workspace, "AGENTS.md");
-  await writeFile(agentsMdPath, "custom rules");
+  const content = await readFile(join(configDir(), "AGENTS.md"), "utf-8");
+  expect(content).toContain("# Communication");
+  expect(content).not.toContain("# Professional objectivity");
+});
+
+test("always overwrites default-agents on startup", async () => {
   await OpencodeConfig.create(profile);
-  const content = await readFile(agentsMdPath, "utf-8");
-  expect(content).toBe("custom rules");
+  const path = join(profile.xdgConfig, "opencode", "AGENTS.md");
+  await writeFile(path, "custom");
+  await OpencodeConfig.create(profile);
+  const content = await readFile(path, "utf-8");
+  expect(content).toContain("# Professional objectivity");
+});
+
+test("always overwrites system-agents on startup", async () => {
+  await OpencodeConfig.create(profile);
+  const path = join(configDir(), "AGENTS.md");
+  await writeFile(path, "custom");
+  await OpencodeConfig.create(profile);
+  const content = await readFile(path, "utf-8");
+  expect(content).toContain("# Communication");
 });
 
 test("renders agent files with self-file access", async () => {
@@ -130,20 +149,36 @@ test("writes system OpenCode plugin", async () => {
   expect(content).toContain("};");
 });
 
-test("copies skill files", async () => {
+test("copies skill directory with SKILL.md and scripts", async () => {
   await OpencodeConfig.create(profile);
-  const content = await readFile(join(skillsDir(), "telegram-api.md"), "utf-8");
-  expect(content).toContain("# Telegram Bot API");
-  expect(content).toContain("$XDG_CONFIG_HOME/openkitten/telegram.json");
+  const skillMd = await readFile(
+    join(skillsDir(), "telegram-api", "SKILL.md"),
+    "utf-8",
+  );
+  expect(skillMd).toContain("# Telegram Bot API");
+  expect(skillMd).toContain("name: telegram-api");
+  expect(skillMd).toContain("./get-token.sh");
+
+  const getTokenSh = await readFile(
+    join(skillsDir(), "telegram-api", "get-token.sh"),
+    "utf-8",
+  );
+  expect(getTokenSh).toContain("openkitten/telegram.json");
+
+  const getTokenTs = await readFile(
+    join(skillsDir(), "telegram-api", "get-token.ts"),
+    "utf-8",
+  );
+  expect(getTokenTs).toContain("openkitten");
 });
 
-test("does not overwrite existing skill files", async () => {
+test("always overwrites skill files on startup", async () => {
   await OpencodeConfig.create(profile);
-  const skillPath = join(skillsDir(), "telegram-api.md");
+  const skillPath = join(skillsDir(), "telegram-api", "SKILL.md");
   await writeFile(skillPath, "custom content");
   await OpencodeConfig.create(profile);
   const content = await readFile(skillPath, "utf-8");
-  expect(content).toBe("custom content");
+  expect(content).toContain("# Telegram Bot API");
 });
 
 test("does not overwrite existing opencode config", async () => {
@@ -155,25 +190,26 @@ test("does not overwrite existing opencode config", async () => {
   expect(config.default_agent).toBe("build");
 });
 
-test("does not overwrite existing agent files", async () => {
+test("always overwrites agent files on startup", async () => {
   await OpencodeConfig.create(profile);
   const buildPath = join(configDir(), "agents", "build.md");
   await writeFile(buildPath, "custom content");
   await OpencodeConfig.create(profile);
   const content = await readFile(buildPath, "utf-8");
-  expect(content).toBe("custom content");
+  expect(content).not.toBe("custom content");
+  expect(content).toContain("durable memory");
 });
 
-test("copies new agents while preserving existing ones", async () => {
+test("overwrites all agent files on repeated create", async () => {
   await OpencodeConfig.create(profile);
   const buildPath = join(configDir(), "agents", "build.md");
   await writeFile(buildPath, "custom content");
   await OpencodeConfig.create(profile);
   const buildContent = await readFile(buildPath, "utf-8");
-  expect(buildContent).toBe("custom content");
+  expect(buildContent).not.toBe("custom content");
   const planPath = join(configDir(), "agents", "plan.md");
   const planContent = await readFile(planPath, "utf-8");
-  expect(planContent).not.toBe("custom content");
+  expect(planContent).toContain("plan mode");
 });
 
 test("overwrites existing system OpenCode plugin", async () => {
