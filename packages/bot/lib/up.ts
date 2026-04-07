@@ -6,6 +6,7 @@ import * as clack from "@clack/prompts";
 import boxen from "boxen";
 import { defineCommand } from "citty";
 import { getUserId } from "~/lib/get-user-id";
+import { grammySetCommands } from "~/lib/grammy-set-commands";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
@@ -201,7 +202,10 @@ export const up = defineCommand({
     await updateSource();
     clack.outro("Processed update");
     const profile = await Profile.create();
-    await TelegramConfig.create(profile, { skipActions: args.yes });
+    const telegramConfig = await TelegramConfig.create(profile, {
+      skipActions: args.yes,
+    });
+    await grammySetCommands(telegramConfig.botToken);
     await OpencodeConfig.create(profile, { skipActions: args.yes });
     process.stderr.write(
       `${boxen(styleText("bold", "OpenKitten"), { padding: 1 })}\n`,
