@@ -65,6 +65,14 @@ vi.mock("~/lib/grammy-handle-media-group-flush", () => ({
   grammyHandleMediaGroupFlush: mockGrammyHandleMediaGroupFlush,
 }));
 
+vi.mock("~/lib/scheduler", () => ({
+  Scheduler: {
+    create: vi.fn(() => ({
+      [Symbol.dispose]: vi.fn(),
+    })),
+  },
+}));
+
 vi.mock("node:fs/promises", async () => {
   const actual =
     await vi.importActual<typeof import("node:fs/promises")>(

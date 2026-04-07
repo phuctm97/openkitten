@@ -14,6 +14,8 @@ import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getAttachmentName } from "~/lib/get-attachment-name";
 import { logger } from "~/lib/logger";
+import { registerScheduleTools } from "~/lib/mcp-schedule-tools";
+import type { Scheduler } from "~/lib/scheduler";
 import { version } from "~/package.json" with { type: "json" };
 
 const openkittenMetadataSchema = zod.object({
@@ -48,14 +50,20 @@ type SendFileResult = CallToolResult & {
 export class McpServer implements Disposable {
   readonly #bot: Bot;
   readonly #existingSessions: ExistingSessions;
+  readonly #scheduler: Scheduler;
   readonly #token: string;
   readonly #server: Bun.Server<undefined>;
   readonly #exited: Promise<void>;
   readonly #resolveExited: () => void;
 
-  private constructor(bot: Bot, existingSessions: ExistingSessions) {
+  private constructor(
+    bot: Bot,
+    existingSessions: ExistingSessions,
+    scheduler: Scheduler,
+  ) {
     this.#bot = bot;
     this.#existingSessions = existingSessions;
+    this.#scheduler = scheduler;
     this.#token = randomBytes(32).toString("base64url");
     this.#server = Bun.serve({
       hostname: "127.0.0.1",
@@ -93,6 +101,11 @@ export class McpServer implements Disposable {
       },
       async (args) => this.#sendFile(args),
     );
+    registerScheduleTools(server, {
+      scheduler: this.#scheduler,
+      existingSessions: this.#existingSessions,
+      getMetadata: (args) => this.#getMetadata(args),
+    });
     const transport = new WebStandardStreamableHTTPServerTransport();
     await server.connect(transport);
     return transport.handleRequest(req);
@@ -193,9 +206,10 @@ export class McpServer implements Disposable {
     bot: Bot,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
+    scheduler: Scheduler,
   ): Promise<McpServer> {
     logger.debug("MCP server is starting…");
-    const server = new McpServer(bot, existingSessions);
+    const server = new McpServer(bot, existingSessions, scheduler);
     try {
       await opencodeClient.mcp.add(
         {

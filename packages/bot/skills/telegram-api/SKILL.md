@@ -1,19 +1,27 @@
+---
+name: telegram-api
+description: Manage the Telegram bot — read bot token, call Telegram Bot API methods, change bot settings, delete messages, and other bot administration tasks.
+---
+
 # Telegram Bot API
 
-Use this guide when managing the Telegram bot itself — changing bot name, description, avatar, deleting messages, setting commands, or any bot administration task not related to sending messages.
+Use this skill when managing the Telegram bot itself — changing bot name, description, avatar, deleting messages, setting commands, or any bot administration task not related to sending messages.
 
 ## Bot Token
 
-Read the bot token from `$XDG_CONFIG_HOME/openkitten/telegram.json`:
+Run the helper script to read the bot token securely:
 
-```json
-{
-  "botToken": "<bot_id>:<bot_secret>",
-  "userId": 12345
-}
+```bash
+bash ./get-token.sh
 ```
 
-Extract the `botToken` value. **Never log, echo, or expose the bot token in output.**
+Or in TypeScript:
+
+```bash
+bun ./get-token.ts
+```
+
+**Never log, echo, or expose the bot token in any other output.**
 
 ## API Documentation
 

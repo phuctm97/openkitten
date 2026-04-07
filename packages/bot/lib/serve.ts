@@ -12,16 +12,14 @@ import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
 import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
-import { grammyHandleDocument } from "~/lib/grammy-handle-document";
+import { grammyHandleFile } from "~/lib/grammy-handle-file";
 import { grammyHandleMediaGroupFlush } from "~/lib/grammy-handle-media-group-flush";
-import { grammyHandlePhoto } from "~/lib/grammy-handle-photo";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
 import { MediaGroupBuffer } from "~/lib/media-group-buffer";
-import { ModelCapabilities } from "~/lib/model-capabilities";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
@@ -30,6 +28,7 @@ import { PendingPrompts } from "~/lib/pending-prompts";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import { Profile } from "~/lib/profile";
 import { restart } from "~/lib/restart";
+import { Scheduler } from "~/lib/scheduler";
 import type { Scope } from "~/lib/scope";
 import { Shutdown } from "~/lib/shutdown";
 import { TelegramConfig } from "~/lib/telegram-config";
@@ -67,10 +66,18 @@ export const serve = defineCommand({
         database,
         opencodeServer.client,
       );
+      using scheduler = Scheduler.create(
+        bot,
+        database,
+        opencodeServer.client,
+        existingSessions,
+        profile.xdgData,
+      );
       using mcpServer = await McpServer.create(
         bot,
         opencodeServer.client,
         existingSessions,
+        scheduler,
       );
       using workingSessions = WorkingSessions.create(existingSessions);
       await using pendingPrompts = PendingPrompts.create(
@@ -115,8 +122,7 @@ export const serve = defineCommand({
         pendingPrompts,
         floatingPromises,
       );
-      const attachmentStorage = AttachmentStorage.create(profile.workspace);
-      const modelCapabilities = ModelCapabilities.create(opencodeServer.client);
+      const attachmentStorage = AttachmentStorage.create(profile.xdgCache);
       const scope: Scope = {
         bot,
         database,
@@ -129,7 +135,6 @@ export const serve = defineCommand({
         floatingPromises,
         mediaGroupBuffer,
         attachmentStorage,
-        modelCapabilities,
         typingIndicators,
       };
       await using opencodeEventStream = OpencodeEventStream.create(
@@ -150,14 +155,15 @@ export const serve = defineCommand({
         grammyEventLoop.connect(scope, grammyHandleCallback),
       );
       bot.on("message:text", grammyEventLoop.connect(scope, grammyHandleText));
-      bot.on(
-        "message:photo",
-        grammyEventLoop.connect(scope, grammyHandlePhoto),
-      );
-      bot.on(
-        "message:document",
-        grammyEventLoop.connect(scope, grammyHandleDocument),
-      );
+      const fileHandler = grammyEventLoop.connect(scope, grammyHandleFile);
+      bot.on("message:photo", fileHandler);
+      bot.on("message:document", fileHandler);
+      bot.on("message:video", fileHandler);
+      bot.on("message:audio", fileHandler);
+      bot.on("message:voice", fileHandler);
+      bot.on("message:animation", fileHandler);
+      bot.on("message:video_note", fileHandler);
+      bot.on("message:sticker", fileHandler);
       await using grammyEventStream = await GrammyEventStream.create(
         bot,
         shutdown,
