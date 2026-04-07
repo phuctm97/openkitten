@@ -15,35 +15,45 @@ function findModel(
   const modelName = modelParts.join("/");
   for (const provider of providers) {
     for (const [key, model] of Object.entries(provider.models)) {
-      if (key === modelId || key === modelName || model.id === modelId) {
-        return model;
-      }
+      if (key === modelId) return model;
+      if (key === modelName) return model;
+      if (model.id === modelId) return model;
     }
   }
   return undefined;
 }
-export async function supportsInput(
+
+function resolveDefaultModel(defaults: {
+  [key: string]: string;
+}): string | undefined {
+  const values = Object.values(defaults);
+  return values.length > 0 ? values[0] : undefined;
+}
+
+function checkInput(
+  input: Model["capabilities"]["input"],
+  mime: string,
+): boolean {
+  if (mime.startsWith("image/")) return input.image;
+  if (mime === "application/pdf") return input.pdf;
+  if (mime.startsWith("audio/")) return input.audio;
+  if (mime.startsWith("video/")) return input.video;
+  return false;
+}
+
+export async function modelSupportsFile(
   client: OpencodeClient,
   mime: string,
 ): Promise<boolean> {
   const normalized = normalizeMime(mime);
   const { data: config } = await client.config.get({}, { throwOnError: true });
-  const modelId = config.model;
-  if (!modelId) {
-    return false;
-  }
   const { data: providersData } = await client.config.providers(
     {},
     { throwOnError: true },
   );
+  const modelId = config.model ?? resolveDefaultModel(providersData.default);
+  if (!modelId) return false;
   const model = findModel(providersData.providers, modelId);
-  if (!model) {
-    return false;
-  }
-  const input = model.capabilities.input;
-  if (normalized.startsWith("image/")) return input.image;
-  if (normalized === "application/pdf") return input.pdf;
-  if (normalized.startsWith("audio/")) return input.audio;
-  if (normalized.startsWith("video/")) return input.video;
-  return false;
+  if (!model) return false;
+  return checkInput(model.capabilities.input, normalized);
 }

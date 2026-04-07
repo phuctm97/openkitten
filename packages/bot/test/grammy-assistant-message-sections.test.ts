@@ -612,6 +612,7 @@ test("omits attachment summaries once files are sent separately", () => {
       createFilePart({ filename: undefined, url: "   " }),
       createCompletedToolPart("read", { filePath: "/repo/src/app.ts" }, {}, [
         createFilePart({
+          source: fileSource,
           filename: "attachment.txt",
           url: "data:text/plain;base64,V29ybGQ=",
         }) as Extract<Part, { type: "file" }>,
@@ -622,6 +623,7 @@ test("omits attachment summaries once files are sent separately", () => {
           url: "https://example.com/archive.txt",
         }) as Extract<Part, { type: "file" }>,
         createFilePart({
+          source: fileSource,
           filename: "archive.txt",
           url: "data:text/plain;base64,QXJjaGl2ZQ==",
         }) as Extract<Part, { type: "file" }>,
