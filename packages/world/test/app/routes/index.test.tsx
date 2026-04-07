@@ -1,44 +1,59 @@
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { expect, test, vi } from "vitest";
+import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, expect, test, vi } from "vitest";
 
-vi.mock("~/components/scene", () => ({
-  Scene: () => <div data-testid="scene-mock">Scene Mock</div>,
+const indexRouteMocks = vi.hoisted(() => ({
+  createGame: vi.fn(() => ({
+    destroy: vi.fn(),
+  })),
 }));
 
-import Component from "~/app/routes/index";
+vi.mock("~/lib/create-game", () => ({
+  createGame: indexRouteMocks.createGame,
+}));
 
-test("renders the phase 1 shell without extra status cards", () => {
-  render(<Component />);
-
-  expect(screen.getByText("OpenKitten World")).toBeInTheDocument();
-  expect(
-    screen.getByText(
-      "The home page is now a real browser-client demo: React Router drives shell, Jotai powers state, and a Pixi room sits at the center like a tiny screen inside the app.",
-    ),
-  ).toBeInTheDocument();
-  expect(screen.getByText("Phase 1")).toBeInTheDocument();
-  expect(screen.getByText("React + Pixi")).toBeInTheDocument();
-  expect(screen.getByTestId("scene-mock")).toBeInTheDocument();
-  expect(screen.queryByText("state")).not.toBeInTheDocument();
-  expect(screen.queryByText("system")).not.toBeInTheDocument();
-  expect(screen.queryByText("stack")).not.toBeInTheDocument();
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.resetModules();
 });
 
-test("switches between auto, light, and dark themes", async () => {
-  const user = userEvent.setup();
+test("renders the fullscreen game route and boots Phaser", async () => {
+  const { default: Component } = await import("~/app/routes/index");
+  const { unmount } = render(<Component />);
 
-  render(<Component />);
+  const screenElement = screen.getByTestId("game-screen");
 
-  await user.click(screen.getByRole("button", { name: "Light theme" }));
+  expect(screenElement).toHaveClass("h-full", "overflow-hidden");
+  await waitFor(() => {
+    expect(indexRouteMocks.createGame).toHaveBeenCalledTimes(1);
+  });
+  expect(indexRouteMocks.createGame).toHaveBeenCalledWith(screenElement);
+  expect(screen.queryByText("OpenKitten World")).not.toBeInTheDocument();
+  expect(screen.queryByText("Phase 1")).not.toBeInTheDocument();
 
-  expect(localStorage.getItem("openkitten-world-theme")).toBe("light");
+  const game = indexRouteMocks.createGame.mock.results[0]?.value;
 
-  await user.click(screen.getByRole("button", { name: "Dark theme" }));
+  if (game === undefined) {
+    throw new Error("Expected the Phaser game instance to be created.");
+  }
 
-  expect(localStorage.getItem("openkitten-world-theme")).toBe("dark");
+  unmount();
 
-  await user.click(screen.getByRole("button", { name: "System theme" }));
+  expect(game.destroy).toHaveBeenCalledWith(true);
+});
 
-  expect(localStorage.getItem("openkitten-world-theme")).toBe("auto");
+test("does not create Phaser when the route ref stays null", async () => {
+  vi.doMock("react", async () => {
+    const react = await vi.importActual<typeof import("react")>("react");
+
+    return {
+      ...react,
+      useState: () => [null, vi.fn()] as const,
+    };
+  });
+
+  const { default: NullRefComponent } = await import("~/app/routes/index");
+
+  render(<NullRefComponent />);
+
+  expect(indexRouteMocks.createGame).not.toHaveBeenCalled();
 });

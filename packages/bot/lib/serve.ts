@@ -1,6 +1,7 @@
 import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
+import { AttachmentStorage } from "~/lib/attachment-storage";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
@@ -11,10 +12,16 @@ import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
 import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
+import { grammyHandleDocument } from "~/lib/grammy-handle-document";
+import { grammyHandleMediaGroupFlush } from "~/lib/grammy-handle-media-group-flush";
 import { grammyHandlePhoto } from "~/lib/grammy-handle-photo";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
+import { grammySetCommands } from "~/lib/grammy-set-commands";
+import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
+import { MediaGroupBuffer } from "~/lib/media-group-buffer";
+import { ModelCapabilities } from "~/lib/model-capabilities";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
@@ -48,6 +55,7 @@ export const serve = defineCommand({
       const opencodeConfig = await OpencodeConfig.create(profile, {
         skipActions,
       });
+      await grammySetCommands(telegramConfig.botToken);
       const bot = new Bot(telegramConfig.botToken);
       bot.api.config.use(autoRetry());
       bot.use(grammyFilterUser(telegramConfig.userId));
@@ -78,6 +86,27 @@ export const serve = defineCommand({
         existingSessions,
       );
       await using floatingPromises = FloatingPromises.create();
+      using mediaGroupBuffer = MediaGroupBuffer.create(
+        floatingPromises,
+        async (entries) => {
+          try {
+            await grammyHandleMediaGroupFlush(
+              {
+                bot,
+                database,
+                opencodeClient: opencodeServer.client,
+                existingSessions,
+                workingSessions,
+                pendingPrompts,
+              },
+              entries,
+            );
+          } catch (error) {
+            logger.fatal("Media group flush failed", error);
+            shutdown.trigger();
+          }
+        },
+      );
       using typingIndicators = TypingIndicators.create(
         bot,
         shutdown,
@@ -86,6 +115,8 @@ export const serve = defineCommand({
         pendingPrompts,
         floatingPromises,
       );
+      const attachmentStorage = AttachmentStorage.create(profile.workspace);
+      const modelCapabilities = ModelCapabilities.create(opencodeServer.client);
       const scope: Scope = {
         bot,
         database,
@@ -96,6 +127,9 @@ export const serve = defineCommand({
         pendingPrompts,
         processingMessages,
         floatingPromises,
+        mediaGroupBuffer,
+        attachmentStorage,
+        modelCapabilities,
         typingIndicators,
       };
       await using opencodeEventStream = OpencodeEventStream.create(
@@ -119,6 +153,10 @@ export const serve = defineCommand({
       bot.on(
         "message:photo",
         grammyEventLoop.connect(scope, grammyHandlePhoto),
+      );
+      bot.on(
+        "message:document",
+        grammyEventLoop.connect(scope, grammyHandleDocument),
       );
       await using grammyEventStream = await GrammyEventStream.create(
         bot,

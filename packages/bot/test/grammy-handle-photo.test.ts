@@ -39,6 +39,7 @@ function mockPhotoCtx(
   threadId?: number,
   messageId = 100,
   filePath = "photos/test.jpg",
+  mediaGroupId?: string,
 ) {
   return {
     chat: { id: chatId },
@@ -47,6 +48,7 @@ function mockPhotoCtx(
       ...(caption !== undefined && { caption }),
       message_id: messageId,
       photo: [{ file_id: "photo-small" }, { file_id: "photo-large" }],
+      media_group_id: mediaGroupId,
     },
     api: { token: "test-token" },
     getFile: vi.fn<() => Promise<{ file_path: string | undefined }>>(
@@ -55,6 +57,13 @@ function mockPhotoCtx(
       }),
     ),
     update: { update_id: 1 },
+  };
+}
+
+function mockMediaGroupBuffer() {
+  return {
+    add: vi.fn(),
+    [Symbol.dispose]: vi.fn(),
   };
 }
 
@@ -121,6 +130,7 @@ function mockScope(overrides: {
   opencodeClient?: ReturnType<typeof mockOpencodeClient>;
   pendingPrompts?: ReturnType<typeof mockPendingPrompts>;
   workingSessions?: ReturnType<typeof mockWorkingSessions>;
+  mediaGroupBuffer?: ReturnType<typeof mockMediaGroupBuffer>;
 }): Scope {
   return {
     bot: {} as never,
@@ -133,6 +143,10 @@ function mockScope(overrides: {
     pendingPrompts: (overrides.pendingPrompts ?? mockPendingPrompts()) as never,
     processingMessages: {} as never,
     floatingPromises: {} as never,
+    mediaGroupBuffer: (overrides.mediaGroupBuffer ??
+      mockMediaGroupBuffer()) as never,
+    attachmentStorage: {} as never,
+    modelCapabilities: {} as never,
     typingIndicators: {} as never,
   };
 }
@@ -881,4 +895,108 @@ test("rethrows errors from lock", async () => {
   await expect(
     grammyHandlePhoto(scope, mockPhotoCtx(42) as never, signal),
   ).rejects.toBe(error);
+});
+
+test("buffers photo in media group with deferred download", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  const mediaGroupBuffer = mockMediaGroupBuffer();
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    mediaGroupBuffer,
+  });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(
+      42,
+      "describe this",
+      7,
+      100,
+      "photos/test.jpg",
+      "mg1",
+    ) as never,
+    signal,
+  );
+
+  expect(mediaGroupBuffer.add).toHaveBeenCalledWith("mg1", {
+    chatId: 42,
+    threadId: 7,
+    messageId: 100,
+    download: expect.any(Function),
+  });
+  expect(existingSessions.find).not.toHaveBeenCalled();
+  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
+});
+
+test("deferred download resolves to correct parts", async () => {
+  const mediaGroupBuffer = mockMediaGroupBuffer();
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({ mediaGroupBuffer });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(
+      42,
+      "describe this",
+      undefined,
+      100,
+      "photos/test.jpg",
+      "mg1",
+    ) as never,
+    signal,
+  );
+
+  const call = vi.mocked(mediaGroupBuffer.add).mock.calls[0];
+  if (!call) throw new Error("Expected add to be called");
+  const entry = call[1];
+  const parts = await entry.download();
+  expect(parts).toEqual([
+    { type: "text", text: "describe this" },
+    {
+      type: "file",
+      mime: "image/jpeg",
+      filename: "test.jpg",
+      url: "data:image/jpeg;base64,AQID",
+    },
+  ]);
+});
+
+test("deferred download without caption excludes text part", async () => {
+  const mediaGroupBuffer = mockMediaGroupBuffer();
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({ mediaGroupBuffer });
+
+  await grammyHandlePhoto(
+    scope,
+    mockPhotoCtx(
+      42,
+      undefined,
+      undefined,
+      55,
+      "photos/test.jpg",
+      "mg2",
+    ) as never,
+    signal,
+  );
+
+  const call = vi.mocked(mediaGroupBuffer.add).mock.calls[0];
+  if (!call) throw new Error("Expected add to be called");
+  const entry = call[1];
+  const parts = await entry.download();
+  expect(parts).toEqual([
+    {
+      type: "file",
+      mime: "image/jpeg",
+      filename: "test.jpg",
+      url: "data:image/jpeg;base64,AQID",
+    },
+  ]);
 });

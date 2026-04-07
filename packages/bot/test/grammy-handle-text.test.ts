@@ -102,6 +102,9 @@ function mockScope(overrides: {
     pendingPrompts: (overrides.pendingPrompts ?? mockPendingPrompts()) as never,
     processingMessages: {} as never,
     floatingPromises: {} as never,
+    mediaGroupBuffer: {} as never,
+    attachmentStorage: {} as never,
+    modelCapabilities: {} as never,
     typingIndicators: {} as never,
   };
 }

@@ -2,134 +2,77 @@
 
 ## Status
 
-This document translates the current OpenKitten World vision, spec, client strategy, visual direction, and MVP into a practical implementation plan.
+This plan describes the intended implementation path for OpenKitten World.
 
-It is meant to answer:
+The implementation target is:
 
-- how the first world client should be structured
-- how `PixiJS + React` should be used together
-- how to scope the first implementation safely
-- what phases should come first
-- what engineering decisions should be made now versus deferred
-
-This is a build plan for the first real client implementation, not the final system architecture for the whole product.
+- Phaser-first on `/`
+- React Router for routing
+- React pages for non-game routes
+- Jotai only as a narrow bridge when the two runtimes need to share state
 
 ## Planning Principles
 
-The implementation should optimize for:
+The implementation should preserve these principles:
 
-- proving the product quickly
-- keeping the House model intact
-- avoiding premature game-engine abstraction
-- preserving future room for richer immersion
-- staying close to the team's TypeScript and React strengths
+- the home route is a game experience first
+- the core domain model stays independent from rendering details
+- Phaser owns the frame loop and primary interaction model on `/`
+- React remains available for routes that are not game experiences
+- React DOM on `/` should be optional and intentionally minimized
 
-The implementation should not optimize for:
+This plan should optimize for product feel, not only for implementation familiarity.
 
-- maximum engine completeness
-- premature backend complexity
-- speculative scale concerns before the core client experience is proven
+## Immediate Focus
 
-## Immediate Recommendation
+Start with a fullscreen Phaser route and build outward from there.
 
-The first implementation should start inside the existing `packages/world` package.
+Concretely, that means:
 
-That means:
-
-- keep the current docs in `packages/world`
-- add actual application code to the same package
-- grow it into the first world client
-
-This keeps the product thinking and implementation close together at the start.
-
-If the codebase grows large later, it can be split.
-But that is not necessary before the first slice exists.
+- keep the React Router app root neutral
+- let `app/routes/index.tsx` create and destroy one `Phaser.Game`
+- move world construction into Phaser scenes
+- stop designing `/` as a dashboard shell around a renderer
 
 ## Recommended Stack
 
 ### Core
 
-- `TypeScript`
-- `React`
-- `PixiJS`
-- `@pixi/react`
+- `Phaser` for the main `/` runtime
+- `React Router` for routing and route composition
+- `React` for non-game routes and optional overlays
+- `Jotai` for a small renderer-agnostic shared store when needed
+- `Bun` workspace tooling for package management and scripts
 
-### Recommended Build And Dev Tooling
+### Build And Dev Tooling
 
-- a browser-oriented dev/build tool such as `Vite`
-- Bun workspace tooling for package management and scripts
+- Vite through the existing React Router setup
+- the current `bun run dev`, `bun run build`, and `bun run test` workflow
+- TypeScript build checks through `bun --bun tsc --build`
 
-The exact build tool can still be chosen during scaffolding, but the implementation should preserve this principle:
+The build system can remain simple.
+The main architectural change is runtime ownership, not bundling strategy.
 
-- the client should behave like a modern web application first
-- the world rendering should sit naturally inside that model
+## Route Strategy
 
-## Key Architectural Decision
+The route model should be:
 
-The first implementation should use:
+- `/` for the fullscreen House experience
+- additional routes for conventional web flows where appropriate
 
-- `React` as the app and UI composition layer
-- `Pixi` as the world rendering and interaction layer
+Examples of likely future non-game routes:
 
-That means the first client should be understood as:
+- auth
+- onboarding
+- settings
+- account management
+- 404 or fallback routes
 
-- a world-first product presentation
-- built on top of an application-first state model
-
-This is the most important architecture decision in the plan.
-
-## UI Strategy For The First Slice
-
-For the MVP and early implementation, the recommended strategy is:
-
-- use `Pixi` for the House world and lightweight in-world affordances
-- use `React` for dense, text-heavy, productivity-heavy panels
-
-This means:
-
-- cats
-- rooms
-- props
-- world selection states
-- simple in-world overlays
-
-belong naturally in the Pixi layer
-
-while:
-
-- inbox panels
-- thread panels
-- transcript panels
-- cat detail panels
-- text inputs
-
-should prioritize readability and speed of implementation first
-
-This is a recommendation for the first implementation, not a permanent limitation.
-The state model should still make it possible to evolve toward more in-world UI later if that becomes valuable.
-
-## Why This Hybrid Layering Is Recommended
-
-It best serves the actual product:
-
-- OpenKitten World is still a serious productivity tool
-- many surfaces are text-heavy
-- long-form readability matters
-- writing comfort matters
-- the product should feel good before it feels fully diegetic
-
-This also keeps the first implementation focused on what is unique:
-
-- the House
-- the cats
-- the world view
-- the interaction model
-
-rather than rebuilding a custom text-heavy UI system too early.
+These routes should not impose layout assumptions on `/`.
 
 ## Suggested Package Layout
 
-The first implementation should likely grow `packages/world` into something like:
+The package should likely grow toward something like:
 
 - `packages/world/README.md`
 - `packages/world/VISION.md`
@@ -143,221 +86,185 @@ The first implementation should likely grow `packages/world` into something like
 - `packages/world/vite.config.ts`
 - `packages/world/vitest.config.ts`
 - `packages/world/app/`
-- `packages/world/hooks/`
-- `packages/world/components/`
+- `packages/world/game/`
+- `packages/world/game/scenes/`
+- `packages/world/game/objects/`
+- `packages/world/game/systems/`
+- `packages/world/state/`
 - `packages/world/domain/`
 - `packages/world/fixtures/`
-- `packages/world/scene/`
-- `packages/world/panels/`
-- `packages/world/state/`
 - `packages/world/lib/`
-- `packages/world/test/`
 - `packages/world/public/`
-
-The exact folder split can change, but the conceptual layering should stay stable.
+- `packages/world/test/`
 
 ## Layered Client Architecture
 
 ### 1. Domain Layer
 
-The domain layer should mirror the world spec closely.
+The domain layer should hold renderer-agnostic product concepts:
 
-It should define the core client-side shapes for:
+- house
+- cats
+- goals
+- threads
+- notices
+- memos
+- rules
+- sessions
+- transcript summaries
 
-- House
-- Cat
-- Goal
-- Thread
-- Comment
-- Activity
-- Notice
-- Session
-
-This layer should stay close to the product vocabulary.
-It should not be polluted with rendering-specific concerns.
+This layer should not know whether the home route is rendered by Phaser or anything else.
 
 ### 2. Fixtures Layer
 
-The first client should rely on fixtures and mocked scenarios.
+The early client should still be fixture-driven.
 
-This layer should provide:
+It should provide:
 
-- the default demo House
-- two demo Cats
-- example Threads
-- example Notices
-- one active Session transcript
+- one demo house
+- one human
+- two cats
+- a few goals and threads
+- a small inbox
+- one visible active session
 
-Fixtures are important because they let the team prove the product before backend work and executor work exist.
+The point is to validate the world experience before deeper backend integration.
 
-### 3. State Layer
+### 3. Shared State Layer
 
-The state layer should hold the live client state for:
+The shared state layer should stay small and explicit.
 
-- House data
-- selected cat
-- selected thread
-- opened panel state
-- transcript playback state
-- local interaction results
+It can use Jotai for:
 
-The state model should be:
+- current inspect target
+- selected cat or object
+- coarse navigation intent
+- maybe summary-level notice or thread state
 
-- app-first
-- serializable
-- independent from rendering details
+It should not become a chatty, frame-by-frame coordination bus.
 
-The state layer should be able to drive:
+### 4. Phaser Game Layer
 
-- a Pixi House view
-- React panels
-- future alternate presentation modes
+This is the primary runtime for `/`.
 
-### 4. World Presentation Layer
+It should contain:
 
-The world layer should map House state into visible world objects.
+- boot scene
+- house scene
+- optional UI scene
+- world object placement
+- selection and hover behavior
+- camera behavior, if needed
+- animations and moment-to-moment feedback
 
-It should be responsible for:
+The game layer should own:
 
-- room layout
-- cat placement
-- object placement
-- hover and selection feedback
-- movement and idle animation
-- world-level transitions
+- frame updates
+- pointer and keyboard interaction
+- object hit testing
+- game-native presentation of the House
 
-This layer should not own the product state.
-It should render and interact with product state.
+### 5. Optional React Surface Layer
 
-### 5. Panel Layer
+React should still exist in the package, but with narrower responsibility.
 
-The panel layer should render the text-heavy surfaces:
+It should own:
 
-- cat detail
-- inbox
-- thread view
-- session transcript
+- routes that are not primarily game experiences
+- overlays that are clearly better as DOM
+- accessibility-heavy forms or settings flows
+- supporting product infrastructure around the game route
 
-It should be product-clear and readable first.
-Visual richness can grow later.
+If an inspect surface can live naturally inside Phaser, prefer that first.
 
-### 6. Interaction Layer
+### 6. Integration Boundary
 
-The interaction layer should connect:
+The boundary between Phaser and React should be explicit.
 
-- world clicks
-- panel opens
-- selection changes
-- transcript playback
-- comment submission
-- memo submission later
+The preferred shape is:
 
-This is the bridge between the world and the actual work surfaces.
+- shared domain types
+- a small shared store
+- coarse messages or intents
+
+The avoided shape is:
+
+- React controlling the game loop
+- Phaser delegating routine UI ownership back to React on every interaction
+- permanent dashboard chrome around the game
 
 ## Recommended First World Scope
 
-The first world implementation should be:
+The first meaningful Phaser slice should still be intentionally small:
 
-- one static house scene
-- one visible room or house slice
-- no scrolling map
-- no multi-room traversal
+- one house room or room-like slice
+- two visible cats
+- one active work station
+- one resting cat
+- one or two visible house props
+- one readable inspect flow
 
-This is intentional.
-
-The first question is not:
-
-- can we build a big world?
-
-It is:
-
-- can one small House scene already feel good, useful, and alive?
-
-## Recommended First World Objects
-
-The first scene should include:
-
-- one active cat station
-- one idle cat area
-- one inbox/mail object
-- one whiteboard object
-- one cabinet object
-
-The whiteboard and cabinet can initially be:
-
-- mostly visual
-- lightly inspectable
-
-They do not need deep product behavior in the first slice.
+This is enough to answer whether the game-first route feels right.
 
 ## Recommended First Data Flow
 
-The first implementation should use:
+The clean mental model is:
 
-- local fixtures as the source of truth
-- local timers to simulate transcript updates
-- local state updates when the user comments or opens notices
+1. Fixtures produce a stable House state.
+2. `app/routes/index.tsx` mounts the fullscreen Phaser container.
+3. `app/routes/index.tsx` creates a `Phaser.Game`.
+4. Phaser scenes render and interact with the House state.
+5. Selection or inspect actions may update a small shared store.
+6. Optional game-native or DOM overlays read from that store.
 
-That means the first build should not depend on:
-
-- a server
-- a websocket
-- executor integration
-- authentication
-
-This makes the first client much easier to reason about.
+The store should support the experience.
+It should not become the experience.
 
 ## Suggested Phase Plan
 
-### Phase 1: Package Scaffolding
+### Phase 1: Phaser Bootstrap
 
-Set up the world package as a runnable browser client.
+Set up the home route as a runnable fullscreen Phaser client.
 
 Deliverables:
 
-- browser entrypoint
-- React bootstrapping
-- Pixi stage bootstrapping
-- working dev script
+- a fullscreen `/` route with no surrounding app chrome
+- a Phaser game bootstrap
+- one boot scene and one house scene
+- a working dev script
+- passing build and test checks
 
-### Phase 2: Domain And Fixtures
+### Phase 2: Fixture-Driven House Slice
 
 Add:
 
 - core client-side domain types
 - a fixed demo House scenario
-- fixture-driven cats, threads, notices, and transcript
+- two cats
+- basic room props and placements
 
 Deliverables:
 
 - stable mock data
-- enough domain structure to build the first slice
+- readable world layout
+- click and hover targets
 
-### Phase 3: House Scene
+### Phase 3: Game-Native Inspection Flow
 
-Build the first House scene.
-
-Deliverables:
-
-- one room or house slice
-- two visible cats
-- world object placements
-- selection and hover states
-- simple idle animation
-
-### Phase 4: Panels And Navigation
-
-Build the basic panels.
+Build the first inspection surfaces.
 
 Deliverables:
 
-- cat detail panel
-- inbox panel
-- thread panel
-- session transcript panel
-- navigation between world selection and panel state
+- cat inspection surface
+- inbox or notice surface
+- thread inspection surface
+- session transcript surface
+- navigation between world selection and inspect state
 
-### Phase 5: Mock Interactivity
+These surfaces should default to game-native UI.
+Use DOM only where it clearly improves the result.
+
+### Phase 4: Human Steering
 
 Add one or two meaningful write actions.
 
@@ -368,111 +275,90 @@ Deliverables:
 - local state update
 - visible House reaction
 
-### Phase 6: Polish The Vertical Slice
+### Phase 5: World Polish
 
 Improve:
 
-- panel transitions
+- movement or idle life
 - hover feedback
-- cat presence
-- transcript feel
-- world clarity
+- camera framing
+- panel transitions
+- readability of the world and HUD
 
-This phase is about making the slice feel real, not feature-rich.
+### Phase 6: Real Integration Boundaries
 
-## Recommended Visible Reactions
+Prepare the client for future executor and backend integration.
 
-The MVP should include a few visible reactions that connect product actions back into the world.
+Deliverables:
 
-Examples:
-
-- when a thread is opened, the active cat and/or work area highlight
-- when a comment is added, the relevant thread state updates immediately
-- when an inbox notice is opened, the related cat or thread becomes visually emphasized
-- when the mock transcript updates, the active cat visibly reacts
-
-These are important because they make the House feel connected rather than split into unrelated panels.
+- clearer state ownership boundaries
+- replaceable fixture adapter
+- preserved separation between world runtime and executor runtime
 
 ## Asset Strategy
 
-The first implementation should keep assets intentionally simple.
+The first implementation should favor:
 
-Recommended early asset categories:
+- simple but strong silhouettes
+- reusable room props
+- lightweight 2D animation
+- a small number of assets that read clearly at fullscreen size
 
-- house background
-- a few room/station props
-- two cat bodies
-- a small set of facial or pose variants
-- simple accessory layers
-- icons for inbox, thread, cabinet, whiteboard
+Avoid over-investing in content volume before the core feel is proven.
 
-The asset strategy should assume:
+## UI Strategy
 
-- heavy reuse
-- AI-assisted generation and iteration
-- simple, stylized forms
-- limited animation states
+The default UI strategy on `/` should be:
 
-## Animation Strategy
+- world-first
+- game-native
+- spatially coherent
+- calm and readable
 
-The first implementation should target:
+This means:
 
-- cat idle animation
-- one working loop
-- one resting loop
-- subtle hover feedback
-- simple panel transitions
-- light transcript/world feedback
+- no permanent browser-style sidebars around the world
+- no assumption that every surface should be a DOM card
+- no pressure to rebuild every productivity panel before the world feels convincing
 
-The first implementation should avoid:
-
-- large cinematic sequences
-- complex pathfinding presentation
-- highly bespoke animation for every action
+If a DOM overlay is used, it should feel like an exception chosen for clarity, not the main composition model.
 
 ## Engineering Boundaries To Preserve
 
-The implementation must preserve the stable boundaries already set in the spec:
+The implementation should not depend on:
 
-- domain state should not depend on rendering
-- cats and House concepts should not be reduced to generic engine objects
-- executor integration should remain separate from the world client
-- cat memory implementation should remain replaceable
-- notices, threads, and sessions should stay product-native concepts
+- a server for the first visual slice
+- websocket integration
+- authentication
+- real executor integration
 
-## Deferred Decisions
+The first client should be easy to run and easy to reason about locally.
 
-The following decisions should remain open until after the MVP exists:
+The implementation should also preserve these boundaries:
 
-- exact backend architecture
-- exact persistence layer
-- exact realtime transport
-- real executor integration details
-- whether more of the UI should move into Pixi later
-- deeper world traversal model
-- multi-house navigation
-- multi-human collaboration flows
+- Phaser owns the home-route runtime
+- React Router owns routing
+- the domain model stays renderer-agnostic
+- executor integration stays separate from the world client
 
 ## First Engineering Milestone
 
-The first engineering milestone should be:
+The first convincing milestone is:
 
-`A runnable local world client that opens one House scene, shows two cats, and lets the user inspect one active session through a readable panel flow.`
+`A runnable local Phaser client that opens one House scene fullscreen, shows two cats, and lets the user inspect one active session through a coherent in-world or game-native UI flow.`
 
-If that milestone is not convincing, the team should improve the slice before adding more backend or world complexity.
+If that milestone is not convincing, the team should improve the slice before adding more backend or product complexity.
 
 ## What Comes After The First Milestone
 
-Only after the first milestone feels good should the team move to:
+After the first milestone, the likely next steps are:
 
-- stronger world polish
-- real data loading
-- real notice generation
-- real thread persistence
-- real executor/session wiring
-
-The first implementation should earn complexity gradually.
+- stronger game-native UI language
+- richer cat behavior
+- more visible work reactions
+- a better steering loop
+- backend and executor integration that preserves the game-first route shape
 
 ## One-Sentence Summary
 
-Build OpenKitten World first as a fixture-driven, single-house, Pixi-rendered client with React-managed product surfaces, and prove that one small House can already feel alive, readable, and useful before expanding the system.
+Build OpenKitten World first as a fixture-driven fullscreen Phaser House, prove that the game-first route makes the product feel alive and useful, and only then expand the surrounding product surface.
