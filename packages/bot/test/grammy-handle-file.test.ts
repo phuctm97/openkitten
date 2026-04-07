@@ -3,20 +3,17 @@ import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammyHandleFile } from "~/lib/grammy-handle-file";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
-import { supportsInput } from "~/lib/model-capabilities";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
 
 vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
-vi.mock("~/lib/model-capabilities");
 
 const signal = new AbortController().signal;
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(supportsInput).mockResolvedValue(true);
 });
 
 // ─── context builders ────────────────────────────────────────────────────────
@@ -39,7 +36,7 @@ interface MockFileCtxOptions {
   filePath?: string | undefined;
   mediaGroupId?: string;
   fileType?: FileType;
-  mimeType?: string;
+  mimeType?: string | undefined;
   fileName?: string;
 }
 
@@ -51,7 +48,7 @@ function mockFileCtx({
   filePath = "files/test.jpg",
   mediaGroupId,
   fileType = "document",
-  mimeType = "image/jpeg",
+  mimeType,
   fileName = "test.jpg",
 }: MockFileCtxOptions = {}) {
   const filePayload = buildFilePayload(fileType, mimeType, fileName);
@@ -65,16 +62,16 @@ function mockFileCtx({
       media_group_id: mediaGroupId,
     },
     api: { token: "test-token" },
-    getFile: vi.fn<() => Promise<{ file_path: string | undefined }>>(
-      async () => ({ file_path: filePath }),
-    ),
+    getFile: vi.fn<
+      () => Promise<{ file_id: string; file_path: string | undefined }>
+    >(async () => ({ file_id: "test-file-id", file_path: filePath })),
     update: { update_id: 1 },
   };
 }
 
 function buildFilePayload(
   fileType: FileType,
-  mimeType: string,
+  mimeType: string | undefined,
   fileName: string,
 ): Record<string, unknown> {
   switch (fileType) {
@@ -82,7 +79,7 @@ function buildFilePayload(
       return {
         document: {
           file_id: "doc-id",
-          mime_type: mimeType,
+          ...(mimeType && { mime_type: mimeType }),
           file_name: fileName,
         },
       };
@@ -124,12 +121,44 @@ function mockMediaGroupBuffer() {
   };
 }
 
-function mockOpencodeClient() {
+function mockOpencodeClient(
+  input: {
+    image?: boolean;
+    pdf?: boolean;
+    audio?: boolean;
+    video?: boolean;
+  } = {},
+) {
   return {
-    session: {
-      create: vi.fn(),
-      delete: vi.fn(),
-      promptAsync: vi.fn(),
+    session: { create: vi.fn(), delete: vi.fn(), promptAsync: vi.fn() },
+    config: {
+      get: vi.fn(async () => ({
+        data: { model: "anthropic/claude-sonnet-4-6" },
+      })),
+      providers: vi.fn(async () => ({
+        data: {
+          providers: [
+            {
+              id: "anthropic",
+              models: {
+                "anthropic/claude-sonnet-4-6": {
+                  id: "claude-sonnet-4-6",
+                  capabilities: {
+                    input: {
+                      image: input.image ?? true,
+                      pdf: input.pdf ?? true,
+                      audio: input.audio ?? true,
+                      video: input.video ?? true,
+                      text: true,
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          default: { anthropic: "anthropic/claude-sonnet-4-6" },
+        },
+      })),
     },
   };
 }
@@ -567,7 +596,7 @@ test("extractTelegramFilename: voice falls back to file path segment", async () 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     expect.objectContaining({
       parts: expect.arrayContaining([
-        expect.objectContaining({ type: "file", filename: "voice-hash.ogg" }),
+        expect.objectContaining({ type: "file", filename: "test-file-id.oga" }),
       ]),
     }),
     { throwOnError: true },
@@ -593,7 +622,7 @@ test("extractTelegramFilename: sticker falls back to fallback prefix with extens
       parts: expect.arrayContaining([
         expect.objectContaining({
           type: "file",
-          filename: "telegram-file.webp",
+          filename: "test-file-id.webp",
         }),
       ]),
     }),
@@ -606,7 +635,6 @@ test("extractTelegramFilename: sticker falls back to fallback prefix with extens
 test("model-supported MIME sends base64 data URL without saving to disk", async () => {
   const opencodeClient = mockOpencodeClient();
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.mocked(supportsInput).mockResolvedValue(true);
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
@@ -644,9 +672,13 @@ test("model-supported MIME sends base64 data URL without saving to disk", async 
 // ─── model-unsupported MIME: saves to disk only ──────────────────────────────
 
 test("model-unsupported MIME saves to disk only without base64 file part", async () => {
-  const opencodeClient = mockOpencodeClient();
+  const opencodeClient = mockOpencodeClient({
+    image: false,
+    pdf: false,
+    audio: false,
+    video: false,
+  });
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.mocked(supportsInput).mockResolvedValue(false);
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
@@ -677,7 +709,9 @@ test("model-unsupported MIME saves to disk only without base64 file part", async
     { throwOnError: true },
   );
   expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "test-file-id",
     "archive.zip",
+    "application/zip",
     new Uint8Array([1, 2, 3]),
   );
 });
@@ -687,7 +721,6 @@ test("model-unsupported MIME saves to disk only without base64 file part", async
 test("with caption: includes caption text part before file parts", async () => {
   const opencodeClient = mockOpencodeClient();
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.mocked(supportsInput).mockResolvedValue(true);
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
@@ -713,7 +746,6 @@ test("with caption: includes caption text part before file parts", async () => {
 test("without caption: no leading text part", async () => {
   const opencodeClient = mockOpencodeClient();
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.mocked(supportsInput).mockResolvedValue(true);
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
@@ -734,7 +766,6 @@ test("without caption: no leading text part", async () => {
 test("empty caption: does not include empty text part", async () => {
   const opencodeClient = mockOpencodeClient();
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.mocked(supportsInput).mockResolvedValue(true);
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
@@ -783,7 +814,6 @@ test("media group: buffers entry with deferred download and returns early", asyn
 
 test("media group: deferred download resolves to correct parts with caption", async () => {
   const mediaGroupBuffer = mockMediaGroupBuffer();
-  vi.mocked(supportsInput).mockResolvedValue(true);
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
@@ -812,7 +842,6 @@ test("media group: deferred download resolves to correct parts with caption", as
 
 test("media group: deferred download without caption excludes text part", async () => {
   const mediaGroupBuffer = mockMediaGroupBuffer();
-  vi.mocked(supportsInput).mockResolvedValue(true);
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
@@ -945,7 +974,10 @@ test("no file path: throws invariant error", async () => {
   const scope = mockScope({ opencodeClient });
 
   const ctx = mockFileCtx();
-  ctx.getFile.mockResolvedValue({ file_path: undefined });
+  ctx.getFile.mockResolvedValue({
+    file_id: "test-file-id",
+    file_path: undefined,
+  });
 
   await expect(grammyHandleFile(scope, ctx as never, signal)).rejects.toThrow(
     "Expected Telegram file to have a file path",
@@ -1049,9 +1081,13 @@ test("fetch is called with correct Telegram file URL", async () => {
 });
 
 test("attachment storage write is always called even for unsupported MIME", async () => {
-  const opencodeClient = mockOpencodeClient();
+  const opencodeClient = mockOpencodeClient({
+    image: false,
+    pdf: false,
+    audio: false,
+    video: false,
+  });
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.mocked(supportsInput).mockResolvedValue(false);
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([9, 8, 7])),
   );
@@ -1070,7 +1106,9 @@ test("attachment storage write is always called even for unsupported MIME", asyn
   );
 
   expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "test-file-id",
     "archive.zip",
+    "application/zip",
     new Uint8Array([9, 8, 7]),
   );
 });
@@ -1100,41 +1138,46 @@ test("throws invariant when ctx.message is missing", async () => {
 });
 
 test("resolveFilename: falls back to bin extension when mime has no known extension", async () => {
-  const opencodeClient = mockOpencodeClient();
+  const opencodeClient = mockOpencodeClient({
+    image: false,
+    pdf: false,
+    audio: false,
+    video: false,
+  });
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.mocked(supportsInput).mockResolvedValue(false);
-  // Use video_note (mime = video/mp4 hardcoded) but override with a fake mime via content-type header
-  // and use filePath "/" so path segment is empty
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3]), {
       headers: { "content-type": "application/x-unknown-noop" },
     }),
   );
-  const scope = mockScope({ opencodeClient });
+  const attachmentStorage = mockAttachmentStorage("/mock/file.bin");
+  const scope = mockScope({ opencodeClient, attachmentStorage });
 
-  // Use photo type so telegram mime is undefined, then content-type gives unknown mime
-  await grammyHandleFile(
-    scope,
-    mockFileCtx({ fileType: "photo", filePath: "/" }) as never,
-    signal,
-  );
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: { message_id: 100, contact: { phone_number: "123" } },
+    api: { token: "test-token" },
+    getFile: vi.fn(async () => ({
+      file_id: "test-file-id",
+      file_path: "files/unknown",
+    })),
+    update: { update_id: 1 },
+  };
 
-  const call = vi.mocked(opencodeClient.session.promptAsync).mock.calls[0];
-  if (!call) throw new Error("Expected promptAsync to be called");
-  const parts = call[0].parts;
-  // filename should be "telegram-file.bin" since extension("application/x-unknown-noop") is false
-  expect(parts).toContainEqual(
-    expect.objectContaining({
-      text: expect.stringContaining("Attached file saved to:"),
-    }),
+  await grammyHandleFile(scope, ctx as never, signal);
+
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "test-file-id",
+    "test-file-id.bin",
+    "application/x-unknown-noop",
+    new Uint8Array([1, 2, 3]),
   );
 });
 
-test("resolveMime: uses lookup from file path when no telegram mime and no content-type header", async () => {
+test("extractTelegramMime: returns image/jpeg for photo messages", async () => {
   const opencodeClient = mockOpencodeClient();
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.mocked(supportsInput).mockResolvedValue(true);
-  // No telegram mime (photo type), no content-type header, but file path has a known extension
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
@@ -1149,7 +1192,7 @@ test("resolveMime: uses lookup from file path when no telegram mime and no conte
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     expect.objectContaining({
       parts: expect.arrayContaining([
-        expect.objectContaining({ type: "file", mime: "image/png" }),
+        expect.objectContaining({ type: "file", mime: "image/jpeg" }),
       ]),
     }),
     { throwOnError: true },
@@ -1157,9 +1200,13 @@ test("resolveMime: uses lookup from file path when no telegram mime and no conte
 });
 
 test("resolveMime: falls back to application/octet-stream when no mime info available", async () => {
-  const opencodeClient = mockOpencodeClient();
+  const opencodeClient = mockOpencodeClient({
+    image: false,
+    pdf: false,
+    audio: false,
+    video: false,
+  });
   opencodeClient.session.promptAsync.mockResolvedValue({});
-  vi.mocked(supportsInput).mockResolvedValue(false);
   // No telegram mime (photo type), no content-type header, no recognisable extension
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
@@ -1182,9 +1229,536 @@ test("resolveMime: falls back to application/octet-stream when no mime info avai
     }),
     { throwOnError: true },
   );
-  // mime should fall back to application/octet-stream → supportsInput returns false → no file part
+  // mime should fall back to application/octet-stream → modelSupportsFile returns false → no file part
   const call = vi.mocked(opencodeClient.session.promptAsync).mock.calls[0];
   if (!call) throw new Error("Expected promptAsync to be called");
   const parts = call[0].parts;
   expect(parts).not.toContainEqual(expect.objectContaining({ type: "file" }));
+});
+
+// ─── modelSupportsFile edge cases (inlined) ─────────────────────────────────────
+
+test("modelSupportsFile: returns false when no model and no defaults", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const opencodeClient = {
+    session: { create: vi.fn(), delete: vi.fn(), promptAsync: vi.fn() },
+    config: {
+      get: vi.fn(async () => ({ data: { model: undefined } })),
+      providers: vi.fn(async () => ({
+        data: { providers: [], default: {} },
+      })),
+    },
+  };
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const attachmentStorage = mockAttachmentStorage("/mock/unsupported.jpg");
+  const scope = mockScope({
+    opencodeClient: opencodeClient as never,
+    attachmentStorage,
+  });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({ fileType: "photo" }) as never,
+    signal,
+  );
+
+  expect(attachmentStorage.write).toHaveBeenCalled();
+});
+
+test("modelSupportsFile: uses default model when config.model is undefined", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const opencodeClient = {
+    session: { create: vi.fn(), delete: vi.fn(), promptAsync: vi.fn() },
+    config: {
+      get: vi.fn(async () => ({ data: { model: undefined } })),
+      providers: vi.fn(async () => ({
+        data: {
+          providers: [
+            {
+              id: "anthropic",
+              models: {
+                "anthropic/claude-sonnet-4-6": {
+                  id: "claude-sonnet-4-6",
+                  capabilities: {
+                    input: {
+                      image: true,
+                      pdf: true,
+                      audio: false,
+                      video: false,
+                      text: true,
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          default: { anthropic: "anthropic/claude-sonnet-4-6" },
+        },
+      })),
+    },
+  };
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const scope = mockScope({ opencodeClient: opencodeClient as never });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({ fileType: "photo" }) as never,
+    signal,
+  );
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({ type: "file", mime: "image/jpeg" }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("modelSupportsFile: model not found returns false", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const opencodeClient = {
+    session: { create: vi.fn(), delete: vi.fn(), promptAsync: vi.fn() },
+    config: {
+      get: vi.fn(async () => ({ data: { model: "unknown/model" } })),
+      providers: vi.fn(async () => ({
+        data: { providers: [], default: {} },
+      })),
+    },
+  };
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const attachmentStorage = mockAttachmentStorage("/mock/path.jpg");
+  const scope = mockScope({
+    opencodeClient: opencodeClient as never,
+    attachmentStorage,
+  });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({ fileType: "photo" }) as never,
+    signal,
+  );
+
+  expect(attachmentStorage.write).toHaveBeenCalled();
+});
+
+test("modelSupportsFile: matches model by short name", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const opencodeClient = {
+    session: { create: vi.fn(), delete: vi.fn(), promptAsync: vi.fn() },
+    config: {
+      get: vi.fn(async () => ({
+        data: { model: "anthropic/claude-sonnet-4-6" },
+      })),
+      providers: vi.fn(async () => ({
+        data: {
+          providers: [
+            {
+              id: "anthropic",
+              models: {
+                "claude-sonnet-4-6": {
+                  id: "claude-sonnet-4-6",
+                  capabilities: {
+                    input: {
+                      image: true,
+                      pdf: false,
+                      audio: true,
+                      video: false,
+                      text: true,
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          default: {},
+        },
+      })),
+    },
+  };
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const scope = mockScope({ opencodeClient: opencodeClient as never });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({ fileType: "photo" }) as never,
+    signal,
+  );
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({ type: "file", mime: "image/jpeg" }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("modelSupportsFile: pdf routed correctly", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({ opencodeClient });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({
+      fileType: "document",
+      mimeType: "application/pdf",
+      fileName: "doc.pdf",
+    }) as never,
+    signal,
+  );
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({ type: "file", mime: "application/pdf" }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("modelSupportsFile: audio routed to model when supported", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({ opencodeClient });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({
+      fileType: "audio",
+      mimeType: "audio/mpeg",
+      fileName: "song.mp3",
+    }) as never,
+    signal,
+  );
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({ type: "file", mime: "audio/mpeg" }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("resolveMime: falls back to file path lookup when no telegram mime and no header", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({ opencodeClient });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({
+      fileType: "document",
+      filePath: "files/test.png",
+    }) as never,
+    signal,
+  );
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({ type: "file", mime: "image/png" }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("resolveMime: falls back to octet-stream when nothing matches", async () => {
+  const opencodeClient = mockOpencodeClient({
+    image: false,
+    pdf: false,
+    audio: false,
+    video: false,
+  });
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const attachmentStorage = mockAttachmentStorage("/mock/file.bin");
+  const scope = mockScope({ opencodeClient, attachmentStorage });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({
+      fileType: "document",
+
+      filePath: "files/noext",
+    }) as never,
+    signal,
+  );
+
+  expect(attachmentStorage.write).toHaveBeenCalled();
+});
+
+test("resolveMime: catches invalid content-type header", async () => {
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3]), {
+      headers: { "content-type": "invalid" },
+    }),
+  );
+  const scope = mockScope({ opencodeClient });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({
+      fileType: "document",
+
+      filePath: "files/test.jpg",
+    }) as never,
+    signal,
+  );
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({ type: "file", mime: "image/jpeg" }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("modelSupportsFile: video saved to disk when not supported", async () => {
+  const opencodeClient = mockOpencodeClient({ video: false });
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const attachmentStorage = mockAttachmentStorage("/mock/video.mp4");
+  const scope = mockScope({ opencodeClient, attachmentStorage });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({
+      fileType: "video",
+      mimeType: "video/mp4",
+      fileName: "clip.mp4",
+    }) as never,
+    signal,
+  );
+
+  expect(attachmentStorage.write).toHaveBeenCalled();
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({
+          type: "text",
+          text: "Attached file saved to: /mock/video.mp4",
+        }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("modelSupportsFile: matches model by model.id field", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const opencodeClient = {
+    session: { create: vi.fn(), delete: vi.fn(), promptAsync: vi.fn() },
+    config: {
+      get: vi.fn(async () => ({
+        data: { model: "anthropic/claude-sonnet-4-6" },
+      })),
+      providers: vi.fn(async () => ({
+        data: {
+          providers: [
+            {
+              id: "anthropic",
+              models: {
+                "some-internal-key": {
+                  id: "anthropic/claude-sonnet-4-6",
+                  capabilities: {
+                    input: {
+                      image: true,
+                      pdf: true,
+                      audio: false,
+                      video: false,
+                      text: true,
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          default: {},
+        },
+      })),
+    },
+  };
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const scope = mockScope({ opencodeClient: opencodeClient as never });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({ fileType: "photo" }) as never,
+    signal,
+  );
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({ type: "file", mime: "image/jpeg" }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("modelSupportsFile: skips non-matching model.id and continues search", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const opencodeClient = {
+    session: { create: vi.fn(), delete: vi.fn(), promptAsync: vi.fn() },
+    config: {
+      get: vi.fn(async () => ({
+        data: { model: "anthropic/claude-sonnet-4-6" },
+      })),
+      providers: vi.fn(async () => ({
+        data: {
+          providers: [
+            {
+              id: "anthropic",
+              models: {
+                "unrelated-key": {
+                  id: "unrelated-model",
+                  capabilities: {
+                    input: {
+                      image: false,
+                      pdf: false,
+                      audio: false,
+                      video: false,
+                      text: true,
+                    },
+                  },
+                },
+                "another-key": {
+                  id: "anthropic/claude-sonnet-4-6",
+                  capabilities: {
+                    input: {
+                      image: true,
+                      pdf: true,
+                      audio: false,
+                      video: false,
+                      text: true,
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          default: {},
+        },
+      })),
+    },
+  };
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const scope = mockScope({ opencodeClient: opencodeClient as never });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({ fileType: "photo" }) as never,
+    signal,
+  );
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({ type: "file", mime: "image/jpeg" }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("normalizeMime: strips parameters from MIME type", async () => {
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const scope = mockScope({ opencodeClient });
+
+  await grammyHandleFile(
+    scope,
+    mockFileCtx({
+      fileType: "document",
+      mimeType: "image/jpeg; charset=binary",
+      fileName: "test.jpg",
+    }) as never,
+    signal,
+  );
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: expect.arrayContaining([
+        expect.objectContaining({
+          type: "file",
+          mime: "image/jpeg; charset=binary",
+        }),
+      ]),
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("extractTelegramMime: returns undefined for unknown message type", async () => {
+  const opencodeClient = mockOpencodeClient({
+    image: false,
+    pdf: false,
+    audio: false,
+    video: false,
+  });
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3]), {
+      headers: { "content-type": "application/octet-stream" },
+    }),
+  );
+  const attachmentStorage = mockAttachmentStorage("/mock/unknown.bin");
+  const scope = mockScope({ opencodeClient, attachmentStorage });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: { message_id: 100, contact: { phone_number: "123" } },
+    api: { token: "test-token" },
+    getFile: vi.fn(async () => ({
+      file_id: "test-file-id",
+      file_path: "files/unknown",
+    })),
+    update: { update_id: 1 },
+  };
+
+  await grammyHandleFile(scope, ctx as never, signal);
+
+  expect(attachmentStorage.write).toHaveBeenCalled();
 });

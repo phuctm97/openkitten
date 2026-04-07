@@ -125,13 +125,17 @@ export namespace OpencodeConfig {
     for await (const file of mdGlob.scan(defaultAgentsDir)) {
       agentFiles.push(file);
     }
+    const skillGlob = new Bun.Glob("*/**");
+    const skillFiles: string[] = [];
+    for await (const file of skillGlob.scan(defaultSkillsDir)) {
+      skillFiles.push(file);
+    }
     for (const file of agentFiles) {
       const source = join(defaultAgentsDir, file);
       const destination = join(agentsDir, file);
       writes.push(writeDefaultAgentFile(source, destination));
     }
-    const skillGlob = new Bun.Glob("*/**");
-    for await (const file of skillGlob.scan(defaultSkillsDir)) {
+    for (const file of skillFiles) {
       const source = join(defaultSkillsDir, file);
       const destination = join(skillsDir, file);
       writes.push(
@@ -143,7 +147,9 @@ export namespace OpencodeConfig {
     }
     writes.push(
       readFile(defaultDefaultAgents, "utf-8").then((content) =>
-        writeFile(join(profile.xdgConfig, "opencode", "AGENTS.md"), content),
+        writeFile(join(profile.xdgConfig, "opencode", "AGENTS.md"), content, {
+          flag: "wx",
+        }),
       ),
     );
     writes.push(
