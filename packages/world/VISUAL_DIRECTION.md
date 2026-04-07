@@ -2,10 +2,9 @@
 
 ## Status
 
-This document reflects the Phaser-first client direction.
+This document defines the visual direction for OpenKitten World.
 
-The visual goal is no longer "a web UI wrapped around a world renderer."
-It is "a fullscreen browser game that happens to be a serious productivity product."
+The visual goal is a fullscreen browser game that also carries serious productivity work.
 
 ## Core Visual Thesis
 

@@ -2,11 +2,9 @@
 
 ## Status
 
-This plan supersedes the earlier Pixi-focused implementation plan.
+This plan describes the intended implementation path for OpenKitten World.
 
-The current codebase has moved past the earlier `PixiJS + React` scaffold and should now stay on the Phaser baseline described here.
-
-The implementation target from this point forward is:
+The implementation target is:
 
 - Phaser-first on `/`
 - React Router for routing
@@ -25,9 +23,9 @@ The implementation should preserve these principles:
 
 This plan should optimize for product feel, not only for implementation familiarity.
 
-## Immediate Recommendation
+## Immediate Focus
 
-Replace the current `Scene`-inside-a-React-shell direction with a fullscreen Phaser route.
+Start with a fullscreen Phaser route and build outward from there.
 
 Concretely, that means:
 

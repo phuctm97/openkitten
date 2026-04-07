@@ -4,15 +4,15 @@ This package contains both the canonical product documents and the browser clien
 
 ## Status
 
-These docs reflect the current direction adopted after evaluating the earlier `PixiJS + React` phase-1 prototype:
+OpenKitten World is planned and built as a Phaser-first browser client:
 
-- `/` should become a fullscreen Phaser experience
-- React Router should still own routing
+- `/` is a fullscreen Phaser experience
+- React Router owns routing
 - non-game routes can stay conventional React pages
-- React DOM on `/` should be optional and secondary
+- React DOM on `/` is optional and secondary
 - Jotai may be used as a narrow bridge between Phaser and React when needed
 
-The current implementation has moved on from that earlier Pixi experiment and now targets the Phaser route described below.
+These docs assume that architecture throughout.
 
 ## Documents
 
@@ -21,7 +21,7 @@ The current implementation has moved on from that earlier Pixi experiment and no
 - [Spec](./SPEC.md)
   The canonical product vocabulary, domain model, interaction model, and implementation boundaries.
 - [Client Strategy](./CLIENT_STRATEGY.md)
-  Why the client direction changed and why Phaser is now the preferred home-route runtime.
+  Why Phaser is the right runtime for the home route and how it should relate to React.
 - [Visual Direction](./VISUAL_DIRECTION.md)
   The visual, spatial, and UI principles for a fullscreen game-first product.
 - [MVP](./MVP.md)
