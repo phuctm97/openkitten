@@ -4,13 +4,12 @@
 
 This document supersedes the earlier `PixiJS + React` recommendation.
 
-The previous phase-1 prototype was useful because it made two things obvious:
+The previous phase-1 `PixiJS + React` prototype was useful because it made two things obvious:
 
 - the Pixi API pushed the project toward low-level imperative drawing too early
 - a React app shell wrapped around a world renderer did not create the intended vibe
 
-The package still contains that earlier Pixi scaffold today.
-It should now be treated as a spike that informed the next decision.
+That earlier Pixi direction was not wasted, but the package should now be treated as Phaser-first throughout.
 
 ## The New Product Framing
 
@@ -92,8 +91,7 @@ instead of:
 
 ## Why Pixi Is No Longer The Preferred Choice
 
-Pixi remains a strong renderer.
-It simply no longer matches the current product framing.
+`PixiJS + React` no longer matches the current product framing.
 
 The main concerns are:
 
@@ -101,7 +99,7 @@ The main concerns are:
 - too little opinionated support for the kind of game runtime now desired
 - a natural tendency to keep React as the primary owner of the experience
 
-If OpenKitten World were still aiming for a hybrid "web app first, renderer second" shape, Pixi would remain credible.
+If OpenKitten World were still aiming for a hybrid "web app first, renderer second" shape, `PixiJS + React` would remain credible.
 
 That is no longer the plan.
 
@@ -188,5 +186,5 @@ OpenKitten World should move forward with:
 - React pages for routes that are not primarily game experiences
 - Jotai only as a narrow bridge when Phaser and React truly need shared state
 
-The earlier Pixi spike was not wasted.
+The earlier Pixi prototype was not wasted.
 It answered the right question by making the wrong-feeling shape visible early enough to change course.

@@ -4,7 +4,7 @@ This package contains both the canonical product documents and the browser clien
 
 ## Status
 
-These docs reflect the current direction adopted after evaluating the earlier Pixi phase-1 spike:
+These docs reflect the current direction adopted after evaluating the earlier `PixiJS + React` phase-1 prototype:
 
 - `/` should become a fullscreen Phaser experience
 - React Router should still own routing
@@ -12,8 +12,7 @@ These docs reflect the current direction adopted after evaluating the earlier Pi
 - React DOM on `/` should be optional and secondary
 - Jotai may be used as a narrow bridge between Phaser and React when needed
 
-The current implementation still contains the earlier Pixi scaffold.
-It should be treated as a useful prototype that informed the new direction, not as the target architecture.
+The current implementation has moved on from that earlier Pixi experiment and now targets the Phaser route described below.
 
 ## Documents
 

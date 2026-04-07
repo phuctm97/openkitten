@@ -4,8 +4,7 @@
 
 This plan supersedes the earlier Pixi-focused implementation plan.
 
-The current codebase still contains the previous phase-1 Pixi scaffold.
-That scaffold should now be treated as legacy spike work that informed this new plan.
+The current codebase has moved past the earlier `PixiJS + React` scaffold and should now stay on the Phaser baseline described here.
 
 The implementation target from this point forward is:
 
@@ -33,8 +32,7 @@ Replace the current `Scene`-inside-a-React-shell direction with a fullscreen Pha
 Concretely, that means:
 
 - keep the React Router app root neutral
-- let `app/routes/index.tsx` mount a `GameScreen`
-- let `GameScreen` create and destroy one `Phaser.Game`
+- let `app/routes/index.tsx` create and destroy one `Phaser.Game`
 - move world construction into Phaser scenes
 - stop designing `/` as a dashboard shell around a renderer
 
@@ -215,8 +213,8 @@ This is enough to answer whether the game-first route feels right.
 The clean mental model is:
 
 1. Fixtures produce a stable House state.
-2. `app/routes/index.tsx` mounts a `GameScreen`.
-3. `GameScreen` creates a `Phaser.Game`.
+2. `app/routes/index.tsx` mounts the fullscreen Phaser container.
+3. `app/routes/index.tsx` creates a `Phaser.Game`.
 4. Phaser scenes render and interact with the House state.
 5. Selection or inspect actions may update a small shared store.
 6. Optional game-native or DOM overlays read from that store.
