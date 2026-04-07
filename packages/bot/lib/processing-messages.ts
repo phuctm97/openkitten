@@ -238,10 +238,10 @@ export class ProcessingMessages {
       switch (part.type) {
         case "reasoning":
           part.text += delta;
-          return;
+          break;
         case "text":
           part.text += delta;
-          return;
+          break;
       }
       return;
     }
