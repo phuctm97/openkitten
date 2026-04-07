@@ -1,23 +1,15 @@
-import { beforeEach, expect, test, vi } from "vitest";
+import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
 import type { Scope } from "~/lib/scope";
-import { setSessionAgent } from "~/lib/set-session-agent";
-
-vi.mock("~/lib/set-session-agent");
 
 const signal = new AbortController().signal;
-
-beforeEach(() => {
-  vi.resetAllMocks();
-});
 
 function mockCtx(
   chatId: number,
   callbackQueryId: string,
   data: string,
   threadId?: number,
-  messageId = 50,
 ) {
   return {
     callbackQuery: {
@@ -25,7 +17,6 @@ function mockCtx(
       data,
       message: {
         chat: { id: chatId },
-        message_id: messageId,
         message_thread_id: threadId,
       },
     },
@@ -34,12 +25,7 @@ function mockCtx(
 }
 
 function mockBot() {
-  return {
-    api: {
-      answerCallbackQuery: vi.fn(),
-      editMessageText: vi.fn(),
-    },
-  };
+  return { api: { answerCallbackQuery: vi.fn() } };
 }
 
 function mockExistingSessions(sessionId: string | undefined): ExistingSessions {
@@ -66,45 +52,23 @@ function mockPendingPrompts() {
   };
 }
 
-function mockOpencodeClient(agents = defaultAgents) {
-  return {
-    app: {
-      agents: vi.fn(async () => ({ data: agents })),
-    },
-  };
-}
-
-const defaultAgents = [
-  { name: "assist", mode: "primary", description: "General purpose" },
-  { name: "build", mode: "all", description: "Software engineering" },
-  {
-    name: "hidden-agent",
-    mode: "primary",
-    hidden: true,
-    description: "Internal",
-  },
-  { name: "sub-task", mode: "subagent", description: "Internal" },
-];
-
 function mockScope(overrides: {
-  bot?: ReturnType<typeof mockBot>;
-  existingSessions?: ExistingSessions;
-  pendingPrompts?: ReturnType<typeof mockPendingPrompts>;
-  opencodeClient?: ReturnType<typeof mockOpencodeClient>;
+  bot: ReturnType<typeof mockBot>;
+  existingSessions: ExistingSessions;
+  pendingPrompts: ReturnType<typeof mockPendingPrompts>;
 }): Scope {
   return {
-    bot: (overrides.bot ?? mockBot()) as never,
+    bot: overrides.bot as never,
     database: {} as never,
     shutdown: {} as never,
-    opencodeClient: (overrides.opencodeClient ?? mockOpencodeClient()) as never,
-    existingSessions: overrides.existingSessions ?? mockExistingSessions("s1"),
+    opencodeClient: {} as never,
+    existingSessions: overrides.existingSessions,
     workingSessions: {} as never,
-    pendingPrompts: (overrides.pendingPrompts ?? mockPendingPrompts()) as never,
+    pendingPrompts: overrides.pendingPrompts as never,
     processingMessages: {} as never,
     floatingPromises: {} as never,
     mediaGroupBuffer: {} as never,
     attachmentStorage: {} as never,
-    modelCapabilities: { invalidate: vi.fn() } as never,
     typingIndicators: {} as never,
   };
 }
@@ -164,7 +128,10 @@ test("answers with expired_session when no session exists", async () => {
 });
 
 test("throws invariant error when message is missing", async () => {
-  const scope = mockScope({});
+  const bot = mockBot();
+  const existingSessions = mockExistingSessions("s1");
+  const pendingPrompts = mockPendingPrompts();
+  const scope = mockScope({ bot, existingSessions, pendingPrompts });
 
   const ctx = {
     callbackQuery: {
@@ -181,112 +148,14 @@ test("throws invariant error when message is missing", async () => {
 });
 
 test("rethrows errors from pending prompts", async () => {
+  const bot = mockBot();
+  const existingSessions = mockExistingSessions("s1");
   const pendingPrompts = mockPendingPrompts();
   const error = new Error("unexpected");
   pendingPrompts.answer.mockRejectedValue(error);
-  const scope = mockScope({ pendingPrompts });
+  const scope = mockScope({ bot, existingSessions, pendingPrompts });
 
   await expect(
     grammyHandleCallback(scope, mockCtx(42, "cb1", "po:0"), signal),
   ).rejects.toBe(error);
-});
-
-// --- Agent callback tests ---
-
-test("agent callback switches agent and edits message", async () => {
-  const bot = mockBot();
-  const opencodeClient = mockOpencodeClient();
-  const scope = mockScope({ bot, opencodeClient });
-
-  await grammyHandleCallback(scope, mockCtx(42, "cb1", "ag:build"), signal);
-
-  expect(setSessionAgent).toHaveBeenCalledWith(scope.database, "s1", "build");
-  expect(scope.modelCapabilities.invalidate).toHaveBeenCalledOnce();
-  expect(bot.api.editMessageText).toHaveBeenCalledWith(
-    42,
-    50,
-    expect.any(String),
-    expect.objectContaining({
-      parse_mode: "MarkdownV2",
-      reply_markup: { inline_keyboard: [] },
-    }),
-  );
-  expect(bot.api.answerCallbackQuery).toHaveBeenCalledWith("cb1");
-});
-
-test("agent callback answers expired when no session exists", async () => {
-  const bot = mockBot();
-  const existingSessions = mockExistingSessions(undefined);
-  const scope = mockScope({ bot, existingSessions });
-
-  await grammyHandleCallback(scope, mockCtx(42, "cb1", "ag:build"), signal);
-
-  expect(bot.api.answerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: "Session expired",
-  });
-  expect(setSessionAgent).not.toHaveBeenCalled();
-});
-
-test("agent callback answers not available for unknown agent", async () => {
-  const bot = mockBot();
-  const opencodeClient = mockOpencodeClient();
-  const scope = mockScope({ bot, opencodeClient });
-
-  await grammyHandleCallback(
-    scope,
-    mockCtx(42, "cb1", "ag:nonexistent"),
-    signal,
-  );
-
-  expect(bot.api.answerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: 'Agent "nonexistent" is not available',
-  });
-  expect(setSessionAgent).not.toHaveBeenCalled();
-});
-
-test("agent callback rejects hidden agent", async () => {
-  const bot = mockBot();
-  const opencodeClient = mockOpencodeClient();
-  const scope = mockScope({ bot, opencodeClient });
-
-  await grammyHandleCallback(
-    scope,
-    mockCtx(42, "cb1", "ag:hidden-agent"),
-    signal,
-  );
-
-  expect(bot.api.answerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: 'Agent "hidden-agent" is not available',
-  });
-  expect(setSessionAgent).not.toHaveBeenCalled();
-});
-
-test("agent callback rejects subagent", async () => {
-  const bot = mockBot();
-  const opencodeClient = mockOpencodeClient();
-  const scope = mockScope({ bot, opencodeClient });
-
-  await grammyHandleCallback(scope, mockCtx(42, "cb1", "ag:sub-task"), signal);
-
-  expect(bot.api.answerCallbackQuery).toHaveBeenCalledWith("cb1", {
-    text: 'Agent "sub-task" is not available',
-  });
-  expect(setSessionAgent).not.toHaveBeenCalled();
-});
-
-test("agent callback throws invariant when message is missing", async () => {
-  const scope = mockScope({});
-
-  const ctx = {
-    callbackQuery: {
-      id: "cb1",
-      data: "ag:build",
-      message: undefined,
-    },
-    update: { update_id: 1 },
-  } as never;
-
-  await expect(grammyHandleCallback(scope, ctx, signal)).rejects.toThrow(
-    "Expected callback query to have a message",
-  );
 });

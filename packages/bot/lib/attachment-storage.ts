@@ -16,7 +16,7 @@ export class AttachmentStorage {
     return path;
   }
 
-  static create(workspace: string): AttachmentStorage {
-    return new AttachmentStorage(join(workspace, ".attachments"));
+  static create(cacheDir: string): AttachmentStorage {
+    return new AttachmentStorage(join(cacheDir, "openkitten", "attachments"));
   }
 }
