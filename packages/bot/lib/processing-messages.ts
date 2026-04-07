@@ -89,13 +89,23 @@ export class ProcessingMessages {
       parts: Part[];
     }[],
   ): StreamingMessage | undefined {
+    const latestCompletedActivityTime = messages.reduce<number | undefined>(
+      (latest, message) => {
+        if (!("time" in message.info)) return latest;
+        const { completed } = message.info.time;
+        if (completed === undefined) return latest;
+        if (latest === undefined) return completed;
+        return Math.max(latest, completed);
+      },
+      undefined,
+    );
     const assistants = messages.filter(
       (message): message is StreamingMessage =>
         message.info.role === "assistant" &&
         "time" in message.info &&
         message.info.time.completed === undefined,
     );
-    return assistants.reduce<StreamingMessage | undefined>(
+    const latestAssistant = assistants.reduce<StreamingMessage | undefined>(
       (latest, message) => {
         if (!latest) return message;
         if (message.info.time.created > latest.info.time.created)
@@ -105,6 +115,14 @@ export class ProcessingMessages {
       },
       undefined,
     );
+    if (!latestAssistant) return undefined;
+    if (
+      latestCompletedActivityTime !== undefined &&
+      latestAssistant.info.time.created < latestCompletedActivityTime
+    ) {
+      return undefined;
+    }
+    return latestAssistant;
   }
 
   #setStreamingMessage(message: StreamingMessage): void {

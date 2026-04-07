@@ -1551,6 +1551,136 @@ test("initialized seeds the latest assistant streaming state", async () => {
   expectLatestDraft("m1", "streaming");
 });
 
+test("initialized ignores messages without time metadata when selecting drafts", async () => {
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: { role: "system" },
+        parts: [],
+      },
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 2 },
+        },
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m1",
+            type: "text",
+            text: "streaming",
+          },
+        ],
+      },
+    ],
+  }));
+  await setup(["sess-1"], { preserveMessagesMock: true });
+  expectLatestDraft("m1", "streaming");
+});
+
+test("initialized ignores incomplete assistant messages older than completed activity", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 1 },
+        },
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m1",
+            type: "text",
+            text: "stale",
+          },
+        ],
+      },
+      {
+        info: {
+          id: "m2",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 2, completed: 3 },
+        },
+        parts: [{ type: "text", text: "final" }],
+      },
+    ],
+  }));
+  const { bot } = await setup(["sess-1"], { preserveMessagesMock: true });
+  expect(grammySendAssistantMessage).toHaveBeenCalledWith({
+    bot,
+    info: {
+      id: "m2",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 2, completed: 3 },
+    },
+    parts: [{ type: "text", text: "final" }],
+    chatId: 123,
+    threadId: undefined,
+  });
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+});
+
+test("initialized keeps incomplete assistant messages newer than completed activity", async () => {
+  const { grammySendAssistantMessage } = await import(
+    "~/lib/grammy-send-assistant-message"
+  );
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 1, completed: 2 },
+        },
+        parts: [{ type: "text", text: "older final" }],
+      },
+      {
+        info: {
+          id: "m2",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 3 },
+        },
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m2",
+            type: "text",
+            text: "newer streaming",
+          },
+        ],
+      },
+    ],
+  }));
+  const { bot } = await setup(["sess-1"], { preserveMessagesMock: true });
+  expect(grammySendAssistantMessage).toHaveBeenCalledWith({
+    bot,
+    info: {
+      id: "m1",
+      sessionID: "sess-1",
+      role: "assistant",
+      time: { created: 1, completed: 2 },
+    },
+    parts: [{ type: "text", text: "older final" }],
+    chatId: 123,
+    threadId: undefined,
+  });
+  expectLatestDraft("m2", "newer streaming");
+});
+
 test("initialized skips draft sync when streaming is disabled", async () => {
   mockSessionMessages = vi.fn(async () => ({
     data: [
