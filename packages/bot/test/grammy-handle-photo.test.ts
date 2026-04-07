@@ -145,6 +145,8 @@ function mockScope(overrides: {
     floatingPromises: {} as never,
     mediaGroupBuffer: (overrides.mediaGroupBuffer ??
       mockMediaGroupBuffer()) as never,
+    attachmentStorage: {} as never,
+    modelCapabilities: {} as never,
     typingIndicators: {} as never,
   };
 }

@@ -155,12 +155,32 @@ function mockMediaGroupBuffer() {
   };
 }
 
+function mockAttachmentStorage() {
+  return {
+    write: vi.fn(
+      async (_filename: string, _data: Uint8Array) =>
+        "/mock/.attachments/uuid-file",
+    ),
+  };
+}
+
+function mockModelCapabilities(supportsImage = false) {
+  return {
+    supportsInput: vi.fn(
+      async (mime: string) => supportsImage && mime.startsWith("image/"),
+    ),
+    invalidate: vi.fn(),
+  };
+}
+
 function mockScope(overrides: {
   existingSessions?: ExistingSessions;
   opencodeClient?: ReturnType<typeof mockOpencodeClient>;
   pendingPrompts?: ReturnType<typeof mockPendingPrompts>;
   workingSessions?: ReturnType<typeof mockWorkingSessions>;
   mediaGroupBuffer?: ReturnType<typeof mockMediaGroupBuffer>;
+  attachmentStorage?: ReturnType<typeof mockAttachmentStorage>;
+  modelCapabilities?: ReturnType<typeof mockModelCapabilities>;
 }): Scope {
   return {
     bot: {} as never,
@@ -175,6 +195,10 @@ function mockScope(overrides: {
     floatingPromises: {} as never,
     mediaGroupBuffer: (overrides.mediaGroupBuffer ??
       mockMediaGroupBuffer()) as never,
+    attachmentStorage: (overrides.attachmentStorage ??
+      mockAttachmentStorage()) as never,
+    modelCapabilities: (overrides.modelCapabilities ??
+      mockModelCapabilities()) as never,
     typingIndicators: {} as never,
   };
 }
@@ -185,11 +209,17 @@ test("uses Telegram mime_type when available", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -200,15 +230,17 @@ test("uses Telegram mime_type when available", async () => {
     signal,
   );
 
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "report.pdf",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         {
-          type: "file",
-          mime: "application/pdf",
-          filename: "report.pdf",
-          url: expect.stringMatching(/^data:application\/pdf;base64,/),
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -220,13 +252,19 @@ test("falls back to content-type header when no Telegram mime", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3]), {
       headers: { "content-type": "application/zip; charset=binary" },
     }),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -234,15 +272,17 @@ test("falls back to content-type header when no Telegram mime", async () => {
     signal,
   );
 
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "archive.zip",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         {
-          type: "file",
-          mime: "application/zip",
-          filename: "archive.zip",
-          url: expect.stringMatching(/^data:application\/zip;base64,/),
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -254,13 +294,19 @@ test("falls back to filename extension lookup when header is invalid", async () 
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3]), {
       headers: { "content-type": "not-valid-content-type" },
     }),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -268,15 +314,17 @@ test("falls back to filename extension lookup when header is invalid", async () 
     signal,
   );
 
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "spreadsheet.csv",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         {
-          type: "file",
-          mime: "text/csv",
-          filename: "spreadsheet.csv",
-          url: expect.stringMatching(/^data:text\/csv;base64,/),
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -288,11 +336,17 @@ test("falls back to application/octet-stream when nothing works", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   // No mimeType, no fileName, no content-type header — all fallbacks exhausted
   await grammyHandleDocument(
@@ -301,15 +355,17 @@ test("falls back to application/octet-stream when nothing works", async () => {
     signal,
   );
 
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "file",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         {
-          type: "file",
-          mime: "application/octet-stream",
-          filename: "file",
-          url: expect.stringMatching(/^data:application\/octet-stream;base64,/),
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -321,13 +377,19 @@ test("falls back to application/octet-stream when content-type header is invalid
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3]), {
       headers: { "content-type": "not-valid" },
     }),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   // Invalid header + no fileName → lookup skipped → octet-stream
   await grammyHandleDocument(
@@ -336,15 +398,17 @@ test("falls back to application/octet-stream when content-type header is invalid
     signal,
   );
 
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "telegram-document.bin",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         {
-          type: "file",
-          mime: "application/octet-stream",
-          filename: "telegram-document.bin",
-          url: expect.stringMatching(/^data:application\/octet-stream;base64,/),
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -356,13 +420,19 @@ test("falls back to application/octet-stream when filename extension is unknown"
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3]), {
       headers: { "content-type": "not-valid" },
     }),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   // lookup returns false for unknown extension → octet-stream
   await grammyHandleDocument(
@@ -371,15 +441,17 @@ test("falls back to application/octet-stream when filename extension is unknown"
     signal,
   );
 
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "data.xyz123unknown",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         {
-          type: "file",
-          mime: "application/octet-stream",
-          filename: "data.xyz123unknown",
-          url: expect.stringMatching(/^data:application\/octet-stream;base64,/),
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -393,11 +465,17 @@ test("uses Telegram file_name when available", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -408,13 +486,9 @@ test("uses Telegram file_name when available", async () => {
     signal,
   );
 
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
-    expect.objectContaining({
-      parts: expect.arrayContaining([
-        expect.objectContaining({ filename: "my-report.pdf" }),
-      ]),
-    }),
-    { throwOnError: true },
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "my-report.pdf",
+    expect.any(Uint8Array),
   );
 });
 
@@ -422,11 +496,17 @@ test("falls back to file path basename when no Telegram file name", async () => 
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -437,13 +517,9 @@ test("falls back to file path basename when no Telegram file name", async () => 
     signal,
   );
 
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
-    expect.objectContaining({
-      parts: expect.arrayContaining([
-        expect.objectContaining({ filename: "server-basename.pdf" }),
-      ]),
-    }),
-    { throwOnError: true },
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "server-basename.pdf",
+    expect.any(Uint8Array),
   );
 });
 
@@ -451,13 +527,19 @@ test("falls back to telegram-document.{ext} with known mime extension", async ()
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3]), {
       headers: { "content-type": "application/zip" },
     }),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   // filePath "/" yields empty basename → falls back to telegram-document.{ext}
   await grammyHandleDocument(
@@ -466,13 +548,9 @@ test("falls back to telegram-document.{ext} with known mime extension", async ()
     signal,
   );
 
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
-    expect.objectContaining({
-      parts: expect.arrayContaining([
-        expect.objectContaining({ filename: "telegram-document.zip" }),
-      ]),
-    }),
-    { throwOnError: true },
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "telegram-document.zip",
+    expect.any(Uint8Array),
   );
 });
 
@@ -480,6 +558,7 @@ test("falls back to telegram-document.bin when mime has no known extension", asy
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   // Use a mime type that has no known file extension so extension() returns false
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -487,7 +566,12 @@ test("falls back to telegram-document.bin when mime has no known extension", asy
       headers: { "content-type": "application/x-unknown-type-xyz" },
     }),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   // filePath "/" yields empty basename + mime with no extension → .bin
   await grammyHandleDocument(
@@ -496,13 +580,9 @@ test("falls back to telegram-document.bin when mime has no known extension", asy
     signal,
   );
 
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
-    expect.objectContaining({
-      parts: expect.arrayContaining([
-        expect.objectContaining({ filename: "telegram-document.bin" }),
-      ]),
-    }),
-    { throwOnError: true },
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "telegram-document.bin",
+    expect.any(Uint8Array),
   );
 });
 
@@ -512,11 +592,17 @@ test("prompts opencode with a document attachment", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -531,15 +617,17 @@ test("prompts opencode with a document attachment", async () => {
     sessionId: "s1",
     messageId: 100,
   });
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "test.pdf",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         {
-          type: "file",
-          mime: "application/pdf",
-          filename: "test.pdf",
-          url: "data:application/pdf;base64,AQID",
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -557,11 +645,17 @@ test("document with caption: includes text part", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -578,16 +672,18 @@ test("document with caption: includes text part", async () => {
     sessionId: "s1",
     messageId: 55,
   });
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "test.pdf",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         { type: "text", text: "summarize this" },
         {
-          type: "file",
-          mime: "application/pdf",
-          filename: "test.pdf",
-          url: "data:application/pdf;base64,AQID",
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -599,11 +695,17 @@ test("empty caption: no text part", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -616,15 +718,17 @@ test("empty caption: no text part", async () => {
     signal,
   );
 
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "test.pdf",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         {
-          type: "file",
-          mime: "application/pdf",
-          filename: "test.pdf",
-          url: "data:application/pdf;base64,AQID",
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -667,10 +771,11 @@ test("media group: buffers entry with deferred download", async () => {
 
 test("media group: deferred download resolves to correct parts", async () => {
   const mediaGroupBuffer = mockMediaGroupBuffer();
+  const attachmentStorage = mockAttachmentStorage();
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
-  const scope = mockScope({ mediaGroupBuffer });
+  const scope = mockScope({ mediaGroupBuffer, attachmentStorage });
 
   await grammyHandleDocument(
     scope,
@@ -686,12 +791,14 @@ test("media group: deferred download resolves to correct parts", async () => {
   if (!call) throw new Error("Expected add to be called");
   const entry = call[1];
   const parts = await entry.download();
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "report.pdf",
+    expect.any(Uint8Array),
+  );
   expect(parts).toEqual([
     {
-      type: "file",
-      mime: "application/pdf",
-      filename: "report.pdf",
-      url: "data:application/pdf;base64,AQID",
+      type: "text",
+      text: "Attached file: /mock/.attachments/uuid-file",
     },
   ]);
 });
@@ -818,12 +925,18 @@ test("passes agent to promptAsync when set", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
   vi.mocked(getSessionAgent).mockReturnValue("build");
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -834,16 +947,18 @@ test("passes agent to promptAsync when set", async () => {
     signal,
   );
 
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "test.pdf",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       agent: "build",
       parts: [
         {
-          type: "file",
-          mime: "application/pdf",
-          filename: "test.pdf",
-          url: "data:application/pdf;base64,AQID",
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -855,11 +970,17 @@ test("passes threadId through the flow", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.spyOn(globalThis, "fetch").mockResolvedValue(
     new Response(new Uint8Array([1, 2, 3])),
   );
-  const scope = mockScope({ existingSessions, opencodeClient, pendingPrompts });
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
 
   await grammyHandleDocument(
     scope,
@@ -876,16 +997,18 @@ test("passes threadId through the flow", async () => {
     { chatId: 42, threadId: 7 },
     { createIfNotFound: true },
   );
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "test.pdf",
+    expect.any(Uint8Array),
+  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     {
       sessionID: "s1",
       parts: [
         { type: "text", text: "caption" },
         {
-          type: "file",
-          mime: "application/pdf",
-          filename: "test.pdf",
-          url: "data:application/pdf;base64,AQID",
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
         },
       ],
     },
@@ -918,4 +1041,93 @@ test("throws when download fails", async () => {
   await expect(
     grammyHandleDocument(scope, mockDocumentCtx(42) as never, signal),
   ).rejects.toThrow("Expected Telegram document download to succeed");
+});
+
+// --- New tests: image vs non-image routing ---
+
+test("sends image document as base64 data URL to model", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
+  const modelCapabilities = mockModelCapabilities(true);
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+    modelCapabilities,
+  });
+
+  await grammyHandleDocument(
+    scope,
+    mockDocumentCtx(42, {
+      mimeType: "image/png",
+      fileName: "photo.png",
+    }) as never,
+    signal,
+  );
+
+  expect(attachmentStorage.write).not.toHaveBeenCalled();
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "file",
+          mime: "image/png",
+          filename: "photo.png",
+          url: "data:image/png;base64,AQID",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
+});
+
+test("writes non-image document to filesystem", async () => {
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  const attachmentStorage = mockAttachmentStorage();
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    new Response(new Uint8Array([1, 2, 3])),
+  );
+  const scope = mockScope({
+    existingSessions,
+    opencodeClient,
+    pendingPrompts,
+    attachmentStorage,
+  });
+
+  await grammyHandleDocument(
+    scope,
+    mockDocumentCtx(42, {
+      mimeType: "application/pdf",
+      fileName: "document.pdf",
+    }) as never,
+    signal,
+  );
+
+  expect(attachmentStorage.write).toHaveBeenCalledWith(
+    "document.pdf",
+    expect.any(Uint8Array),
+  );
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    {
+      sessionID: "s1",
+      parts: [
+        {
+          type: "text",
+          text: "Attached file: /mock/.attachments/uuid-file",
+        },
+      ],
+    },
+    { throwOnError: true },
+  );
 });

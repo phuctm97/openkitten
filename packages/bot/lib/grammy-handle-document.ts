@@ -2,8 +2,10 @@ import { parse as parseContentType } from "content-type";
 import type { Context, Filter } from "grammy";
 import { extension, lookup } from "mime-types";
 import invariant from "tiny-invariant";
+import type { AttachmentStorage } from "~/lib/attachment-storage";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
+import type { ModelCapabilities } from "~/lib/model-capabilities";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
@@ -46,7 +48,11 @@ function documentFilename(
   return `telegram-document.${extension(mime) || "bin"}`;
 }
 
-async function documentParts(ctx: DocumentContext) {
+async function documentParts(
+  ctx: DocumentContext,
+  attachmentStorage: AttachmentStorage,
+  modelCapabilities: ModelCapabilities,
+) {
   const file = await ctx.getFile();
   invariant(file.file_path, "Expected Telegram document to have a file path");
   const response = await fetch(
@@ -57,19 +63,29 @@ async function documentParts(ctx: DocumentContext) {
   );
   invariant(response.ok, "Expected Telegram document download to succeed");
   const mime = documentMime(ctx, response);
-  const data = Buffer.from(await response.arrayBuffer()).toString("base64");
+  const filename = documentFilename(ctx, file.file_path, mime);
   const parts = [];
 
   if (ctx.message.caption) {
     parts.push({ type: "text" as const, text: ctx.message.caption });
   }
 
-  parts.push({
-    type: "file" as const,
-    mime,
-    filename: documentFilename(ctx, file.file_path, mime),
-    url: `data:${mime};base64,${data}`,
-  });
+  if (await modelCapabilities.supportsInput(mime)) {
+    const data = Buffer.from(await response.arrayBuffer()).toString("base64");
+    parts.push({
+      type: "file" as const,
+      mime,
+      filename,
+      url: `data:${mime};base64,${data}`,
+    });
+  } else {
+    const data = new Uint8Array(await response.arrayBuffer());
+    const path = await attachmentStorage.write(filename, data);
+    parts.push({
+      type: "text" as const,
+      text: `Attached file: ${path}`,
+    });
+  }
 
   return parts;
 }
@@ -83,6 +99,8 @@ export async function grammyHandleDocument(
     workingSessions,
     pendingPrompts,
     mediaGroupBuffer,
+    attachmentStorage,
+    modelCapabilities,
   }: Scope,
   ctx: DocumentContext,
   _signal: AbortSignal,
@@ -93,7 +111,7 @@ export async function grammyHandleDocument(
       chatId: ctx.chat.id,
       threadId: ctx.msg.message_thread_id || undefined,
       messageId: ctx.message.message_id,
-      download: () => documentParts(ctx),
+      download: () => documentParts(ctx, attachmentStorage, modelCapabilities),
     });
     return;
   }
@@ -123,7 +141,7 @@ export async function grammyHandleDocument(
         {
           sessionID: sessionId,
           ...(agent && { agent }),
-          parts: await documentParts(ctx),
+          parts: await documentParts(ctx, attachmentStorage, modelCapabilities),
         },
         { throwOnError: true },
       );

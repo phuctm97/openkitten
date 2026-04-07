@@ -7,7 +7,7 @@ import { setSessionAgent } from "~/lib/set-session-agent";
 type CallbackContext = Filter<Context, "callback_query:data">;
 
 async function handleAgentCallback(
-  { bot, database, opencodeClient, existingSessions }: Scope,
+  { bot, database, opencodeClient, existingSessions, modelCapabilities }: Scope,
   ctx: CallbackContext,
   agentName: string,
 ): Promise<void> {
@@ -40,6 +40,7 @@ async function handleAgentCallback(
   }
 
   setSessionAgent(database, sessionId, agent.name);
+  modelCapabilities.invalidate();
   const chunks = grammyFormatAgentChanged(agent);
   const first = chunks[0];
   invariant(first?.markdown, "Expected agent changed to have markdown content");

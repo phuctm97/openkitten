@@ -12,6 +12,10 @@ const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
 const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
 
+const defaultSkillsDir = resolve(import.meta.dirname, "../skills");
+
+const defaultAgentsMd = resolve(import.meta.dirname, "../AGENTS.md");
+
 const agentFilePathPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH__";
 const agentFilePathYamlPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH_YAML__";
 const agentDirectoryGlobYamlPlaceholder =
@@ -104,16 +108,43 @@ export namespace OpencodeConfig {
     const configDir = join(profile.dir, ".opencode");
     const agentsDir = join(configDir, "agents");
     const pluginsDir = join(profile.xdgConfig, "opencode", "plugins");
+    const skillsDir = join(profile.xdgConfig, "openkitten", "skills");
     await Promise.all([
       mkdir(agentsDir, { recursive: true }),
       mkdir(pluginsDir, { recursive: true }),
+      mkdir(profile.workspace, { recursive: true }),
+      mkdir(skillsDir, { recursive: true }),
     ]);
-    const agentsGlob = new Bun.Glob("*.md");
-    for await (const file of agentsGlob.scan(defaultAgentsDir)) {
+    const mdGlob = new Bun.Glob("*.md");
+    const agentFiles: string[] = [];
+    for await (const file of mdGlob.scan(defaultAgentsDir)) {
+      agentFiles.push(file);
+    }
+    const skillFiles: string[] = [];
+    for await (const file of mdGlob.scan(defaultSkillsDir)) {
+      skillFiles.push(file);
+    }
+    for (const file of agentFiles) {
       const source = join(defaultAgentsDir, file);
       const destination = join(agentsDir, file);
       writes.push(writeDefaultAgentFile(source, destination));
     }
+    for (const file of skillFiles) {
+      const source = join(defaultSkillsDir, file);
+      const destination = join(skillsDir, file);
+      writes.push(
+        readFile(source, "utf-8").then((content) =>
+          writeFile(destination, content, { flag: "wx" }),
+        ),
+      );
+    }
+    writes.push(
+      readFile(defaultAgentsMd, "utf-8").then((content) =>
+        writeFile(join(profile.workspace, "AGENTS.md"), content, {
+          flag: "wx",
+        }),
+      ),
+    );
     writes.push(
       writeFile(
         join(configDir, "opencode.json"),

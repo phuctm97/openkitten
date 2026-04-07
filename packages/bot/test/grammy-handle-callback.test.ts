@@ -103,6 +103,8 @@ function mockScope(overrides: {
     processingMessages: {} as never,
     floatingPromises: {} as never,
     mediaGroupBuffer: {} as never,
+    attachmentStorage: {} as never,
+    modelCapabilities: { invalidate: vi.fn() } as never,
     typingIndicators: {} as never,
   };
 }
@@ -199,6 +201,7 @@ test("agent callback switches agent and edits message", async () => {
   await grammyHandleCallback(scope, mockCtx(42, "cb1", "ag:build"), signal);
 
   expect(setSessionAgent).toHaveBeenCalledWith(scope.database, "s1", "build");
+  expect(scope.modelCapabilities.invalidate).toHaveBeenCalledOnce();
   expect(bot.api.editMessageText).toHaveBeenCalledWith(
     42,
     50,

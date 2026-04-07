@@ -1,9 +1,11 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { Bot } from "grammy";
+import type { AttachmentStorage } from "~/lib/attachment-storage";
 import type { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import type { FloatingPromises } from "~/lib/floating-promises";
 import type { MediaGroupBuffer } from "~/lib/media-group-buffer";
+import type { ModelCapabilities } from "~/lib/model-capabilities";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import type { ProcessingMessages } from "~/lib/processing-messages";
 import type { Shutdown } from "~/lib/shutdown";
@@ -21,5 +23,7 @@ export interface Scope {
   readonly processingMessages: ProcessingMessages;
   readonly floatingPromises: FloatingPromises;
   readonly mediaGroupBuffer: MediaGroupBuffer;
+  readonly attachmentStorage: AttachmentStorage;
+  readonly modelCapabilities: ModelCapabilities;
   readonly typingIndicators: TypingIndicators;
 }
