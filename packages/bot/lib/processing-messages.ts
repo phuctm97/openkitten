@@ -111,7 +111,10 @@ export class ProcessingMessages {
     );
   }
 
-  async #sendDraft(message: StreamingMessage): Promise<void> {
+  async #syncDraft(sessionId: string): Promise<void> {
+    const message = this.#streamingMessages.get(sessionId);
+    if (!message) return;
+
     const location = this.#existingSessions.get(message.info.sessionID);
     if (!location) return;
 
@@ -169,12 +172,6 @@ export class ProcessingMessages {
         options,
       );
     }
-  }
-
-  async #syncDraft(sessionId: string): Promise<void> {
-    const message = this.#streamingMessages.get(sessionId);
-    if (!message) return;
-    await this.#sendDraft(message);
   }
 
   #setStreamingInfo(info: AssistantMessage): void {
