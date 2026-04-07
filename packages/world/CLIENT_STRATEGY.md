@@ -2,460 +2,191 @@
 
 ## Status
 
-This document captures the current client/framework decision for OpenKitten World and the product positioning that led to that decision.
+This document supersedes the earlier `PixiJS + React` recommendation.
 
-It exists to answer these questions clearly:
+The previous phase-1 prototype was useful because it made two things obvious:
 
-- what kind of product OpenKitten World should be in its early days
-- what its long-term north star should be
-- what client/game framework best fits that path
-- what tradeoffs are accepted now versus deferred for later
+- the Pixi API pushed the project toward low-level imperative drawing too early
+- a React app shell wrapped around a world renderer did not create the intended vibe
 
-This document is intentionally narrower than [Vision](./VISION.md) and [Spec](./SPEC.md).
-It focuses on client strategy, framework choice, and presentation direction.
+The package still contains that earlier Pixi scaffold today.
+It should now be treated as a spike that informed the next decision.
 
-## Product Context
+## The New Product Framing
 
-OpenKitten World is the primary world-like product experience that lives at `world.openkitten.com`.
-
-That naming is intentional:
-
-- `OpenKitten` is the brand
-- `OpenKitten World` is the larger place users return to
-- each `House` is one workspace/home inside that world
-
-This matters because:
-
-- one human may have multiple houses
-- multiple humans may share a house
-- users are expected to return to the product repeatedly throughout the day
-- the product should feel like a place they want to come back to, not just a utilitarian dashboard
-
-`app.openkitten.com` is intentionally left available for a future, more conventional, standard web app surface if OpenKitten ever needs one.
-
-## Product Goals For The Client
-
-The client should support a product that is:
-
-- web-native
-- fast to load
-- reliable across browsers and devices
-- open-source and easy to self-host
-- easy for a TypeScript/web-heavy team to build and evolve
-- capable of presenting the House as a living, game-like world
-
-The client also needs to work well with the rest of the OpenKitten model:
-
-- async-first interaction
-- high observability
-- many side panels and structured views
-- real-time session streams
-- thread, notice, memo, and rule surfaces
-- connected external executors
-
-This is not a pure game client.
-It is also not a standard SaaS UI.
-It is a hybrid product that uses a world-like presentation to make work feel alive.
-
-## Personal / Team Context Behind The Decision
-
-The current primary builder context matters:
-
-- prior game experience exists, but it is old
-- the last decade of day-to-day work has been mostly:
-  - TypeScript
-  - React
-  - Node.js / Bun
-  - web app and SaaS architecture
-
-So the best client choice is not the one with the most traditional game-engine features in the abstract.
-It is the one that best supports building OpenKitten World quickly, well, and sustainably with the team's actual strengths.
-
-## Decision Criteria
-
-The framework choice was evaluated against these priorities:
-
-1. Lowest practical learning curve for a TypeScript/React-heavy team
-2. Strong web/browser reliability and performance
-3. Good fit for a hybrid product that mixes world rendering with serious app UI
-4. Good open-source and self-hosting ergonomics
-5. Room to grow toward a richer, more immersive world later
-6. Nice-to-have future multi-platform potential, but not a hard v1 requirement
-
-An important clarification emerged during the decision:
-
-- broad multi-platform shipping is desirable
-- but it is not a hard requirement for the initial product
-- web-native reliability and development leverage matter more right now
-
-## Frameworks Considered
-
-### PixiJS + React
-
-This means:
-
-- `PixiJS` for rendering and interaction
-- `React` for product structure, UI composition, and application architecture
-- optionally `@pixi/react` for React-native composition of the world layer
-
-Strengths:
-
-- best fit for a TypeScript + React + web-heavy team
-- most natural fit for a hybrid app/game product
-- easy to keep the product architecture close to a traditional React application
-- lets OpenKitten keep one shared application state while presenting it in a world-like way
-- leaves open the possibility of later adding other presentation modes on top of the same state
-
-Costs:
-
-- fewer built-in game systems than a full game framework
-- some world/runtime conventions will need to be built in-house
-- more deliberate client architecture work is required up front
-
-### Phaser
-
-Strengths:
-
-- stronger traditional 2D game framework shape
-- more built-in game-oriented systems out of the box
-- likely faster to reach a very conventional 2D game feel
-
-Costs:
-
-- more opinionated game architecture
-- less naturally aligned with React-first product structure
-- less ideal for a product whose core is still a serious async productivity system
-
-### Defold
-
-Strengths:
-
-- strong multi-platform story
-- free and royalty-free
-- attractive if broad platform shipping becomes a much more urgent goal
-
-Costs:
-
-- much less aligned with current TypeScript/React strengths
-- higher effective learning curve
-- weaker fit for a web-first product that should feel native to the browser and easy to self-host
-
-## Complexity, Learning Curve, And Cost Comparison
-
-This comparison is intentionally practical and team-relative.
-It is not a claim about the absolute quality of each framework.
-
-| Choice | Complexity For OpenKitten World | Learning Curve For A TS/React-Heavy Team | Cost / License |
-| --- | --- | --- | --- |
-| `PixiJS + React` | Low-medium | Low | Free, open-source, permissive licensing |
-| `Phaser` | Medium | Low-medium | Core framework is free and open-source; optional editor/tooling can introduce cost |
-| `Defold` | Medium-high | Medium-high | Free, royalty-free |
-
-The key takeaway is:
-
-- `PixiJS + React` has the lowest practical adoption friction for the current team
-- `Phaser` is still approachable, but asks the team to think more like a game-framework team
-- `Defold` may be attractive strategically, but costs too much in day-to-day stack mismatch right now
-
-## Narrowing To Two Choices
-
-The initial comparison narrowed the field to:
-
-- `PixiJS + React`
-- `Defold`
-
-That was based on strategic coverage:
-
-- `PixiJS + React` covered the strongest web-native product path
-- `Defold` covered the strongest early multi-platform path
-
-After clarifying that multi-platform shipping is not a hard near-term requirement, the more relevant comparison became:
-
-- `PixiJS + React`
-- `Phaser`
-
-That is the real practical top-two for OpenKitten World today.
-
-## Final Framework Decision
-
-OpenKitten World should use:
-
-- `PixiJS + React`
-
-### Why This Is The Right Choice
-
-`PixiJS + React` best matches what OpenKitten World actually is:
-
-- a productivity system
-- with a living, game-like presentation layer
-- not a conventional game first
-
-This stack makes it possible to build OpenKitten World similarly to a modern React app:
-
-- the core state can remain product-native
-- panels, notices, threads, cats, and houses can remain application-first concepts
-- the world layer can embody that state visually instead of forcing the product into a scene-first game model
-- future alternate presentations over the same core state remain possible, but that is a nice-to-have rather than an early product goal
-
-This is especially valuable because OpenKitten World includes many traditional product surfaces:
-
-- side panels
-- inbox / notice surfaces
-- thread views
-- cat details
-- session inspection
-- house controls
-- settings and configuration
-
-Those are common in games too, but in OpenKitten World they are not secondary.
-They are central to the product.
-
-### Why Phaser Is Not The Default Choice
-
-`Phaser` remains a strong alternative, but it is not the best default choice because OpenKitten World is not primarily trying to become:
-
-- a full 2D game
-- a JRPG-style world with productivity features attached
-
-If that were the primary product direction, Phaser would become much more attractive.
-
-Instead, OpenKitten World is better understood as:
+OpenKitten World should now be treated as:
 
 - a serious productivity system
-- embodied as a living world
+- presented primarily as a game-like world
+- with `/` acting as the fullscreen home experience
 
-That framing makes `PixiJS + React` a better match.
+This is a different framing from "a web product with a world-like presentation layer."
 
-## Product Positioning Decision
+The distinction matters because it changes who owns the main runtime:
 
-This was the most important non-technical conclusion of the framework discussion:
+- before, React owned the page and the world sat inside it
+- now, the game runtime should own the home route and React should become supporting infrastructure
 
-OpenKitten World should embrace:
+## Why The Decision Changed
 
-- `a productivity app with a game-like presentation`
+The earlier strategy favored the lowest-friction path for a TypeScript and React-heavy team.
 
-and should not, at least initially, embrace:
+That logic was reasonable, but the phase-1 implementation revealed stronger product truth:
 
-- `a fully immersive game that happens to do productivity`
+- the low-level rendering model felt like friction, not leverage
+- `@pixi/react` did not provide the kind of ergonomic ownership the route needed
+- the surrounding web UI made the House feel embedded rather than primary
+- the intended emotional effect depends on entering a place, not opening a dashboard
 
-This is a strategic product choice, not just a client-framework preference.
+The product now looks closer to:
 
-## Why The Early Product Should Be Productivity-First
+- a full game experience whose purpose is getting real work done
 
-The core value of OpenKitten World is still:
+than to:
 
-- helping the user get things done
+- a React product with a game-like center panel
 
-The world layer exists to make the product:
+## Updated Client Shape
 
-- more alive
-- more legible
-- more delightful
-- more habit-forming
-- more emotionally resonant
+The current preferred route model is:
 
-It does not exist to replace the work model with generic game systems.
+- `/` renders a fullscreen Phaser experience
+- other routes may remain normal React pages
+- React Router still owns navigation
+- React DOM overlays on `/` are allowed only when clearly useful
 
-This is why the world should serve:
+This means OpenKitten can have both:
 
-- goals
-- threads
-- comments
-- notices
-- memos
-- rules
-- sessions
-- cat observation
+- a strong game-first home route
+- conventional web routes for flows that are better served by traditional UI
 
-rather than overshadow them.
+Examples of likely React routes:
 
-### What This Means In Practice
+- auth
+- settings
+- legal or marketing-adjacent pages
+- 404 pages
+- future operational dashboards, if they exist
 
-The early product should not spend its time building:
+Those routes should not force `/` to become a dashboard-shaped application.
 
-- heavy RPG infrastructure
-- game systems for their own sake
-- rich immersion that makes real work slower or harder
+## Why Phaser Is Now The Preferred Choice
 
-Instead, it should build:
+Phaser is the preferred choice because the project now needs a stronger game runtime at the center of the main route.
 
-- a spatial, living house interface
-- cats that feel present and observable
-- world-native surfaces for work and coordination
-- strong asynchronous product primitives
-- enough game-like embodiment to make the system memorable and enjoyable
+The core benefits are:
 
-## The Long-Term North Star
+- a scene-oriented mental model
+- built-in support for cameras, input, timing, tweens, and common game structure
+- a clearer place for game-native UI and HUD layers
+- fewer incentives to treat the world as an embedded renderer
+- a better fit for a fullscreen, game-first browser route
 
-Even though the early product should be productivity-first, the long-term north star should still be much more ambitious:
+Most importantly, Phaser encourages the right architectural question:
 
-- a deeply immersive living world for real work
+- how should the House behave as a playable world?
 
-That means the immersive-first direction is not wrong.
-It is just better treated as the north star than as the initial center of gravity.
+instead of:
 
-Over time, OpenKitten World can grow toward:
+- how should a React page render a world-shaped component?
 
-- richer embodiment
-- stronger spatiality
-- more ambient simulation
-- more emotionally expressive cats
-- dream-like and ritual-like interactions
-- stronger attachment to the House as a place
+## Why Pixi Is No Longer The Preferred Choice
 
-The point is not to reject immersion.
-The point is to grow into it without sacrificing the core product value.
+Pixi remains a strong renderer.
+It simply no longer matches the current product framing.
 
-## Reverse Pressure Test: What If OpenKitten World Went Fully Immersive First?
+The main concerns are:
 
-This path was considered seriously.
+- too much low-level world construction too early
+- too little opinionated support for the kind of game runtime now desired
+- a natural tendency to keep React as the primary owner of the experience
 
-If OpenKitten World went fully immersive first, it would become something much closer to:
+If OpenKitten World were still aiming for a hybrid "web app first, renderer second" shape, Pixi would remain credible.
 
-- a living simulation
-- a place the user inhabits
-- a world where work happens through embodied play
+That is no longer the plan.
 
-Examples of how that might look:
+## What React Still Owns
 
-- the user walks to the mailbox to read notices
-- the user visits rooms to see what cats are doing
-- memos are placed physically in the house
-- dream turns appear as real dream scenes
-- executor connections feel like giving cats actual workstations or toolbenches
+React is still important.
+It just should not own the core `/` runtime.
 
-This path has real strengths.
+React should continue to own:
 
-### Unique Strengths Of The Immersive-First Path
+- routing
+- non-game routes
+- traditional forms or operational pages
+- optional DOM overlays when they clearly improve readability
+- shared product code that does not belong to the frame loop
 
-- much stronger emotional attachment
-- much stronger differentiation from normal AI products
-- a stronger sense of place
-- stronger potential for long-term worldbuilding
-- more memorable rituals and house identity
-- a better chance of becoming a product people leave open because they enjoy being there
+This keeps OpenKitten flexible without forcing the main route back into dashboard mode.
 
-### Costs Of The Immersive-First Path
+## State Boundary Between Phaser And React
 
-- much more generic game-infrastructure work
-- slower validation of the core productivity value
-- more friction for dense work interactions
-- greater browser and design complexity
-- higher risk of building charm before usefulness
-- stronger pressure toward a more game-opinionated framework
+The cleanest model is:
 
-### What Would Be Missed If OpenKitten Stayed Too Product-Like
+- Phaser owns the real-time scene, frame loop, input handling, and game-native UI on `/`
+- the domain model stays renderer-agnostic
+- React and Phaser only share state through a narrow explicit boundary
 
-This reverse analysis matters because it reveals what the early product should not lose sight of:
+Jotai is a reasonable bridge for that boundary when needed.
 
-- emotional attachment
-- stronger sense of place
-- ambient legibility
-- memorable rituals
-- long-term delight
+The preferred usage is coarse-grained:
 
-Those are not optional forever.
-They are part of what makes OpenKitten World special.
+- selected object state
+- navigation intent
+- inspector target
+- maybe a small shared session or notice summary
 
-## Synthesis
+The preferred usage is not:
 
-The best current synthesis is:
+- React driving the game loop
+- Phaser and React constantly mutating the same fine-grained UI state
+- making the home route depend on tightly coupled cross-runtime chatter
 
-- **early product identity**
-  productivity system with a game-like presentation
-- **long-term north star**
-  immersive living world for real work
+## Architectural Consequences
 
-This is the strategic reason `PixiJS + React` is the best current choice.
+This decision implies:
 
-It supports:
+- no surrounding product chrome on `/`
+- no permanent "app shell plus game viewport" layout
+- a neutral React root that can host both game and non-game routes
+- game-native menus, windows, and inspect flows should be the default on `/`
+- DOM overlays should stay optional and lightweight
 
-- building the real productivity product first
-- using game-like embodiment where it helps most
-- leaving room to become more immersive later
+The home route should feel like entering the House, not opening an admin console.
 
-without forcing the product into a traditional game framework before that is justified.
+## Risks We Are Accepting
 
-## Pokemon Emerald Reference
+Choosing Phaser means accepting:
 
-`Pokemon Emerald` was used as an aesthetic and experiential reference point:
+- more game-specific architecture
+- less default leverage from standard React UI patterns on the home route
+- a higher bar for UI, input, and asset discipline
+- a need to think carefully about what belongs in-game versus in DOM
 
-- readable 2D world
-- spatial navigation
-- strong sense of place
-- calm but alive atmosphere
-- layered UI and menus on top of an explorable world
+That trade is acceptable because the current product risk is no longer "can the team build a browser app?"
 
-That is a useful inspiration.
+It is:
 
-However, OpenKitten World should not be interpreted as:
-
-- "Pokemon Emerald, but for productivity"
-
-If building a game very close to Pokemon Emerald itself, a more traditional game framework like `Phaser` would likely be more attractive.
-
-For OpenKitten World, the better framing is:
-
-- a real work system that can borrow some of the clarity, charm, and spatiality of games like Pokemon Emerald
-
-That distinction is important.
-
-## Practical Implications For The Client
-
-Choosing `PixiJS + React` implies these implementation principles:
-
-- keep domain state independent from rendering details
-- let the world be one presentation of product state, not the source of truth
-- build a spatial, animated, game-like interface on top of the same core model
-- keep open the possibility of future alternative UI presentations
-- build only the game-like systems that materially improve OpenKitten World
-
-This means OpenKitten should avoid building generic game infrastructure unless it directly supports:
-
-- house legibility
-- cat presence
-- better observation
-- stronger delight
-- more intuitive interaction
-
-## What We Are Accepting By Choosing Pixi
-
-This decision intentionally accepts that OpenKitten World may need to build some world-specific client primitives itself rather than taking them all from a full game framework.
-
-That is acceptable because those primitives are more likely to reflect what is uniquely OpenKitten rather than generic game conventions.
-
-The product should spend its complexity budget on:
-
-- the House
-- the Cats
-- the work model
-- the world-like presentation
-
-not on becoming a general-purpose 2D game engine.
+- can the product feel like the world it needs to be?
 
 ## Re-Evaluation Trigger
 
-The framework choice should be revisited only if one of these becomes true:
+This decision should be revisited only if one of these becomes true:
 
-- the product starts behaving much more like a full game than a hybrid product
-- the required world systems become obviously painful to build in Pixi
-- browser reliability or performance is not good enough
-- the team discovers that a more opinionated game framework would dramatically reduce real product delivery time
+- Phaser makes the main route slower or harder to ship than expected
+- game-native UI on `/` becomes an obvious liability for readability
+- the product drifts back toward a conventional web app with only light world elements
+- another framework clearly provides the same game-first feel with materially better delivery speed
 
-Until then, `PixiJS + React` remains the preferred direction.
+## Decision Summary
 
-## Final Decision Summary
+OpenKitten World should move forward with:
 
-OpenKitten World should currently be built as:
+- Phaser as the primary runtime for `/`
+- React Router as the routing layer
+- React pages for routes that are not primarily game experiences
+- Jotai only as a narrow bridge when Phaser and React truly need shared state
 
-- a web-native product at `world.openkitten.com`
-- using `PixiJS + React`
-- with an early identity of `productivity app with a game-like presentation`
-- and a long-term north star of `immersive living world for real work`
-
-That is the current best balance between:
-
-- product usefulness
-- implementation leverage
-- worldbuilding ambition
-- and long-term differentiation
+The earlier Pixi spike was not wasted.
+It answered the right question by making the wrong-feeling shape visible early enough to change course.

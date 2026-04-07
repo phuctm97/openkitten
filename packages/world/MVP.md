@@ -2,17 +2,9 @@
 
 ## Status
 
-This document defines the current MVP target for OpenKitten World.
+This document defines the current MVP target for the Phaser-first direction.
 
-It is not the full product roadmap.
-It is the smallest vertical slice that should prove the product direction, the world presentation, and the usefulness of the House-and-Cats model.
-
-This document should help product and engineering answer:
-
-- what the first build must actually do
-- what the MVP is trying to prove
-- what is intentionally out of scope
-- what success looks like before deeper world-building or executor integration
+It supersedes the earlier assumption that the first convincing slice should look like a hybrid React shell with an embedded world renderer.
 
 ## MVP Goal
 
@@ -20,38 +12,38 @@ The MVP should prove that OpenKitten World can feel like:
 
 - a real productivity system
 - embodied as a living house
-- with cats that feel present
-- without collapsing into a generic SaaS dashboard or a generic game prototype
+- presented as a fullscreen game-first experience
+- without collapsing into either a generic dashboard or a generic toy prototype
 
-The MVP is successful if a user can enter a House, observe cats, inspect real work surfaces, and feel:
+The MVP is successful if a user can enter a House, observe cats, inspect work, and feel:
 
 - the House is a place
 - the cats are alive
 - the work model is understandable
-- the interface is readable and comfortable
-- the product is more emotionally compelling than a standard dashboard
+- the game-native UI is readable
+- the product becomes more compelling because it feels like a world
 
 ## Core Question
 
 The MVP is mainly trying to answer this question:
 
-`Can OpenKitten World make serious async work feel alive, lovable, and legible through a world-like interface without making the work harder?`
+`Can a fullscreen game-first House make serious async work feel alive, readable, and worth returning to?`
 
 ## MVP Product Promise
 
-The MVP does not need to prove every part of the full spec.
+The MVP does not need to prove every part of the full product.
 
 It only needs to prove these five things:
 
 1. A `House` can feel spatial and alive.
 2. A `Cat` can feel like a persistent individual, not a disposable run.
-3. `Threads`, `Notices`, and `Sessions` can be understood through the world and nearby panels.
-4. The product can support real reading, writing, and inspection without visual fatigue.
-5. The world presentation makes the product more compelling rather than more confusing.
+3. `Threads`, `Notices`, and `Sessions` can be understood through game-native inspection flows.
+4. The interface can support real reading and steering without feeling like a dashboard.
+5. The game presentation makes the product more emotionally convincing rather than less practical.
 
 ## MVP Slice
 
-The first MVP should be a single playable house slice with mocked data.
+The first MVP should be a single playable House slice with mocked data.
 
 It should include:
 
@@ -65,23 +57,23 @@ It should include:
 - one visible `Whiteboard`
 - one visible `Cabinet`
 
-The point is not to support every object deeply.
-The point is to make the House feel like a believable living workspace.
+The point is not feature breadth.
+The point is to make the House feel believable as a working place.
 
 ## First User Journey
 
 The first user journey should be:
 
-1. The user opens OpenKitten World and enters a House.
+1. The user opens `/` and enters a fullscreen House.
 2. The user sees a small, readable, living room-like workspace with two visible cats.
-3. One cat is clearly active and working.
-4. The user clicks that cat and opens its detail panel.
-5. The user sees the cat's identity, current status, assigned threads, and current active session.
-6. The user opens the active session transcript and watches a mock stream update.
+3. One cat is clearly active and one cat is clearly resting or idle.
+4. The user clicks a cat and opens a game-native inspect surface.
+5. The user sees the cat's identity, current status, assigned threads, and active session.
+6. The user opens the active session transcript and reads a mock live feed.
 7. The user opens the inbox and reads a few notices.
 8. The user opens a thread and reads comments and activities.
 9. The user adds a comment or memo.
-10. The House reacts in some visible way.
+10. The House reacts in a visible way.
 
 This should be enough to communicate the core OpenKitten fantasy.
 
@@ -89,7 +81,7 @@ This should be enough to communicate the core OpenKitten fantasy.
 
 ### 1. House View
 
-The MVP needs a single main House view that feels like a place.
+The MVP needs one main House view that feels like a place.
 
 It should show:
 
@@ -98,8 +90,8 @@ It should show:
 - a few recognizable objects or stations
 - enough visual structure for the user to orient themselves quickly
 
-The House does not need multiple rooms or map traversal yet.
-A single-screen house slice is enough for the MVP.
+The House does not need multiple rooms or traversal yet.
+A single-screen slice is enough.
 
 ### 2. Cat Presence
 
@@ -113,16 +105,13 @@ For example:
 Each cat should have:
 
 - a name
-- a simple visual identity
+- a clear visual identity
 - a visible state
 - a clickable interaction target
 
-The cats do not need deep autonomy yet.
-They only need to feel present and individually recognizable.
+### 3. Cat Inspection Surface
 
-### 3. Cat Detail Panel
-
-Clicking a cat should open a panel that shows:
+Clicking a cat should open a surface that shows:
 
 - identity
 - role or flavor
@@ -130,220 +119,166 @@ Clicking a cat should open a panel that shows:
 - assigned threads
 - active session, if any
 
-This panel is important because it proves that cats are inspectable workers, not just decorative mascots.
+This surface should preferably feel game-native.
+DOM is acceptable only if it materially improves readability.
 
 ### 4. Inbox And Notices
 
-The MVP should include a small inbox.
+The MVP should include a small inbox with a few notices representing common House attention items.
 
-The inbox should contain a few notices that represent common House attention items, such as:
+These notices should help the user understand:
 
-- a cat mentioned the human on a thread
-- a cat requested review
-- a thread changed recently
-
-The user should be able to open the inbox, read notices, and use them to navigate into the related work.
+- what needs attention
+- what changed recently
+- what the cats are doing
 
 ### 5. Thread View
 
-The MVP needs at least one readable thread panel.
+The MVP should include at least one readable thread view with:
 
-It should show:
-
-- title
-- assignee
-- status
 - comments
 - activities
-- linked session history or active session reference
+- assignment context
+- open or closed state
 
-The user should be able to add a comment in the MVP.
+The goal is not workflow depth.
+The goal is proving that durable work objects fit naturally inside the House.
 
 ### 6. Session View
 
-The MVP needs one active session view with a mock transcript.
+The MVP should include one active session with a mock transcript.
 
-It should prove:
+The transcript should communicate:
 
-- that sessions are inspectable
-- that a cat can feel active right now
-- that the user can watch work happening in a legible way
-
-The transcript can be mocked.
-The important part is the interaction model and presentation.
+- what the cat is working on
+- that the cat is actually doing something
+- that sessions are inspectable, not magical black boxes
 
 ### 7. One Human Steering Action
 
-The MVP should include at least one human write action.
+The MVP should include one meaningful write action.
 
-The best candidates are:
+Recommended options:
 
 - add a thread comment
 - add a memo
 
-The MVP does not need both if one is much simpler to build first.
-But at least one should exist so the user can feel they are participating in the House.
+This action should produce a visible reaction in the House or UI.
 
 ### 8. Visible House Props
 
-The MVP should show at least:
+The MVP should include a few visible props that make work feel situated.
 
-- one `Whiteboard`
-- one `Cabinet`
+Recommended examples:
 
-These do not need to be fully functional in the first slice.
-But they should exist visually so the House feels like a real place with more than cats and panels.
+- a desk or workstation
+- a whiteboard
+- a cabinet
+- a notice board or inbox station
 
-## Recommended MVP Scenario
-
-The recommended fixed demo scenario is:
-
-- `Mochi` is actively working on a thread and has an open session.
-- `Pepper` is present in the house but not actively working right now.
-- there is a recent notice asking the human to review something or read a mention.
-- one thread is clearly current and connected to Mochi's session.
-- the user can comment on that thread.
-- the House responds visibly when the user does.
-
-This is a very strong demo because it shows:
-
-- one working cat
-- one non-working cat
-- one current work thread
-- one inbox item
-- one active session
-- one human steering action
-
-without requiring a large data model or many features.
+These do not need deep interaction yet.
+They mainly need to make the House legible.
 
 ## MVP Interaction Rules
 
-The MVP should preserve the product model even with mocked data.
+The MVP interaction model should be simple:
 
-That means:
+- click or tap visible objects
+- open one inspection surface at a time
+- keep transitions calm and readable
+- allow the user to back out easily
 
-- the human is mostly observing, reviewing, and nudging
-- cats are the visible workers
-- communication is async-first
-- the product is not chat-first
+The MVP does not need:
 
-So the MVP should not default to:
-
-- a giant chat box
-- direct DM-style cat interaction
-- raw executor debugging UI
+- free movement controls
+- combat-like verbs
+- broad traversal
+- complicated inventory systems
 
 ## What The MVP Must Feel Like
 
 The MVP should feel:
 
+- fullscreen
 - calm
-- warm
-- readable
-- functional
 - spatial
-- slightly magical
-- already useful
+- readable
+- game-native
+- emotionally warm
+- useful enough to inspect real work
 
-It should not feel:
-
-- like a tech demo of sprites moving around
-- like a Figma prototype with cats pasted on top
-- like a generic game scene without clear utility
-- like a text product that just happens to have a background image
+The user should feel like they entered a House, not like they opened a dashboard tab.
 
 ## What The MVP Must Not Try To Do
 
 The MVP should not try to prove:
 
+- multi-room traversal
+- deep simulation systems
+- real multiplayer
 - full executor integration
-- full wake logic
-- real cat memory
-- memo turns
-- dream turns
-- multi-house support
-- multi-human collaboration
-- real authentication
-- real persistence
-- mobile-perfect responsiveness
-- complete world navigation
-- complete whiteboard or cabinet behavior
-- real notices pipeline
-- full art polish
+- a broad SaaS settings surface
+- every possible work object
 
-Those things are important later, but they are not required to validate the core product shape.
+It should also avoid:
+
+- surrounding browser chrome around the world
+- giant panel stacks that dominate the route
+- chat-first interaction as the main loop
 
 ## MVP Out Of Scope
 
-The following should be explicitly out of scope for the first MVP slice:
+These are explicitly out of scope for the MVP:
 
-- real external executors
-- real backend sync
-- real cat autonomy
-- rules enforcement
-- memo incorporation
-- notice generation logic
-- file uploads
-- real cabinet inventory management
-- whiteboard editing
-- dream turns
-- watch or collaborator systems
-- multi-room traversal
-- deep accessibility and full keyboard coverage
-- account management
-- onboarding flow
+- authentication
+- real backend persistence
+- real executor sessions
+- cross-device sync
+- advanced house policies
+- rich customization systems
+- deep economy or progression systems
 
 ## MVP Success Criteria
 
-The MVP is successful if the team can honestly say:
+The MVP is successful if a small number of users can say:
 
-- the House already feels like a place
-- the cats already feel like individuals
-- the user can understand what is happening without a tutorial-heavy explanation
-- reading and writing inside the product already feels comfortable
-- the product already feels different from a generic AI dashboard
-- the team can clearly imagine building the full product from this foundation
+- "I understood what the cats were doing."
+- "The House felt like a place."
+- "Inspecting work felt natural."
+- "This made me more interested in returning."
+- "It felt more like a product than a toy."
 
 ## MVP Acceptance Checklist
 
-- one House scene exists
-- two visible cats exist
-- at least one cat has an active session
-- a cat detail panel exists
-- an inbox exists
-- a thread panel exists
-- at least one human write action exists
-- a mock transcript stream exists
-- the world visibly reacts to user interaction
-- the visual presentation already aligns with the current visual direction
-- the product still feels like work software, not just a toy
+The MVP should include:
+
+- a runnable fullscreen `/` route
+- one readable House slice
+- two visible cats
+- one active session
+- one inbox with notices
+- one thread inspection flow
+- one steering action
+- one visible reaction to that action
 
 ## MVP Technical Strategy
 
-The MVP should use:
+The MVP should be built with:
 
-- mocked House state
-- mocked session transcript updates
-- no real executor dependency
-- no real backend dependency
+- Phaser as the primary runtime on `/`
+- fixture-driven data
+- game-native UI where practical
+- optional DOM overlays only when clearly beneficial
 
-The goal is to validate:
-
-- interaction model
-- spatial model
-- UI comfort
-- world legibility
-- basic emotional feel
-
-before connecting the full runtime and backend systems.
+The implementation should keep the domain model independent from the renderer so future evolution stays possible.
 
 ## Next Step After MVP
 
-If the MVP works, the next step should be:
+If the MVP works, the next step is not "add more screens."
 
-- connect the mocked world to a real application state model
-- deepen House surfaces one by one
-- add real data flow and eventually real executors
-- increase world richness only where it clearly improves the product
+The next step is:
 
-The MVP should create confidence in the product shape, not try to complete the product.
+- deepen the House feel
+- strengthen cat presence
+- tighten the steering loop
+- integrate real system state without losing the game-first route shape
