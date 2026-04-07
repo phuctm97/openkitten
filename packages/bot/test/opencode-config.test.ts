@@ -88,13 +88,13 @@ test("always overwrites default-agents on startup", async () => {
   expect(content).toContain("# Professional objectivity");
 });
 
-test("does not overwrite system-agents if already exists", async () => {
+test("always overwrites system-agents on startup", async () => {
   await OpencodeConfig.create(profile);
   const path = join(configDir(), "AGENTS.md");
   await writeFile(path, "custom");
   await OpencodeConfig.create(profile);
   const content = await readFile(path, "utf-8");
-  expect(content).toBe("custom");
+  expect(content).toContain("# Communication");
 });
 
 test("renders agent files with self-file access", async () => {
@@ -190,25 +190,26 @@ test("does not overwrite existing opencode config", async () => {
   expect(config.default_agent).toBe("build");
 });
 
-test("does not overwrite existing agent files", async () => {
+test("always overwrites agent files on startup", async () => {
   await OpencodeConfig.create(profile);
   const buildPath = join(configDir(), "agents", "build.md");
   await writeFile(buildPath, "custom content");
   await OpencodeConfig.create(profile);
   const content = await readFile(buildPath, "utf-8");
-  expect(content).toBe("custom content");
+  expect(content).not.toBe("custom content");
+  expect(content).toContain("durable memory");
 });
 
-test("copies new agents while preserving existing ones", async () => {
+test("overwrites all agent files on repeated create", async () => {
   await OpencodeConfig.create(profile);
   const buildPath = join(configDir(), "agents", "build.md");
   await writeFile(buildPath, "custom content");
   await OpencodeConfig.create(profile);
   const buildContent = await readFile(buildPath, "utf-8");
-  expect(buildContent).toBe("custom content");
+  expect(buildContent).not.toBe("custom content");
   const planPath = join(configDir(), "agents", "plan.md");
   const planContent = await readFile(planPath, "utf-8");
-  expect(planContent).not.toBe("custom content");
+  expect(planContent).toContain("plan mode");
 });
 
 test("overwrites existing system OpenCode plugin", async () => {

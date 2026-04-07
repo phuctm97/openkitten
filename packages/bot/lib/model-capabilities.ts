@@ -1,6 +1,5 @@
 import type { Model } from "@opencode-ai/sdk/v2";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
-import { logger } from "~/lib/logger";
 
 function normalizeMime(mime: string): string {
   const semicolon = mime.indexOf(";");
@@ -23,33 +22,28 @@ function findModel(
   }
   return undefined;
 }
-
 export async function supportsInput(
   client: OpencodeClient,
   mime: string,
 ): Promise<boolean> {
   const normalized = normalizeMime(mime);
-  try {
-    const { data: config } = await client.config.get(
-      {},
-      { throwOnError: true },
-    );
-    const modelId = config.model;
-    if (!modelId) return normalized.startsWith("image/");
-    const { data: providersData } = await client.config.providers(
-      {},
-      { throwOnError: true },
-    );
-    const model = findModel(providersData.providers, modelId);
-    if (!model) return normalized.startsWith("image/");
-    const input = model.capabilities.input;
-    if (normalized.startsWith("image/")) return input.image;
-    if (normalized === "application/pdf") return input.pdf;
-    if (normalized.startsWith("audio/")) return input.audio;
-    if (normalized.startsWith("video/")) return input.video;
+  const { data: config } = await client.config.get({}, { throwOnError: true });
+  const modelId = config.model;
+  if (!modelId) {
     return false;
-  } catch (error) {
-    logger.warn("Failed to detect model capabilities, using fallback", error);
-    return normalized.startsWith("image/");
   }
+  const { data: providersData } = await client.config.providers(
+    {},
+    { throwOnError: true },
+  );
+  const model = findModel(providersData.providers, modelId);
+  if (!model) {
+    return false;
+  }
+  const input = model.capabilities.input;
+  if (normalized.startsWith("image/")) return input.image;
+  if (normalized === "application/pdf") return input.pdf;
+  if (normalized.startsWith("audio/")) return input.audio;
+  if (normalized.startsWith("video/")) return input.video;
+  return false;
 }

@@ -93,19 +93,19 @@ test("returns false for unsupported mime types", async () => {
   expect(await supportsInput(client as never, "text/plain")).toBe(false);
 });
 
-test("falls back to image-only when no model is configured", async () => {
+test("returns false when no model is configured", async () => {
   const client = mockClient(undefined, defaultProviders);
-  expect(await supportsInput(client as never, "image/jpeg")).toBe(true);
+  expect(await supportsInput(client as never, "image/jpeg")).toBe(false);
   expect(await supportsInput(client as never, "application/pdf")).toBe(false);
 });
 
-test("falls back to image-only when model is not found", async () => {
+test("returns false when model is not found", async () => {
   const client = mockClient("unknown/model", defaultProviders);
-  expect(await supportsInput(client as never, "image/jpeg")).toBe(true);
+  expect(await supportsInput(client as never, "image/jpeg")).toBe(false);
   expect(await supportsInput(client as never, "application/pdf")).toBe(false);
 });
 
-test("falls back to image-only when config.get throws", async () => {
+test("propagates error when config.get throws", async () => {
   const client = {
     config: {
       get: vi.fn(async () => {
@@ -114,11 +114,12 @@ test("falls back to image-only when config.get throws", async () => {
       providers: vi.fn(),
     },
   };
-  expect(await supportsInput(client as never, "image/jpeg")).toBe(true);
-  expect(await supportsInput(client as never, "application/pdf")).toBe(false);
+  await expect(supportsInput(client as never, "image/jpeg")).rejects.toThrow(
+    "network error",
+  );
 });
 
-test("falls back to image-only when config.providers throws", async () => {
+test("propagates error when config.providers throws", async () => {
   const client = {
     config: {
       get: vi.fn(async () => ({
@@ -129,8 +130,9 @@ test("falls back to image-only when config.providers throws", async () => {
       }),
     },
   };
-  expect(await supportsInput(client as never, "image/jpeg")).toBe(true);
-  expect(await supportsInput(client as never, "application/pdf")).toBe(false);
+  await expect(supportsInput(client as never, "image/jpeg")).rejects.toThrow(
+    "network error",
+  );
 });
 
 test("handles uppercase MIME types", async () => {

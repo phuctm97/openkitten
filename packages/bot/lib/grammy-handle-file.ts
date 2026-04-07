@@ -90,10 +90,6 @@ async function fileParts(
     "telegram-file",
   );
   const bytes = await response.arrayBuffer();
-  const savedPath = await attachmentStorage.write(
-    filename,
-    new Uint8Array(bytes),
-  );
   const parts = [];
 
   const caption = ctx.message?.caption;
@@ -109,12 +105,16 @@ async function fileParts(
       filename,
       url: `data:${mime};base64,${data}`,
     });
+  } else {
+    const savedPath = await attachmentStorage.write(
+      filename,
+      new Uint8Array(bytes),
+    );
+    parts.push({
+      type: "text" as const,
+      text: `Attached file saved to: ${savedPath}`,
+    });
   }
-
-  parts.push({
-    type: "text" as const,
-    text: `Attached file saved to: ${savedPath}`,
-  });
 
   return parts;
 }

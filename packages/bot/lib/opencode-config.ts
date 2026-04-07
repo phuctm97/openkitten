@@ -83,7 +83,7 @@ async function writeDefaultAgentFile(
 ): Promise<void> {
   const template = await readFile(source, "utf-8");
   const rendered = renderAgentTemplate(template, destination);
-  await writeFile(destination, rendered, { flag: "wx" });
+  await writeFile(destination, rendered);
 }
 
 function cancel(): never {
@@ -148,7 +148,7 @@ export namespace OpencodeConfig {
     );
     writes.push(
       readFile(defaultSystemAgents, "utf-8").then((content) =>
-        writeFile(join(configDir, "AGENTS.md"), content, { flag: "wx" }),
+        writeFile(join(configDir, "AGENTS.md"), content),
       ),
     );
     writes.push(

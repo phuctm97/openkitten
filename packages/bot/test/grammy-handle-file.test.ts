@@ -603,7 +603,7 @@ test("extractTelegramFilename: sticker falls back to fallback prefix with extens
 
 // ─── model-supported MIME: sends base64 + saves to disk ─────────────────────
 
-test("model-supported MIME sends base64 data URL and saves to disk", async () => {
+test("model-supported MIME sends base64 data URL without saving to disk", async () => {
   const opencodeClient = mockOpencodeClient();
   opencodeClient.session.promptAsync.mockResolvedValue({});
   vi.mocked(supportsInput).mockResolvedValue(true);
@@ -634,18 +634,11 @@ test("model-supported MIME sends base64 data URL and saves to disk", async () =>
           filename: "test.jpg",
           url: "data:image/jpeg;base64,AQID",
         },
-        {
-          type: "text",
-          text: "Attached file saved to: /mock/path/file.jpg",
-        },
       ],
     },
     { throwOnError: true },
   );
-  expect(attachmentStorage.write).toHaveBeenCalledWith(
-    "test.jpg",
-    new Uint8Array([1, 2, 3]),
-  );
+  expect(attachmentStorage.write).not.toHaveBeenCalled();
 });
 
 // ─── model-unsupported MIME: saves to disk only ──────────────────────────────
@@ -711,10 +704,6 @@ test("with caption: includes caption text part before file parts", async () => {
       parts: [
         { type: "text", text: "what is this?" },
         expect.objectContaining({ type: "file" }),
-        expect.objectContaining({
-          type: "text",
-          text: expect.stringContaining("Attached file saved to:"),
-        }),
       ],
     }),
     { throwOnError: true },
@@ -818,7 +807,6 @@ test("media group: deferred download resolves to correct parts with caption", as
       filename: "test.jpg",
       url: "data:image/jpeg;base64,AQID",
     },
-    { type: "text", text: "Attached file saved to: /mock/path/file.jpg" },
   ]);
 });
 

@@ -138,58 +138,10 @@ function restoreCodeBlockLangs(text: string, langs: readonly string[]): string {
   });
 }
 
-function stripTables(text: string): string {
-  const codeBlocks = findCodeBlockRanges(text);
-  const lines = text.split("\n");
-  const result: string[] = [];
-  let inTable = false;
-  let headers: string[] = [];
-  let pos = 0;
-
-  for (const line of lines) {
-    const lineStart = pos;
-    pos += line.length + 1;
-    if (isInCodeBlock(lineStart, codeBlocks)) {
-      result.push(line);
-      continue;
-    }
-    const trimmed = line.trim();
-    if (/^\|.*\|$/.test(trimmed)) {
-      if (/^\|[\s:|-]+\|$/.test(trimmed)) continue;
-      const cells = trimmed
-        .slice(1, -1)
-        .split("|")
-        .map((c) => c.trim());
-      if (!inTable) {
-        headers = cells;
-        inTable = true;
-      } else {
-        const parts = cells.map((cell, i) =>
-          headers[i] ? `${headers[i]}: ${cell}` : cell,
-        );
-        result.push(`• ${parts.join(" | ")}`);
-      }
-    } else {
-      if (inTable && headers.length > 0) {
-        result.push(`• ${headers.join(" | ")}`);
-      }
-      inTable = false;
-      headers = [];
-      result.push(line);
-    }
-  }
-  if (inTable && headers.length > 0) {
-    result.push(`• ${headers.join(" | ")}`);
-  }
-
-  return result.join("\n");
-}
-
 function convertSingleChunk(chunk: string): GrammyChunk {
   try {
-    const cleaned = stripTables(chunk);
-    const langs = extractCodeBlockLangs(cleaned);
-    const markdown = restoreCodeBlockLangs(convert(cleaned), langs);
+    const langs = extractCodeBlockLangs(chunk);
+    const markdown = restoreCodeBlockLangs(convert(chunk), langs);
     return { text: chunk, markdown };
   } catch (error) {
     logger.warn("Failed to format as MarkdownV2", error, { chunk });
