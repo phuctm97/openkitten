@@ -16,19 +16,12 @@ interface StreamingMessage {
   readonly parts: Part[];
 }
 
-interface SentDraft {
-  readonly markdown?: string | undefined;
-  readonly messageId: string;
-  readonly text: string;
-}
-
 export class ProcessingMessages {
   readonly #bot: Bot;
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #streamingMessages = new Map<string, StreamingMessage>();
-  readonly #sentDrafts = new Map<string, SentDraft>();
   readonly #unhook: () => void;
 
   private constructor(
@@ -43,7 +36,6 @@ export class ProcessingMessages {
     this.#existingSessions = existingSessions;
     this.#unhook = existingSessions.hook("beforeRemove", ({ sessionId }) => {
       this.#streamingMessages.delete(sessionId);
-      this.#sentDrafts.delete(sessionId);
     });
   }
 
@@ -121,10 +113,7 @@ export class ProcessingMessages {
 
   async #sendDraft(message: StreamingMessage): Promise<void> {
     const location = this.#existingSessions.get(message.info.sessionID);
-    if (!location) {
-      this.#sentDrafts.delete(message.info.sessionID);
-      return;
-    }
+    if (!location) return;
 
     const chunk = grammyFormatDraft(
       message.parts
@@ -135,20 +124,7 @@ export class ProcessingMessages {
         .map((part) => part.text)
         .join("\n\n"),
     );
-    if (!chunk.text) {
-      this.#sentDrafts.delete(message.info.sessionID);
-      return;
-    }
-
-    const previous = this.#sentDrafts.get(message.info.sessionID);
-    if (
-      previous &&
-      previous.messageId === message.info.id &&
-      previous.text === chunk.text &&
-      previous.markdown === chunk.markdown
-    ) {
-      return;
-    }
+    if (!chunk.text) return;
 
     const draftId = grammyBuildDraftId(message.info.id);
     const options = {
@@ -193,20 +169,11 @@ export class ProcessingMessages {
         options,
       );
     }
-
-    this.#sentDrafts.set(message.info.sessionID, {
-      messageId: message.info.id,
-      text: chunk.text,
-      markdown: chunk.markdown,
-    });
   }
 
   async #syncDraft(sessionId: string): Promise<void> {
     const message = this.#streamingMessages.get(sessionId);
-    if (!message) {
-      this.#sentDrafts.delete(sessionId);
-      return;
-    }
+    if (!message) return;
     await this.#sendDraft(message);
   }
 
@@ -251,6 +218,7 @@ export class ProcessingMessages {
   ): void {
     const current = this.#streamingMessages.get(sessionId);
     if (!current || current.info.id !== messageId) return;
+    if (current.parts.every((part) => part.id !== partId)) return;
     this.#streamingMessages.set(sessionId, {
       info: current.info,
       parts: current.parts.filter((part) => part.id !== partId),
@@ -273,9 +241,11 @@ export class ProcessingMessages {
     if (field === "text") {
       switch (part.type) {
         case "reasoning":
+          part.text += delta;
+          return;
         case "text":
           part.text += delta;
-          break;
+          return;
       }
       return;
     }
@@ -351,7 +321,6 @@ export class ProcessingMessages {
           break;
         }
         this.#removeStreamingMessage(info.sessionID, info.id);
-        this.#sentDrafts.delete(info.sessionID);
         if (!this.#claim(info)) break;
         try {
           const { data } = await this.#opencodeClient.session.message(
@@ -371,7 +340,6 @@ export class ProcessingMessages {
             event.properties.sessionID,
             event.properties.messageID,
           );
-          await this.#syncDraft(event.properties.sessionID);
         }
         break;
       case "message.part.updated":

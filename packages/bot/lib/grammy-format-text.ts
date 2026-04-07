@@ -2,9 +2,9 @@ import { convert } from "telegram-markdown-v2";
 import type { GrammyChunk } from "~/lib/grammy-chunk";
 import { logger } from "~/lib/logger";
 import { markdownFindCodeBlockRanges } from "~/lib/markdown-find-code-block-ranges";
-import { markdownHrPattern } from "~/lib/markdown-hr-pattern";
 import { markdownIsInCodeBlock } from "~/lib/markdown-is-in-code-block";
 import { markdownPreserveCodeBlockLanguages } from "~/lib/markdown-preserve-code-block-languages";
+import { markdownSplitSections } from "~/lib/markdown-split-sections";
 import { telegramMessageMaxLength } from "~/lib/telegram-message-max-length";
 
 const splitLength = Math.floor(telegramMessageMaxLength * 0.8);
@@ -120,7 +120,7 @@ function tryConvert(chunk: string): readonly GrammyChunk[] {
 }
 
 export function grammyFormatText(text: string): readonly GrammyChunk[] {
-  const sections = text.split(markdownHrPattern);
+  const sections = markdownSplitSections(text);
   const results: GrammyChunk[] = [];
 
   for (const section of sections) {

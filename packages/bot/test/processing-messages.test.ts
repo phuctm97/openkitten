@@ -298,7 +298,7 @@ test("update refreshes the draft with the same draft id after text deltas", asyn
   expectLatestDraft("m1", "hello");
 });
 
-test("update skips resending an unchanged draft", async () => {
+test("update resends the latest draft for a refreshed text snapshot", async () => {
   const { pm } = await setup();
   await pm.update({
     type: "message.updated",
@@ -329,21 +329,24 @@ test("update skips resending an unchanged draft", async () => {
   mockSendMessageDraft.mockClear();
 
   await pm.update({
-    type: "message.updated",
+    type: "message.part.updated",
     properties: {
-      info: {
-        id: "m1",
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
         sessionID: "sess-1",
-        role: "assistant",
-        time: { created: 1 },
+        messageID: "m1",
+        type: "text",
+        text: "hello",
       },
+      time: 3,
     },
   } as never);
 
-  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+  expectLatestDraft("m1", "hello");
 });
 
-test("update refreshes streaming message info without dropping parts", async () => {
+test("update refreshes streaming message info and resends the latest draft", async () => {
   const { pm } = await setup();
   await pm.update({
     type: "message.updated",
@@ -382,18 +385,7 @@ test("update refreshes streaming message info without dropping parts", async () 
       },
     },
   } as never);
-  expect(mockSendMessageDraft).not.toHaveBeenCalled();
-  await pm.update({
-    type: "message.part.delta",
-    properties: {
-      sessionID: "sess-1",
-      messageID: "m1",
-      partID: "p1",
-      field: "text",
-      delta: " world",
-    },
-  } as never);
-  expectLatestDraft("m1", "hello world");
+  expectLatestDraft("m1", "hello");
 });
 
 test("update ignores part snapshots without an active streaming message", async () => {
@@ -566,6 +558,60 @@ test("update joins text parts in id order for the draft", async () => {
   expectLatestDraft("m1", "hello\n\nworld");
 });
 
+test("update resends the latest draft when a non-text part changes", async () => {
+  const { pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+
+  mockSendMessageDraft.mockClear();
+
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p2",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "tool",
+        callID: "call-1",
+        tool: "bash",
+        state: {
+          status: "pending",
+          input: {},
+          raw: "echo hello",
+        },
+      },
+      time: 3,
+    },
+  } as never);
+
+  expectLatestDraft("m1", "hello");
+});
+
 test("update ignores reasoning-only deltas when building drafts", async () => {
   const { pm } = await setup();
   await pm.update({
@@ -635,6 +681,7 @@ test("update ignores deltas for unsupported fields", async () => {
       time: 2,
     },
   } as never);
+  mockSendMessageDraft.mockClear();
   await pm.update({
     type: "message.part.delta",
     properties: {
@@ -645,7 +692,7 @@ test("update ignores deltas for unsupported fields", async () => {
       delta: "ignored",
     },
   } as never);
-  expect(mockSendMessageDraft).toHaveBeenCalledOnce();
+  expectLatestDraft("m1", "hello");
 });
 
 test("update ignores deltas for missing parts", async () => {
@@ -874,7 +921,7 @@ test("update ignores part removals for a different message", async () => {
       partID: "p1",
     },
   } as never);
-  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+  expectLatestDraft("m1", "hello");
   mockSendMessageDraft.mockClear();
   await pm.update({
     type: "message.part.delta",

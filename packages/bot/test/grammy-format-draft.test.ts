@@ -22,6 +22,13 @@ test("returns only the latest section after horizontal rules", () => {
   expect(result.markdown).toContain("After");
 });
 
+test("does not treat horizontal rules inside code blocks as section breaks", () => {
+  const result = grammyFormatDraft("```txt\n---\nhello\n```");
+  expect(result.text).toBe("```txt\n---\nhello\n```");
+  expect(result.markdown).toContain("```txt\n");
+  expect(result.markdown).toContain("---");
+});
+
 test("keeps the latest content from long text", () => {
   const words = Array.from({ length: 700 }, (_, index) => `word${index}`);
   const result = grammyFormatDraft(words.join(" "));

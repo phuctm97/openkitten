@@ -2,9 +2,9 @@ import { convert } from "telegram-markdown-v2";
 import type { GrammyChunk } from "~/lib/grammy-chunk";
 import { logger } from "~/lib/logger";
 import { markdownFindCodeBlockRanges } from "~/lib/markdown-find-code-block-ranges";
-import { markdownHrPattern } from "~/lib/markdown-hr-pattern";
 import { markdownIsInCodeBlock } from "~/lib/markdown-is-in-code-block";
 import { markdownPreserveCodeBlockLanguages } from "~/lib/markdown-preserve-code-block-languages";
+import { markdownSplitSections } from "~/lib/markdown-split-sections";
 import { telegramMessageMaxLength } from "~/lib/telegram-message-max-length";
 
 const trimAggressionFactor = 0.92;
@@ -32,7 +32,7 @@ const trimPriorities: readonly TrimPriority[] = [
 ];
 
 function getLastSection(text: string): string {
-  const sections = text.split(markdownHrPattern);
+  const sections = markdownSplitSections(text);
   for (let index = sections.length - 1; index >= 0; index -= 1) {
     const section = sections[index]?.trim();
     if (section) return section;

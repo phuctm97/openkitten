@@ -47,6 +47,13 @@ test("splits on various HR patterns", () => {
   }
 });
 
+test("does not split on horizontal rules inside code blocks", () => {
+  const result = grammyFormatText("```txt\n---\nhello\n```");
+  expect(result).toHaveLength(1);
+  expect(result[0]?.text).toBe("```txt\n---\nhello\n```");
+  expect(result[0]?.markdown).toContain("```txt\n");
+});
+
 test("skips empty sections from HR splits", () => {
   const text = "---\n\nContent here.\n\n---";
   const result = grammyFormatText(text);
