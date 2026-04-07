@@ -20,14 +20,9 @@ export function Layout({ children }: PropsWithChildren) {
         <Meta />
         <Links />
       </head>
-      <body className="m-0 min-h-full bg-background text-foreground antialiased">
+      <body className="m-0 min-h-full antialiased">
         <ThemeConnector />
-        <div className="relative min-h-screen overflow-hidden">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.18),_transparent_34%),radial-gradient(circle_at_bottom_right,_rgba(56,189,248,0.12),_transparent_28%)] dark:bg-[radial-gradient(circle_at_top,_rgba(249,115,22,0.24),_transparent_36%),radial-gradient(circle_at_bottom_right,_rgba(96,165,250,0.16),_transparent_30%)]" />
-          <main className="relative mx-auto flex min-h-screen w-full max-w-[1280px] items-center justify-center px-4 py-6 sm:px-6 lg:px-10">
-            {children}
-          </main>
-        </div>
+        {children}
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -37,16 +32,18 @@ export function Layout({ children }: PropsWithChildren) {
 
 export function HydrateFallback(_: Route.HydrateFallbackProps) {
   return (
-    <section className="rounded-3xl border border-border bg-card p-8 text-card-foreground shadow-xl shadow-primary/5">
-      <p className="mb-2 mt-0 text-sm font-bold uppercase tracking-[0.06em] text-primary/80">
-        Waking Up
-      </p>
-      <h2 className="mb-4 mt-0 font-heading text-[clamp(1.6rem,2.8vw,2.4rem)] leading-[1.1]">
-        Opening your House...
-      </h2>
-      <p className="m-0 max-w-[64ch] text-base leading-[1.6]">
-        OpenKitten World is getting the house ready.
-      </p>
+    <section className="grid min-h-screen px-6 py-10">
+      <div className="m-auto max-w-[30rem] space-y-3 rounded-[2rem] border border-border bg-card px-6 py-8 text-center shadow-xs">
+        <p className="m-0 text-sm font-bold uppercase tracking-[0.08em] text-muted-foreground">
+          Booting House
+        </p>
+        <h2 className="m-0 font-heading text-[clamp(1.8rem,3vw,2.6rem)] leading-[1.1]">
+          Opening OpenKitten World...
+        </h2>
+        <p className="m-0 text-sm leading-[1.7] text-muted-foreground">
+          The fullscreen Phaser client is starting up.
+        </p>
+      </div>
     </section>
   );
 }
@@ -65,19 +62,23 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <section className="rounded-3xl border border-border bg-card p-8 text-card-foreground shadow-xl shadow-primary/5">
-      <p className="mb-2 mt-0 text-sm font-bold uppercase tracking-[0.06em] text-primary/80">
-        Error
-      </p>
-      <h2 className="mb-4 mt-0 font-heading text-[clamp(1.6rem,2.8vw,2.4rem)] leading-[1.1]">
-        {message}
-      </h2>
-      <p className="m-0 max-w-[64ch] text-base leading-[1.6]">{details}</p>
-      {stack ? (
-        <pre className="mt-6 overflow-auto rounded-2xl bg-muted p-4 font-mono text-sm leading-[1.5] whitespace-pre-wrap">
-          {stack}
-        </pre>
-      ) : null}
+    <section className="grid min-h-screen px-6 py-10">
+      <div className="m-auto w-full max-w-[42rem] rounded-[2rem] border border-border bg-card p-8 shadow-xs">
+        <p className="mb-2 mt-0 text-sm font-bold uppercase tracking-[0.08em] text-muted-foreground">
+          Error
+        </p>
+        <h2 className="mb-4 mt-0 font-heading text-[clamp(1.8rem,3vw,2.6rem)] leading-[1.1]">
+          {message}
+        </h2>
+        <p className="m-0 text-base leading-[1.7] text-muted-foreground">
+          {details}
+        </p>
+        {stack ? (
+          <pre className="mt-6 overflow-auto rounded-[1.25rem] border border-border bg-muted/50 p-4 font-mono text-sm leading-[1.6] whitespace-pre-wrap">
+            {stack}
+          </pre>
+        ) : null}
+      </div>
     </section>
   );
 }

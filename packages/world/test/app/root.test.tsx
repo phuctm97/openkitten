@@ -63,12 +63,15 @@ test("renders the document shell and shared layout", async () => {
 test("renders the hydrate fallback", async () => {
   const { HydrateFallback } = await import("~/app/root");
 
-  render(<HydrateFallback {...rootHydrateFallbackProps} />);
+  const { container } = render(
+    <HydrateFallback {...rootHydrateFallbackProps} />,
+  );
 
-  expect(screen.getByText("Opening your House...")).toBeInTheDocument();
+  expect(screen.getByText("Opening OpenKitten World...")).toBeInTheDocument();
   expect(
-    screen.getByText("OpenKitten World is getting the house ready."),
+    screen.getByText("The fullscreen Phaser client is starting up."),
   ).toBeInTheDocument();
+  expect(container.firstChild).toHaveClass("grid", "min-h-screen");
 });
 
 test("renders a 404 error boundary state", async () => {
@@ -76,12 +79,15 @@ test("renders a 404 error boundary state", async () => {
 
   rootMocks.isRouteErrorResponse.mockReturnValueOnce(true);
 
-  render(<ErrorBoundary error={{ status: 404 }} params={{}} />);
+  const { container } = render(
+    <ErrorBoundary error={{ status: 404 }} params={{}} />,
+  );
 
   expect(screen.getByText("404")).toBeInTheDocument();
   expect(
     screen.getByText("The requested page could not be found."),
   ).toBeInTheDocument();
+  expect(container.firstChild).toHaveClass("grid", "min-h-screen");
 });
 
 test("renders a generic route error boundary state for non-404 responses", async () => {
