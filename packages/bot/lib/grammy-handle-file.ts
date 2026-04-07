@@ -6,7 +6,7 @@ import invariant from "tiny-invariant";
 import type { AttachmentStorage } from "~/lib/attachment-storage";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
-import { supportsInput } from "~/lib/model-capabilities";
+import { modelSupportsFile } from "~/lib/model-supports-file";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
@@ -21,7 +21,8 @@ function extractTelegramMime(ctx: Context): string | undefined {
   if ("animation" in msg && msg.animation) return msg.animation.mime_type;
   if ("video_note" in msg && msg.video_note) return "video/mp4";
   if ("sticker" in msg && msg.sticker) return "image/webp";
-  return undefined;
+  if ("photo" in msg && msg.photo) return "image/jpeg";
+  return undefined; // Unknown file type — resolveMime will use content-type or file path
 }
 
 function extractTelegramFilename(ctx: Context): string | undefined {
@@ -55,14 +56,11 @@ function resolveMime(
 
 function resolveFilename(
   telegramFilename: string | undefined,
-  filePath: string,
+  fileId: string,
   mime: string,
-  fallbackPrefix: string,
 ): string {
   if (telegramFilename) return telegramFilename;
-  const pathName = filePath.split("/").filter(Boolean).at(-1);
-  if (pathName) return pathName;
-  return `${fallbackPrefix}.${extension(mime) || "bin"}`;
+  return `${fileId}.${extension(mime) || "bin"}`;
 }
 
 async function fileParts(
@@ -83,12 +81,7 @@ async function fileParts(
   const telegramMime = extractTelegramMime(ctx);
   const telegramFilename = extractTelegramFilename(ctx);
   const mime = resolveMime(telegramMime, file.file_path, response);
-  const filename = resolveFilename(
-    telegramFilename,
-    file.file_path,
-    mime,
-    "telegram-file",
-  );
+  const filename = resolveFilename(telegramFilename, file.file_id, mime);
   const bytes = await response.arrayBuffer();
   const parts = [];
 
@@ -97,7 +90,7 @@ async function fileParts(
     parts.push({ type: "text" as const, text: caption });
   }
 
-  if (await supportsInput(opencodeClient, mime)) {
+  if (await modelSupportsFile(opencodeClient, mime)) {
     const data = Buffer.from(bytes).toString("base64");
     parts.push({
       type: "file" as const,
@@ -107,7 +100,9 @@ async function fileParts(
     });
   } else {
     const savedPath = await attachmentStorage.write(
+      file.file_id,
       filename,
+      mime,
       new Uint8Array(bytes),
     );
     parts.push({

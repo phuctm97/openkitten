@@ -79,13 +79,13 @@ test("copies system-agents to OPENCODE_CONFIG_DIR", async () => {
   expect(content).not.toContain("# Professional objectivity");
 });
 
-test("always overwrites default-agents on startup", async () => {
+test("does not overwrite existing default-agents", async () => {
   await OpencodeConfig.create(profile);
   const path = join(profile.xdgConfig, "opencode", "AGENTS.md");
   await writeFile(path, "custom");
   await OpencodeConfig.create(profile);
   const content = await readFile(path, "utf-8");
-  expect(content).toContain("# Professional objectivity");
+  expect(content).toBe("custom");
 });
 
 test("always overwrites system-agents on startup", async () => {

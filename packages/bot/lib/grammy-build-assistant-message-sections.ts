@@ -182,7 +182,9 @@ export function grammyBuildAssistantMessageSections(
         startActionSection();
         summarizeToolPart(info, part, actionSummary);
 
-        const attachments = toolAttachments(part).filter(isAttachment);
+        const attachments = toolAttachments(part)
+          .filter(isAttachment)
+          .filter((f) => !!f.source);
         if (attachments.length === 0) continue;
 
         flushActionSection();

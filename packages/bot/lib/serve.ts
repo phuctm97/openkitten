@@ -122,7 +122,7 @@ export const serve = defineCommand({
         pendingPrompts,
         floatingPromises,
       );
-      const attachmentStorage = AttachmentStorage.create(profile.xdgCache);
+      const attachmentStorage = AttachmentStorage.create(profile.workspace);
       const scope: Scope = {
         bot,
         database,

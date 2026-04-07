@@ -95,7 +95,8 @@ export class McpServer implements Disposable {
     server.registerTool(
       "send_file",
       {
-        description: "Send a local file.",
+        description:
+          "Send a local file that YOU created or generated to the user via Telegram. NEVER use this tool to re-send files that the user already uploaded or sent to you — those files are already visible to the user in the chat.",
         inputSchema: sendFileInputSchema,
         outputSchema: sendFileOutputSchema,
       },

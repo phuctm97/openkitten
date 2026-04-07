@@ -7,6 +7,9 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
+import { FloatingThemeSwitcher } from "~/components/floating-theme-switcher";
+import { Badge } from "~/components/ui/badge";
+import { Button } from "~/components/ui/button";
 import { ThemeConnector } from "~/lib/theme-connector";
 import type { Route } from "./+types/root";
 
@@ -32,16 +35,18 @@ export function Layout({ children }: PropsWithChildren) {
 
 export function HydrateFallback(_: Route.HydrateFallbackProps) {
   return (
-    <section className="grid min-h-screen px-6 py-10">
-      <div className="m-auto max-w-[30rem] space-y-3 rounded-[2rem] border border-border bg-card px-6 py-8 text-center shadow-xs">
-        <p className="m-0 text-sm font-bold uppercase tracking-[0.08em] text-muted-foreground">
-          Booting House
-        </p>
-        <h2 className="m-0 font-heading text-[clamp(1.8rem,3vw,2.6rem)] leading-[1.1]">
-          Opening OpenKitten World...
-        </h2>
-        <p className="m-0 text-sm leading-[1.7] text-muted-foreground">
-          The fullscreen Phaser client is starting up.
+    <section className="grid min-h-screen place-items-center bg-background px-6 py-10">
+      <FloatingThemeSwitcher />
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex w-full max-w-sm flex-col items-center gap-4 text-center"
+      >
+        <div className="flex size-14 items-center justify-center rounded-full border border-border bg-muted/50">
+          <span className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
+        </div>
+        <p className="m-0 text-sm leading-6 text-muted-foreground">
+          Loading OpenKitten World
         </p>
       </div>
     </section>
@@ -49,35 +54,59 @@ export function HydrateFallback(_: Route.HydrateFallbackProps) {
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
-  let message = "Oops!";
-  let details = "An unexpected error occurred.";
-  let stack: string | undefined;
+  let badge = "Error";
+  let message = "Something went wrong";
+  let details =
+    "We ran into an unexpected problem. If it keeps happening, contact us.";
 
-  if (isRouteErrorResponse(error) && error.status === 404) {
-    message = "404";
-    details = "The requested page could not be found.";
-  } else if (import.meta.env.DEV && error instanceof Error) {
-    details = error.message;
-    stack = error.stack;
+  if (isRouteErrorResponse(error)) {
+    badge = error.status.toString();
+
+    if (error.status === 404) {
+      message = error.statusText || "Not Found";
+      if (typeof error.data === "string" && error.data.length > 0) {
+        details = error.data;
+      } else {
+        details =
+          "The page you are looking for does not exist or may have moved.";
+      }
+    } else {
+      message = error.statusText || "Request Failed";
+      if (typeof error.data === "string" && error.data.length > 0) {
+        details = error.data;
+      }
+    }
   }
 
   return (
-    <section className="grid min-h-screen px-6 py-10">
-      <div className="m-auto w-full max-w-[42rem] rounded-[2rem] border border-border bg-card p-8 shadow-xs">
-        <p className="mb-2 mt-0 text-sm font-bold uppercase tracking-[0.08em] text-muted-foreground">
-          Error
-        </p>
-        <h2 className="mb-4 mt-0 font-heading text-[clamp(1.8rem,3vw,2.6rem)] leading-[1.1]">
+    <section className="relative grid min-h-screen overflow-hidden bg-background px-6 py-10">
+      <FloatingThemeSwitcher />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 overflow-hidden"
+      >
+        <div className="absolute left-0 top-12 size-72 rounded-full bg-destructive/10 blur-3xl" />
+        <div className="absolute bottom-0 right-0 size-80 rounded-full bg-primary/10 blur-3xl" />
+      </div>
+      <div
+        role="alert"
+        className="relative m-auto w-full max-w-[44rem] rounded-[2rem] border border-border/70 bg-card/95 p-8 shadow-xl shadow-destructive/5 backdrop-blur-sm"
+      >
+        <Badge variant="outline">{badge}</Badge>
+        <h2 className="mb-3 mt-5 font-heading text-[clamp(1.8rem,3vw,2.7rem)] leading-[1.1]">
           {message}
         </h2>
-        <p className="m-0 text-base leading-[1.7] text-muted-foreground">
+        <p className="m-0 max-w-[60ch] text-base leading-[1.7] text-muted-foreground">
           {details}
         </p>
-        {stack ? (
-          <pre className="mt-6 overflow-auto rounded-[1.25rem] border border-border bg-muted/50 p-4 font-mono text-sm leading-[1.6] whitespace-pre-wrap">
-            {stack}
-          </pre>
-        ) : null}
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <form className="contents">
+            <Button type="submit">Reload Page</Button>
+          </form>
+          <Button variant="outline" asChild>
+            <a href="/">Go Home</a>
+          </Button>
+        </div>
       </div>
     </section>
   );
