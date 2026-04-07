@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest";
-import { ModelCapabilities } from "~/lib/model-capabilities";
+import { supportsInput } from "~/lib/model-capabilities";
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -55,10 +55,7 @@ test("detects image support for claude model", async () => {
     "anthropic/claude-sonnet-4-20250514",
     defaultProviders,
   );
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("image/jpeg")).toBe(true);
-  expect(await mc.supportsInput("image/png")).toBe(true);
+  expect(await supportsInput(client as never, "image/jpeg")).toBe(true);
 });
 
 test("detects pdf support for claude model", async () => {
@@ -66,9 +63,7 @@ test("detects pdf support for claude model", async () => {
     "anthropic/claude-sonnet-4-20250514",
     defaultProviders,
   );
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("application/pdf")).toBe(true);
+  expect(await supportsInput(client as never, "application/pdf")).toBe(true);
 });
 
 test("detects no audio support for claude model", async () => {
@@ -76,23 +71,17 @@ test("detects no audio support for claude model", async () => {
     "anthropic/claude-sonnet-4-20250514",
     defaultProviders,
   );
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("audio/mpeg")).toBe(false);
+  expect(await supportsInput(client as never, "audio/mpeg")).toBe(false);
 });
 
 test("detects audio support for gpt model", async () => {
   const client = mockClient("openai/gpt-4o", defaultProviders);
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("audio/mpeg")).toBe(true);
+  expect(await supportsInput(client as never, "audio/mpeg")).toBe(true);
 });
 
 test("detects no pdf support for gpt model", async () => {
   const client = mockClient("openai/gpt-4o", defaultProviders);
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("application/pdf")).toBe(false);
+  expect(await supportsInput(client as never, "application/pdf")).toBe(false);
 });
 
 test("returns false for unsupported mime types", async () => {
@@ -100,61 +89,23 @@ test("returns false for unsupported mime types", async () => {
     "anthropic/claude-sonnet-4-20250514",
     defaultProviders,
   );
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("application/zip")).toBe(false);
-  expect(await mc.supportsInput("application/octet-stream")).toBe(false);
-  expect(await mc.supportsInput("text/plain")).toBe(false);
+  expect(await supportsInput(client as never, "application/zip")).toBe(false);
+  expect(await supportsInput(client as never, "text/plain")).toBe(false);
 });
 
-test("caches capabilities after first resolve", async () => {
-  const client = mockClient(
-    "anthropic/claude-sonnet-4-20250514",
-    defaultProviders,
-  );
-  const mc = ModelCapabilities.create(client as never);
-
-  await mc.supportsInput("image/jpeg");
-  await mc.supportsInput("image/png");
-  await mc.supportsInput("application/pdf");
-
-  expect(client.config.get).toHaveBeenCalledOnce();
-  expect(client.config.providers).toHaveBeenCalledOnce();
-});
-
-test("invalidate clears cache and re-fetches", async () => {
-  const client = mockClient(
-    "anthropic/claude-sonnet-4-20250514",
-    defaultProviders,
-  );
-  const mc = ModelCapabilities.create(client as never);
-
-  await mc.supportsInput("image/jpeg");
-  expect(client.config.get).toHaveBeenCalledOnce();
-
-  mc.invalidate();
-  await mc.supportsInput("image/jpeg");
-  expect(client.config.get).toHaveBeenCalledTimes(2);
-});
-
-test("falls back to image-only when no model is configured", async () => {
+test("returns false when no model is configured", async () => {
   const client = mockClient(undefined, defaultProviders);
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("image/jpeg")).toBe(true);
-  expect(await mc.supportsInput("application/pdf")).toBe(false);
-  expect(client.config.providers).not.toHaveBeenCalled();
+  expect(await supportsInput(client as never, "image/jpeg")).toBe(false);
+  expect(await supportsInput(client as never, "application/pdf")).toBe(false);
 });
 
-test("falls back to image-only when model is not found in providers", async () => {
+test("returns false when model is not found", async () => {
   const client = mockClient("unknown/model", defaultProviders);
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("image/jpeg")).toBe(true);
-  expect(await mc.supportsInput("application/pdf")).toBe(false);
+  expect(await supportsInput(client as never, "image/jpeg")).toBe(false);
+  expect(await supportsInput(client as never, "application/pdf")).toBe(false);
 });
 
-test("falls back to image-only when config.get throws", async () => {
+test("propagates error when config.get throws", async () => {
   const client = {
     config: {
       get: vi.fn(async () => {
@@ -163,14 +114,12 @@ test("falls back to image-only when config.get throws", async () => {
       providers: vi.fn(),
     },
   };
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("image/jpeg")).toBe(true);
-  expect(await mc.supportsInput("application/pdf")).toBe(false);
-  expect(client.config.providers).not.toHaveBeenCalled();
+  await expect(supportsInput(client as never, "image/jpeg")).rejects.toThrow(
+    "network error",
+  );
 });
 
-test("falls back to image-only when config.providers throws", async () => {
+test("propagates error when config.providers throws", async () => {
   const client = {
     config: {
       get: vi.fn(async () => ({
@@ -181,13 +130,34 @@ test("falls back to image-only when config.providers throws", async () => {
       }),
     },
   };
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("image/jpeg")).toBe(true);
-  expect(await mc.supportsInput("application/pdf")).toBe(false);
+  await expect(supportsInput(client as never, "image/jpeg")).rejects.toThrow(
+    "network error",
+  );
 });
 
-test("matches model by short name when full key does not match", async () => {
+test("handles uppercase MIME types", async () => {
+  const client = mockClient(
+    "anthropic/claude-sonnet-4-20250514",
+    defaultProviders,
+  );
+  expect(await supportsInput(client as never, "IMAGE/JPEG")).toBe(true);
+  expect(await supportsInput(client as never, "Application/PDF")).toBe(true);
+});
+
+test("handles MIME types with parameters", async () => {
+  const client = mockClient(
+    "anthropic/claude-sonnet-4-20250514",
+    defaultProviders,
+  );
+  expect(
+    await supportsInput(client as never, "image/jpeg; charset=binary"),
+  ).toBe(true);
+  expect(
+    await supportsInput(client as never, "application/pdf; version=1.4"),
+  ).toBe(true);
+});
+
+test("matches model by short name", async () => {
   const providers = [
     {
       models: {
@@ -201,81 +171,7 @@ test("matches model by short name when full key does not match", async () => {
     },
   ];
   const client = mockClient("anthropic/claude-sonnet-4-20250514", providers);
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("application/pdf")).toBe(true);
-});
-
-test("returns false for video when model does not support it", async () => {
-  const client = mockClient(
-    "anthropic/claude-sonnet-4-20250514",
-    defaultProviders,
-  );
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("video/mp4")).toBe(false);
-});
-
-test("returns true for video when model supports it", async () => {
-  const providers = [
-    {
-      models: {
-        "custom/video-model": {
-          id: "video-model",
-          capabilities: {
-            input: { image: true, pdf: false, audio: false, video: true },
-          },
-        },
-      },
-    },
-  ];
-  const client = mockClient("custom/video-model", providers);
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("video/mp4")).toBe(true);
-});
-
-test("concurrent calls share the same in-flight request", async () => {
-  const client = mockClient(
-    "anthropic/claude-sonnet-4-20250514",
-    defaultProviders,
-  );
-  const mc = ModelCapabilities.create(client as never);
-
-  const [r1, r2, r3] = await Promise.all([
-    mc.supportsInput("image/jpeg"),
-    mc.supportsInput("application/pdf"),
-    mc.supportsInput("audio/mpeg"),
-  ]);
-
-  expect(r1).toBe(true);
-  expect(r2).toBe(true);
-  expect(r3).toBe(false);
-  expect(client.config.get).toHaveBeenCalledOnce();
-  expect(client.config.providers).toHaveBeenCalledOnce();
-});
-
-test("handles uppercase MIME types", async () => {
-  const client = mockClient(
-    "anthropic/claude-sonnet-4-20250514",
-    defaultProviders,
-  );
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("IMAGE/JPEG")).toBe(true);
-  expect(await mc.supportsInput("Application/PDF")).toBe(true);
-  expect(await mc.supportsInput("AUDIO/MPEG")).toBe(false);
-});
-
-test("handles MIME types with parameters", async () => {
-  const client = mockClient(
-    "anthropic/claude-sonnet-4-20250514",
-    defaultProviders,
-  );
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("image/jpeg; charset=binary")).toBe(true);
-  expect(await mc.supportsInput("application/pdf; version=1.4")).toBe(true);
+  expect(await supportsInput(client as never, "application/pdf")).toBe(true);
 });
 
 test("matches model by model.id field", async () => {
@@ -292,31 +188,30 @@ test("matches model by model.id field", async () => {
     },
   ];
   const client = mockClient("anthropic/claude-sonnet-4-20250514", providers);
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("application/pdf")).toBe(true);
+  expect(await supportsInput(client as never, "application/pdf")).toBe(true);
 });
 
-test("invalidate after error allows re-fetch", async () => {
-  const client = {
-    config: {
-      get: vi.fn(),
-      providers: vi.fn(),
+test("returns false for video when model does not support it", async () => {
+  const client = mockClient(
+    "anthropic/claude-sonnet-4-20250514",
+    defaultProviders,
+  );
+  expect(await supportsInput(client as never, "video/mp4")).toBe(false);
+});
+
+test("returns true for video when model supports it", async () => {
+  const providers = [
+    {
+      models: {
+        "custom/video-model": {
+          id: "video-model",
+          capabilities: {
+            input: { image: true, pdf: false, audio: false, video: true },
+          },
+        },
+      },
     },
-  };
-  client.config.get.mockRejectedValueOnce(new Error("network error"));
-  client.config.get.mockResolvedValueOnce({
-    data: { model: "anthropic/claude-sonnet-4-20250514" },
-  });
-  client.config.providers.mockResolvedValueOnce({
-    data: { providers: defaultProviders },
-  });
-  const mc = ModelCapabilities.create(client as never);
-
-  expect(await mc.supportsInput("application/pdf")).toBe(false);
-
-  mc.invalidate();
-
-  expect(await mc.supportsInput("application/pdf")).toBe(true);
-  expect(client.config.get).toHaveBeenCalledTimes(2);
+  ];
+  const client = mockClient("custom/video-model", providers);
+  expect(await supportsInput(client as never, "video/mp4")).toBe(true);
 });

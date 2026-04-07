@@ -14,7 +14,12 @@ const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
 
 const defaultSkillsDir = resolve(import.meta.dirname, "../skills");
 
-const defaultAgentsMd = resolve(import.meta.dirname, "../AGENTS.md");
+const defaultSystemAgents = resolve(import.meta.dirname, "../system-agents.md");
+
+const defaultDefaultAgents = resolve(
+  import.meta.dirname,
+  "../default-agents.md",
+);
 
 const agentFilePathPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH__";
 const agentFilePathYamlPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH_YAML__";
@@ -78,7 +83,7 @@ async function writeDefaultAgentFile(
 ): Promise<void> {
   const template = await readFile(source, "utf-8");
   const rendered = renderAgentTemplate(template, destination);
-  await writeFile(destination, rendered, { flag: "wx" });
+  await writeFile(destination, rendered);
 }
 
 function cancel(): never {
@@ -120,29 +125,30 @@ export namespace OpencodeConfig {
     for await (const file of mdGlob.scan(defaultAgentsDir)) {
       agentFiles.push(file);
     }
-    const skillFiles: string[] = [];
-    for await (const file of mdGlob.scan(defaultSkillsDir)) {
-      skillFiles.push(file);
-    }
     for (const file of agentFiles) {
       const source = join(defaultAgentsDir, file);
       const destination = join(agentsDir, file);
       writes.push(writeDefaultAgentFile(source, destination));
     }
-    for (const file of skillFiles) {
+    const skillGlob = new Bun.Glob("*/**");
+    for await (const file of skillGlob.scan(defaultSkillsDir)) {
       const source = join(defaultSkillsDir, file);
       const destination = join(skillsDir, file);
       writes.push(
-        readFile(source, "utf-8").then((content) =>
-          writeFile(destination, content, { flag: "wx" }),
-        ),
+        mkdir(dirname(destination), { recursive: true }).then(async () => {
+          const content = await readFile(source, "utf-8");
+          await writeFile(destination, content);
+        }),
       );
     }
     writes.push(
-      readFile(defaultAgentsMd, "utf-8").then((content) =>
-        writeFile(join(profile.workspace, "AGENTS.md"), content, {
-          flag: "wx",
-        }),
+      readFile(defaultDefaultAgents, "utf-8").then((content) =>
+        writeFile(join(profile.xdgConfig, "opencode", "AGENTS.md"), content),
+      ),
+    );
+    writes.push(
+      readFile(defaultSystemAgents, "utf-8").then((content) =>
+        writeFile(join(configDir, "AGENTS.md"), content),
       ),
     );
     writes.push(
@@ -185,6 +191,9 @@ export namespace OpencodeConfig {
             mdns: false,
             mdnsDomain: "opencode.local",
             cors: ["https://opencode.local"],
+          },
+          skills: {
+            paths: [skillsDir],
           },
           plugin: ["opencode-claude-auth"],
         }),
