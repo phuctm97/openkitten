@@ -218,7 +218,6 @@ export class ProcessingMessages {
   ): void {
     const current = this.#streamingMessages.get(sessionId);
     if (!current || current.info.id !== messageId) return;
-    if (current.parts.every((part) => part.id !== partId)) return;
     this.#streamingMessages.set(sessionId, {
       info: current.info,
       parts: current.parts.filter((part) => part.id !== partId),
