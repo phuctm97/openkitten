@@ -21,8 +21,8 @@ export class ProcessingMessages {
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
-  readonly #stream: boolean;
   readonly #streamingMessages = new Map<string, StreamingMessage>();
+  readonly #stream: boolean;
   readonly #unhook: () => void;
 
   private constructor(
