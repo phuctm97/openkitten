@@ -40,14 +40,26 @@ test("keeps the latest content from long text", () => {
 test("reopens code blocks when trimming into the latest code", () => {
   const lines = Array.from(
     { length: 400 },
-    (_, index) => `const v${index} = ${index};`,
+    (_, index) =>
+      `const variable_${index.toString().padStart(4, "0")} = "${index.toString().repeat(12)}";`,
   );
   const text = `Intro.\n\n\`\`\`ts\n${lines.join("\n")}\n\`\`\``;
   const result = grammyFormatDraft(text);
   expect(result.text.startsWith("```ts\n")).toBe(true);
-  expect(result.text).toContain("const v399 = 399;");
+  expect(result.text).toContain(lines[399]);
   assert.isDefined(result.markdown);
   expect(result.markdown).toContain("```ts\n");
+  const firstCodeLine = result.text.split("\n")[1];
+  expect(lines).toContain(firstCodeLine);
+});
+
+test("aligns reopened code blocks to the next newline when trimming mid-line", () => {
+  const text = `\`\`\`txt\n${"a".repeat(5000)}\nshort\n\`\`\``;
+  const result = grammyFormatDraft(text);
+
+  expect(result.text).toBe("```txt\nshort\n```");
+  expect(result.markdown).toContain("```txt\n");
+  expect(result.markdown).toContain("short");
 });
 
 test("trims more aggressively when MarkdownV2 escaping expands the content", () => {

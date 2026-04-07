@@ -16,8 +16,6 @@ export function markdownSplitSections(text: string): readonly string[] {
     match = pattern.exec(text)
   ) {
     const markerOffset = match[0].search(markdownHrMarkerPattern);
-    if (markerOffset < 0) continue;
-
     const markerStart = match.index + markerOffset;
     if (markdownIsInCodeBlock(markerStart, ranges)) continue;
 

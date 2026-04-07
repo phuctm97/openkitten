@@ -1,15 +1,18 @@
 import { eq } from "drizzle-orm";
+import { convert } from "telegram-markdown-v2";
 import { beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyBuildDraftId } from "~/lib/grammy-build-draft-id";
 import { grammyFormatDraft } from "~/lib/grammy-format-draft";
+import { logger } from "~/lib/logger";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import * as schema from "~/lib/schema";
 
 vi.mock("~/lib/grammy-send-assistant-message", () => ({
   grammySendAssistantMessage: vi.fn(async () => {}),
 }));
+vi.mock("telegram-markdown-v2", { spy: true });
 
 type MockFn = ReturnType<typeof vi.fn<(...args: unknown[]) => unknown>>;
 
@@ -71,7 +74,7 @@ async function setup(
   options: {
     preserveMessagesMock?: boolean;
     persistedMessageIds?: readonly string[];
-  } = {},
+  } & ProcessingMessages.Options = {},
 ) {
   const database = Database.create();
   database
@@ -92,7 +95,9 @@ async function setup(
   const bot = createMockBot();
   const client = createMockOpencodeClient(options);
   const es = createMockExistingSessions(sessionIds);
-  const pm = await ProcessingMessages.create(bot, database, client, es);
+  const pm = await ProcessingMessages.create(bot, database, client, es, {
+    stream: options.stream ?? true,
+  });
   return { database, bot, client, es, pm };
 }
 
@@ -253,6 +258,251 @@ test("update sends a draft when streaming text appears", async () => {
     },
   } as never);
   expectLatestDraft("m1", "hello");
+});
+
+test("update falls back to plain text when draft markdown is unavailable", async () => {
+  vi.mocked(convert).mockReturnValue("x".repeat(5000));
+
+  const { pm } = await setup();
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+
+  expect(mockSendMessageDraft).toHaveBeenLastCalledWith(
+    123,
+    grammyBuildDraftId("m1"),
+    "hello",
+    {},
+  );
+});
+
+test("update retries drafts as plain text when markdown send fails", async () => {
+  vi.mocked(convert).mockRestore();
+  const error = new Error("markdown failed");
+
+  const { pm } = await setup();
+  mockSendMessageDraft.mockRejectedValueOnce(error).mockResolvedValueOnce(true);
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "Hello world",
+      },
+      time: 2,
+    },
+  } as never);
+
+  const firstCall = mockSendMessageDraft.mock.calls[0];
+  if (!firstCall) throw new Error("Expected initial draft send");
+  const markdown = firstCall[2];
+
+  expect(mockSendMessageDraft).toHaveBeenNthCalledWith(
+    1,
+    123,
+    grammyBuildDraftId("m1"),
+    markdown,
+    { parse_mode: "MarkdownV2" },
+  );
+  expect(mockSendMessageDraft).toHaveBeenNthCalledWith(
+    2,
+    123,
+    grammyBuildDraftId("m1"),
+    "Hello world",
+    {},
+  );
+  expect(logger.warn).toHaveBeenCalledWith(
+    "Failed to send MarkdownV2 draft, falling back to text",
+    error,
+    {
+      chatId: 123,
+      draftId: grammyBuildDraftId("m1"),
+      markdown,
+      text: "Hello world",
+      threadId: undefined,
+    },
+  );
+});
+
+test("update defaults to disabled draft streaming", async () => {
+  const database = Database.create();
+  database
+    .insert(schema.session)
+    .values({ id: "sess-1", chatId: 123, threadId: 0 })
+    .run();
+  const bot = createMockBot();
+  const client = createMockOpencodeClient();
+  const es = createMockExistingSessions();
+  const pm = await ProcessingMessages.create(bot, database, client, es);
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+});
+
+test("update skips drafts when streaming is disabled", async () => {
+  const { pm } = await setup([], { stream: false });
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+});
+
+test("update skips drafts when the session location is missing", async () => {
+  const { es, pm } = await setup();
+  vi.mocked(es.get).mockReturnValue(undefined);
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
+});
+
+test("update sends drafts to the session thread when present", async () => {
+  const { es, pm } = await setup();
+  vi.mocked(es.get).mockReturnValue({ chatId: 123, threadId: 456 });
+
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m1",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1 },
+      },
+    },
+  } as never);
+  await pm.update({
+    type: "message.part.updated",
+    properties: {
+      sessionID: "sess-1",
+      part: {
+        id: "p1",
+        sessionID: "sess-1",
+        messageID: "m1",
+        type: "text",
+        text: "hello",
+      },
+      time: 2,
+    },
+  } as never);
+
+  const chunk = grammyFormatDraft("hello");
+  expect(mockSendMessageDraft).toHaveBeenLastCalledWith(
+    123,
+    grammyBuildDraftId("m1"),
+    chunk.markdown ?? chunk.text,
+    chunk.markdown
+      ? { parse_mode: "MarkdownV2", message_thread_id: 456 }
+      : { message_thread_id: 456 },
+  );
 });
 
 test("update refreshes the draft with the same draft id after text deltas", async () => {
@@ -1299,6 +1549,32 @@ test("initialized seeds the latest assistant streaming state", async () => {
   }));
   await setup(["sess-1"], { preserveMessagesMock: true });
   expectLatestDraft("m1", "streaming");
+});
+
+test("initialized skips draft sync when streaming is disabled", async () => {
+  mockSessionMessages = vi.fn(async () => ({
+    data: [
+      {
+        info: {
+          id: "m1",
+          sessionID: "sess-1",
+          role: "assistant",
+          time: { created: 1 },
+        },
+        parts: [
+          {
+            id: "p1",
+            sessionID: "sess-1",
+            messageID: "m1",
+            type: "text",
+            text: "streaming",
+          },
+        ],
+      },
+    ],
+  }));
+  await setup(["sess-1"], { preserveMessagesMock: true, stream: false });
+  expect(mockSendMessageDraft).not.toHaveBeenCalled();
 });
 
 test("initialized picks the newest streaming assistant message by creation time", async () => {

@@ -56,6 +56,13 @@ interface OpencodeConfigCreateOptions {
   readonly skipActions?: boolean | undefined;
 }
 
+function settle<T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> {
+  return promise.then(
+    (value) => ({ status: "fulfilled", value }),
+    (reason) => ({ status: "rejected", reason }),
+  );
+}
+
 function normalizePathPattern(path: string): string {
   return path.replaceAll("\\", "/");
 }
@@ -109,7 +116,7 @@ export namespace OpencodeConfig {
     profile: Profile,
     options: OpencodeConfigCreateOptions = {},
   ): Promise<OpencodeConfig> {
-    const writes: Promise<unknown>[] = [];
+    const writes: Promise<PromiseSettledResult<unknown>>[] = [];
     const configDir = join(profile.dir, ".opencode");
     const agentsDir = join(configDir, "agents");
     const pluginsDir = join(profile.xdgConfig, "opencode", "plugins");
@@ -128,40 +135,53 @@ export namespace OpencodeConfig {
     for (const file of agentFiles) {
       const source = join(defaultAgentsDir, file);
       const destination = join(agentsDir, file);
-      writes.push(writeDefaultAgentFile(source, destination));
+      writes.push(settle(writeDefaultAgentFile(source, destination)));
     }
     const skillGlob = new Bun.Glob("*/**");
     for await (const file of skillGlob.scan(defaultSkillsDir)) {
       const source = join(defaultSkillsDir, file);
       const destination = join(skillsDir, file);
       writes.push(
-        mkdir(dirname(destination), { recursive: true }).then(async () => {
-          const content = await readFile(source, "utf-8");
-          await writeFile(destination, content);
-        }),
+        settle(
+          mkdir(dirname(destination), { recursive: true }).then(async () => {
+            const content = await readFile(source, "utf-8");
+            await writeFile(destination, content);
+          }),
+        ),
       );
     }
     writes.push(
-      readFile(defaultDefaultAgents, "utf-8").then((content) =>
-        writeFile(join(profile.xdgConfig, "opencode", "AGENTS.md"), content),
+      settle(
+        readFile(defaultDefaultAgents, "utf-8").then((content) =>
+          writeFile(join(profile.xdgConfig, "opencode", "AGENTS.md"), content),
+        ),
       ),
     );
     writes.push(
-      readFile(defaultSystemAgents, "utf-8").then((content) =>
-        writeFile(join(configDir, "AGENTS.md"), content),
+      settle(
+        readFile(defaultSystemAgents, "utf-8").then((content) =>
+          writeFile(join(configDir, "AGENTS.md"), content),
+        ),
       ),
     );
     writes.push(
-      writeFile(
-        join(configDir, "opencode.json"),
-        JSON.stringify(defaultConfigJson, null, 2),
-        { flag: "wx" },
+      settle(
+        writeFile(
+          join(configDir, "opencode.json"),
+          JSON.stringify(defaultConfigJson, null, 2),
+          { flag: "wx" },
+        ),
       ),
     );
     writes.push(
-      Bun.write(join(pluginsDir, opencodePluginFilename), opencodePluginSource),
+      settle(
+        Bun.write(
+          join(pluginsDir, opencodePluginFilename),
+          opencodePluginSource,
+        ),
+      ),
     );
-    const results = await Promise.allSettled(writes);
+    const results = await Promise.all(writes);
     const errors = results
       .filter(
         (r): r is PromiseRejectedResult =>

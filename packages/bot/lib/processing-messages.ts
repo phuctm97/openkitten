@@ -21,6 +21,7 @@ export class ProcessingMessages {
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
+  readonly #stream: boolean;
   readonly #streamingMessages = new Map<string, StreamingMessage>();
   readonly #unhook: () => void;
 
@@ -29,11 +30,13 @@ export class ProcessingMessages {
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
+    options: ProcessingMessages.Options,
   ) {
     this.#bot = bot;
     this.#database = database;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
+    this.#stream = options.stream === true;
     this.#unhook = existingSessions.hook("beforeRemove", ({ sessionId }) => {
       this.#streamingMessages.delete(sessionId);
     });
@@ -111,10 +114,7 @@ export class ProcessingMessages {
     );
   }
 
-  async #syncDraft(sessionId: string): Promise<void> {
-    const message = this.#streamingMessages.get(sessionId);
-    if (!message) return;
-
+  async #sendDraft(message: StreamingMessage): Promise<void> {
     const location = this.#existingSessions.get(message.info.sessionID);
     if (!location) return;
 
@@ -172,6 +172,13 @@ export class ProcessingMessages {
         options,
       );
     }
+  }
+
+  async #syncDraft(sessionId: string): Promise<void> {
+    if (!this.#stream) return;
+    const message = this.#streamingMessages.get(sessionId);
+    if (!message) return;
+    await this.#sendDraft(message);
   }
 
   #setStreamingInfo(info: AssistantMessage): void {
@@ -378,14 +385,22 @@ export class ProcessingMessages {
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
+    options: ProcessingMessages.Options = {},
   ): Promise<ProcessingMessages> {
     const processingMessages = new ProcessingMessages(
       bot,
       database,
       opencodeClient,
       existingSessions,
+      options,
     );
     await processingMessages.#initialize();
     return processingMessages;
+  }
+}
+
+export namespace ProcessingMessages {
+  export interface Options {
+    readonly stream?: boolean;
   }
 }

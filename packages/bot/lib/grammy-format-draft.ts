@@ -1,6 +1,7 @@
 import { convert } from "telegram-markdown-v2";
 import type { GrammyChunk } from "~/lib/grammy-chunk";
 import { logger } from "~/lib/logger";
+import { markdownAlignCodeBlockTrimStart } from "~/lib/markdown-align-code-block-trim-start";
 import { markdownFindCodeBlockRanges } from "~/lib/markdown-find-code-block-ranges";
 import { markdownIsInCodeBlock } from "~/lib/markdown-is-in-code-block";
 import { markdownPreserveCodeBlockLanguages } from "~/lib/markdown-preserve-code-block-languages";
@@ -60,30 +61,6 @@ function findNaturalTrimStart(
   return undefined;
 }
 
-function alignCodeBlockTrimStart(
-  text: string,
-  maxLength: number,
-  start: number,
-  range: CodeBlockRange,
-): number {
-  const reopenPrefix = `\`\`\`${range.lang}\n`;
-  const available = Math.max(1, maxLength - reopenPrefix.length);
-  let nextStart = Math.max(start, text.length - available);
-
-  if (nextStart > range.start && text[nextStart - 1] !== "\n") {
-    const nextNewline = text.indexOf("\n", nextStart);
-    if (nextNewline >= 0 && nextNewline < range.end) {
-      const lineStart = nextNewline + 1;
-      if (reopenPrefix.length + text.length - lineStart <= maxLength) {
-        nextStart = lineStart;
-      }
-    }
-  }
-
-  while (text[nextStart] === "\n") nextStart += 1;
-  return nextStart;
-}
-
 function trimTailChunk(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
 
@@ -93,7 +70,7 @@ function trimTailChunk(text: string, maxLength: number): string {
 
   const range = markdownIsInCodeBlock(start, ranges);
   if (range) {
-    start = alignCodeBlockTrimStart(text, maxLength, start, range);
+    start = markdownAlignCodeBlockTrimStart(text, maxLength, start, range);
     return `\`\`\`${range.lang}\n${text.slice(start)}`;
   }
 
