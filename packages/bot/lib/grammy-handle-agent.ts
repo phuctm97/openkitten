@@ -9,7 +9,7 @@ import type { Scope } from "~/lib/scope";
 import { setSessionAgent } from "~/lib/set-session-agent";
 
 export async function grammyHandleAgent(
-  { bot, database, opencodeClient, existingSessions }: Scope,
+  { bot, database, opencodeClient, existingSessions, modelCapabilities }: Scope,
   ctx: CommandContext<Context>,
   _signal: AbortSignal,
 ): Promise<void> {
@@ -72,6 +72,7 @@ export async function grammyHandleAgent(
   }
 
   setSessionAgent(database, sessionId, agent.name);
+  modelCapabilities.invalidate();
   await grammySendAgentChanged({
     bot,
     chatId: ctx.chat.id,

@@ -1,6 +1,7 @@
 import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
+import { AttachmentStorage } from "~/lib/attachment-storage";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
@@ -20,6 +21,7 @@ import { grammySetCommands } from "~/lib/grammy-set-commands";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
 import { MediaGroupBuffer } from "~/lib/media-group-buffer";
+import { ModelCapabilities } from "~/lib/model-capabilities";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
@@ -113,6 +115,8 @@ export const serve = defineCommand({
         pendingPrompts,
         floatingPromises,
       );
+      const attachmentStorage = AttachmentStorage.create(profile.workspace);
+      const modelCapabilities = ModelCapabilities.create(opencodeServer.client);
       const scope: Scope = {
         bot,
         database,
@@ -124,6 +128,8 @@ export const serve = defineCommand({
         processingMessages,
         floatingPromises,
         mediaGroupBuffer,
+        attachmentStorage,
+        modelCapabilities,
         typingIndicators,
       };
       await using opencodeEventStream = OpencodeEventStream.create(

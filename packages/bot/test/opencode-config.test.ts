@@ -39,6 +39,8 @@ const configDir = () => join(profileDir, ".opencode");
 
 const pluginsDir = () => join(profile.xdgConfig, "opencode", "plugins");
 
+const skillsDir = () => join(profile.xdgConfig, "openkitten", "skills");
+
 const toolPrefix = "openkitten_";
 
 const normalizePathPattern = (path: string) => path.replaceAll("\\", "/");
@@ -54,6 +56,26 @@ test("copies agent files", async () => {
   await expect(
     readFile(join(configDir(), "agents", "plan.md"), "utf-8"),
   ).resolves.toBeDefined();
+});
+
+test("copies AGENTS.md to workspace", async () => {
+  await OpencodeConfig.create(profile);
+  const content = await readFile(join(profile.workspace, "AGENTS.md"), "utf-8");
+  expect(content).toContain("# Communication");
+  expect(content).toContain("# Professional objectivity");
+  expect(content).toContain("# Tool usage");
+  expect(content).toContain("# Skills");
+  expect(content).toContain("$XDG_CONFIG_HOME/openkitten/skills/");
+  expect(content).not.toContain("__OPENKITTEN_AGENT_");
+});
+
+test("does not overwrite existing AGENTS.md in workspace", async () => {
+  await OpencodeConfig.create(profile);
+  const agentsMdPath = join(profile.workspace, "AGENTS.md");
+  await writeFile(agentsMdPath, "custom rules");
+  await OpencodeConfig.create(profile);
+  const content = await readFile(agentsMdPath, "utf-8");
+  expect(content).toBe("custom rules");
 });
 
 test("renders agent files with self-file access", async () => {
@@ -106,6 +128,22 @@ test("writes system OpenCode plugin", async () => {
   expect(content).toContain("sessionID: input.sessionID,");
   expect(content).toContain("callID: input.callID,");
   expect(content).toContain("};");
+});
+
+test("copies skill files", async () => {
+  await OpencodeConfig.create(profile);
+  const content = await readFile(join(skillsDir(), "telegram-api.md"), "utf-8");
+  expect(content).toContain("# Telegram Bot API");
+  expect(content).toContain("$XDG_CONFIG_HOME/openkitten/telegram.json");
+});
+
+test("does not overwrite existing skill files", async () => {
+  await OpencodeConfig.create(profile);
+  const skillPath = join(skillsDir(), "telegram-api.md");
+  await writeFile(skillPath, "custom content");
+  await OpencodeConfig.create(profile);
+  const content = await readFile(skillPath, "utf-8");
+  expect(content).toBe("custom content");
 });
 
 test("does not overwrite existing opencode config", async () => {

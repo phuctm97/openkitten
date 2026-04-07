@@ -94,6 +94,8 @@ function mockScope(overrides: {
     processingMessages: {} as never,
     floatingPromises: {} as never,
     mediaGroupBuffer: {} as never,
+    attachmentStorage: {} as never,
+    modelCapabilities: { invalidate: vi.fn() } as never,
     typingIndicators: {} as never,
   };
 }
@@ -194,6 +196,7 @@ test("sets valid agent and replies with agent changed", async () => {
   await grammyHandleAgent(scope, ctx, signal);
 
   expect(setSessionAgent).toHaveBeenCalledWith(scope.database, "s1", "build");
+  expect(scope.modelCapabilities.invalidate).toHaveBeenCalledOnce();
   expect(grammySendAgentChanged).toHaveBeenCalledWith({
     bot: scope.bot,
     chatId: 42,
