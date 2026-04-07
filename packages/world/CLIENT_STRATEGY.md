@@ -2,52 +2,31 @@
 
 ## Status
 
-This document supersedes the earlier `PixiJS + React` recommendation.
+This document defines the client architecture for OpenKitten World.
 
-The previous phase-1 `PixiJS + React` prototype was useful because it made two things obvious:
+The package is built around:
 
-- the Pixi API pushed the project toward low-level imperative drawing too early
-- a React app shell wrapped around a world renderer did not create the intended vibe
+- Phaser as the primary runtime for `/`
+- React Router for routing and route composition
+- React for non-game routes and optional overlays
+- Jotai as a narrow shared-state bridge when needed
 
-That earlier Pixi direction was not wasted, but the package should now be treated as Phaser-first throughout.
+## Product Framing
 
-## The New Product Framing
-
-OpenKitten World should now be treated as:
+OpenKitten World should be treated as:
 
 - a serious productivity system
 - presented primarily as a game-like world
 - with `/` acting as the fullscreen home experience
 
-This is a different framing from "a web product with a world-like presentation layer."
+The distinction matters because it determines who owns the main runtime:
 
-The distinction matters because it changes who owns the main runtime:
+- Phaser owns the home route
+- React becomes supporting infrastructure around that route
 
-- before, React owned the page and the world sat inside it
-- now, the game runtime should own the home route and React should become supporting infrastructure
+## Route Model
 
-## Why The Decision Changed
-
-The earlier strategy favored the lowest-friction path for a TypeScript and React-heavy team.
-
-That logic was reasonable, but the phase-1 implementation revealed stronger product truth:
-
-- the low-level rendering model felt like friction, not leverage
-- `@pixi/react` did not provide the kind of ergonomic ownership the route needed
-- the surrounding web UI made the House feel embedded rather than primary
-- the intended emotional effect depends on entering a place, not opening a dashboard
-
-The product now looks closer to:
-
-- a full game experience whose purpose is getting real work done
-
-than to:
-
-- a React product with a game-like center panel
-
-## Updated Client Shape
-
-The current preferred route model is:
+The route model is:
 
 - `/` renders a fullscreen Phaser experience
 - other routes may remain normal React pages
@@ -69,16 +48,15 @@ Examples of likely React routes:
 
 Those routes should not force `/` to become a dashboard-shaped application.
 
-## Why Phaser Is Now The Preferred Choice
+## Why Phaser Fits
 
-Phaser is the preferred choice because the project now needs a stronger game runtime at the center of the main route.
+Phaser fits the product because the home route needs a real game runtime at its center.
 
 The core benefits are:
 
 - a scene-oriented mental model
 - built-in support for cameras, input, timing, tweens, and common game structure
 - a clearer place for game-native UI and HUD layers
-- fewer incentives to treat the world as an embedded renderer
 - a better fit for a fullscreen, game-first browser route
 
 Most importantly, Phaser encourages the right architectural question:
@@ -88,20 +66,6 @@ Most importantly, Phaser encourages the right architectural question:
 instead of:
 
 - how should a React page render a world-shaped component?
-
-## Why Pixi Is No Longer The Preferred Choice
-
-`PixiJS + React` no longer matches the current product framing.
-
-The main concerns are:
-
-- too much low-level world construction too early
-- too little opinionated support for the kind of game runtime now desired
-- a natural tendency to keep React as the primary owner of the experience
-
-If OpenKitten World were still aiming for a hybrid "web app first, renderer second" shape, `PixiJS + React` would remain credible.
-
-That is no longer the plan.
 
 ## What React Still Owns
 
@@ -153,7 +117,7 @@ This decision implies:
 
 The home route should feel like entering the House, not opening an admin console.
 
-## Risks We Are Accepting
+## Risks And Guardrails
 
 Choosing Phaser means accepting:
 
@@ -162,20 +126,11 @@ Choosing Phaser means accepting:
 - a higher bar for UI, input, and asset discipline
 - a need to think carefully about what belongs in-game versus in DOM
 
-That trade is acceptable because the current product risk is no longer "can the team build a browser app?"
+That trade is acceptable because the primary product risk is not browser delivery.
 
 It is:
 
 - can the product feel like the world it needs to be?
-
-## Re-Evaluation Trigger
-
-This decision should be revisited only if one of these becomes true:
-
-- Phaser makes the main route slower or harder to ship than expected
-- game-native UI on `/` becomes an obvious liability for readability
-- the product drifts back toward a conventional web app with only light world elements
-- another framework clearly provides the same game-first feel with materially better delivery speed
 
 ## Decision Summary
 
@@ -185,6 +140,3 @@ OpenKitten World should move forward with:
 - React Router as the routing layer
 - React pages for routes that are not primarily game experiences
 - Jotai only as a narrow bridge when Phaser and React truly need shared state
-
-The earlier Pixi prototype was not wasted.
-It answered the right question by making the wrong-feeling shape visible early enough to change course.

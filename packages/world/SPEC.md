@@ -4,13 +4,11 @@
 
 This document is the current canonical product and architecture spec for OpenKitten World.
 
-It preserves the core product model while updating the client-facing direction:
+The client model assumes:
 
 - the product ontology stays House-and-Cats first
 - the home route should be a fullscreen Phaser experience
 - React remains available for routes and surfaces that are better served by conventional web UI
-
-The current package implementation target is the Phaser-first route model described here rather than the earlier `PixiJS + React` spike.
 
 ## Product Thesis
 

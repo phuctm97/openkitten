@@ -2,9 +2,13 @@
 
 ## Status
 
-This document defines the current MVP target for the Phaser-first direction.
+This document defines the MVP target for OpenKitten World.
 
-It supersedes the earlier assumption that the first convincing slice should look like a hybrid React shell with an embedded world renderer.
+The MVP assumes:
+
+- a fullscreen Phaser House on `/`
+- game-native inspection as the default interaction model
+- mocked but believable work objects and cats
 
 ## MVP Goal
 
@@ -13,7 +17,7 @@ The MVP should prove that OpenKitten World can feel like:
 - a real productivity system
 - embodied as a living house
 - presented as a fullscreen game-first experience
-- without collapsing into either a generic dashboard or a generic toy prototype
+- without collapsing into either a generic dashboard or a generic toy
 
 The MVP is successful if a user can enter a House, observe cats, inspect work, and feel:
 

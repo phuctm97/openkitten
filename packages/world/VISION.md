@@ -73,6 +73,7 @@ The main route should feel like entering a place, not opening an app shell.
 That means:
 
 - `/` should be fullscreen
+- the House should render through a Phaser-driven world
 - the world should be the primary runtime, not an embedded visual layer
 - most interaction should happen through the game scene and game-native UI
 - React DOM on `/` should be optional, minimal, and clearly subordinate to the world
