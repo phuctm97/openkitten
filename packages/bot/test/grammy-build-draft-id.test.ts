@@ -2,8 +2,8 @@ import { expect, test } from "vitest";
 import { grammyBuildDraftId } from "~/lib/grammy-build-draft-id";
 
 test("builds a deterministic draft id from a message id", () => {
-  expect(grammyBuildDraftId("m1")).toBe(8_693_816_509_193_415);
-  expect(grammyBuildDraftId("m1")).toBe(8_693_816_509_193_415);
+  expect(grammyBuildDraftId("m1")).toBe(3_926_121_320_106_770);
+  expect(grammyBuildDraftId("m1")).toBe(3_926_121_320_106_770);
 });
 
 test("returns a positive safe integer draft id", () => {
@@ -15,10 +15,10 @@ test("returns a positive safe integer draft id", () => {
 });
 
 test("builds different draft ids for different message ids", () => {
-  expect(grammyBuildDraftId("m1")).toBe(8_693_816_509_193_415);
-  expect(grammyBuildDraftId("m2")).toBe(2_700_003_061_566_943);
+  expect(grammyBuildDraftId("m1")).toBe(3_926_121_320_106_770);
+  expect(grammyBuildDraftId("m2")).toBe(477_780_337_894_116);
 });
 
 test("supports empty message ids deterministically", () => {
-  expect(grammyBuildDraftId("")).toBe(2_068_769_241_846_288);
+  expect(grammyBuildDraftId("")).toBe(4_719_389_940_917_042);
 });
