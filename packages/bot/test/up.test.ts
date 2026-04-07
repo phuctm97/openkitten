@@ -4,12 +4,16 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { up } from "~/lib/up";
 
 vi.mock("~/lib/telegram-config", () => ({
-  TelegramConfig: { create: vi.fn() },
+  TelegramConfig: {
+    create: vi.fn(async () => ({ botToken: "test-token", userId: 123 })),
+  },
 }));
 
 vi.mock("~/lib/opencode-config", () => ({
   OpencodeConfig: { create: vi.fn() },
 }));
+
+vi.mock("~/lib/grammy-set-commands");
 
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),

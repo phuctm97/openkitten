@@ -76,6 +76,7 @@ function mockScope(overrides: {
     pendingPrompts: {} as never,
     processingMessages: {} as never,
     floatingPromises: {} as never,
+    mediaGroupBuffer: {} as never,
     typingIndicators: {} as never,
   };
 }

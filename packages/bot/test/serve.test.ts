@@ -4,7 +4,9 @@ import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { GrammyEventLoop } from "~/lib/grammy-event-loop";
 import { GrammyEventStream } from "~/lib/grammy-event-stream";
+import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
+import { MediaGroupBuffer } from "~/lib/media-group-buffer";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { OpencodeServer } from "~/lib/opencode-server";
@@ -19,9 +21,11 @@ import { WorkingSessions } from "~/lib/working-sessions";
 
 const {
   BotMock,
+  MockApi,
   mockAutoRetry,
   mockAutoRetryTransformer,
   mockBotApiConfigUse,
+  mockGrammyHandleMediaGroupFlush,
 } = vi.hoisted(() => {
   const mockBotApiConfigUse = vi.fn();
   const BotMock = vi.fn(function BotMock() {
@@ -34,11 +38,17 @@ const {
   });
   const mockAutoRetryTransformer = vi.fn();
   const mockAutoRetry = vi.fn(() => mockAutoRetryTransformer);
+  const MockApi = vi.fn(function MockApi() {
+    return { setMyCommands: vi.fn() };
+  });
+  const mockGrammyHandleMediaGroupFlush = vi.fn();
   return {
     BotMock,
+    MockApi,
     mockAutoRetry,
     mockAutoRetryTransformer,
     mockBotApiConfigUse,
+    mockGrammyHandleMediaGroupFlush,
   };
 });
 
@@ -46,9 +56,14 @@ vi.mock("@grammyjs/auto-retry", () => ({
   autoRetry: mockAutoRetry,
 }));
 
-vi.mock("grammy", () => {
-  return { Bot: BotMock };
-});
+vi.mock("grammy", () => ({
+  Bot: BotMock,
+  Api: MockApi,
+}));
+
+vi.mock("~/lib/grammy-handle-media-group-flush", () => ({
+  grammyHandleMediaGroupFlush: mockGrammyHandleMediaGroupFlush,
+}));
 
 vi.mock("node:fs/promises", async () => {
   const actual =
@@ -65,9 +80,11 @@ vi.mock("node:fs/promises", async () => {
 
 beforeEach(() => {
   BotMock.mockClear();
+  MockApi.mockClear();
   mockAutoRetry.mockClear();
   mockAutoRetryTransformer.mockClear();
   mockBotApiConfigUse.mockClear();
+  mockGrammyHandleMediaGroupFlush.mockClear();
   mockAutoRetry.mockReturnValue(mockAutoRetryTransformer);
 });
 
@@ -751,6 +768,65 @@ test("updates pending prompts on permission.asked event", async () => {
 
   await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event.payload));
 
+  shutdown.triggerLatest();
+  await run;
+});
+
+test("media group flush callback delegates to grammyHandleMediaGroupFlush", async () => {
+  vi.spyOn(MediaGroupBuffer, "create");
+  mockGrammyHandleMediaGroupFlush.mockResolvedValue(undefined);
+  const { shutdown } = mockAll();
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() =>
+    expect(MediaGroupBuffer.create).toHaveBeenCalledOnce(),
+  );
+
+  const call = vi.mocked(MediaGroupBuffer.create).mock.calls[0];
+  if (!call) throw new Error("Expected MediaGroupBuffer.create to be called");
+  const onFlush = call[1];
+  const entries = [
+    {
+      chatId: 42,
+      threadId: undefined,
+      messageId: 1,
+      download: async () => [{ type: "text" as const, text: "hello" }],
+    },
+  ];
+  await onFlush(entries);
+  expect(mockGrammyHandleMediaGroupFlush).toHaveBeenCalledWith(
+    expect.objectContaining({}),
+    entries,
+  );
+
+  shutdown.triggerLatest();
+  await run;
+});
+
+test("media group flush callback triggers shutdown on error", async () => {
+  vi.spyOn(MediaGroupBuffer, "create");
+  vi.spyOn(logger, "fatal");
+  const flushError = new Error("flush failed");
+  mockGrammyHandleMediaGroupFlush.mockRejectedValue(flushError);
+  const { shutdown } = mockAll();
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() =>
+    expect(MediaGroupBuffer.create).toHaveBeenCalledOnce(),
+  );
+
+  const call = vi.mocked(MediaGroupBuffer.create).mock.calls[0];
+  if (!call) throw new Error("Expected MediaGroupBuffer.create to be called");
+  const onFlush = call[1];
+  await onFlush([]);
+
+  expect(logger.fatal).toHaveBeenCalledWith(
+    "Media group flush failed",
+    flushError,
+  );
+
+  // shutdown.trigger() without args causes restart — stop the loop with a signal
+  await vi.waitFor(() =>
+    expect(MediaGroupBuffer.create).toHaveBeenCalledTimes(2),
+  );
   shutdown.triggerLatest();
   await run;
 });

@@ -8,44 +8,55 @@ import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
 
-type PhotoContext = Filter<Context, "message:photo">;
+type DocumentContext = Filter<Context, "message:document">;
 
-function promptMime(filePath: string, response: Response): string {
+function documentMime(ctx: DocumentContext, response: Response): string {
+  const telegramMime = ctx.message.document.mime_type;
+  if (telegramMime) return telegramMime;
+
   const header = response.headers.get("content-type");
   if (header) {
     try {
-      const type = parseContentType(header).type;
-      if (type.startsWith("image/")) return type;
+      return parseContentType(header).type;
     } catch {
-      // Fall through to file-path inference when Telegram returns an invalid header.
+      // Fall through to file-name inference when the header is invalid.
     }
   }
-  try {
-    const type = lookup(filePath) || undefined;
-    if (type?.startsWith("image/")) return type;
-  } catch {
-    // Fall through to the default when MIME lookup fails unexpectedly.
+
+  const fileName = ctx.message.document.file_name;
+  if (fileName) {
+    const type = lookup(fileName) || undefined;
+    if (type) return type;
   }
-  return "image/jpeg";
+
+  return "application/octet-stream";
 }
 
-function promptFilename(filePath: string, mime: string): string {
-  const filename = filePath.split("/").filter(Boolean).at(-1);
-  if (filename) return filename;
-  return `telegram-photo.${extension(mime) || "jpeg"}`;
+function documentFilename(
+  ctx: DocumentContext,
+  filePath: string,
+  mime: string,
+): string {
+  const telegramName = ctx.message.document.file_name;
+  if (telegramName) return telegramName;
+
+  const pathName = filePath.split("/").filter(Boolean).at(-1);
+  if (pathName) return pathName;
+
+  return `telegram-document.${extension(mime) || "bin"}`;
 }
 
-async function promptParts(ctx: PhotoContext) {
+async function documentParts(ctx: DocumentContext) {
   const file = await ctx.getFile();
-  invariant(file.file_path, "Expected Telegram photo to have a file path");
+  invariant(file.file_path, "Expected Telegram document to have a file path");
   const response = await fetch(
     new URL(
       file.file_path,
       `https://api.telegram.org/file/bot${ctx.api.token}/`,
     ),
   );
-  invariant(response.ok, "Expected Telegram photo download to succeed");
-  const mime = promptMime(file.file_path, response);
+  invariant(response.ok, "Expected Telegram document download to succeed");
+  const mime = documentMime(ctx, response);
   const data = Buffer.from(await response.arrayBuffer()).toString("base64");
   const parts = [];
 
@@ -56,14 +67,14 @@ async function promptParts(ctx: PhotoContext) {
   parts.push({
     type: "file" as const,
     mime,
-    filename: promptFilename(file.file_path, mime),
+    filename: documentFilename(ctx, file.file_path, mime),
     url: `data:${mime};base64,${data}`,
   });
 
   return parts;
 }
 
-export async function grammyHandlePhoto(
+export async function grammyHandleDocument(
   {
     bot,
     database,
@@ -73,7 +84,7 @@ export async function grammyHandlePhoto(
     pendingPrompts,
     mediaGroupBuffer,
   }: Scope,
-  ctx: PhotoContext,
+  ctx: DocumentContext,
   _signal: AbortSignal,
 ): Promise<void> {
   const mediaGroupId = ctx.message.media_group_id;
@@ -82,7 +93,7 @@ export async function grammyHandlePhoto(
       chatId: ctx.chat.id,
       threadId: ctx.msg.message_thread_id || undefined,
       messageId: ctx.message.message_id,
-      download: () => promptParts(ctx),
+      download: () => documentParts(ctx),
     });
     return;
   }
@@ -112,7 +123,7 @@ export async function grammyHandlePhoto(
         {
           sessionID: sessionId,
           ...(agent && { agent }),
-          parts: await promptParts(ctx),
+          parts: await documentParts(ctx),
         },
         { throwOnError: true },
       );
