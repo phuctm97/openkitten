@@ -1,53 +1,13 @@
 import { convert } from "telegram-markdown-v2";
 import type { GrammyChunk } from "~/lib/grammy-chunk";
 import { logger } from "~/lib/logger";
+import { markdownFindCodeBlockRanges } from "~/lib/markdown-find-code-block-ranges";
+import { markdownHrPattern } from "~/lib/markdown-hr-pattern";
+import { markdownIsInCodeBlock } from "~/lib/markdown-is-in-code-block";
+import { markdownPreserveCodeBlockLanguages } from "~/lib/markdown-preserve-code-block-languages";
+import { telegramMessageMaxLength } from "~/lib/telegram-message-max-length";
 
-const telegramMaxLength = 4096;
-const telegramSplitLength = Math.floor(telegramMaxLength * 0.8);
-
-interface CodeBlockRange {
-  readonly start: number;
-  readonly end: number;
-  readonly lang: string;
-}
-
-function findCodeBlockRanges(text: string): readonly CodeBlockRange[] {
-  const ranges: CodeBlockRange[] = [];
-  const regex = /^```(\w*)/gm;
-  let openStart: number | null = null;
-  let openLang = "";
-
-  for (let match = regex.exec(text); match !== null; match = regex.exec(text)) {
-    if (openStart === null) {
-      openStart = match.index;
-      openLang = match[0].slice(3);
-    } else {
-      ranges.push({
-        start: openStart,
-        end: match.index + match[0].length,
-        lang: openLang,
-      });
-      openStart = null;
-      openLang = "";
-    }
-  }
-
-  if (openStart !== null) {
-    ranges.push({ start: openStart, end: text.length, lang: openLang });
-  }
-
-  return ranges;
-}
-
-function isInCodeBlock(
-  pos: number,
-  ranges: readonly CodeBlockRange[],
-): CodeBlockRange | null {
-  for (const range of ranges) {
-    if (pos > range.start && pos < range.end) return range;
-  }
-  return null;
-}
+const splitLength = Math.floor(telegramMessageMaxLength * 0.8);
 
 interface SplitPriority {
   readonly pattern: RegExp;
@@ -70,7 +30,7 @@ function splitMessage(text: string, maxLength: number): readonly string[] {
   let remaining = text;
 
   while (remaining.length > maxLength) {
-    const codeBlocks = findCodeBlockRanges(remaining);
+    const codeBlocks = markdownFindCodeBlockRanges(remaining);
     let splitPos = -1;
 
     for (const { pattern, offset } of splitPriorities) {
@@ -85,7 +45,7 @@ function splitMessage(text: string, maxLength: number): readonly string[] {
       ) {
         const candidatePos = m.index + offset;
         if (candidatePos >= maxLength) break;
-        if (!isInCodeBlock(candidatePos, codeBlocks)) {
+        if (!markdownIsInCodeBlock(candidatePos, codeBlocks)) {
           best = candidatePos;
         }
       }
@@ -93,7 +53,7 @@ function splitMessage(text: string, maxLength: number): readonly string[] {
     }
 
     if (splitPos === -1) {
-      const block = isInCodeBlock(maxLength, codeBlocks);
+      const block = markdownIsInCodeBlock(maxLength, codeBlocks);
       if (block) {
         let bestNewline = -1;
         for (let i = maxLength - 1; i > block.start; i--) {
@@ -124,24 +84,9 @@ function splitMessage(text: string, maxLength: number): readonly string[] {
   return chunks;
 }
 
-function extractCodeBlockLangs(text: string): readonly string[] {
-  return Array.from(text.matchAll(/^```(\w+)/gm), (m) => m[0].slice(3));
-}
-
-function restoreCodeBlockLangs(text: string, langs: readonly string[]): string {
-  if (langs.length === 0) return text;
-  let i = 0;
-  let open = false;
-  return text.replace(/^```$/gm, () => {
-    open = !open;
-    return open && i < langs.length ? `\`\`\`${langs[i++]}` : "```";
-  });
-}
-
 function convertSingleChunk(chunk: string): GrammyChunk {
   try {
-    const langs = extractCodeBlockLangs(chunk);
-    const markdown = restoreCodeBlockLangs(convert(chunk), langs);
+    const markdown = markdownPreserveCodeBlockLanguages(chunk, convert(chunk));
     return { text: chunk, markdown };
   } catch (error) {
     logger.warn("Failed to format as MarkdownV2", error, { chunk });
@@ -152,11 +97,11 @@ function convertSingleChunk(chunk: string): GrammyChunk {
 function tryConvert(chunk: string): readonly GrammyChunk[] {
   const result = convertSingleChunk(chunk);
   if (result.markdown === undefined) return [result];
-  if (result.markdown.length <= telegramMaxLength) return [result];
+  if (result.markdown.length <= telegramMessageMaxLength) return [result];
 
   // MarkdownV2 escaping expanded the text beyond Telegram's limit.
   // Re-split the source at a smaller size estimated from the expansion ratio.
-  const ratio = telegramMaxLength / result.markdown.length;
+  const ratio = telegramMessageMaxLength / result.markdown.length;
   const smallerLimit = Math.floor(chunk.length * ratio * 0.9);
   const subChunks = splitMessage(chunk, smallerLimit);
   const results: GrammyChunk[] = [];
@@ -164,7 +109,7 @@ function tryConvert(chunk: string): readonly GrammyChunk[] {
     const subResult = convertSingleChunk(sub);
     if (
       subResult.markdown !== undefined &&
-      subResult.markdown.length <= telegramMaxLength
+      subResult.markdown.length <= telegramMessageMaxLength
     ) {
       results.push(subResult);
     } else {
@@ -174,17 +119,15 @@ function tryConvert(chunk: string): readonly GrammyChunk[] {
   return results;
 }
 
-const hrPattern = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
-
 export function grammyFormatText(text: string): readonly GrammyChunk[] {
-  const sections = text.split(hrPattern);
+  const sections = text.split(markdownHrPattern);
   const results: GrammyChunk[] = [];
 
   for (const section of sections) {
     const trimmed = section.trim();
     if (!trimmed) continue;
 
-    const chunks = splitMessage(trimmed, telegramSplitLength);
+    const chunks = splitMessage(trimmed, splitLength);
     for (const chunk of chunks) {
       results.push(...tryConvert(chunk));
     }

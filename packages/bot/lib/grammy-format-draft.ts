@@ -1,22 +1,21 @@
 import { convert } from "telegram-markdown-v2";
 import type { GrammyChunk } from "~/lib/grammy-chunk";
 import { logger } from "~/lib/logger";
+import { markdownFindCodeBlockRanges } from "~/lib/markdown-find-code-block-ranges";
+import { markdownHrPattern } from "~/lib/markdown-hr-pattern";
+import { markdownIsInCodeBlock } from "~/lib/markdown-is-in-code-block";
+import { markdownPreserveCodeBlockLanguages } from "~/lib/markdown-preserve-code-block-languages";
+import { telegramMessageMaxLength } from "~/lib/telegram-message-max-length";
 
-const telegramMaxLength = 4096;
 const trimAggressionFactor = 0.92;
 const maxTrimAttempts = 24;
-const hrPattern = /(?:^|\n)[ \t]*(?:---+|___+|\*\*\*+)[ \t]*(?:\n|$)/;
-
-interface CodeBlockRange {
-  readonly start: number;
-  readonly end: number;
-  readonly lang: string;
-}
 
 interface SilentConvertResult {
   readonly markdown?: string | undefined;
   readonly error?: unknown;
 }
+
+type CodeBlockRange = ReturnType<typeof markdownFindCodeBlockRanges>[number];
 
 interface TrimPriority {
   readonly pattern: RegExp;
@@ -32,60 +31,8 @@ const trimPriorities: readonly TrimPriority[] = [
   { pattern: / /g, offset: 1 },
 ];
 
-function findCodeBlockRanges(text: string): readonly CodeBlockRange[] {
-  const ranges: CodeBlockRange[] = [];
-  const regex = /^```(\w*)/gm;
-  let openStart: number | null = null;
-  let openLang = "";
-
-  for (let match = regex.exec(text); match !== null; match = regex.exec(text)) {
-    if (openStart === null) {
-      openStart = match.index;
-      openLang = match[0].slice(3);
-    } else {
-      ranges.push({
-        start: openStart,
-        end: match.index + match[0].length,
-        lang: openLang,
-      });
-      openStart = null;
-      openLang = "";
-    }
-  }
-
-  if (openStart !== null) {
-    ranges.push({ start: openStart, end: text.length, lang: openLang });
-  }
-
-  return ranges;
-}
-
-function isInCodeBlock(
-  pos: number,
-  ranges: readonly CodeBlockRange[],
-): CodeBlockRange | null {
-  for (const range of ranges) {
-    if (pos > range.start && pos < range.end) return range;
-  }
-  return null;
-}
-
-function extractCodeBlockLangs(text: string): readonly string[] {
-  return Array.from(text.matchAll(/^```(\w+)/gm), (match) => match[0].slice(3));
-}
-
-function restoreCodeBlockLangs(text: string, langs: readonly string[]): string {
-  if (langs.length === 0) return text;
-  let index = 0;
-  let open = false;
-  return text.replace(/^```$/gm, () => {
-    open = !open;
-    return open && index < langs.length ? `\`\`\`${langs[index++]}` : "```";
-  });
-}
-
 function getLastSection(text: string): string {
-  const sections = text.split(hrPattern);
+  const sections = text.split(markdownHrPattern);
   for (let index = sections.length - 1; index >= 0; index -= 1) {
     const section = sections[index]?.trim();
     if (section) return section;
@@ -107,7 +54,7 @@ function findNaturalTrimStart(
     ) {
       const candidate = match.index + offset;
       if (candidate < minStart) continue;
-      if (!isInCodeBlock(candidate, ranges)) return candidate;
+      if (!markdownIsInCodeBlock(candidate, ranges)) return candidate;
     }
   }
   return undefined;
@@ -140,11 +87,11 @@ function alignCodeBlockTrimStart(
 function trimTailChunk(text: string, maxLength: number): string {
   if (text.length <= maxLength) return text;
 
-  const ranges = findCodeBlockRanges(text);
+  const ranges = markdownFindCodeBlockRanges(text);
   const minStart = text.length - maxLength;
   let start = findNaturalTrimStart(text, minStart, ranges) ?? minStart;
 
-  const range = isInCodeBlock(start, ranges);
+  const range = markdownIsInCodeBlock(start, ranges);
   if (range) {
     start = alignCodeBlockTrimStart(text, maxLength, start, range);
     return `\`\`\`${range.lang}\n${text.slice(start)}`;
@@ -155,8 +102,9 @@ function trimTailChunk(text: string, maxLength: number): string {
 
 function convertSingleChunkSilently(chunk: string): SilentConvertResult {
   try {
-    const langs = extractCodeBlockLangs(chunk);
-    return { markdown: restoreCodeBlockLangs(convert(chunk), langs) };
+    return {
+      markdown: markdownPreserveCodeBlockLanguages(chunk, convert(chunk)),
+    };
   } catch (error) {
     return { error };
   }
@@ -169,8 +117,8 @@ function nextTrimLength(
 ): number {
   if (currentLength <= 1) return 0;
 
-  if (markdown !== undefined && markdown.length > telegramMaxLength) {
-    const ratio = telegramMaxLength / markdown.length;
+  if (markdown !== undefined && markdown.length > telegramMessageMaxLength) {
+    const ratio = telegramMessageMaxLength / markdown.length;
     const nextLength = Math.floor(
       chunkText.length * ratio * trimAggressionFactor,
     );
@@ -187,8 +135,8 @@ export function grammyFormatDraft(text: string): GrammyChunk {
   const section = getLastSection(text);
   if (!section) return { text: "" };
 
-  let trimLength = Math.min(section.length, telegramMaxLength);
-  const fallbackText = trimTailChunk(section, telegramMaxLength);
+  let trimLength = Math.min(section.length, telegramMessageMaxLength);
+  const fallbackText = trimTailChunk(section, telegramMessageMaxLength);
   let previousChunk: string | undefined;
   let lastError: unknown;
 
@@ -204,7 +152,7 @@ export function grammyFormatDraft(text: string): GrammyChunk {
 
     if (
       result.markdown !== undefined &&
-      result.markdown.length <= telegramMaxLength
+      result.markdown.length <= telegramMessageMaxLength
     ) {
       return { text: chunkText, markdown: result.markdown };
     }
