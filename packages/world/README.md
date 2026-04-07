@@ -1,27 +1,43 @@
 # OpenKitten World
 
-This package contains both the canonical product documents and the runnable browser client for OpenKitten World.
+This package contains both the canonical product documents and the browser client for OpenKitten World.
+
+## Status
+
+These docs reflect the current direction adopted after evaluating the earlier Pixi phase-1 spike:
+
+- `/` should become a fullscreen Phaser experience
+- React Router should still own routing
+- non-game routes can stay conventional React pages
+- React DOM on `/` should be optional and secondary
+- Jotai may be used as a narrow bridge between Phaser and React when needed
+
+The current implementation still contains the earlier Pixi scaffold.
+It should be treated as a useful prototype that informed the new direction, not as the target architecture.
 
 ## Documents
 
 - [Vision](./VISION.md)
+  The product north star and the experience OpenKitten World should ultimately create.
 - [Spec](./SPEC.md)
+  The canonical product vocabulary, domain model, interaction model, and implementation boundaries.
 - [Client Strategy](./CLIENT_STRATEGY.md)
+  Why the client direction changed and why Phaser is now the preferred home-route runtime.
 - [Visual Direction](./VISUAL_DIRECTION.md)
+  The visual, spatial, and UI principles for a fullscreen game-first product.
 - [MVP](./MVP.md)
+  The first vertical slice that should prove the product direction.
 - [Implementation Plan](./IMPLEMENTATION_PLAN.md)
+  The recommended package layout, architecture, and phased path for the Phaser-first client.
 
-Read the vision first for the product north star.
+Recommended reading order:
 
-Read the spec next for the canonical product vocabulary, ontology, interaction model, execution model, invariants, and current implementation boundaries.
-
-Read the client strategy for the current framework choice, presentation strategy, and the planned path from early product focus to long-term immersive world ambitions.
-
-Read the visual direction for the current reference stack, art constraints, character/world/UI guidance, and the intended path from feasible early visuals to a richer long-term atmosphere.
-
-Read the MVP doc for the first vertical slice, scope boundaries, and success criteria.
-
-Read the implementation plan for the recommended Pixi + React client architecture and phased build path.
+1. [Vision](./VISION.md)
+2. [Spec](./SPEC.md)
+3. [Client Strategy](./CLIENT_STRATEGY.md)
+4. [Visual Direction](./VISUAL_DIRECTION.md)
+5. [MVP](./MVP.md)
+6. [Implementation Plan](./IMPLEMENTATION_PLAN.md)
 
 ## Commands
 
@@ -29,4 +45,5 @@ Run these from `packages/world`:
 
 - `bun run dev` starts the local browser client
 - `bun run build` creates the production build
-- `bun run test` runs the test suite (`--coverage` for coverage report)
+- `bun run test` runs the test suite
+- `bun --bun tsc --build` runs the TypeScript build check
