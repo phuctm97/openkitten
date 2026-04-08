@@ -9,7 +9,7 @@ This folder contains the first AI-generated MVP asset set for `packages/world`.
 
 ## Origin
 
-Generated with the Codex image generation skill.
+Generated with the Codex `Image Gen` skill, using its CLI fallback path.
 
 The raw intermediate archive is not kept in the repo.
 This folder contains the curated selected finals only.
