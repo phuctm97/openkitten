@@ -2,6 +2,7 @@ import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { AttachmentStorage } from "~/lib/attachment-storage";
+import { ClaudeCredentialRefresh } from "~/lib/claude-credential-refresh";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
@@ -54,6 +55,7 @@ export const serve = defineCommand({
       const opencodeConfig = await OpencodeConfig.create(profile, {
         skipActions,
       });
+      using _claudeCredentialRefresh = ClaudeCredentialRefresh.create();
       await grammySetCommands(telegramConfig.botToken);
       const bot = new Bot(telegramConfig.botToken);
       bot.api.config.use(autoRetry());
