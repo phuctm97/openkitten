@@ -36,7 +36,7 @@ export class HouseScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setStrokeStyle(2, cardBorderColor, 0.78);
     const title = this.add
-      .text(0, -48, "OpenKitten World", {
+      .text(0, -48, "OpenKitten", {
         color: titleColor,
         fontFamily: '"Oxanium Variable", sans-serif',
         fontSize: "42px",

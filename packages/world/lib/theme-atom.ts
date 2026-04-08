@@ -4,7 +4,7 @@ import { isTheme } from "~/lib/is-theme";
 import type { Theme } from "~/lib/theme";
 
 export const themeAtom = atomWithStorage<Theme>(
-  "openkitten-world-theme",
+  "openkitten-theme",
   "auto",
   {
     getItem: (key, initialValue) => {

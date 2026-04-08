@@ -218,6 +218,16 @@ test("builds and lays out the fullscreen placeholder scene", async () => {
 
   expect(scene.add.rectangle).toHaveBeenCalledTimes(2);
   expect(scene.add.text).toHaveBeenCalledTimes(2);
+  expect(scene.add.text).toHaveBeenNthCalledWith(
+    1,
+    0,
+    -48,
+    "OpenKitten",
+    expect.objectContaining({
+      fontSize: "42px",
+      fontStyle: "700",
+    }),
+  );
   expect(scene.add.container).toHaveBeenCalledWith(640, 360, [
     glow,
     card,
