@@ -1,5 +1,5 @@
 import type { ColorScheme } from "~/lib/color-scheme";
-import type { HousePalette } from "~/lib/house-pallete";
+import type { HousePalette } from "~/lib/house-palette";
 
 const lightPalette: HousePalette = {
   backgroundColor: "#ffffff",

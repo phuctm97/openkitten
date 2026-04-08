@@ -268,6 +268,7 @@ afterEach(() => {
   MockMutationObserver.instances.length = 0;
   vi.clearAllMocks();
   vi.resetModules();
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -388,6 +389,48 @@ test("builds and lays out the fullscreen placeholder scene using the active pale
     expect.any(Function),
     scene,
   );
+});
+
+test("builds the initial scene from the computed color scheme when inline style is unset", async () => {
+  vi.stubGlobal("MutationObserver", MockMutationObserver);
+  vi.spyOn(window, "getComputedStyle").mockReturnValue({
+    colorScheme: "dark",
+  } as never);
+
+  const { HouseScene } = await import("~/lib/house-scene");
+  const scene = new HouseScene();
+
+  scene.create();
+
+  const camera = houseSceneMocks.cameras[0];
+  const canvas = houseSceneMocks.canvases[0];
+  const renderer = houseSceneMocks.renderers[0];
+
+  if (camera === undefined || canvas === undefined || renderer === undefined) {
+    throw new Error("Expected the House scene to create its render targets.");
+  }
+
+  expect(scene.add.text).toHaveBeenNthCalledWith(
+    1,
+    0,
+    -48,
+    "OpenKitten",
+    expect.objectContaining({
+      color: "#fafaf9",
+    }),
+  );
+  expect(scene.add.rectangle).toHaveBeenNthCalledWith(
+    1,
+    0,
+    0,
+    612,
+    332,
+    0x973c00,
+    0.24,
+  );
+  expect(camera.setBackgroundColor).toHaveBeenCalledWith("#0c0a09");
+  expect(canvas.style.backgroundColor).toBe("#0c0a09");
+  expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
 });
 
 test("responds to palette changes, resize events, and shutdown cleanup", async () => {
