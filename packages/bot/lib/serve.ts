@@ -2,7 +2,6 @@ import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { AttachmentStorage } from "~/lib/attachment-storage";
-import { ClaudeCredentialRefresh } from "~/lib/claude-credential-refresh";
 import { CommandRegistry } from "~/lib/command-registry";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
@@ -56,7 +55,6 @@ export const serve = defineCommand({
       const opencodeConfig = await OpencodeConfig.create(profile, {
         skipActions,
       });
-      using _claudeCredentialRefresh = ClaudeCredentialRefresh.create();
       const bot = new Bot(telegramConfig.botToken);
       bot.api.config.use(autoRetry());
       bot.use(grammyFilterUser(telegramConfig.userId));
@@ -78,7 +76,6 @@ export const serve = defineCommand({
         database,
         opencodeServer.client,
         existingSessions,
-        profile.xdgData,
       );
       using mcpServer = await McpServer.create(
         bot,

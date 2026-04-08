@@ -44,6 +44,32 @@ export const message = sqliteTable(
   (table) => [index("message_session_id_idx").on(table.sessionId)],
 );
 
+export const scheduledTask = sqliteTable(
+  "scheduled_task",
+  {
+    id: text().primaryKey(),
+    sessionId: text("session_id")
+      .notNull()
+      .references(() => session.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    kind: text().notNull(),
+    description: text().notNull(),
+    prompt: text().notNull(),
+    cron: text().notNull(),
+    once: integer().notNull().default(0),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`)
+      .$onUpdateFn(() => new Date()),
+  },
+  (table) => [index("scheduled_task_session_id_idx").on(table.sessionId)],
+);
+
 export const command = sqliteTable("command", {
   name: text().primaryKey(),
   description: text().notNull(),
@@ -59,11 +85,19 @@ export const command = sqliteTable("command", {
 
 export const sessionRelations = relations(session, ({ many }) => ({
   messages: many(message),
+  scheduledTasks: many(scheduledTask),
 }));
 
 export const messageRelations = relations(message, ({ one }) => ({
   session: one(session, {
     fields: [message.sessionId],
+    references: [session.id],
+  }),
+}));
+
+export const scheduledTaskRelations = relations(scheduledTask, ({ one }) => ({
+  session: one(session, {
+    fields: [scheduledTask.sessionId],
     references: [session.id],
   }),
 }));

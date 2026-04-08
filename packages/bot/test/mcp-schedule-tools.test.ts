@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
-import type { ExistingSessions } from "~/lib/existing-sessions";
-import { registerScheduleTools } from "~/lib/mcp-schedule-tools";
+import { registerScheduleTools } from "~/lib/register-schedule-tools";
 import type { Scheduler } from "~/lib/scheduler";
 
 type ToolHandler = (args: Record<string, unknown>) => Promise<unknown>;
@@ -25,11 +24,11 @@ function makeRegisteredTools() {
 function makeTask(overrides?: Partial<Scheduler.Task>): Scheduler.Task {
   return {
     id: "task-1",
-    type: "message",
+    sessionId: "sess-1",
+    kind: "session",
     cron: "0 * * * *",
     description: "Hourly task",
     prompt: "Do something",
-    paused: false,
     once: false,
     nextRun: "2026-04-07T01:00:00.000Z",
     ...overrides,
@@ -38,29 +37,20 @@ function makeTask(overrides?: Partial<Scheduler.Task>): Scheduler.Task {
 
 describe("registerScheduleTools", () => {
   const mockSchedulerCreate = vi.fn<() => Promise<Scheduler.Task>>();
-  const mockSchedulerList = vi.fn<() => Promise<Scheduler.Task[]>>();
+  const mockSchedulerList = vi.fn<() => Scheduler.Task[]>();
   const mockSchedulerDelete = vi.fn<() => Promise<void>>();
   const mockSchedulerTrigger = vi.fn<() => Promise<void>>();
+  const mockSchedulerUpdate = vi.fn<() => Promise<Scheduler.Task>>();
 
   const mockScheduler = {
     create: mockSchedulerCreate,
     list: mockSchedulerList,
     delete: mockSchedulerDelete,
     trigger: mockSchedulerTrigger,
+    update: mockSchedulerUpdate,
   } as never as Scheduler;
 
-  const mockExistingSessionsGet =
-    vi.fn<(sessionId: string) => ExistingSessions.Location | undefined>();
-  const mockExistingSessions = {
-    get: mockExistingSessionsGet,
-  } as never as ExistingSessions;
-
   const mockGetMetadata = vi.fn<(args: unknown) => { sessionID: string }>();
-
-  const defaultLocation: ExistingSessions.Location = {
-    chatId: 42,
-    threadId: 7,
-  };
 
   const metadataArgs = { __OPENKITTEN__: { sessionID: "sess-1" } };
 
@@ -69,37 +59,36 @@ describe("registerScheduleTools", () => {
     mockSchedulerList.mockClear();
     mockSchedulerDelete.mockClear();
     mockSchedulerTrigger.mockClear();
-    mockExistingSessionsGet.mockClear();
+    mockSchedulerUpdate.mockClear();
     mockGetMetadata.mockClear();
 
     mockGetMetadata.mockReturnValue({ sessionID: "sess-1" });
-    mockExistingSessionsGet.mockReturnValue(defaultLocation);
   });
 
   function setup() {
     const { registeredTools, mockServer } = makeRegisteredTools();
     registerScheduleTools(mockServer as never, {
       scheduler: mockScheduler,
-      existingSessions: mockExistingSessions,
       getMetadata: mockGetMetadata,
     });
     return registeredTools;
   }
 
-  test("registers exactly 5 tools", () => {
+  test("registers exactly 6 tools", () => {
     const tools = setup();
-    expect(tools.size).toBe(5);
+    expect(tools.size).toBe(6);
     expect([...tools.keys()]).toEqual([
       "schedule_create",
       "schedule_list",
       "schedule_delete",
       "schedule_trigger",
+      "schedule_update",
       "get_server_time",
     ]);
   });
 
   describe("schedule_create", () => {
-    test("creates a recurring task and returns task result", async () => {
+    test("creates a recurring session task", async () => {
       const task = makeTask();
       mockSchedulerCreate.mockResolvedValue(task);
 
@@ -116,20 +105,41 @@ describe("registerScheduleTools", () => {
       const result = await tool.handler(args);
 
       expect(mockGetMetadata).toHaveBeenCalledWith(args);
-      expect(mockExistingSessionsGet).toHaveBeenCalledWith("sess-1");
       expect(mockSchedulerCreate).toHaveBeenCalledWith({
-        type: "message",
-        chatId: 42,
-        threadId: 7,
+        sessionId: "sess-1",
+        kind: "session",
         cron: "0 * * * *",
         description: "Hourly task",
         prompt: "Do something",
         once: false,
       });
       expect(result).toEqual({
-        content: [{ type: "text", text: "Created schedule: Hourly task" }],
+        content: [
+          {
+            type: "text",
+            text: expect.stringContaining("Hourly task"),
+          },
+        ],
         structuredContent: { ...task },
       });
+    });
+
+    test("shows N/A in content when nextRun is null", async () => {
+      const task = makeTask({ nextRun: null });
+      mockSchedulerCreate.mockResolvedValue(task);
+
+      const tools = setup();
+      const tool = tools.get("schedule_create");
+      if (!tool) throw new Error("schedule_create not registered");
+
+      const result = (await tool.handler({
+        ...metadataArgs,
+        cron: "0 * * * *",
+        description: "Hourly task",
+        prompt: "Do something",
+      })) as { content: { text: string }[] };
+
+      expect(result.content[0]?.text).toContain("N/A");
     });
 
     test("creates a once task when once=true", async () => {
@@ -140,14 +150,13 @@ describe("registerScheduleTools", () => {
       const tool = tools.get("schedule_create");
       if (!tool) throw new Error("schedule_create not registered");
 
-      const args = {
+      await tool.handler({
         ...metadataArgs,
         cron: "0 * * * *",
         description: "Hourly task",
         prompt: "Do something",
         once: true,
-      };
-      await tool.handler(args);
+      });
 
       expect(mockSchedulerCreate).toHaveBeenCalledWith(
         expect.objectContaining({ once: true }),
@@ -155,8 +164,7 @@ describe("registerScheduleTools", () => {
     });
 
     test("defaults once to false when omitted", async () => {
-      const task = makeTask();
-      mockSchedulerCreate.mockResolvedValue(task);
+      mockSchedulerCreate.mockResolvedValue(makeTask());
 
       const tools = setup();
       const tool = tools.get("schedule_create");
@@ -174,8 +182,8 @@ describe("registerScheduleTools", () => {
       );
     });
 
-    test('passes type "prompt" through to scheduler.create', async () => {
-      const task = makeTask({ type: "prompt" });
+    test('passes kind "background" through to scheduler.create', async () => {
+      const task = makeTask({ kind: "background" });
       mockSchedulerCreate.mockResolvedValue(task);
 
       const tools = setup();
@@ -184,20 +192,19 @@ describe("registerScheduleTools", () => {
 
       await tool.handler({
         ...metadataArgs,
-        type: "prompt",
-        cron: "0 * * * *",
-        description: "Prompt task",
-        prompt: "Summarise daily activity",
+        kind: "background",
+        cron: "@daily",
+        description: "BG task",
+        prompt: "Check status",
       });
 
       expect(mockSchedulerCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "prompt" }),
+        expect.objectContaining({ kind: "background" }),
       );
     });
 
-    test('defaults type to "message" when omitted', async () => {
-      const task = makeTask();
-      mockSchedulerCreate.mockResolvedValue(task);
+    test('defaults kind to "session" when omitted', async () => {
+      mockSchedulerCreate.mockResolvedValue(makeTask());
 
       const tools = setup();
       const tool = tools.get("schedule_create");
@@ -211,25 +218,8 @@ describe("registerScheduleTools", () => {
       });
 
       expect(mockSchedulerCreate).toHaveBeenCalledWith(
-        expect.objectContaining({ type: "message" }),
+        expect.objectContaining({ kind: "session" }),
       );
-    });
-
-    test("throws when session is not found", async () => {
-      mockExistingSessionsGet.mockReturnValue(undefined);
-
-      const tools = setup();
-      const tool = tools.get("schedule_create");
-      if (!tool) throw new Error("schedule_create not registered");
-
-      await expect(
-        tool.handler({
-          ...metadataArgs,
-          cron: "0 * * * *",
-          description: "Hourly task",
-          prompt: "Do something",
-        }),
-      ).rejects.toThrow("Session not found: sess-1");
     });
 
     test("propagates scheduler.create errors", async () => {
@@ -257,7 +247,7 @@ describe("registerScheduleTools", () => {
         makeTask(),
         makeTask({ id: "task-2", description: "Second" }),
       ];
-      mockSchedulerList.mockResolvedValue(tasks);
+      mockSchedulerList.mockReturnValue(tasks);
 
       const tools = setup();
       const tool = tools.get("schedule_list");
@@ -269,13 +259,32 @@ describe("registerScheduleTools", () => {
       expect(mockGetMetadata).toHaveBeenCalledWith(args);
       expect(mockSchedulerList).toHaveBeenCalledWith();
       expect(result).toEqual({
-        content: [{ type: "text", text: "Found 2 scheduled task(s)." }],
+        content: [
+          {
+            type: "text",
+            text: expect.stringContaining("2 scheduled task(s)"),
+          },
+        ],
         structuredContent: { tasks: tasks.map((t) => ({ ...t })) },
       });
     });
 
+    test("list content shows N/A for null nextRun", async () => {
+      mockSchedulerList.mockReturnValue([makeTask({ nextRun: null })]);
+
+      const tools = setup();
+      const tool = tools.get("schedule_list");
+      if (!tool) throw new Error("schedule_list not registered");
+
+      const result = (await tool.handler({ ...metadataArgs })) as {
+        content: { text: string }[];
+      };
+
+      expect(result.content[0]?.text).toContain("N/A");
+    });
+
     test("returns empty list when no tasks", async () => {
-      mockSchedulerList.mockResolvedValue([]);
+      mockSchedulerList.mockReturnValue([]);
 
       const tools = setup();
       const tool = tools.get("schedule_list");
@@ -284,20 +293,9 @@ describe("registerScheduleTools", () => {
       const result = await tool.handler({ ...metadataArgs });
 
       expect(result).toEqual({
-        content: [{ type: "text", text: "Found 0 scheduled task(s)." }],
+        content: [{ type: "text", text: "No scheduled tasks." }],
         structuredContent: { tasks: [] },
       });
-    });
-
-    test("propagates scheduler.list errors", async () => {
-      const error = new Error("list failed");
-      mockSchedulerList.mockRejectedValue(error);
-
-      const tools = setup();
-      const tool = tools.get("schedule_list");
-      if (!tool) throw new Error("schedule_list not registered");
-
-      await expect(tool.handler({ ...metadataArgs })).rejects.toBe(error);
     });
   });
 
@@ -329,16 +327,13 @@ describe("registerScheduleTools", () => {
       if (!tool) throw new Error("schedule_delete not registered");
 
       await expect(
-        tool.handler({
-          ...metadataArgs,
-          id: "missing",
-        }),
+        tool.handler({ ...metadataArgs, id: "missing" }),
       ).rejects.toBe(error);
     });
   });
 
   describe("schedule_trigger", () => {
-    test("triggers a task immediately and returns triggered: true", async () => {
+    test("triggers a task and returns triggered: true", async () => {
       mockSchedulerTrigger.mockResolvedValue(undefined);
 
       const tools = setup();
@@ -365,10 +360,83 @@ describe("registerScheduleTools", () => {
       if (!tool) throw new Error("schedule_trigger not registered");
 
       await expect(
-        tool.handler({
-          ...metadataArgs,
-          id: "missing",
-        }),
+        tool.handler({ ...metadataArgs, id: "missing" }),
+      ).rejects.toBe(error);
+    });
+  });
+
+  describe("schedule_update", () => {
+    test("updates task and returns updated result", async () => {
+      const updated = makeTask({ description: "Updated" });
+      mockSchedulerUpdate.mockResolvedValue(updated);
+
+      const tools = setup();
+      const tool = tools.get("schedule_update");
+      if (!tool) throw new Error("schedule_update not registered");
+
+      const args = {
+        ...metadataArgs,
+        id: "task-1",
+        description: "Updated",
+      };
+      const result = await tool.handler(args);
+
+      expect(mockGetMetadata).toHaveBeenCalledWith(args);
+      expect(mockSchedulerUpdate).toHaveBeenCalledWith("task-1", {
+        description: "Updated",
+      });
+      expect(result).toEqual({
+        content: [{ type: "text", text: expect.stringContaining("Updated") }],
+        structuredContent: { ...updated },
+      });
+    });
+
+    test("update content shows N/A for null nextRun", async () => {
+      const updated = makeTask({ nextRun: null });
+      mockSchedulerUpdate.mockResolvedValue(updated);
+
+      const tools = setup();
+      const tool = tools.get("schedule_update");
+      if (!tool) throw new Error("schedule_update not registered");
+
+      const result = (await tool.handler({
+        ...metadataArgs,
+        id: "task-1",
+        prompt: "new",
+      })) as { content: { text: string }[] };
+
+      expect(result.content[0]?.text).toContain("N/A");
+    });
+
+    test("updates cron only", async () => {
+      const updated = makeTask({ cron: "@daily" });
+      mockSchedulerUpdate.mockResolvedValue(updated);
+
+      const tools = setup();
+      const tool = tools.get("schedule_update");
+      if (!tool) throw new Error("schedule_update not registered");
+
+      await tool.handler({
+        ...metadataArgs,
+        id: "task-1",
+        cron: "@daily",
+      });
+
+      expect(mockSchedulerUpdate).toHaveBeenCalledWith("task-1", {
+        cron: "@daily",
+      });
+    });
+
+    test("propagates scheduler.update errors", async () => {
+      const error = new Error("not found");
+      mockSchedulerUpdate.mockRejectedValue(error);
+
+      const tools = setup();
+      const tool = tools.get("schedule_update");
+      if (!tool) throw new Error("schedule_update not registered");
+
+      await expect(
+        tool.handler({ ...metadataArgs, id: "missing", prompt: "x" }),
       ).rejects.toBe(error);
     });
   });
@@ -398,10 +466,7 @@ describe("registerScheduleTools", () => {
       expect((sc.timezone as string).length).toBeGreaterThan(0);
       expect(sc.offset).toBeTypeOf("number");
       expect(result.content).toEqual([
-        {
-          type: "text",
-          text: expect.stringContaining("Server time:"),
-        },
+        { type: "text", text: expect.stringContaining("Server time:") },
       ]);
     });
   });
@@ -412,11 +477,13 @@ describe("registerScheduleTools", () => {
       "schedule_list",
       "schedule_delete",
       "schedule_trigger",
+      "schedule_update",
     ] as const)("%s calls getMetadata with the full args object", async (toolName) => {
       mockSchedulerCreate.mockResolvedValue(makeTask());
-      mockSchedulerList.mockResolvedValue([]);
+      mockSchedulerList.mockReturnValue([]);
       mockSchedulerDelete.mockResolvedValue(undefined);
       mockSchedulerTrigger.mockResolvedValue(undefined);
+      mockSchedulerUpdate.mockResolvedValue(makeTask());
 
       const tools = setup();
       const tool = tools.get(toolName);

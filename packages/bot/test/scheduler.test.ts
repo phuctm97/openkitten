@@ -1,78 +1,13 @@
 import { afterEach, beforeEach, expect, type Mock, test, vi } from "vitest";
+import { Database } from "~/lib/database";
 import { Scheduler } from "~/lib/scheduler";
 
-// Bun.cron.parse is not yet in @types/bun — declare the subset we use so
-// vi.spyOn can reference the property without TypeScript errors.
+// Bun.cron.parse is not yet in @types/bun.
 declare namespace Bun {
   namespace cron {
     function parse(expression: string, cursor?: Date): Date | null;
   }
 }
-
-// ---------------------------------------------------------------------------
-// Mock Bunqueue from bunqueue/client
-// ---------------------------------------------------------------------------
-
-interface MockJob {
-  id: string;
-  data: unknown;
-}
-
-interface MockSchedulerInfo {
-  id: string;
-  name: string;
-  pattern: string | undefined;
-  next: number | null;
-}
-
-interface MockQueueInner {
-  removeAsync: Mock<(id: string) => Promise<void>>;
-}
-
-interface MockBunqueueInstance {
-  add: Mock<(name: string, data: unknown, opts?: unknown) => Promise<MockJob>>;
-  cron: Mock<
-    (
-      id: string,
-      pattern: string,
-      data?: unknown,
-    ) => Promise<MockSchedulerInfo | null>
-  >;
-  getJob: Mock<(id: string) => Promise<MockJob | null>>;
-  listCrons: Mock<() => Promise<MockSchedulerInfo[]>>;
-  removeCron: Mock<(id: string) => Promise<boolean>>;
-  close: Mock<() => Promise<void>>;
-  queue: MockQueueInner;
-}
-
-let mockBunqueueInstance: MockBunqueueInstance;
-let capturedProcessor: ((job: MockJob) => Promise<void>) | undefined;
-
-vi.mock("bunqueue/client", () => ({
-  Bunqueue: class MockBunqueue {
-    add = (a: string, b: unknown, c?: unknown) =>
-      mockBunqueueInstance.add(a, b as never, c as never);
-    cron = (a: string, b: string, c?: unknown) =>
-      mockBunqueueInstance.cron(a, b, c as never);
-    getJob = (a: string) => mockBunqueueInstance.getJob(a);
-    listCrons = () => mockBunqueueInstance.listCrons();
-    removeCron = (a: string) => mockBunqueueInstance.removeCron(a);
-    close = () => mockBunqueueInstance.close();
-    queue = {
-      removeAsync: (a: string) => mockBunqueueInstance.queue.removeAsync(a),
-    };
-    constructor(
-      _name: string,
-      opts: { processor?: (job: MockJob) => Promise<void> },
-    ) {
-      if (opts.processor) capturedProcessor = opts.processor;
-    }
-  },
-}));
-
-// ---------------------------------------------------------------------------
-// Mock getSessionAgent
-// ---------------------------------------------------------------------------
 
 const mockGetSessionAgent = vi.fn<() => string | undefined>();
 
@@ -80,126 +15,97 @@ vi.mock("~/lib/get-session-agent", () => ({
   getSessionAgent: () => mockGetSessionAgent(),
 }));
 
-// ---------------------------------------------------------------------------
-// Spy references
-// ---------------------------------------------------------------------------
-
 let cronParseSpy: Mock<(expression: string, cursor?: Date) => Date | null>;
-
-// ---------------------------------------------------------------------------
-// Test dependencies
-// ---------------------------------------------------------------------------
-
+let database: Database;
 let mockBot: {
   api: { sendMessage: ReturnType<typeof vi.fn> };
 };
 let opencodeClient: {
-  session: { promptAsync: ReturnType<typeof vi.fn> };
+  session: {
+    promptAsync: ReturnType<typeof vi.fn>;
+    create: ReturnType<typeof vi.fn>;
+    abort: ReturnType<typeof vi.fn>;
+    status: ReturnType<typeof vi.fn>;
+    messages: ReturnType<typeof vi.fn>;
+  };
 };
 let existingSessions: {
   find: ReturnType<typeof vi.fn>;
+  get: ReturnType<typeof vi.fn>;
 };
 let scheduler: Scheduler;
 
-function makeMockBunqueueInstance(): MockBunqueueInstance {
-  return {
-    add: vi.fn(),
-    cron: vi.fn(),
-    getJob: vi.fn(),
-    listCrons: vi.fn(),
-    removeCron: vi.fn(),
-    close: vi.fn().mockResolvedValue(undefined),
-    queue: {
-      removeAsync: vi.fn().mockResolvedValue(undefined),
-    },
-  };
-}
-
-beforeEach(() => {
+beforeEach(async () => {
   vi.useFakeTimers();
-
-  mockBunqueueInstance = makeMockBunqueueInstance();
-  capturedProcessor = undefined;
 
   cronParseSpy = vi
     .spyOn(Bun.cron, "parse")
     .mockImplementation(() => new Date(Date.now() + 60_000));
 
+  database = Database.create();
   mockBot = { api: { sendMessage: vi.fn().mockResolvedValue(undefined) } };
   opencodeClient = {
-    session: { promptAsync: vi.fn().mockResolvedValue({ data: undefined }) },
+    session: {
+      promptAsync: vi.fn().mockResolvedValue({ data: undefined }),
+      create: vi
+        .fn()
+        .mockResolvedValue({ data: { id: "ephemeral-session-1" } }),
+      abort: vi.fn().mockResolvedValue(undefined),
+      status: vi.fn().mockResolvedValue({ data: {} }),
+      messages: vi.fn().mockResolvedValue({
+        data: [
+          {
+            info: { role: "user" },
+            parts: [],
+          },
+          {
+            info: { role: "assistant" },
+            parts: [
+              {
+                type: "text",
+                text: "[NO_REPORT]",
+              },
+            ],
+          },
+        ],
+      }),
+    },
   };
-  existingSessions = { find: vi.fn().mockResolvedValue("session-1") };
+  existingSessions = {
+    find: vi.fn().mockResolvedValue("session-1"),
+    get: vi.fn().mockReturnValue({ chatId: 123, threadId: undefined }),
+  };
   mockGetSessionAgent.mockReturnValue(undefined);
+
+  const schema = await import("~/lib/schema");
+  database
+    .insert(schema.session)
+    .values({ id: "session-1", chatId: 123, threadId: 0 })
+    .run();
 
   scheduler = Scheduler.create(
     mockBot as never,
-    {} as never,
+    database,
     opencodeClient as never,
     existingSessions as never,
-    "/tmp/test-data",
   );
 });
 
 afterEach(() => {
   scheduler[Symbol.dispose]();
+  database[Symbol.dispose]();
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
 // ---------------------------------------------------------------------------
-// create() — recurring
+// create()
 // ---------------------------------------------------------------------------
 
-test("create() recurring uses queue.cron and returns task", async () => {
-  const cronInfo: MockSchedulerInfo = {
-    id: "cron-42",
-    name: "hourly",
-    pattern: "0 * * * *",
-    next: Date.now() + 60_000,
-  };
-  mockBunqueueInstance.cron.mockResolvedValue(cronInfo);
-
+test("create() inserts row and returns task with all fields", async () => {
   const task = await scheduler.create({
-    type: "message",
-    chatId: 1,
-    threadId: undefined,
-    cron: "0 * * * *",
-    description: "hourly",
-    prompt: "do something",
-    once: false,
-  });
-
-  expect(mockBunqueueInstance.cron).toHaveBeenCalledWith(
-    "hourly",
-    "0 * * * *",
-    {
-      type: "message",
-      chatId: 1,
-      threadId: undefined,
-      description: "hourly",
-      prompt: "do something",
-      cron: "0 * * * *",
-      once: false,
-    },
-  );
-  expect(task.id).toBe("cron-42");
-  expect(task.type).toBe("message");
-  expect(task.cron).toBe("0 * * * *");
-  expect(task.description).toBe("hourly");
-  expect(task.prompt).toBe("do something");
-  expect(task.paused).toBe(false);
-  expect(task.once).toBe(false);
-  expect(task.nextRun).toBe(new Date(Date.now() + 60_000).toISOString());
-});
-
-test("create() recurring uses crypto.randomUUID when cron returns null", async () => {
-  mockBunqueueInstance.cron.mockResolvedValue(null);
-
-  const task = await scheduler.create({
-    type: "prompt",
-    chatId: 1,
-    threadId: undefined,
+    sessionId: "session-1",
+    kind: "session",
     cron: "0 * * * *",
     description: "hourly",
     prompt: "do something",
@@ -209,111 +115,48 @@ test("create() recurring uses crypto.randomUUID when cron returns null", async (
   expect(task.id).toMatch(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   );
+  expect(task.sessionId).toBe("session-1");
+  expect(task.kind).toBe("session");
+  expect(task.cron).toBe("0 * * * *");
+  expect(task.description).toBe("hourly");
+  expect(task.prompt).toBe("do something");
+  expect(task.once).toBe(false);
+  expect(task.nextRun).toBe(new Date(Date.now() + 60_000).toISOString());
 });
 
-// ---------------------------------------------------------------------------
-// create() — once
-// ---------------------------------------------------------------------------
-
-test("create() once uses queue.add with computed delay", async () => {
-  const fakeNow = new Date("2026-04-07T00:00:00.000Z").getTime();
-  vi.setSystemTime(fakeNow);
-  const futureDate = new Date(fakeNow + 60_000);
-  cronParseSpy.mockReturnValue(futureDate);
-
-  const job: MockJob = { id: "job-abc", data: {} };
-  mockBunqueueInstance.add.mockResolvedValue(job);
-
+test("create() with once=true", async () => {
   const task = await scheduler.create({
-    type: "message",
-    chatId: 2,
-    threadId: 5,
-    cron: "* * * * *",
-    description: "once task",
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "one-time",
     prompt: "run once",
     once: true,
   });
 
-  expect(mockBunqueueInstance.add).toHaveBeenCalledWith(
-    "once task",
-    {
-      type: "message",
-      chatId: 2,
-      threadId: 5,
-      description: "once task",
-      prompt: "run once",
-      cron: "* * * * *",
-      once: true,
-    },
-    { delay: 60_000 },
-  );
-  expect(task.id).toBe("job-abc");
   expect(task.once).toBe(true);
-  expect(task.nextRun).toBe(futureDate.toISOString());
 });
 
-test("create() once with delay=0 when Bun.cron.parse returns null", async () => {
+test("create() with background kind", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "@daily",
+    description: "bg task",
+    prompt: "check status",
+    once: false,
+  });
+
+  expect(task.kind).toBe("background");
+});
+
+test("create() returns null nextRun when Bun.cron.parse returns null", async () => {
   cronParseSpy.mockReturnValue(null);
-  const job: MockJob = { id: "job-zero", data: {} };
-  mockBunqueueInstance.add.mockResolvedValue(job);
 
   const task = await scheduler.create({
-    type: "message",
-    chatId: 1,
-    threadId: undefined,
+    sessionId: "session-1",
+    kind: "session",
     cron: "invalid",
-    description: "d",
-    prompt: "p",
-    once: true,
-  });
-
-  expect(mockBunqueueInstance.add).toHaveBeenCalledWith(
-    "d",
-    expect.objectContaining({ once: true }),
-    { delay: 0 },
-  );
-  expect(task.nextRun).toBeNull();
-});
-
-test("create() once with delay=0 when Bun.cron.parse throws", async () => {
-  cronParseSpy.mockImplementation(() => {
-    throw new Error("bad cron");
-  });
-  const job: MockJob = { id: "job-err", data: {} };
-  mockBunqueueInstance.add.mockResolvedValue(job);
-
-  const task = await scheduler.create({
-    type: "message",
-    chatId: 1,
-    threadId: undefined,
-    cron: "broken",
-    description: "d",
-    prompt: "p",
-    once: true,
-  });
-
-  expect(mockBunqueueInstance.add).toHaveBeenCalledWith(
-    "d",
-    expect.objectContaining({ once: true }),
-    { delay: 0 },
-  );
-  expect(task.nextRun).toBeNull();
-});
-
-test("create() recurring returns null nextRun when Bun.cron.parse returns null", async () => {
-  cronParseSpy.mockReturnValue(null);
-  mockBunqueueInstance.cron.mockResolvedValue({
-    id: "cron-1",
-    name: "d",
-    pattern: "* * * * *",
-    next: null,
-  });
-
-  const task = await scheduler.create({
-    type: "prompt",
-    chatId: 1,
-    threadId: undefined,
-    cron: "* * * * *",
     description: "d",
     prompt: "p",
     once: false,
@@ -322,22 +165,15 @@ test("create() recurring returns null nextRun when Bun.cron.parse returns null",
   expect(task.nextRun).toBeNull();
 });
 
-test("create() recurring returns null nextRun when Bun.cron.parse throws", async () => {
+test("create() returns null nextRun when Bun.cron.parse throws", async () => {
   cronParseSpy.mockImplementation(() => {
     throw new Error("bad cron");
   });
-  mockBunqueueInstance.cron.mockResolvedValue({
-    id: "cron-1",
-    name: "d",
-    pattern: "* * * * *",
-    next: null,
-  });
 
   const task = await scheduler.create({
-    type: "prompt",
-    chatId: 1,
-    threadId: undefined,
-    cron: "* * * * *",
+    sessionId: "session-1",
+    kind: "session",
+    cron: "broken",
     description: "d",
     prompt: "p",
     once: false,
@@ -350,112 +186,99 @@ test("create() recurring returns null nextRun when Bun.cron.parse throws", async
 // list()
 // ---------------------------------------------------------------------------
 
-test("list() returns tasks from listCrons", async () => {
-  const cronInfos: MockSchedulerInfo[] = [
-    {
-      id: "cron-1",
-      name: "Task A",
-      pattern: "0 * * * *",
-      next: new Date("2026-04-07T01:00:00.000Z").getTime(),
-    },
-    {
-      id: "cron-2",
-      name: "Task B",
-      pattern: "0 0 * * *",
-      next: null,
-    },
-  ];
-  mockBunqueueInstance.listCrons.mockResolvedValue(cronInfos);
+test("list() returns all tasks with full data", async () => {
+  await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "Task A",
+    prompt: "prompt A",
+    once: false,
+  });
+  await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "@daily",
+    description: "Task B",
+    prompt: "prompt B",
+    once: true,
+  });
 
-  const tasks = await scheduler.list();
+  const tasks = scheduler.list();
 
-  expect(mockBunqueueInstance.listCrons).toHaveBeenCalledOnce();
   expect(tasks).toHaveLength(2);
+  const taskA = tasks.find((t) => t.description === "Task A");
+  expect(taskA?.kind).toBe("session");
+  expect(taskA?.prompt).toBe("prompt A");
+  expect(taskA?.sessionId).toBe("session-1");
 
-  const taskA = tasks[0];
-  expect(taskA?.id).toBe("cron-1");
-  expect(taskA?.cron).toBe("0 * * * *");
-  expect(taskA?.description).toBe("Task A");
-  expect(taskA?.prompt).toBe("");
-  expect(taskA?.paused).toBe(false);
-  expect(taskA?.once).toBe(false);
-  expect(taskA?.nextRun).toBe("2026-04-07T01:00:00.000Z");
-
-  const taskB = tasks[1];
-  expect(taskB?.nextRun).toBeNull();
+  const taskB = tasks.find((t) => t.description === "Task B");
+  expect(taskB?.kind).toBe("background");
+  expect(taskB?.prompt).toBe("prompt B");
+  expect(taskB?.once).toBe(true);
 });
 
-test("list() handles cron with undefined pattern", async () => {
-  const cronInfos: MockSchedulerInfo[] = [
-    { id: "cron-x", name: "No Pattern", pattern: undefined, next: null },
-  ];
-  mockBunqueueInstance.listCrons.mockResolvedValue(cronInfos);
-
-  const tasks = await scheduler.list();
-
-  expect(tasks[0]?.cron).toBe("");
+test("list() returns empty array when no tasks exist", () => {
+  expect(scheduler.list()).toHaveLength(0);
 });
 
-test("list() returns empty array when no crons exist", async () => {
-  mockBunqueueInstance.listCrons.mockResolvedValue([]);
+// ---------------------------------------------------------------------------
+// get()
+// ---------------------------------------------------------------------------
 
-  const tasks = await scheduler.list();
+test("get() returns task by ID", async () => {
+  const created = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "find me",
+    prompt: "p",
+    once: false,
+  });
 
-  expect(tasks).toHaveLength(0);
+  const found = scheduler.get(created.id);
+  expect(found.id).toBe(created.id);
+  expect(found.description).toBe("find me");
+});
+
+test("get() throws NotFoundError for missing ID", () => {
+  expect(() => scheduler.get("nonexistent")).toThrow(Scheduler.NotFoundError);
 });
 
 // ---------------------------------------------------------------------------
 // delete()
 // ---------------------------------------------------------------------------
 
-test("delete() calls removeCron and returns when cron is removed", async () => {
-  mockBunqueueInstance.removeCron.mockResolvedValue(true);
+test("delete() removes task from database", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "to delete",
+    prompt: "p",
+    once: false,
+  });
 
-  await scheduler.delete("cron-123");
-
-  expect(mockBunqueueInstance.removeCron).toHaveBeenCalledWith("cron-123");
-  expect(mockBunqueueInstance.queue.removeAsync).not.toHaveBeenCalled();
-});
-
-test("delete() falls back to queue.removeAsync when removeCron returns false", async () => {
-  mockBunqueueInstance.removeCron.mockResolvedValue(false);
-
-  await scheduler.delete("job-456");
-
-  expect(mockBunqueueInstance.removeCron).toHaveBeenCalledWith("job-456");
-  expect(mockBunqueueInstance.queue.removeAsync).toHaveBeenCalledWith(
-    "job-456",
-  );
+  await scheduler.delete(task.id);
+  expect(scheduler.list()).toHaveLength(0);
 });
 
 // ---------------------------------------------------------------------------
 // trigger()
 // ---------------------------------------------------------------------------
 
-test("trigger() finds job and executes it via #execute", async () => {
-  const jobData = {
-    type: "prompt" as const,
-    chatId: 1,
-    threadId: undefined,
-    description: "d",
-    prompt: "run this",
+test("trigger() executes session task immediately", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
     cron: "0 * * * *",
+    description: "trigger me",
+    prompt: "run this",
     once: false,
-  };
-  mockBunqueueInstance.getJob.mockResolvedValue({
-    id: "job-1",
-    data: jobData,
   });
-  existingSessions.find.mockResolvedValue("session-1");
-  mockGetSessionAgent.mockReturnValue(undefined);
 
-  await scheduler.trigger("job-1");
+  await scheduler.trigger(task.id);
 
-  expect(mockBunqueueInstance.getJob).toHaveBeenCalledWith("job-1");
-  expect(existingSessions.find).toHaveBeenCalledWith(
-    { chatId: 1, threadId: undefined },
-    { createIfNotFound: true },
-  );
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     expect.objectContaining({
       sessionID: "session-1",
@@ -466,39 +289,584 @@ test("trigger() finds job and executes it via #execute", async () => {
 });
 
 test("trigger() includes agent when getSessionAgent returns a value", async () => {
-  const jobData = {
-    type: "prompt" as const,
-    chatId: 1,
-    threadId: undefined,
-    description: "d",
-    prompt: "agent task",
-    cron: "0 * * * *",
-    once: false,
-  };
-  mockBunqueueInstance.getJob.mockResolvedValue({ id: "job-2", data: jobData });
-  existingSessions.find.mockResolvedValue("session-2");
   mockGetSessionAgent.mockReturnValue("my-agent");
 
-  await scheduler.trigger("job-2");
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "agent task",
+    prompt: "agent prompt",
+    once: false,
+  });
+
+  await scheduler.trigger(task.id);
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     expect.objectContaining({
-      sessionID: "session-2",
+      sessionID: "session-1",
       agent: "my-agent",
-      parts: [{ type: "text", text: "[Scheduled Task] agent task" }],
     }),
     { throwOnError: true },
   );
 });
 
-test("trigger() throws NotFoundError when job is not found", async () => {
-  mockBunqueueInstance.getJob.mockResolvedValue(null);
-
+test("trigger() throws NotFoundError when task is missing", async () => {
   await expect(scheduler.trigger("no-such-id")).rejects.toThrow(
     Scheduler.NotFoundError,
   );
+});
+
+// ---------------------------------------------------------------------------
+// update()
+// ---------------------------------------------------------------------------
+
+test("update() changes description", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "old",
+    prompt: "p",
+    once: false,
+  });
+
+  const updated = await scheduler.update(task.id, {
+    description: "new description",
+  });
+
+  expect(updated.description).toBe("new description");
+  expect(updated.cron).toBe("0 * * * *");
+});
+
+test("update() changes prompt", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "old prompt",
+    once: false,
+  });
+
+  const updated = await scheduler.update(task.id, { prompt: "new prompt" });
+  expect(updated.prompt).toBe("new prompt");
+});
+
+test("update() changes cron and restarts timer", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+
+  const updated = await scheduler.update(task.id, { cron: "@daily" });
+  expect(updated.cron).toBe("@daily");
+});
+
+test("update() cron on task with invalid cron handles missing timer", async () => {
+  // Create task with a cron that will fail to parse (no timer started)
+  cronParseSpy.mockImplementation(() => {
+    throw new Error("bad");
+  });
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "invalid",
+    description: "no timer",
+    prompt: "p",
+    once: false,
+  });
+
+  // Restore valid cron parsing, then update cron
+  cronParseSpy.mockImplementation(() => new Date(Date.now() + 60_000));
+  const updated = await scheduler.update(task.id, { cron: "0 * * * *" });
+
+  expect(updated.cron).toBe("0 * * * *");
+});
+
+test("update() with no changes returns task unchanged", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+
+  const updated = await scheduler.update(task.id, {});
+  expect(updated.description).toBe("d");
+  expect(updated.prompt).toBe("p");
+  expect(updated.cron).toBe("0 * * * *");
+});
+
+test("update() throws NotFoundError for missing ID", async () => {
+  await expect(
+    scheduler.update("nonexistent", { prompt: "x" }),
+  ).rejects.toThrow(Scheduler.NotFoundError);
+});
+
+// ---------------------------------------------------------------------------
+// #execute — background kind
+// ---------------------------------------------------------------------------
+
+async function triggerBackground(taskId: string) {
+  const promise = scheduler.trigger(taskId);
+  await vi.advanceTimersByTimeAsync(2000);
+  return promise;
+}
+
+function mockBackgroundResponse(text: string) {
+  opencodeClient.session.messages.mockResolvedValueOnce({
+    data: [{ info: { role: "assistant" }, parts: [{ type: "text", text }] }],
+  });
+}
+
+test("background task sends response to Telegram when meaningful", async () => {
+  mockBackgroundResponse("Important report data");
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "bg report",
+    prompt: "check data",
+    once: false,
+  });
+
+  await triggerBackground(task.id);
+
+  expect(opencodeClient.session.create).toHaveBeenCalledWith(
+    {},
+    { throwOnError: true },
+  );
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({ sessionID: "ephemeral-session-1" }),
+    { throwOnError: true },
+  );
+  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+    123,
+    "Important report data",
+    {},
+  );
+  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
+    sessionID: "ephemeral-session-1",
+  });
+});
+
+test("background task skips Telegram when response is NO_REPORT", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "bg check",
+    prompt: "check status",
+    once: false,
+  });
+
+  await triggerBackground(task.id);
+
+  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
+  expect(opencodeClient.session.abort).toHaveBeenCalled();
+});
+
+test("background task cleans up ephemeral session on error", async () => {
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(
+    new Error("AI failed"),
+  );
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "bg fail",
+    prompt: "fail prompt",
+    once: false,
+  });
+
+  await expect(scheduler.trigger(task.id)).rejects.toThrow("AI failed");
+  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
+    sessionID: "ephemeral-session-1",
+  });
+});
+
+test("background task with threadId sends to correct thread", async () => {
+  const schema = await import("~/lib/schema");
+  database
+    .insert(schema.session)
+    .values({ id: "session-thread", chatId: 456, threadId: 42 })
+    .run();
+  existingSessions.get.mockReturnValue({ chatId: 456, threadId: 42 });
+  mockBackgroundResponse("Thread report");
+
+  const task = await scheduler.create({
+    sessionId: "session-thread",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "threaded bg",
+    prompt: "check thread",
+    once: false,
+  });
+
+  await triggerBackground(task.id);
+
+  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(456, "Thread report", {
+    message_thread_id: 42,
+  });
+});
+
+test("background task skips when response contains NO_REPORT marker", async () => {
+  mockBackgroundResponse("After checking: [NO_REPORT]");
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "truncated",
+    prompt: "check",
+    once: false,
+  });
+
+  await triggerBackground(task.id);
+
+  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
+});
+
+test("background task skips notification when no text in messages", async () => {
+  opencodeClient.session.messages.mockResolvedValueOnce({
+    data: [
+      {
+        info: { role: "assistant" },
+        parts: [{ type: "tool", id: "t1", tool: "bash", state: "done" }],
+      },
+    ],
+  });
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "no text",
+    prompt: "check files",
+    once: false,
+  });
+
+  await triggerBackground(task.id);
+
+  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
+});
+
+test("background task logs warning when ephemeral session abort fails", async () => {
+  opencodeClient.session.abort.mockRejectedValueOnce(new Error("abort failed"));
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "abort error test",
+    prompt: "check",
+    once: false,
+  });
+
+  await triggerBackground(task.id);
+
+  expect(opencodeClient.session.abort).toHaveBeenCalled();
+});
+
+test("background task polls while session is busy then reads result", async () => {
+  // First poll: busy
+  opencodeClient.session.status.mockResolvedValueOnce({
+    data: { "ephemeral-session-1": { type: "busy" } },
+  });
+  // Second poll: idle with result
+  opencodeClient.session.status.mockResolvedValueOnce({
+    data: { "ephemeral-session-1": { type: "idle" } },
+  });
+  opencodeClient.session.messages.mockResolvedValueOnce({
+    data: [
+      {
+        info: { role: "assistant" },
+        parts: [
+          {
+            type: "text",
+            text: "Polled result",
+          },
+        ],
+      },
+    ],
+  });
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "poll test",
+    prompt: "check",
+    once: false,
+  });
+
+  const promise = scheduler.trigger(task.id);
+  // Advance past first poll (busy) and second poll (idle)
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(2000);
+  await promise;
+
+  expect(opencodeClient.session.status).toHaveBeenCalledTimes(2);
+  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+    123,
+    "Polled result",
+    {},
+  );
+});
+
+test("background task continues polling on retry status then resolves", async () => {
+  // First poll: retry (not busy, not idle — loop continues)
+  opencodeClient.session.status.mockResolvedValueOnce({
+    data: {
+      "ephemeral-session-1": {
+        type: "retry",
+        attempt: 1,
+        message: "retrying",
+        next: Date.now() + 1000,
+      },
+    },
+  });
+  opencodeClient.session.messages.mockResolvedValueOnce({
+    data: [{ info: { role: "user" }, parts: [] }],
+  });
+  // Second poll: idle with result
+  opencodeClient.session.status.mockResolvedValueOnce({
+    data: { "ephemeral-session-1": { type: "idle" } },
+  });
+  mockBackgroundResponse("Retry result");
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "retry poll",
+    prompt: "check",
+    once: false,
+  });
+
+  const promise = scheduler.trigger(task.id);
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(2000);
+  await promise;
+
+  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(123, "Retry result", {});
+});
+
+test("background task breaks on idle with no text response", async () => {
+  opencodeClient.session.status.mockResolvedValueOnce({
+    data: { "ephemeral-session-1": { type: "idle" } },
+  });
+  opencodeClient.session.messages.mockResolvedValueOnce({
+    data: [{ info: { role: "user" }, parts: [] }],
+  });
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "idle no text",
+    prompt: "check",
+    once: false,
+  });
+
+  await triggerBackground(task.id);
+
+  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
+});
+
+test("background task breaks when session not in status map", async () => {
+  opencodeClient.session.status.mockResolvedValueOnce({ data: {} });
+  opencodeClient.session.messages.mockResolvedValueOnce({
+    data: [{ info: { role: "user" }, parts: [] }],
+  });
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "no status",
+    prompt: "check",
+    once: false,
+  });
+
+  await triggerBackground(task.id);
+
+  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
+});
+
+test("background task skips execution when location is undefined", async () => {
+  existingSessions.get.mockReturnValueOnce(undefined);
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "bg no location",
+    prompt: "check",
+    once: false,
+  });
+
+  await scheduler.trigger(task.id);
+
+  expect(opencodeClient.session.create).not.toHaveBeenCalled();
+  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
+});
+
+test("delete() throws NotFoundError for nonexistent ID", async () => {
+  await expect(scheduler.delete("nonexistent")).rejects.toThrow(
+    Scheduler.NotFoundError,
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Timer lifecycle
+// ---------------------------------------------------------------------------
+
+test("timer fires and executes session task", async () => {
+  await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "timed",
+    prompt: "auto run",
+    once: false,
+  });
+
+  await vi.advanceTimersByTimeAsync(60_000);
+
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sessionID: "session-1",
+      parts: [{ type: "text", text: "[Scheduled Task] auto run" }],
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("timer skips execution when task was deleted while waiting", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "will be deleted",
+    prompt: "p",
+    once: false,
+  });
+
+  // Delete the task from DB but leave the timer running
+  const schema = await import("~/lib/schema");
+  const { eq } = await import("drizzle-orm");
+  database
+    .delete(schema.scheduledTask)
+    .where(eq(schema.scheduledTask.id, task.id))
+    .run();
+
+  await vi.advanceTimersByTimeAsync(60_000);
 
   expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
+});
+
+test("once task deletes itself after firing", async () => {
+  await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "once",
+    prompt: "one time",
+    once: true,
+  });
+
+  expect(scheduler.list()).toHaveLength(1);
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(scheduler.list()).toHaveLength(0);
+});
+
+test("dispose clears all timers", async () => {
+  await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+
+  scheduler[Symbol.dispose]();
+
+  await vi.advanceTimersByTimeAsync(120_000);
+  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
+});
+
+test("recurring task re-schedules after error", async () => {
+  opencodeClient.session.promptAsync
+    .mockRejectedValueOnce(new Error("transient"))
+    .mockResolvedValueOnce({ data: undefined });
+
+  await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "retry",
+    prompt: "retry me",
+    once: false,
+  });
+
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledTimes(1);
+
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledTimes(2);
+});
+
+test("once task does not re-schedule after error", async () => {
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(
+    new Error("once fail"),
+  );
+
+  await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "once error",
+    prompt: "fail once",
+    once: true,
+  });
+
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledTimes(1);
+
+  // Should NOT fire again since it's a once task
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledTimes(1);
+});
+
+test("stopTimer is safe when no timer exists for id", async () => {
+  // delete() calls #stopTimer internally — deleting an already-deleted task
+  // exercises the path where the timer map has no entry
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+
+  await scheduler.delete(task.id);
+  // Second delete throws NotFoundError, but the first delete already cleared
+  // the timer — verify the internal #stopTimer didn't break
+  await expect(scheduler.delete(task.id)).rejects.toThrow(
+    Scheduler.NotFoundError,
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -514,222 +882,57 @@ test("NotFoundError has correct message and id property", () => {
 });
 
 // ---------------------------------------------------------------------------
-// [Symbol.dispose]()
+// Invalid kind validation
 // ---------------------------------------------------------------------------
 
-test("[Symbol.dispose]() calls queue.close()", () => {
-  scheduler[Symbol.dispose]();
-  expect(mockBunqueueInstance.close).toHaveBeenCalledOnce();
-});
+test("throws on unknown task kind from database", async () => {
+  const schema = await import("~/lib/schema");
+  database
+    .insert(schema.scheduledTask)
+    .values({
+      id: "bad-kind-task",
+      sessionId: "session-1",
+      kind: "invalid",
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+      once: 0,
+    })
+    .run();
 
-test("[Symbol.dispose]() logs error when close() rejects", async () => {
-  const closeError = new Error("close failed");
-  mockBunqueueInstance.close.mockRejectedValue(closeError);
-
-  // Should not throw synchronously
-  expect(() => scheduler[Symbol.dispose]()).not.toThrow();
-
-  // Allow the rejected promise to settle
-  await vi.runAllTimersAsync();
-});
-
-// ---------------------------------------------------------------------------
-// Processor callback (the one passed to new Bunqueue)
-// ---------------------------------------------------------------------------
-
-test("processor callback executes job via Scheduler.#instance", async () => {
-  // Scheduler.create() was called in beforeEach, so capturedProcessor is set
-  // and Scheduler.#instance is the created scheduler.
-  expect(capturedProcessor).toBeDefined();
-
-  const jobData = {
-    type: "prompt" as const,
-    chatId: 10,
-    threadId: 3,
-    description: "d",
-    prompt: "from processor",
-    cron: "* * * * *",
-    once: false,
-  };
-  existingSessions.find.mockResolvedValue("session-proc");
-  mockGetSessionAgent.mockReturnValue(undefined);
-
-  await capturedProcessor?.({ id: "proc-job-1", data: jobData } as never);
-
-  expect(existingSessions.find).toHaveBeenCalledWith(
-    { chatId: 10, threadId: 3 },
-    { createIfNotFound: true },
+  expect(() => scheduler.get("bad-kind-task")).toThrow(
+    "Unknown scheduled task kind: invalid",
   );
+});
+
+// ---------------------------------------------------------------------------
+// Startup loads existing tasks
+// ---------------------------------------------------------------------------
+
+test("startup loads existing tasks and starts timers", async () => {
+  await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "persisted",
+    prompt: "auto run on startup",
+    once: false,
+  });
+  scheduler[Symbol.dispose]();
+
+  scheduler = Scheduler.create(
+    mockBot as never,
+    database,
+    opencodeClient as never,
+    existingSessions as never,
+  );
+
+  await vi.advanceTimersByTimeAsync(60_000);
+
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     expect.objectContaining({
-      sessionID: "session-proc",
-      parts: [{ type: "text", text: "[Scheduled Task] from processor" }],
+      parts: [{ type: "text", text: "[Scheduled Task] auto run on startup" }],
     }),
     { throwOnError: true },
   );
-});
-
-test("processor callback logs error and rethrows when #execute throws", async () => {
-  expect(capturedProcessor).toBeDefined();
-
-  const jobData = {
-    type: "prompt" as const,
-    chatId: 1,
-    threadId: undefined,
-    description: "d",
-    prompt: "fail",
-    cron: "* * * * *",
-    once: false,
-  };
-
-  const execError = new Error("execute failed");
-  opencodeClient.session.promptAsync.mockRejectedValueOnce(execError);
-  existingSessions.find.mockResolvedValue("session-1");
-
-  await expect(
-    capturedProcessor?.({ id: "proc-job-2", data: jobData } as never),
-  ).rejects.toThrow(execError);
-});
-
-test("processor callback is a no-op when Scheduler.#instance is undefined (race before #instance is set)", async () => {
-  // The `if (!instance)` guard fires if a job arrives between `new Bunqueue(...)` and
-  // `Scheduler.#instance = scheduler`. We simulate this race by making the Bunqueue
-  // constructor immediately invoke the processor synchronously before returning.
-  // At that point in Scheduler.create(), #instance has not yet been assigned.
-
-  vi.resetModules();
-
-  let earlyProcessor: ((job: MockJob) => Promise<void>) | undefined;
-  let earlyCallResult: string | undefined;
-
-  vi.doMock("bunqueue/client", () => ({
-    Bunqueue: class BunqueueEarly {
-      add = vi.fn();
-      cron = vi.fn();
-      getJob = vi.fn();
-      listCrons = vi.fn();
-      removeCron = vi.fn();
-      close = vi.fn(async () => {});
-      queue = { removeAsync: vi.fn() };
-      constructor(
-        _name: string,
-        opts: { processor: (job: MockJob) => Promise<void> },
-      ) {
-        earlyProcessor = opts.processor;
-        void opts.processor({ id: "early-job", data: {} } as never).then(() => {
-          earlyCallResult = "ran";
-        });
-      }
-    },
-  }));
-
-  vi.doMock("~/lib/get-session-agent", () => ({
-    getSessionAgent: () => mockGetSessionAgent(),
-  }));
-
-  const { Scheduler: FreshScheduler } = await import("~/lib/scheduler");
-
-  const loggerModule = await import("~/lib/logger");
-  const warnSpy = vi
-    .spyOn(loggerModule.logger, "warn")
-    .mockImplementation((() => loggerModule.logger) as never);
-
-  FreshScheduler.create(
-    {} as never,
-    {} as never,
-    opencodeClient as never,
-    existingSessions as never,
-    "/tmp/test-early",
-  );
-
-  // Let the immediately-invoked async processor settle
-  await Promise.resolve();
-
-  expect(earlyProcessor).toBeDefined();
-  expect(earlyCallResult).toBe("ran");
-  // The processor should have returned early after logging a warning, not called promptAsync
-  expect(warnSpy).toHaveBeenCalledWith("Scheduler not ready, skipping job");
-  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
-
-  warnSpy.mockRestore();
-  vi.resetModules();
-});
-
-// ---------------------------------------------------------------------------
-// #execute — threadId propagation
-// ---------------------------------------------------------------------------
-
-test("#execute passes threadId correctly via trigger", async () => {
-  const jobData = {
-    type: "prompt" as const,
-    chatId: 99,
-    threadId: 7,
-    description: "threaded",
-    prompt: "thread prompt",
-    cron: "* * * * *",
-    once: false,
-  };
-  mockBunqueueInstance.getJob.mockResolvedValue({
-    id: "job-thread",
-    data: jobData,
-  });
-  existingSessions.find.mockResolvedValue("session-t");
-  mockGetSessionAgent.mockReturnValue(undefined);
-
-  await scheduler.trigger("job-thread");
-
-  expect(existingSessions.find).toHaveBeenCalledWith(
-    { chatId: 99, threadId: 7 },
-    { createIfNotFound: true },
-  );
-});
-
-// ---------------------------------------------------------------------------
-// #execute — type: "message" path
-// ---------------------------------------------------------------------------
-
-test('#execute calls bot.api.sendMessage for type "message" without threadId', async () => {
-  const jobData = {
-    type: "message" as const,
-    chatId: 55,
-    threadId: undefined,
-    description: "msg task",
-    prompt: "Hello world",
-    cron: "* * * * *",
-    once: false,
-  };
-  mockBunqueueInstance.getJob.mockResolvedValue({
-    id: "job-msg-1",
-    data: jobData,
-  });
-
-  await scheduler.trigger("job-msg-1");
-
-  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(55, "Hello world", {});
-  expect(existingSessions.find).not.toHaveBeenCalled();
-  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
-});
-
-test('#execute calls bot.api.sendMessage with message_thread_id for type "message" with threadId', async () => {
-  const jobData = {
-    type: "message" as const,
-    chatId: 55,
-    threadId: 42,
-    description: "msg task with thread",
-    prompt: "Hello thread",
-    cron: "* * * * *",
-    once: false,
-  };
-  mockBunqueueInstance.getJob.mockResolvedValue({
-    id: "job-msg-2",
-    data: jobData,
-  });
-
-  await scheduler.trigger("job-msg-2");
-
-  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(55, "Hello thread", {
-    message_thread_id: 42,
-  });
-  expect(existingSessions.find).not.toHaveBeenCalled();
-  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
 });

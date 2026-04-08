@@ -314,6 +314,7 @@ describe("McpServer", () => {
     expect(toolNames).toContain("schedule_list");
     expect(toolNames).toContain("schedule_delete");
     expect(toolNames).toContain("schedule_trigger");
+    expect(toolNames).toContain("schedule_update");
     expect(toolNames).toContain("get_server_time");
     expect(toolNames).toContain("command_create");
     expect(toolNames).toContain("command_update");
@@ -323,7 +324,7 @@ describe("McpServer", () => {
 
   test("schedule tools receive getMetadata from McpServer", async () => {
     const scheduler = {
-      list: vi.fn(async () => []),
+      list: vi.fn(() => []),
     };
     using _server = await McpServer.create(
       bot,

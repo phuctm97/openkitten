@@ -16,7 +16,7 @@ import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getAttachmentName } from "~/lib/get-attachment-name";
 import { logger } from "~/lib/logger";
 import { registerCommandTools } from "~/lib/mcp-command-tools";
-import { registerScheduleTools } from "~/lib/mcp-schedule-tools";
+import { registerScheduleTools } from "~/lib/register-schedule-tools";
 import type { Scheduler } from "~/lib/scheduler";
 import { version } from "~/package.json" with { type: "json" };
 
@@ -112,7 +112,6 @@ export class McpServer implements Disposable {
     );
     registerScheduleTools(server, {
       scheduler: this.#scheduler,
-      existingSessions: this.#existingSessions,
       getMetadata: (args) => this.#getMetadata(args),
     });
     registerCommandTools(server, {
