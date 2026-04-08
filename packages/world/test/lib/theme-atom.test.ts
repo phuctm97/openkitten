@@ -12,17 +12,17 @@ async function importThemeAtom() {
 
 test("returns the initial theme during SSR", async () => {
   vi.stubEnv("SSR", true);
-  localStorage.setItem("openkitten-world-theme", "dark");
+  localStorage.setItem("openkitten-theme", "dark");
 
   expect(createStore().get(await importThemeAtom())).toBe("auto");
 });
 
 test("reads valid themes from localStorage and rejects invalid ones", async () => {
-  localStorage.setItem("openkitten-world-theme", "dark");
+  localStorage.setItem("openkitten-theme", "dark");
 
   expect(createStore().get(await importThemeAtom())).toBe("dark");
 
-  localStorage.setItem("openkitten-world-theme", "sunset");
+  localStorage.setItem("openkitten-theme", "sunset");
 
   expect(createStore().get(await importThemeAtom())).toBe("auto");
 });
@@ -32,10 +32,10 @@ test("writes and removes theme values in localStorage", async () => {
   const store = createStore();
 
   store.set(themeAtom, "light");
-  expect(localStorage.getItem("openkitten-world-theme")).toBe("light");
+  expect(localStorage.getItem("openkitten-theme")).toBe("light");
 
   store.set(themeAtom, RESET);
-  expect(localStorage.getItem("openkitten-world-theme")).toBeNull();
+  expect(localStorage.getItem("openkitten-theme")).toBeNull();
   expect(store.get(themeAtom)).toBe("auto");
 });
 
@@ -54,7 +54,7 @@ test("subscribes to storage changes for the matching key", async () => {
   );
   window.dispatchEvent(
     new StorageEvent("storage", {
-      key: "openkitten-world-theme",
+      key: "openkitten-theme",
       newValue: "light",
       storageArea: sessionStorage,
     }),
@@ -64,7 +64,7 @@ test("subscribes to storage changes for the matching key", async () => {
 
   window.dispatchEvent(
     new StorageEvent("storage", {
-      key: "openkitten-world-theme",
+      key: "openkitten-theme",
       newValue: "dark",
       storageArea: localStorage,
     }),
@@ -75,7 +75,7 @@ test("subscribes to storage changes for the matching key", async () => {
 
   window.dispatchEvent(
     new StorageEvent("storage", {
-      key: "openkitten-world-theme",
+      key: "openkitten-theme",
       newValue: "sunset",
       storageArea: localStorage,
     }),
@@ -87,7 +87,7 @@ test("subscribes to storage changes for the matching key", async () => {
   unsubscribe();
   window.dispatchEvent(
     new StorageEvent("storage", {
-      key: "openkitten-world-theme",
+      key: "openkitten-theme",
       newValue: "light",
       storageArea: localStorage,
     }),

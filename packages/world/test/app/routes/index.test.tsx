@@ -27,7 +27,7 @@ test("renders the fullscreen game route and boots Phaser", async () => {
     expect(indexRouteMocks.createGame).toHaveBeenCalledTimes(1);
   });
   expect(indexRouteMocks.createGame).toHaveBeenCalledWith(screenElement);
-  expect(screen.queryByText("OpenKitten World")).not.toBeInTheDocument();
+  expect(screen.queryByText("OpenKitten")).not.toBeInTheDocument();
   expect(screen.queryByText("Phase 1")).not.toBeInTheDocument();
 
   const game = indexRouteMocks.createGame.mock.results[0]?.value;

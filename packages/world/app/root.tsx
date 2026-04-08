@@ -19,7 +19,7 @@ export function Layout({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>OpenKitten World</title>
+        <title>OpenKitten</title>
         <Meta />
         <Links />
       </head>
@@ -46,7 +46,7 @@ export function HydrateFallback(_: Route.HydrateFallbackProps) {
           <span className="size-8 animate-spin rounded-full border-2 border-border border-t-primary" />
         </div>
         <p className="m-0 text-sm leading-6 text-muted-foreground">
-          Loading OpenKitten World
+          Loading OpenKitten
         </p>
       </div>
     </section>

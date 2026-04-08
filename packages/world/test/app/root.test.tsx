@@ -53,7 +53,7 @@ test("renders the document shell and shared layout", async () => {
     </Layout>,
   );
 
-  expect(markup).toContain("OpenKitten World");
+  expect(markup).toContain("OpenKitten");
   expect(markup).toContain("Child Content");
   expect(markup).toContain("links-placeholder");
   expect(markup).toContain("meta-placeholder");
@@ -68,7 +68,7 @@ test("renders the hydrate fallback", async () => {
   );
 
   expect(screen.getByRole("status")).toBeInTheDocument();
-  expect(screen.getByText("Loading OpenKitten World")).toBeInTheDocument();
+  expect(screen.getByText("Loading OpenKitten")).toBeInTheDocument();
   expect(
     screen.getByRole("button", { name: "System theme" }),
   ).toBeInTheDocument();
