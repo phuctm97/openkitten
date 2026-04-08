@@ -65,8 +65,8 @@ The early world should favor:
 
 - one room or one room-like slice
 - strong silhouettes
-- clear work stations
-- visible rest areas
+- a few clearly placed OpenKitten surfaces
+- open floor space that lets cats read clearly anywhere in the room
 - obvious interaction targets
 
 The user should quickly understand:
@@ -107,10 +107,18 @@ Early cat design should emphasize:
 - strong silhouette
 - readable pose
 - a few identifying details
-- clear active versus resting states
+- clear awake versus resting states
 
 The cats do not need high asset complexity to feel alive.
 They need clarity, charm, and enough motion to feel present.
+In the MVP, a cat's state should read primarily from the cat itself:
+
+- eyes open versus closed
+- posture
+- small idle motion
+
+The cat does not need to stand at a desk to look active.
+The cat does not need to lie in a dedicated rest area to look asleep.
 
 ## House And Props
 
@@ -122,14 +130,19 @@ The House should feel like:
 
 Recommended early props:
 
-- desks or worktables
 - a whiteboard
 - a cabinet
 - a notice or inbox area
-- resting furniture
+- desks, lamps, shelves, rugs, or cushions
 - a few small atmospheric objects
 
-Props should support meaning before decoration.
+The MVP should distinguish between:
+
+- OpenKitten-significant objects such as the whiteboard, cabinet, and inbox area
+- atmospheric house props that mainly make the room feel cute, warm, and believable
+
+Most house props can be presentational in the MVP.
+They do not need deep interaction unless they are part of the core OpenKitten model.
 
 ## Motion Direction
 
@@ -143,6 +156,7 @@ Motion should be:
 Good early motion includes:
 
 - idle cat breathing or tail movement
+- awake versus resting state changes through pose, blink, or eye treatment
 - small hover reactions
 - gentle inspect transitions
 - subtle environmental life

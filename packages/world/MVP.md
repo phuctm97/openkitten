@@ -70,7 +70,7 @@ The first user journey should be:
 
 1. The user opens `/` and enters a fullscreen House.
 2. The user sees a small, readable, living room-like workspace with two visible cats.
-3. One cat is clearly active and one cat is clearly resting or idle.
+3. One cat is clearly awake and one cat is clearly resting or asleep.
 4. The user clicks a cat and opens a game-native inspect surface.
 5. The user sees the cat's identity, current status, assigned threads, and active session.
 6. The user opens the active session transcript and reads a mock live feed.
@@ -91,7 +91,7 @@ It should show:
 
 - a room or small house area
 - two cats in world space
-- a few recognizable objects or stations
+- a few recognizable objects and OpenKitten surfaces
 - enough visual structure for the user to orient themselves quickly
 
 The House does not need multiple rooms or traversal yet.
@@ -103,8 +103,8 @@ The MVP should include at least two cats with clearly different states.
 
 For example:
 
-- one active cat working at a station
-- one idle or resting cat
+- one awake cat
+- one resting or sleeping cat
 
 Each cat should have:
 
@@ -112,6 +112,10 @@ Each cat should have:
 - a clear visual identity
 - a visible state
 - a clickable interaction target
+
+In the MVP, "awake" is enough to communicate that a cat is currently doing something.
+The cat does not need workstation-specific animations.
+State should read from the cat's own pose, face, or motion rather than from a required location in the room.
 
 ### 3. Cat Inspection Surface
 
@@ -175,13 +179,13 @@ The MVP should include a few visible props that make work feel situated.
 
 Recommended examples:
 
-- a desk or workstation
 - a whiteboard
 - a cabinet
 - a notice board or inbox station
+- a few warm household props such as desks, lamps, rugs, shelves, or cushions
 
-These do not need deep interaction yet.
-They mainly need to make the House legible.
+Only OpenKitten-significant objects need to carry interaction in the MVP.
+Most other room props can stay presentational and mainly exist to make the House feel cute, warm, and believable.
 
 ## MVP Interaction Rules
 
