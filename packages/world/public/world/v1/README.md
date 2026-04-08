@@ -60,4 +60,3 @@ FX:
 - This set is intended as a first candidate set, not a fully locked art pack.
 - The strongest assets from this pass are the room shell and the cat-state pairings.
 - Follow-up edits should start from the saved prompts and these curated finals.
-- These assets were generated with the Codex `Image Gen` skill, using its CLI fallback path.
