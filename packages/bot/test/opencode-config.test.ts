@@ -39,7 +39,7 @@ const configDir = () => join(profileDir, ".opencode");
 
 const pluginsDir = () => join(profile.xdgConfig, "opencode", "plugins");
 
-const skillsDir = () => join(profile.xdgConfig, "openkitten", "skills");
+const skillsDir = () => join(profile.xdgConfig, "opencode", "skills");
 
 const toolPrefix = "openkitten_";
 
@@ -58,30 +58,26 @@ test("copies agent files", async () => {
   ).resolves.toBeDefined();
 });
 
-test("copies default-agents to XDG_CONFIG_HOME/opencode", async () => {
+test("copies system-agents to XDG_CONFIG_HOME/opencode", async () => {
   await OpencodeConfig.create(profile);
   const content = await readFile(
     join(profile.xdgConfig, "opencode", "AGENTS.md"),
     "utf-8",
   );
-  expect(content).toContain("# Professional objectivity");
-  expect(content).toContain("# Working with files");
-  expect(content).toContain("# Tool usage");
-  expect(content).toContain("# Proactiveness");
-  expect(content).toContain("# Memory update rules");
-  expect(content).not.toContain("# Communication");
-});
-
-test("copies system-agents to OPENCODE_CONFIG_DIR", async () => {
-  await OpencodeConfig.create(profile);
-  const content = await readFile(join(configDir(), "AGENTS.md"), "utf-8");
   expect(content).toContain("# Communication");
   expect(content).not.toContain("# Professional objectivity");
 });
 
+test("copies default-agents to OPENCODE_CONFIG_DIR", async () => {
+  await OpencodeConfig.create(profile);
+  const content = await readFile(join(configDir(), "AGENTS.md"), "utf-8");
+  expect(content).toContain("# Professional objectivity");
+  expect(content).not.toContain("# Communication");
+});
+
 test("does not overwrite existing default-agents", async () => {
   await OpencodeConfig.create(profile);
-  const path = join(profile.xdgConfig, "opencode", "AGENTS.md");
+  const path = join(configDir(), "AGENTS.md");
   await writeFile(path, "custom");
   await OpencodeConfig.create(profile);
   const content = await readFile(path, "utf-8");
@@ -90,7 +86,7 @@ test("does not overwrite existing default-agents", async () => {
 
 test("always overwrites system-agents on startup", async () => {
   await OpencodeConfig.create(profile);
-  const path = join(configDir(), "AGENTS.md");
+  const path = join(profile.xdgConfig, "opencode", "AGENTS.md");
   await writeFile(path, "custom");
   await OpencodeConfig.create(profile);
   const content = await readFile(path, "utf-8");

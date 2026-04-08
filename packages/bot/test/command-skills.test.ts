@@ -27,7 +27,7 @@ test("create writes SKILL.md and command.json", async () => {
   });
 
   const skillMd = await readFile(
-    join(skillsDir, "commands", "translate", "SKILL.md"),
+    join(skillsDir, "translate", "SKILL.md"),
     "utf-8",
   );
   expect(skillMd).toContain("name: command-translate");
@@ -35,10 +35,7 @@ test("create writes SKILL.md and command.json", async () => {
   expect(skillMd).toContain("Translate the following text to English.");
 
   const commandJson = JSON.parse(
-    await readFile(
-      join(skillsDir, "commands", "translate", "command.json"),
-      "utf-8",
-    ),
+    await readFile(join(skillsDir, "translate", "command.json"), "utf-8"),
   );
   expect(commandJson).toEqual({
     name: "translate",
@@ -97,6 +94,11 @@ test("list returns empty array when no commands exist", async () => {
   expect(commands).toEqual([]);
 });
 
+test("list returns empty array when directory does not exist", async () => {
+  const commands = await CommandSkills.list(join(skillsDir, "nonexistent"));
+  expect(commands).toEqual([]);
+});
+
 test("list returns all commands sorted by name", async () => {
   await CommandSkills.create(skillsDir, {
     name: "beta",
@@ -122,7 +124,7 @@ test("list skips directories without command.json", async () => {
     prompt: "P",
   });
   const { mkdir } = await import("node:fs/promises");
-  await mkdir(join(skillsDir, "commands", "broken"), { recursive: true });
+  await mkdir(join(skillsDir, "broken"), { recursive: true });
   const commands = await CommandSkills.list(skillsDir);
   expect(commands).toHaveLength(1);
   expect(commands[0]?.name).toBe("valid");
@@ -147,7 +149,7 @@ test("delete throws NotFoundError for missing command", async () => {
 
 test("create rethrows non-ENOENT filesystem errors", async () => {
   const { mkdir: mkdirFs } = await import("node:fs/promises");
-  const dir = join(skillsDir, "commands", "broken");
+  const dir = join(skillsDir, "broken");
   await mkdirFs(dir, { recursive: true });
   await mkdirFs(join(dir, "command.json"), { recursive: true });
 
@@ -162,7 +164,7 @@ test("create rethrows non-ENOENT filesystem errors", async () => {
 
 test("delete rethrows non-ENOENT filesystem errors", async () => {
   const { mkdir: mkdirFs } = await import("node:fs/promises");
-  const dir = join(skillsDir, "commands", "broken");
+  const dir = join(skillsDir, "broken");
   await mkdirFs(dir, { recursive: true });
   await mkdirFs(join(dir, "command.json"), { recursive: true });
 

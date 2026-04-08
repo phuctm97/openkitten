@@ -24,10 +24,6 @@ class NotFoundError extends Error {
   }
 }
 
-function commandsDir(skillsDir: string): string {
-  return join(skillsDir, "commands");
-}
-
 function buildSkillMd(
   name: string,
   description: string,
@@ -51,16 +47,15 @@ function buildSkillMd(
 }
 
 async function list(skillsDir: string): Promise<CommandSkills.Command[]> {
-  const dir = commandsDir(skillsDir);
   let entries: string[];
   try {
-    entries = await readdir(dir);
+    entries = await readdir(skillsDir);
   } catch {
     return [];
   }
   const commands: CommandSkills.Command[] = [];
   for (const entry of entries) {
-    const jsonPath = join(dir, entry, "command.json");
+    const jsonPath = join(skillsDir, entry, "command.json");
     try {
       const raw = await readFile(jsonPath, "utf-8");
       const data = JSON.parse(raw) as CommandSkills.Command;
@@ -88,7 +83,7 @@ async function create(
       `Invalid command name "${input.name}": must match ${namePattern}`,
     );
   }
-  const dir = join(commandsDir(skillsDir), input.name);
+  const dir = join(skillsDir, input.name);
   const jsonPath = join(dir, "command.json");
   try {
     await readFile(jsonPath, "utf-8");
@@ -114,7 +109,7 @@ async function create(
 }
 
 async function deleteCommand(skillsDir: string, name: string): Promise<void> {
-  const dir = join(commandsDir(skillsDir), name);
+  const dir = join(skillsDir, name);
   try {
     await readFile(join(dir, "command.json"), "utf-8");
   } catch (error) {
