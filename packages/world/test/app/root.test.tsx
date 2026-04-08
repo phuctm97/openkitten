@@ -57,6 +57,8 @@ test("renders the document shell and shared layout", async () => {
   expect(markup).toContain("Child Content");
   expect(markup).toContain("links-placeholder");
   expect(markup).toContain("meta-placeholder");
+  expect(markup).toContain("openkitten-theme");
+  expect(markup).toContain("document.documentElement.style.colorScheme");
   expect(markup).toContain("Scroll Restoration Placeholder");
 });
 
