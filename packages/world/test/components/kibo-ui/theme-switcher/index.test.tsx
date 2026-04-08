@@ -16,10 +16,18 @@ vi.mock("motion/react", () => ({
   },
 }));
 
-test("renders nothing during server rendering before mount", () => {
+test("renders a same-size skeleton during server rendering before mount", () => {
   const markup = renderToStaticMarkup(<ThemeSwitcher />);
 
-  expect(markup).toBe("");
+  expect(markup).toContain('aria-hidden="true"');
+  expect(markup).toContain(
+    'class="relative isolate flex h-8 rounded-full bg-background p-1 ring-1 ring-border"',
+  );
+  expect(markup.match(/data-slot="skeleton"/g)).toHaveLength(3);
+  expect(
+    markup.match(/class="(?=[^"]*h-6)(?=[^"]*w-6)(?=[^"]*rounded-full)[^"]*"/g),
+  ).toHaveLength(3);
+  expect(markup).not.toContain('aria-label="System theme"');
 });
 
 test("renders the three theme options after mount", () => {

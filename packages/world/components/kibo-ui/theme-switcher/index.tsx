@@ -1,8 +1,10 @@
+import type { LucideIcon } from "lucide-react";
 import { Monitor, Moon, Sun } from "lucide-react";
 import { motion } from "motion/react";
 import { useControllableState } from "radix-ui/internal";
 import { useCallback, useEffect, useState } from "react";
 
+import { Skeleton } from "~/components/ui/skeleton";
 import type { Theme } from "~/lib/theme";
 import { cn } from "~/lib/utils";
 
@@ -24,7 +26,7 @@ const themes = [
   },
 ] satisfies ReadonlyArray<{
   key: Theme;
-  icon: typeof Monitor;
+  icon: LucideIcon;
   label: string;
 }>;
 
@@ -34,6 +36,10 @@ export type ThemeSwitcherProps = {
   defaultValue?: Theme;
   className?: string;
 };
+
+const themeSwitcherClassName =
+  "relative isolate flex h-8 rounded-full bg-background p-1 ring-1 ring-border";
+const themeSwitcherItemClassName = "relative h-6 w-6 rounded-full";
 
 export const ThemeSwitcher = ({
   value,
@@ -61,23 +67,24 @@ export const ThemeSwitcher = ({
   }, []);
 
   if (!mounted) {
-    return null;
+    return (
+      <div aria-hidden="true" className={cn(themeSwitcherClassName, className)}>
+        {themes.map(({ key }) => (
+          <Skeleton className={themeSwitcherItemClassName} key={key} />
+        ))}
+      </div>
+    );
   }
 
   return (
-    <div
-      className={cn(
-        "relative isolate flex h-8 rounded-full bg-background p-1 ring-1 ring-border",
-        className,
-      )}
-    >
+    <div className={cn(themeSwitcherClassName, className)}>
       {themes.map(({ key, icon: Icon, label }) => {
         const isActive = theme === key;
 
         return (
           <button
             aria-label={label}
-            className="relative h-6 w-6 rounded-full"
+            className={themeSwitcherItemClassName}
             key={key}
             onClick={() => handleThemeClick(key)}
             type="button"
