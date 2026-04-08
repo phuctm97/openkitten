@@ -36,7 +36,7 @@ vi.mock("node:util", () => ({
 vi.mock("@clack/prompts", () => ({
   intro: vi.fn(),
   outro: vi.fn(),
-  log: { warn: vi.fn(), info: vi.fn() },
+  log: { warn: vi.fn() },
   note: vi.fn(),
   spinner: vi.fn(() => ({
     start: vi.fn(),
@@ -118,8 +118,6 @@ test("installs on linux", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
     .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)));
@@ -140,8 +138,6 @@ test("passes yes option when yes flag is set", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
     .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)));
@@ -160,8 +156,6 @@ test("restarts on linux when already running", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
   const clack = await import("@clack/prompts");
@@ -177,8 +171,6 @@ test("installs on darwin with default profile", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
     .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
@@ -202,8 +194,6 @@ test("installs on darwin with custom profile", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
     .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
@@ -222,8 +212,6 @@ test("restarts on darwin when already running", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(1)))
@@ -243,8 +231,6 @@ test("proceeds after darwin bootout timeout", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
@@ -263,8 +249,6 @@ test("installs on win32", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
   expect(vi.mocked(mkdir)).toHaveBeenCalledWith(
@@ -302,8 +286,7 @@ test("skips update when worktree is dirty", async () => {
 test("throws on runTask failure", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")));
+    .mockReturnValueOnce(chainable(shellResult(0, "")));
   vi.spyOn(Bun, "spawn").mockImplementation((() => ({
     stdout: emptyStream(),
     stderr: emptyStream(),
@@ -318,9 +301,7 @@ test("throws on unsupported platform", async () => {
   Object.defineProperty(process, "platform", { value: "freebsd" });
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")));
+    .mockReturnValueOnce(chainable(shellResult(0, "")));
   await expect(runCommand(up, { rawArgs: [] })).rejects.toThrow(
     "freebsd is not supported yet",
   );
@@ -331,9 +312,7 @@ test("throws when getuid is unavailable on darwin", async () => {
   Object.defineProperty(process, "getuid", { value: undefined });
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")));
+    .mockReturnValueOnce(chainable(shellResult(0, "")));
   await expect(runCommand(up, { rawArgs: [] })).rejects.toThrow(
     "process.getuid is not available",
   );
@@ -366,55 +345,8 @@ test("runTask forwards stdout and stderr", async () => {
   })) as never);
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")));
+    .mockReturnValueOnce(chainable(shellResult(0, "")));
   await runCommand(up, { rawArgs: [] });
   expect(taskLogMessage).toHaveBeenCalledWith("out line");
   expect(taskLogMessage).toHaveBeenCalledWith("err line");
-});
-
-test("restarts process when source code changes after git pull", async () => {
-  const clack = await import("@clack/prompts");
-  shellMock
-    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")));
-  const exitSpy = vi
-    .spyOn(process, "exit")
-    .mockImplementation((() => {}) as never);
-  try {
-    await runCommand(up, { rawArgs: [] });
-    expect(vi.mocked(clack.log.info)).toHaveBeenCalledWith(
-      expect.stringContaining("Restarting"),
-    );
-    expect(Bun.spawn).toHaveBeenCalledWith(
-      [process.execPath, ".", "up"],
-      expect.objectContaining({ cwd: botDir }),
-    );
-    expect(exitSpy).toHaveBeenCalledWith(0);
-  } finally {
-    exitSpy.mockRestore();
-  }
-});
-
-test("passes --yes flag when restarting after source change", async () => {
-  shellMock
-    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "")))
-    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
-    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")));
-  const exitSpy = vi
-    .spyOn(process, "exit")
-    .mockImplementation((() => {}) as never);
-  try {
-    await runCommand(up, { rawArgs: ["--yes"] });
-    expect(Bun.spawn).toHaveBeenCalledWith(
-      [process.execPath, ".", "up", "--yes"],
-      expect.objectContaining({ cwd: botDir }),
-    );
-  } finally {
-    exitSpy.mockRestore();
-  }
 });
