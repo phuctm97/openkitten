@@ -8,9 +8,7 @@ export function getColorScheme() {
     return inlineColorScheme;
   }
 
-  const [computedColorScheme = defaultColorScheme] = getComputedStyle(
-    document.documentElement,
-  )
+  const [computedColorScheme] = getComputedStyle(document.documentElement)
     .colorScheme.trim()
     .split(/\s+/, 1);
 
