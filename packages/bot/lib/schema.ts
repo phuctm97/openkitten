@@ -44,6 +44,19 @@ export const message = sqliteTable(
   (table) => [index("message_session_id_idx").on(table.sessionId)],
 );
 
+export const command = sqliteTable("command", {
+  name: text().primaryKey(),
+  description: text().notNull(),
+  prompt: text().notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`)
+    .$onUpdateFn(() => new Date()),
+});
+
 export const sessionRelations = relations(session, ({ many }) => ({
   messages: many(message),
 }));

@@ -12,14 +12,14 @@ vi.mock("grammy", () => ({
   },
 }));
 
-test("registers all bot commands with Telegram", async () => {
-  await grammySetCommands("test-token");
+test("registers provided commands with Telegram", async () => {
+  const commands = [
+    { command: "start", description: "Start a new conversation" },
+    { command: "help", description: "Show help" },
+  ];
+
+  await grammySetCommands("test-token", commands);
 
   expect(mockSetMyCommands).toHaveBeenCalledOnce();
-  expect(mockSetMyCommands).toHaveBeenCalledWith([
-    { command: "start", description: "Start a new conversation" },
-    { command: "abort", description: "Stop the current generation" },
-    { command: "compact", description: "Summarize conversation history" },
-    { command: "agent", description: "Switch or list AI agents" },
-  ]);
+  expect(mockSetMyCommands).toHaveBeenCalledWith(commands);
 });

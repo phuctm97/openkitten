@@ -238,6 +238,7 @@ function mockScope(overrides: {
       mockMediaGroupBuffer()) as never,
     attachmentStorage: (overrides.attachmentStorage ??
       mockAttachmentStorage()) as never,
+    commandRegistry: {} as never,
     typingIndicators: {} as never,
   };
 }
