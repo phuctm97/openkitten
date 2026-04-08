@@ -43,26 +43,29 @@ async function runTask(
   }
 }
 
-async function updateSource(): Promise<void> {
+async function updateSource(): Promise<boolean> {
   const branch = (
     await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(repoDir).text()
   ).trim();
   if (branch !== "main") {
     clack.log.warn(`Skipped update\n${styleText("dim", "Non-main branch")}`);
-    return;
+    return false;
   }
   const status = (
     await Bun.$`git status --porcelain`.cwd(repoDir).text()
   ).trim();
   if (status !== "") {
     clack.log.warn(`Skipped update\n${styleText("dim", "Dirty worktree")}`);
-    return;
+    return false;
   }
+  const before = (await Bun.$`git rev-parse HEAD`.cwd(repoDir).text()).trim();
   await runTask("Pulling changes", "Pulled changes", ["git", "pull"]);
   await runTask("Installing dependencies", "Installed dependencies", [
     "bun",
     "install",
   ]);
+  const after = (await Bun.$`git rev-parse HEAD`.cwd(repoDir).text()).trim();
+  return before !== after;
 }
 
 async function installLinux(profile: Profile): Promise<void> {
@@ -199,8 +202,18 @@ export const up = defineCommand({
       `${boxen(styleText("bold", "Source"), { padding: 1 })}\n`,
     );
     clack.intro("Update");
-    await updateSource();
+    const sourceChanged = await updateSource();
     clack.outro("Processed update");
+    if (sourceChanged) {
+      clack.log.info("Code updated. Restarting…");
+      const cmd = [process.execPath, ".", "up"];
+      if (args.yes) cmd.push("--yes");
+      const proc = Bun.spawn(cmd, {
+        cwd: botDir,
+        stdio: ["inherit", "inherit", "inherit"],
+      });
+      process.exit(await proc.exited);
+    }
     const profile = await Profile.create();
     const telegramConfig = await TelegramConfig.create(profile, {
       skipActions: args.yes,
