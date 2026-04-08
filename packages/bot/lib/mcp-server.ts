@@ -10,10 +10,12 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
 import zod from "zod";
 import { attachmentKindSchema } from "~/lib/attachment-kind-schema";
+import type { CommandRegistry } from "~/lib/command-registry";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getAttachmentName } from "~/lib/get-attachment-name";
 import { logger } from "~/lib/logger";
+import { registerCommandTools } from "~/lib/mcp-command-tools";
 import { registerScheduleTools } from "~/lib/mcp-schedule-tools";
 import type { Scheduler } from "~/lib/scheduler";
 import { version } from "~/package.json" with { type: "json" };
@@ -51,6 +53,8 @@ export class McpServer implements Disposable {
   readonly #bot: Bot;
   readonly #existingSessions: ExistingSessions;
   readonly #scheduler: Scheduler;
+  readonly #commandRegistry: CommandRegistry;
+  readonly #botToken: string;
   readonly #token: string;
   readonly #server: Bun.Server<undefined>;
   readonly #exited: Promise<void>;
@@ -60,10 +64,14 @@ export class McpServer implements Disposable {
     bot: Bot,
     existingSessions: ExistingSessions,
     scheduler: Scheduler,
+    commandRegistry: CommandRegistry,
+    botToken: string,
   ) {
     this.#bot = bot;
     this.#existingSessions = existingSessions;
     this.#scheduler = scheduler;
+    this.#commandRegistry = commandRegistry;
+    this.#botToken = botToken;
     this.#token = randomBytes(32).toString("base64url");
     this.#server = Bun.serve({
       hostname: "127.0.0.1",
@@ -105,6 +113,11 @@ export class McpServer implements Disposable {
     registerScheduleTools(server, {
       scheduler: this.#scheduler,
       existingSessions: this.#existingSessions,
+      getMetadata: (args) => this.#getMetadata(args),
+    });
+    registerCommandTools(server, {
+      commandRegistry: this.#commandRegistry,
+      botToken: this.#botToken,
       getMetadata: (args) => this.#getMetadata(args),
     });
     const transport = new WebStandardStreamableHTTPServerTransport();
@@ -208,9 +221,17 @@ export class McpServer implements Disposable {
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
     scheduler: Scheduler,
+    commandRegistry: CommandRegistry,
+    botToken: string,
   ): Promise<McpServer> {
     logger.debug("MCP server is starting…");
-    const server = new McpServer(bot, existingSessions, scheduler);
+    const server = new McpServer(
+      bot,
+      existingSessions,
+      scheduler,
+      commandRegistry,
+      botToken,
+    );
     try {
       await opencodeClient.mcp.add(
         {

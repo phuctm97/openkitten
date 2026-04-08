@@ -1,5 +1,6 @@
 import { runCommand } from "citty";
 import { beforeEach, expect, test, vi } from "vitest";
+import { CommandRegistry } from "~/lib/command-registry";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { GrammyEventLoop } from "~/lib/grammy-event-loop";
@@ -118,6 +119,9 @@ function mockCreateDatabase() {
     [Symbol.dispose]() {},
   };
   vi.spyOn(Database, "create").mockReturnValue(database as never);
+  vi.spyOn(CommandRegistry, "create").mockReturnValue({
+    toTelegramCommands: () => CommandRegistry.builtins,
+  } as never);
   return database;
 }
 

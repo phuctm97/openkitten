@@ -104,6 +104,7 @@ function mockScope(overrides: {
     floatingPromises: {} as never,
     mediaGroupBuffer: {} as never,
     attachmentStorage: {} as never,
+    commandRegistry: { get: vi.fn(() => undefined) } as never,
     typingIndicators: {} as never,
   };
 }
@@ -287,4 +288,107 @@ test("rethrows errors from lock", async () => {
   await expect(
     grammyHandleText(scope, mockCtx(42, "hello"), signal),
   ).rejects.toBe(error);
+});
+
+test("dispatches to custom command handler when command matches", async () => {
+  const scope = mockScope({});
+  const mockHandleCustomCommand = vi.fn(async () => {});
+  vi.spyOn(
+    await import("~/lib/grammy-handle-custom-command"),
+    "grammyHandleCustomCommand",
+  ).mockImplementation(mockHandleCustomCommand);
+
+  const command = { name: "translate", description: "T", prompt: "P: {text}" };
+  vi.mocked(scope.commandRegistry.get).mockReturnValueOnce(command);
+
+  await grammyHandleText(scope, mockCtx(42, "/translate hello"), signal);
+
+  expect(scope.commandRegistry.get).toHaveBeenCalledWith("translate");
+  expect(mockHandleCustomCommand).toHaveBeenCalledWith(
+    scope,
+    expect.anything(),
+    signal,
+    command,
+    "hello",
+  );
+});
+
+test("dispatches custom command with @botname suffix", async () => {
+  const scope = mockScope({});
+  const mockHandleCustomCommand = vi.fn(async () => {});
+  vi.spyOn(
+    await import("~/lib/grammy-handle-custom-command"),
+    "grammyHandleCustomCommand",
+  ).mockImplementation(mockHandleCustomCommand);
+
+  const command = { name: "translate", description: "T", prompt: "P: {text}" };
+  vi.mocked(scope.commandRegistry.get).mockReturnValueOnce(command);
+
+  await grammyHandleText(
+    scope,
+    mockCtx(42, "/translate@mybotname hello"),
+    signal,
+  );
+
+  expect(scope.commandRegistry.get).toHaveBeenCalledWith("translate");
+  expect(mockHandleCustomCommand).toHaveBeenCalledWith(
+    scope,
+    expect.anything(),
+    signal,
+    command,
+    "hello",
+  );
+});
+
+test("falls through to normal text for unknown /command", async () => {
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const scope = mockScope({ opencodeClient, pendingPrompts });
+  vi.mocked(scope.commandRegistry.get).mockReturnValueOnce(undefined);
+
+  await grammyHandleText(scope, mockCtx(42, "/unknown hello"), signal);
+
+  expect(scope.commandRegistry.get).toHaveBeenCalledWith("unknown");
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({
+      parts: [{ type: "text", text: "/unknown hello" }],
+    }),
+    { throwOnError: true },
+  );
+});
+
+test("dispatches custom command with no args", async () => {
+  const scope = mockScope({});
+  const mockHandleCustomCommand = vi.fn(async () => {});
+  vi.spyOn(
+    await import("~/lib/grammy-handle-custom-command"),
+    "grammyHandleCustomCommand",
+  ).mockImplementation(mockHandleCustomCommand);
+
+  const command = { name: "daily", description: "D", prompt: "Daily summary" };
+  vi.mocked(scope.commandRegistry.get).mockReturnValueOnce(command);
+
+  await grammyHandleText(scope, mockCtx(42, "/daily"), signal);
+
+  expect(mockHandleCustomCommand).toHaveBeenCalledWith(
+    scope,
+    expect.anything(),
+    signal,
+    command,
+    "",
+  );
+});
+
+test("does not check command registry for non-command text", async () => {
+  const opencodeClient = mockOpencodeClient();
+  const pendingPrompts = mockPendingPrompts();
+  pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
+  opencodeClient.session.promptAsync.mockResolvedValue({});
+  const scope = mockScope({ opencodeClient, pendingPrompts });
+
+  await grammyHandleText(scope, mockCtx(42, "just regular text"), signal);
+
+  expect(scope.commandRegistry.get).not.toHaveBeenCalled();
 });

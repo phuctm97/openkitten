@@ -5,6 +5,7 @@ import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
 import boxen from "boxen";
 import { defineCommand } from "citty";
+import { CommandRegistry } from "~/lib/command-registry";
 import { getUserId } from "~/lib/get-user-id";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
 import { OpencodeConfig } from "~/lib/opencode-config";
@@ -218,7 +219,7 @@ export const up = defineCommand({
     const telegramConfig = await TelegramConfig.create(profile, {
       skipActions: args.yes,
     });
-    await grammySetCommands(telegramConfig.botToken);
+    await grammySetCommands(telegramConfig.botToken, CommandRegistry.builtins);
     await OpencodeConfig.create(profile, { skipActions: args.yes });
     process.stderr.write(
       `${boxen(styleText("bold", "OpenKitten"), { padding: 1 })}\n`,

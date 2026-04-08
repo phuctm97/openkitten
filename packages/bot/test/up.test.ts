@@ -15,6 +15,12 @@ vi.mock("~/lib/opencode-config", () => ({
 
 vi.mock("~/lib/grammy-set-commands");
 
+vi.mock("~/lib/command-registry", () => ({
+  CommandRegistry: {
+    builtins: [{ command: "start", description: "Start" }],
+  },
+}));
+
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),
 }));

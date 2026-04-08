@@ -3,6 +3,7 @@ import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { AttachmentStorage } from "~/lib/attachment-storage";
 import { ClaudeCredentialRefresh } from "~/lib/claude-credential-refresh";
+import { CommandRegistry } from "~/lib/command-registry";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
@@ -56,11 +57,15 @@ export const serve = defineCommand({
         skipActions,
       });
       using _claudeCredentialRefresh = ClaudeCredentialRefresh.create();
-      await grammySetCommands(telegramConfig.botToken);
       const bot = new Bot(telegramConfig.botToken);
       bot.api.config.use(autoRetry());
       bot.use(grammyFilterUser(telegramConfig.userId));
       using database = Database.create(profile);
+      const commandRegistry = CommandRegistry.create(database);
+      await grammySetCommands(
+        telegramConfig.botToken,
+        commandRegistry.toTelegramCommands(),
+      );
       using shutdown = Shutdown.create();
       await using opencodeServer = await OpencodeServer.create(opencodeConfig);
       const existingSessions = await ExistingSessions.create(
@@ -80,6 +85,8 @@ export const serve = defineCommand({
         opencodeServer.client,
         existingSessions,
         scheduler,
+        commandRegistry,
+        telegramConfig.botToken,
       );
       using workingSessions = WorkingSessions.create(existingSessions);
       await using pendingPrompts = PendingPrompts.create(
@@ -130,6 +137,7 @@ export const serve = defineCommand({
         database,
         shutdown,
         opencodeClient: opencodeServer.client,
+        commandRegistry,
         existingSessions,
         workingSessions,
         pendingPrompts,
