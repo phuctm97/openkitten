@@ -113,7 +113,7 @@ export namespace OpencodeConfig {
     const configDir = join(profile.dir, ".opencode");
     const agentsDir = join(configDir, "agents");
     const pluginsDir = join(profile.xdgConfig, "opencode", "plugins");
-    const skillsDir = join(profile.xdgConfig, "openkitten", "skills");
+    const skillsDir = join(profile.xdgConfig, "opencode", "skills");
     await Promise.all([
       mkdir(agentsDir, { recursive: true }),
       mkdir(pluginsDir, { recursive: true }),
@@ -147,14 +147,12 @@ export namespace OpencodeConfig {
     }
     writes.push(
       readFile(defaultDefaultAgents, "utf-8").then((content) =>
-        writeFile(join(profile.xdgConfig, "opencode", "AGENTS.md"), content, {
-          flag: "wx",
-        }),
+        writeFile(join(configDir, "AGENTS.md"), content, { flag: "wx" }),
       ),
     );
     writes.push(
       readFile(defaultSystemAgents, "utf-8").then((content) =>
-        writeFile(join(configDir, "AGENTS.md"), content),
+        writeFile(join(profile.xdgConfig, "opencode", "AGENTS.md"), content),
       ),
     );
     writes.push(
@@ -197,9 +195,6 @@ export namespace OpencodeConfig {
             mdns: false,
             mdnsDomain: "opencode.local",
             cors: ["https://opencode.local"],
-          },
-          skills: {
-            paths: [skillsDir],
           },
           plugin: ["opencode-claude-auth"],
         }),

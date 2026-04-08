@@ -1,7 +1,6 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { Bot } from "grammy";
 import type { AttachmentStorage } from "~/lib/attachment-storage";
-import type { CommandRegistry } from "~/lib/command-registry";
 import type { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import type { FloatingPromises } from "~/lib/floating-promises";
@@ -17,7 +16,6 @@ export interface Scope {
   readonly database: Database;
   readonly shutdown: Shutdown;
   readonly opencodeClient: OpencodeClient;
-  readonly commandRegistry: CommandRegistry;
   readonly existingSessions: ExistingSessions;
   readonly workingSessions: WorkingSessions;
   readonly pendingPrompts: PendingPrompts;

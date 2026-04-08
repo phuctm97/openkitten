@@ -1,8 +1,10 @@
+import { join } from "node:path";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { AttachmentStorage } from "~/lib/attachment-storage";
-import { CommandRegistry } from "~/lib/command-registry";
+import { builtinCommands } from "~/lib/builtin-commands";
+import { CommandSkills } from "~/lib/command-skills";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
@@ -59,11 +61,12 @@ export const serve = defineCommand({
       bot.api.config.use(autoRetry());
       bot.use(grammyFilterUser(telegramConfig.userId));
       using database = Database.create(profile);
-      const commandRegistry = CommandRegistry.create(database);
-      await grammySetCommands(
-        telegramConfig.botToken,
-        commandRegistry.toTelegramCommands(),
-      );
+      const commandSkillsDir = join(profile.xdgConfig, "opencode", "skills");
+      const commandSkills = await CommandSkills.list(commandSkillsDir);
+      await grammySetCommands(telegramConfig.botToken, [
+        ...builtinCommands,
+        ...CommandSkills.toTelegramCommands(commandSkills),
+      ]);
       using shutdown = Shutdown.create();
       await using opencodeServer = await OpencodeServer.create(opencodeConfig);
       const existingSessions = await ExistingSessions.create(
@@ -82,7 +85,7 @@ export const serve = defineCommand({
         opencodeServer.client,
         existingSessions,
         scheduler,
-        commandRegistry,
+        commandSkillsDir,
         telegramConfig.botToken,
       );
       using workingSessions = WorkingSessions.create(existingSessions);
@@ -134,7 +137,6 @@ export const serve = defineCommand({
         database,
         shutdown,
         opencodeClient: opencodeServer.client,
-        commandRegistry,
         existingSessions,
         workingSessions,
         pendingPrompts,

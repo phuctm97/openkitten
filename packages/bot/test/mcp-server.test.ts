@@ -125,7 +125,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     expect(logger.debug).toHaveBeenCalledWith("MCP server is starting…");
@@ -138,7 +138,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     expect(Bun.serve).toHaveBeenCalledWith(
@@ -152,7 +152,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     expect(mockMcpAdd).toHaveBeenCalledWith(
@@ -179,7 +179,7 @@ describe("McpServer", () => {
         failingClient,
         existingSessions,
         mockScheduler,
-        {} as never,
+        "/tmp/test-skills",
         "test-bot-token",
       ),
     ).rejects.toThrow(error);
@@ -192,7 +192,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     server[Symbol.dispose]();
@@ -206,7 +206,7 @@ describe("McpServer", () => {
         mockClient,
         existingSessions,
         mockScheduler,
-        {} as never,
+        "/tmp/test-skills",
         "test-bot-token",
       );
     }
@@ -220,7 +220,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     const response = await capturedFetch(new Request("http://localhost/other"));
@@ -233,7 +233,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     const response = await capturedFetch(
@@ -248,7 +248,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     const response = await capturedFetch(
@@ -266,7 +266,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     const req = new Request("http://localhost/mcp", {
@@ -297,7 +297,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
 
@@ -317,7 +317,6 @@ describe("McpServer", () => {
     expect(toolNames).toContain("schedule_update");
     expect(toolNames).toContain("get_server_time");
     expect(toolNames).toContain("command_create");
-    expect(toolNames).toContain("command_update");
     expect(toolNames).toContain("command_delete");
     expect(toolNames).toContain("command_list");
   });
@@ -331,7 +330,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       scheduler as never,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
 
@@ -354,14 +353,14 @@ describe("McpServer", () => {
   });
 
   test("command tools receive getMetadata from McpServer", async () => {
-    const mockList = vi.fn(() => []);
-    const commandRegistry = { list: mockList } as never;
+    const dir = await mkdtemp(join(tmpdir(), "mcp-server-"));
+    tempDirs.push(dir);
     using _server = await McpServer.create(
       bot,
       mockClient,
       existingSessions,
       mockScheduler,
-      commandRegistry,
+      dir,
       "test-bot-token",
     );
 
@@ -380,7 +379,6 @@ describe("McpServer", () => {
       __OPENKITTEN__: { sessionID: "sess-1", callID: "call-1" },
     })) as { structuredContent: { commands: unknown[] } };
     expect(result.structuredContent.commands).toEqual([]);
-    expect(mockList).toHaveBeenCalledOnce();
   });
 
   test("send_file sends a local png as a Telegram photo", async () => {
@@ -394,7 +392,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     await capturedFetch(
@@ -442,7 +440,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     await capturedFetch(
@@ -489,7 +487,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     await capturedFetch(
@@ -528,7 +526,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     await capturedFetch(
@@ -562,7 +560,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     await capturedFetch(
@@ -589,7 +587,7 @@ describe("McpServer", () => {
       mockClient,
       existingSessions,
       mockScheduler,
-      {} as never,
+      "/tmp/test-skills",
       "test-bot-token",
     );
     await capturedFetch(
