@@ -8,15 +8,21 @@ type HouseView = {
   subtitle: Phaser.GameObjects.Text;
 };
 
-const cardColor = 0x132034;
-const glowColor = 0x22d3ee;
-const cardBorderColor = 0x38bdf8;
-const subtitleColor = "#d6d3d1";
-const titleColor = "#fafaf9";
 const cardHeight = 280;
 const cardWidth = 560;
 const glowHeight = 332;
 const glowWidth = 612;
+const panelAlpha = 0.96;
+
+const placeholderPalette = {
+  cardBorderAlpha: 1,
+  cardBorderColor: 0xe7e5e4,
+  cardColor: 0xffffff,
+  glowAlpha: 0.16,
+  glowColor: 0xd97706,
+  subtitleColor: "#78716c",
+  titleColor: "#1c1917",
+};
 
 export class HouseScene extends Phaser.Scene {
   static readonly key = "house";
@@ -29,15 +35,33 @@ export class HouseScene extends Phaser.Scene {
 
   create() {
     const glow = this.add
-      .rectangle(0, 0, glowWidth, glowHeight, glowColor, 0.16)
+      .rectangle(
+        0,
+        0,
+        glowWidth,
+        glowHeight,
+        placeholderPalette.glowColor,
+        placeholderPalette.glowAlpha,
+      )
       .setOrigin(0.5);
     const card = this.add
-      .rectangle(0, 0, cardWidth, cardHeight, cardColor, 0.96)
+      .rectangle(
+        0,
+        0,
+        cardWidth,
+        cardHeight,
+        placeholderPalette.cardColor,
+        panelAlpha,
+      )
       .setOrigin(0.5)
-      .setStrokeStyle(2, cardBorderColor, 0.78);
+      .setStrokeStyle(
+        2,
+        placeholderPalette.cardBorderColor,
+        placeholderPalette.cardBorderAlpha,
+      );
     const title = this.add
       .text(0, -48, "OpenKitten", {
-        color: titleColor,
+        color: placeholderPalette.titleColor,
         fontFamily: '"Oxanium Variable", sans-serif',
         fontSize: "42px",
         fontStyle: "700",
@@ -50,7 +74,7 @@ export class HouseScene extends Phaser.Scene {
         "Phaser is running fullscreen on `/`.\nThe real House comes next.",
         {
           align: "center",
-          color: subtitleColor,
+          color: placeholderPalette.subtitleColor,
           fontFamily: '"Azeret Mono Variable", monospace',
           fontSize: "16px",
           lineSpacing: 8,

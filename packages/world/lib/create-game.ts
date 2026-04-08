@@ -9,5 +9,6 @@ export function createGame(parent: HTMLElement) {
       mode: Phaser.Scale.RESIZE,
     },
     scene: [BootScene, HouseScene],
+    backgroundColor: "#ffffff",
   });
 }

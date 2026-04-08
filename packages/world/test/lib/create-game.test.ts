@@ -32,5 +32,6 @@ test("creates a fullscreen Phaser game bound to the provided parent", async () =
       mode: "RESIZE",
     },
     scene: [expect.any(Function), expect.any(Function)],
+    backgroundColor: "#ffffff",
   });
 });

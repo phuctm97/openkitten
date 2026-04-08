@@ -132,7 +132,6 @@ const houseSceneMocks = vi.hoisted(() => {
         },
       ),
     };
-
     events = createMockEventEmitter();
 
     scale = createMockScale();
@@ -224,9 +223,38 @@ test("builds and lays out the fullscreen placeholder scene", async () => {
     -48,
     "OpenKitten",
     expect.objectContaining({
+      color: "#1c1917",
       fontSize: "42px",
       fontStyle: "700",
     }),
+  );
+  expect(scene.add.text).toHaveBeenNthCalledWith(
+    2,
+    0,
+    28,
+    "Phaser is running fullscreen on `/`.\nThe real House comes next.",
+    expect.objectContaining({
+      color: "#78716c",
+      lineSpacing: 8,
+    }),
+  );
+  expect(scene.add.rectangle).toHaveBeenNthCalledWith(
+    1,
+    0,
+    0,
+    612,
+    332,
+    0xd97706,
+    0.16,
+  );
+  expect(scene.add.rectangle).toHaveBeenNthCalledWith(
+    2,
+    0,
+    0,
+    560,
+    280,
+    0xffffff,
+    0.96,
   );
   expect(scene.add.container).toHaveBeenCalledWith(640, 360, [
     glow,
@@ -234,6 +262,7 @@ test("builds and lays out the fullscreen placeholder scene", async () => {
     title,
     subtitle,
   ]);
+  expect(card.setStrokeStyle).toHaveBeenLastCalledWith(2, 0xe7e5e4, 1);
   expect(glow.setSize).toHaveBeenCalledWith(612, 332);
   expect(card.setSize).toHaveBeenCalledWith(560, 280);
   expect(panel.setPosition).toHaveBeenCalledWith(640, 360);
