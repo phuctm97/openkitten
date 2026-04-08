@@ -11,7 +11,7 @@ This folder contains the first AI-generated MVP asset set for `packages/world`.
 
 Generated with:
 
-- `/Users/phuctm97/.codex/skills/.system/imagegen/scripts/image_gen.py`
+- the bundled image generation CLI at `scripts/image_gen.py`
 
 The raw intermediate archive is not kept in the repo.
 This folder contains the curated selected finals only.
