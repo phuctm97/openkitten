@@ -11,6 +11,7 @@ import { FloatingThemeSwitcher } from "~/components/floating-theme-switcher";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { ThemeConnector } from "~/lib/theme-connector";
+import { ThemeInitializer } from "~/lib/theme-initializer";
 import type { Route } from "./+types/root";
 
 export function Layout({ children }: PropsWithChildren) {
@@ -19,6 +20,7 @@ export function Layout({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <ThemeInitializer />
         <title>OpenKitten</title>
         <Meta />
         <Links />
