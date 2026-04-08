@@ -1,26 +1,11 @@
-import { useLayoutEffect, useState } from "react";
-import { createGame } from "~/lib/create-game";
+import { FloatingThemeSwitcher } from "~/components/floating-theme-switcher";
+import { Game } from "~/components/game";
 
 export default function Component() {
-  const [element, ref] = useState<HTMLDivElement | null>(null);
-
-  useLayoutEffect(() => {
-    if (!element) {
-      return;
-    }
-
-    const game = createGame(element);
-
-    return () => {
-      game.destroy(true);
-    };
-  }, [element]);
-
   return (
-    <div
-      ref={ref}
-      data-testid="game-screen"
-      className="h-full overflow-hidden"
-    />
+    <>
+      <FloatingThemeSwitcher />
+      <Game />
+    </>
   );
 }
