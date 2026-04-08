@@ -208,8 +208,8 @@ export const up = defineCommand({
       skipActions: args.yes,
     });
     await OpencodeConfig.create(profile, { skipActions: args.yes });
-    const skillsDir = join(profile.xdgConfig, "openkitten", "skills");
-    const commandSkills = await CommandSkills.list(skillsDir);
+    const commandSkillsDir = join(profile.xdgConfig, "opencode", "skills");
+    const commandSkills = await CommandSkills.list(commandSkillsDir);
     await grammySetCommands(telegramConfig.botToken, [
       ...builtinCommands,
       ...CommandSkills.toTelegramCommands(commandSkills),

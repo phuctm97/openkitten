@@ -199,7 +199,10 @@ export namespace OpencodeConfig {
             cors: ["https://opencode.local"],
           },
           skills: {
-            paths: [skillsDir],
+            paths: [
+              skillsDir,
+              join(profile.xdgConfig, "opencode", "skills", "commands"),
+            ],
           },
           plugin: ["opencode-claude-auth"],
         }),

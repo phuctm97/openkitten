@@ -61,8 +61,8 @@ export const serve = defineCommand({
       bot.api.config.use(autoRetry());
       bot.use(grammyFilterUser(telegramConfig.userId));
       using database = Database.create(profile);
-      const skillsDir = join(profile.xdgConfig, "openkitten", "skills");
-      const commandSkills = await CommandSkills.list(skillsDir);
+      const commandSkillsDir = join(profile.xdgConfig, "opencode", "skills");
+      const commandSkills = await CommandSkills.list(commandSkillsDir);
       await grammySetCommands(telegramConfig.botToken, [
         ...builtinCommands,
         ...CommandSkills.toTelegramCommands(commandSkills),
@@ -85,7 +85,7 @@ export const serve = defineCommand({
         opencodeServer.client,
         existingSessions,
         scheduler,
-        skillsDir,
+        commandSkillsDir,
         telegramConfig.botToken,
       );
       using workingSessions = WorkingSessions.create(existingSessions);
