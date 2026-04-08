@@ -1,11 +1,12 @@
 import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
 import boxen from "boxen";
 import { defineCommand } from "citty";
-import { CommandRegistry } from "~/lib/command-registry";
+import { builtinCommands } from "~/lib/builtin-commands";
+import { CommandSkills } from "~/lib/command-skills";
 import { getUserId } from "~/lib/get-user-id";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
 import { OpencodeConfig } from "~/lib/opencode-config";
@@ -206,8 +207,13 @@ export const up = defineCommand({
     const telegramConfig = await TelegramConfig.create(profile, {
       skipActions: args.yes,
     });
-    await grammySetCommands(telegramConfig.botToken, CommandRegistry.builtins);
     await OpencodeConfig.create(profile, { skipActions: args.yes });
+    const skillsDir = join(profile.xdgConfig, "openkitten", "skills");
+    const commandSkills = await CommandSkills.list(skillsDir);
+    await grammySetCommands(telegramConfig.botToken, [
+      ...builtinCommands,
+      ...CommandSkills.toTelegramCommands(commandSkills),
+    ]);
     process.stderr.write(
       `${boxen(styleText("bold", "OpenKitten"), { padding: 1 })}\n`,
     );

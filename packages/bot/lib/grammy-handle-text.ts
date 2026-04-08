@@ -1,6 +1,5 @@
 import type { Context, Filter } from "grammy";
 import { getSessionAgent } from "~/lib/get-session-agent";
-import { grammyHandleCustomCommand } from "~/lib/grammy-handle-custom-command";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
@@ -8,29 +7,11 @@ import { WorkingSessions } from "~/lib/working-sessions";
 
 type TextContext = Filter<Context, "message:text">;
 
-const commandPattern =
-  /^\/([a-z0-9_]{1,32})(?:@[a-z0-9_]+)?(?:\s+([\s\S]*))?$/i;
-
 export async function grammyHandleText(
   scope: Scope,
   ctx: TextContext,
-  signal: AbortSignal,
+  _signal: AbortSignal,
 ): Promise<void> {
-  const match = commandPattern.exec(ctx.message.text);
-  if (match?.[1]) {
-    const command = scope.commandRegistry.get(match[1]);
-    if (command) {
-      await grammyHandleCustomCommand(
-        scope,
-        ctx,
-        signal,
-        command,
-        (match[2] ?? "").trim(),
-      );
-      return;
-    }
-  }
-
   const {
     bot,
     database,

@@ -10,12 +10,11 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
 import zod from "zod";
 import { attachmentKindSchema } from "~/lib/attachment-kind-schema";
-import type { CommandRegistry } from "~/lib/command-registry";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getAttachmentName } from "~/lib/get-attachment-name";
 import { logger } from "~/lib/logger";
-import { registerCommandTools } from "~/lib/mcp-command-tools";
+import { registerCommandTools } from "~/lib/register-command-tools";
 import { registerScheduleTools } from "~/lib/register-schedule-tools";
 import type { Scheduler } from "~/lib/scheduler";
 import { version } from "~/package.json" with { type: "json" };
@@ -53,7 +52,7 @@ export class McpServer implements Disposable {
   readonly #bot: Bot;
   readonly #existingSessions: ExistingSessions;
   readonly #scheduler: Scheduler;
-  readonly #commandRegistry: CommandRegistry;
+  readonly #skillsDir: string;
   readonly #botToken: string;
   readonly #token: string;
   readonly #server: Bun.Server<undefined>;
@@ -64,13 +63,13 @@ export class McpServer implements Disposable {
     bot: Bot,
     existingSessions: ExistingSessions,
     scheduler: Scheduler,
-    commandRegistry: CommandRegistry,
+    skillsDir: string,
     botToken: string,
   ) {
     this.#bot = bot;
     this.#existingSessions = existingSessions;
     this.#scheduler = scheduler;
-    this.#commandRegistry = commandRegistry;
+    this.#skillsDir = skillsDir;
     this.#botToken = botToken;
     this.#token = randomBytes(32).toString("base64url");
     this.#server = Bun.serve({
@@ -115,7 +114,7 @@ export class McpServer implements Disposable {
       getMetadata: (args) => this.#getMetadata(args),
     });
     registerCommandTools(server, {
-      commandRegistry: this.#commandRegistry,
+      skillsDir: this.#skillsDir,
       botToken: this.#botToken,
       getMetadata: (args) => this.#getMetadata(args),
     });
@@ -220,7 +219,7 @@ export class McpServer implements Disposable {
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
     scheduler: Scheduler,
-    commandRegistry: CommandRegistry,
+    skillsDir: string,
     botToken: string,
   ): Promise<McpServer> {
     logger.debug("MCP server is starting…");
@@ -228,7 +227,7 @@ export class McpServer implements Disposable {
       bot,
       existingSessions,
       scheduler,
-      commandRegistry,
+      skillsDir,
       botToken,
     );
     try {

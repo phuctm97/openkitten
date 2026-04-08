@@ -94,7 +94,6 @@ function mockScope(overrides: {
     floatingPromises: {} as never,
     mediaGroupBuffer: {} as never,
     attachmentStorage: {} as never,
-    commandRegistry: {} as never,
     typingIndicators: {} as never,
   };
 }
