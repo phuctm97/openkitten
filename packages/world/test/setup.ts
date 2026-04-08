@@ -3,13 +3,14 @@ import { cleanup } from "@testing-library/react";
 import { getDefaultStore } from "jotai";
 import { afterEach, beforeEach, vi } from "vitest";
 
+import { defaultColorScheme } from "~/lib/default-color-scheme";
 import { themeAtom } from "~/lib/theme-atom";
 import { stubMatchMedia } from "~/test/stub-match-media";
 
 beforeEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
-  stubMatchMedia("light");
+  stubMatchMedia(defaultColorScheme);
   localStorage.clear();
   const store = getDefaultStore();
   store.set(themeAtom, "auto");
