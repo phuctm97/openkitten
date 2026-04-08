@@ -7,18 +7,20 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
-import { FloatingThemeSwitcher } from "~/components/floating-theme-switcher";
+import { ThemeAnchor } from "~/components/theme-anchor";
+import { ThemeConnector } from "~/components/theme-connector";
+import { ThemeInitializer } from "~/components/theme-initializer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import { ThemeConnector } from "~/lib/theme-connector";
 import type { Route } from "./+types/root";
 
 export function Layout({ children }: PropsWithChildren) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en" className="h-full" suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <ThemeInitializer />
         <title>OpenKitten</title>
         <Meta />
         <Links />
@@ -36,7 +38,7 @@ export function Layout({ children }: PropsWithChildren) {
 export function HydrateFallback(_: Route.HydrateFallbackProps) {
   return (
     <section className="grid min-h-screen place-items-center bg-background px-6 py-10">
-      <FloatingThemeSwitcher />
+      <ThemeAnchor />
       <div
         role="status"
         aria-live="polite"
@@ -80,7 +82,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 
   return (
     <section className="relative grid min-h-screen overflow-hidden bg-background px-6 py-10">
-      <FloatingThemeSwitcher />
+      <ThemeAnchor />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"

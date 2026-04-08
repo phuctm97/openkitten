@@ -1,6 +1,6 @@
 import { useLayoutEffect } from "react";
 
-import { useTheme } from "~/lib/use-theme";
+import { useTheme } from "~/hooks/use-theme";
 
 export function ThemeConnector() {
   const { colorScheme } = useTheme();

@@ -1,7 +1,7 @@
 import { render } from "@testing-library/react";
 import { expect, test } from "vitest";
 
-import { ThemeConnector } from "~/lib/theme-connector";
+import { ThemeConnector } from "~/components/theme-connector";
 
 test("applies the active color scheme to the document element", () => {
   localStorage.setItem("openkitten-theme", "dark");

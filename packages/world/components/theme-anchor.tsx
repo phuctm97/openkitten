@@ -1,7 +1,7 @@
 import { ThemeSwitcher } from "~/components/kibo-ui/theme-switcher";
-import { useTheme } from "~/lib/use-theme";
+import { useTheme } from "~/hooks/use-theme";
 
-export function FloatingThemeSwitcher() {
+export function ThemeAnchor() {
   const { theme, setTheme } = useTheme();
 
   return (
