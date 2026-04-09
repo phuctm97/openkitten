@@ -13,8 +13,6 @@ Backgrounds:
 
 - `backgrounds/house-room-shell-v1.png`
   Final selected wide room shell with the text label removed.
-- `backgrounds/house-foreground-trim-v1.png`
-  Final selected foreground trim overlay.
 
 Props:
 

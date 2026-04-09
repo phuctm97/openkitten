@@ -3,18 +3,22 @@ import { getColorScheme } from "~/lib/get-color-scheme";
 import { getHousePalette } from "~/lib/get-house-palette";
 
 type HouseView = {
-  card: Phaser.GameObjects.Rectangle;
-  glow: Phaser.GameObjects.Rectangle;
-  panel: Phaser.GameObjects.Container;
-  title: Phaser.GameObjects.Text;
-  subtitle: Phaser.GameObjects.Text;
+  roomShell: Phaser.GameObjects.Image;
 };
 
-const cardHeight = 280;
-const cardWidth = 560;
-const glowHeight = 332;
-const glowWidth = 612;
-const panelAlpha = 0.96;
+const roomShellHeight = 1024;
+const roomShellTextureKey = "house-room-shell-v1";
+const roomShellTexturePath = "/world/v1/backgrounds/house-room-shell-v1.png";
+const roomShellWidth = 1536;
+
+function getCoverSize(width: number, height: number) {
+  const scale = Math.max(width / roomShellWidth, height / roomShellHeight);
+
+  return {
+    displayHeight: roomShellHeight * scale,
+    displayWidth: roomShellWidth * scale,
+  };
+}
 
 export class HouseScene extends Phaser.Scene {
   static readonly key = "house";
@@ -26,56 +30,15 @@ export class HouseScene extends Phaser.Scene {
     super(HouseScene.key);
   }
 
+  preload() {
+    this.load.image(roomShellTextureKey, roomShellTexturePath);
+  }
+
   create() {
-    const palette = getHousePalette(getColorScheme());
-    const glow = this.add
-      .rectangle(
-        0,
-        0,
-        glowWidth,
-        glowHeight,
-        palette.glowColor,
-        palette.glowAlpha,
-      )
-      .setOrigin(0.5);
-    const card = this.add
-      .rectangle(0, 0, cardWidth, cardHeight, palette.cardColor, panelAlpha)
-      .setOrigin(0.5)
-      .setStrokeStyle(2, palette.cardBorderColor, palette.cardBorderAlpha);
-    const title = this.add
-      .text(0, -48, "OpenKitten", {
-        color: palette.titleColor,
-        fontFamily: '"Oxanium Variable", sans-serif',
-        fontSize: "42px",
-        fontStyle: "700",
-      })
-      .setOrigin(0.5);
-    const subtitle = this.add
-      .text(
-        0,
-        28,
-        "Phaser is running fullscreen on `/`.\nThe real House comes next.",
-        {
-          align: "center",
-          color: palette.subtitleColor,
-          fontFamily: '"Azeret Mono Variable", monospace',
-          fontSize: "16px",
-          lineSpacing: 8,
-        },
-      )
-      .setOrigin(0.5);
-    const panel = this.add.container(
-      this.scale.width / 2,
-      this.scale.height / 2,
-      [glow, card, title, subtitle],
-    );
+    const roomShell = this.add.image(0, 0, roomShellTextureKey).setOrigin(0.5);
 
     this.view = {
-      card,
-      glow,
-      panel,
-      title,
-      subtitle,
+      roomShell,
     };
 
     this.syncPalette();
@@ -114,15 +77,6 @@ export class HouseScene extends Phaser.Scene {
       palette.backgroundColor,
     );
 
-    view.glow.setFillStyle(palette.glowColor, palette.glowAlpha);
-    view.card.setFillStyle(palette.cardColor, panelAlpha);
-    view.card.setStrokeStyle(
-      2,
-      palette.cardBorderColor,
-      palette.cardBorderAlpha,
-    );
-    view.title.setColor(palette.titleColor);
-    view.subtitle.setColor(palette.subtitleColor);
     this.cameras.main.setBackgroundColor(palette.backgroundColor);
     this.game.canvas.style.backgroundColor = palette.backgroundColor;
     Object.assign(this.game.renderer.config, {
@@ -138,16 +92,9 @@ export class HouseScene extends Phaser.Scene {
     }
 
     const { height, width } = this.scale;
-    const compact = width < 640;
-    const panelWidth = compact ? Math.max(width - 48, 280) : cardWidth;
-    const panelHeight = compact ? 240 : cardHeight;
+    const { displayHeight, displayWidth } = getCoverSize(width, height);
 
-    view.glow.setSize(panelWidth + 52, panelHeight + 52);
-    view.card.setSize(panelWidth, panelHeight);
-    view.panel.setPosition(width / 2, height / 2);
-    view.title.setFontSize(compact ? "30px" : "42px");
-    view.title.setY(compact ? -38 : -48);
-    view.subtitle.setWordWrapWidth(panelWidth - 64, true);
-    view.subtitle.setY(compact ? 18 : 28);
+    view.roomShell.setDisplaySize(displayWidth, displayHeight);
+    view.roomShell.setPosition(width / 2, height / 2);
   }
 }
