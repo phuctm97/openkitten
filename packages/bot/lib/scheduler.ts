@@ -50,7 +50,7 @@ export class Scheduler implements Disposable {
       embedded: true,
       processor: (job: Job<TaskData>) => this.#processJob(job),
       concurrency: 5,
-      removeOnComplete: true,
+      removeOnComplete: { count: 50 },
       retry: {
         strategy: "exponential",
         maxAttempts: 3,

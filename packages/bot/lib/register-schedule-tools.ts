@@ -196,7 +196,7 @@ export function registerScheduleTools(
     "queue_schedule_trigger",
     {
       description:
-        "Run a scheduled task immediately without waiting for the next cron tick. Useful for testing or when the user wants results now.",
+        "Enqueue a scheduled task for immediate execution without waiting for the next cron tick. The job is processed asynchronously — for background tasks, execution may take several minutes as the AI processes the prompt. Use queue_status or queue_list_jobs to monitor progress.",
       inputSchema: scheduleIdInputSchema,
       outputSchema: zod.object({ triggered: zod.boolean() }),
     },
