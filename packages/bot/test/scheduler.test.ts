@@ -333,7 +333,13 @@ test("delete() removes task from Map and bunqueue", async () => {
 // trigger()
 // ---------------------------------------------------------------------------
 
-test("trigger() executes session task immediately", async () => {
+test("trigger() enqueues a job via bunqueue instead of executing inline", async () => {
+  const mockAdd = vi.fn().mockResolvedValue({
+    id: "triggered-1",
+    name: "trigger-task-1",
+  });
+  mockQueue.add = mockAdd;
+
   const task = await scheduler.create({
     sessionId: "session-1",
     kind: "session",
@@ -345,28 +351,28 @@ test("trigger() executes session task immediately", async () => {
 
   await scheduler.trigger(task.id);
 
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+  expect(mockAdd).toHaveBeenCalledWith(
+    `trigger-${task.id}`,
     expect.objectContaining({
-      sessionID: "session-1",
-      parts: [{ type: "text", text: "[Scheduled Task] run this" }],
+      sessionId: "session-1",
+      prompt: "run this",
     }),
-    { throwOnError: true },
   );
+  // Should NOT execute inline — promptAsync not called directly
+  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
 });
 
-test("trigger() includes agent when getSessionAgent returns a value", async () => {
+test("processor includes agent when getSessionAgent returns a value", async () => {
   mockGetSessionAgent.mockReturnValue("my-agent");
 
-  const task = await scheduler.create({
+  await fireJob("agent-task", {
     sessionId: "session-1",
     kind: "session",
     cron: "0 * * * *",
-    description: "agent task",
     prompt: "agent prompt",
+    description: "d",
     once: false,
   });
-
-  await scheduler.trigger(task.id);
 
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     expect.objectContaining({
@@ -509,12 +515,16 @@ test("update() throws NotFoundError for missing ID", async () => {
 // #processJob — via capturedProcessor
 // ---------------------------------------------------------------------------
 
-async function fireJob(taskId: string, data: Record<string, unknown>) {
+async function fireJob(
+  taskId: string,
+  data: Record<string, unknown>,
+  name?: string,
+) {
   if (!capturedProcessor)
     throw new Error(
       "capturedProcessor was never set — Scheduler.create() not called?",
     );
-  const job = { data: { taskId, ...data } };
+  const job = { name: name ?? taskId, data: { taskId, ...data } };
   await capturedProcessor(job);
 }
 
@@ -522,8 +532,15 @@ async function fireJob(taskId: string, data: Record<string, unknown>) {
 // #execute — background kind
 // ---------------------------------------------------------------------------
 
-async function triggerBackground(taskId: string) {
-  const promise = scheduler.trigger(taskId);
+async function triggerBackground(task: Scheduler.Task) {
+  const promise = fireJob(task.id, {
+    sessionId: task.sessionId,
+    kind: task.kind,
+    cron: task.cron,
+    prompt: task.prompt,
+    description: task.description,
+    once: task.once,
+  });
   await vi.advanceTimersByTimeAsync(2000);
   return promise;
 }
@@ -546,7 +563,7 @@ test("background task sends response to Telegram when meaningful", async () => {
     once: false,
   });
 
-  await triggerBackground(task.id);
+  await triggerBackground(task);
 
   expect(opencodeClient.session.create).toHaveBeenCalledWith(
     {},
@@ -576,7 +593,7 @@ test("background task skips Telegram when response is NO_REPORT", async () => {
     once: false,
   });
 
-  await triggerBackground(task.id);
+  await triggerBackground(task);
 
   expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
   expect(opencodeClient.session.abort).toHaveBeenCalled();
@@ -596,7 +613,16 @@ test("background task cleans up ephemeral session on error", async () => {
     once: false,
   });
 
-  await expect(scheduler.trigger(task.id)).rejects.toThrow("AI failed");
+  await expect(
+    fireJob(task.id, {
+      sessionId: task.sessionId,
+      kind: task.kind,
+      cron: task.cron,
+      prompt: task.prompt,
+      description: task.description,
+      once: task.once,
+    }),
+  ).rejects.toThrow("AI failed");
   expect(opencodeClient.session.abort).toHaveBeenCalledWith({
     sessionID: "ephemeral-session-1",
   });
@@ -620,7 +646,7 @@ test("background task with threadId sends to correct thread", async () => {
     once: false,
   });
 
-  await triggerBackground(task.id);
+  await triggerBackground(task);
 
   expect(mockBot.api.sendMessage).toHaveBeenCalledWith(456, "Thread report", {
     message_thread_id: 42,
@@ -639,7 +665,7 @@ test("background task skips when response contains NO_REPORT marker", async () =
     once: false,
   });
 
-  await triggerBackground(task.id);
+  await triggerBackground(task);
 
   expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
 });
@@ -663,7 +689,7 @@ test("background task skips notification when no text in messages", async () => 
     once: false,
   });
 
-  await triggerBackground(task.id);
+  await triggerBackground(task);
 
   expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
 });
@@ -680,7 +706,7 @@ test("background task logs warning when ephemeral session abort fails", async ()
     once: false,
   });
 
-  await triggerBackground(task.id);
+  await triggerBackground(task);
 
   expect(opencodeClient.session.abort).toHaveBeenCalled();
 });
@@ -710,7 +736,14 @@ test("background task polls while session is busy then reads result", async () =
     once: false,
   });
 
-  const promise = scheduler.trigger(task.id);
+  const promise = fireJob(task.id, {
+    sessionId: task.sessionId,
+    kind: task.kind,
+    cron: task.cron,
+    prompt: task.prompt,
+    description: task.description,
+    once: task.once,
+  });
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(2000);
   await promise;
@@ -751,7 +784,14 @@ test("background task continues polling on retry status then resolves", async ()
     once: false,
   });
 
-  const promise = scheduler.trigger(task.id);
+  const promise = fireJob(task.id, {
+    sessionId: task.sessionId,
+    kind: task.kind,
+    cron: task.cron,
+    prompt: task.prompt,
+    description: task.description,
+    once: task.once,
+  });
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(2000);
   await promise;
@@ -776,7 +816,7 @@ test("background task breaks on idle with no text response", async () => {
     once: false,
   });
 
-  await triggerBackground(task.id);
+  await triggerBackground(task);
 
   expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
 });
@@ -796,7 +836,7 @@ test("background task breaks when session not in status map", async () => {
     once: false,
   });
 
-  await triggerBackground(task.id);
+  await triggerBackground(task);
 
   expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
 });
@@ -813,7 +853,14 @@ test("background task skips execution when location is undefined", async () => {
     once: false,
   });
 
-  await scheduler.trigger(task.id);
+  await fireJob(task.id, {
+    sessionId: task.sessionId,
+    kind: task.kind,
+    cron: task.cron,
+    prompt: task.prompt,
+    description: task.description,
+    once: task.once,
+  });
 
   expect(opencodeClient.session.create).not.toHaveBeenCalled();
   expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
@@ -901,6 +948,33 @@ test("processor populates Map from job data on first fire after restart", async 
   const found = scheduler.get("restored-task");
   expect(found.prompt).toBe("restored");
   expect(found.description).toBe("restored desc");
+});
+
+test("manual trigger does not delete once-task from Map", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "once manual",
+    prompt: "p",
+    once: true,
+  });
+
+  await fireJob(
+    task.id,
+    {
+      sessionId: "session-1",
+      kind: "session",
+      cron: "0 * * * *",
+      prompt: "p",
+      description: "once manual",
+      once: true,
+    },
+    `trigger-${task.id}`,
+  );
+
+  // Task should still be in the Map after manual trigger
+  expect(scheduler.get(task.id).description).toBe("once manual");
 });
 
 test("processor deletes once-task from Map after execution", async () => {

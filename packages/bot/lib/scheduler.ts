@@ -105,7 +105,7 @@ export class Scheduler implements Disposable {
   async trigger(id: string): Promise<void> {
     const data = this.#tasks.get(id);
     if (!data) throw new Scheduler.NotFoundError(id);
-    await this.#execute(data);
+    await this.#queue.queue.add(`trigger-${data.taskId}`, data);
   }
 
   async update(
@@ -207,7 +207,8 @@ export class Scheduler implements Disposable {
     try {
       await this.#execute(data);
     } finally {
-      if (data.once) {
+      const isManualTrigger = job.name.startsWith("trigger-");
+      if (data.once && !isManualTrigger) {
         this.#tasks.delete(data.taskId);
       }
     }
