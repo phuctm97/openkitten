@@ -109,7 +109,6 @@ When you start saving final approved assets into the repo, use:
 
 ```text
 packages/world/public/world/v1/backgrounds/house-room-shell-v1.png
-packages/world/public/world/v1/backgrounds/house-foreground-trim-v1.png
 packages/world/public/world/v1/props/whiteboard-v1.png
 packages/world/public/world/v1/props/cabinet-v1.png
 packages/world/public/world/v1/props/inbox-station-v1.png
@@ -134,7 +133,6 @@ If a tool cannot produce transparent backgrounds directly, generate on a flat ch
 This is the smallest useful set for MVP:
 
 - 1 room shell background
-- 1 foreground trim overlay
 - 3 OpenKitten-significant props
 - 5 to 7 atmospheric props
 - 2 cats
@@ -452,22 +450,6 @@ Composition/framing: centered single asset
 Lighting/mood: soft warm indoor shadow
 Constraints: no text, no watermark, simple and reusable
 Avoid: hard black ellipse, photoreal shadow detail
-```
-
-Foreground trim prompt:
-
-```text
-Use case: stylized-concept
-Asset type: foreground overlay for a game scene
-Primary request: create a subtle foreground trim layer for the OpenKitten World MVP room
-Input images: Image 1 = approved room-shell reference
-Scene/backdrop: transparent background if supported
-Subject: a few foreground leaves, shelf edges, or frame elements that can sit at the front of the room and add depth without blocking gameplay
-Style/medium: stylized 2D game overlay, painterly-cartoon finish
-Composition/framing: sparse overlay pieces, readable, not cluttered
-Lighting/mood: warm indoor light
-Constraints: no text, no logo, no watermark, match the room-shell style, keep gameplay visibility clear
-Avoid: heavy screen-obscuring foreground, dark vignette, busy ornament
 ```
 
 ## Iteration Prompts

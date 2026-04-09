@@ -10,20 +10,18 @@ type MockCanvas = {
   };
 };
 
-type MockContainer = {
-  add: ReturnType<typeof vi.fn>;
-  setPosition: ReturnType<typeof vi.fn>;
-};
-
 type MockEventEmitter = {
   once: ReturnType<typeof vi.fn>;
 };
 
-type MockRectangle = {
-  setFillStyle: ReturnType<typeof vi.fn>;
+type MockImage = {
+  setDisplaySize: ReturnType<typeof vi.fn>;
   setOrigin: ReturnType<typeof vi.fn>;
-  setSize: ReturnType<typeof vi.fn>;
-  setStrokeStyle: ReturnType<typeof vi.fn>;
+  setPosition: ReturnType<typeof vi.fn>;
+};
+
+type MockLoader = {
+  image: ReturnType<typeof vi.fn>;
 };
 
 type MockRenderer = {
@@ -37,14 +35,6 @@ type MockScale = {
   off: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;
   width: number;
-};
-
-type MockText = {
-  setColor: ReturnType<typeof vi.fn>;
-  setFontSize: ReturnType<typeof vi.fn>;
-  setOrigin: ReturnType<typeof vi.fn>;
-  setWordWrapWidth: ReturnType<typeof vi.fn>;
-  setY: ReturnType<typeof vi.fn>;
 };
 
 class MockMutationObserver {
@@ -80,38 +70,30 @@ function createMockCanvas(): MockCanvas {
   };
 }
 
-function createMockContainer(): MockContainer {
-  const container = {
-    add: vi.fn(),
-    setPosition: vi.fn(),
-  };
-
-  container.add.mockReturnValue(container);
-  container.setPosition.mockReturnValue(container);
-
-  return container;
-}
-
 function createMockEventEmitter(): MockEventEmitter {
   return {
     once: vi.fn(),
   };
 }
 
-function createMockRectangle(): MockRectangle {
-  const rectangle = {
-    setFillStyle: vi.fn(),
+function createMockImage(): MockImage {
+  const image = {
+    setDisplaySize: vi.fn(),
     setOrigin: vi.fn(),
-    setSize: vi.fn(),
-    setStrokeStyle: vi.fn(),
+    setPosition: vi.fn(),
   };
 
-  rectangle.setFillStyle.mockReturnValue(rectangle);
-  rectangle.setOrigin.mockReturnValue(rectangle);
-  rectangle.setSize.mockReturnValue(rectangle);
-  rectangle.setStrokeStyle.mockReturnValue(rectangle);
+  image.setDisplaySize.mockReturnValue(image);
+  image.setOrigin.mockReturnValue(image);
+  image.setPosition.mockReturnValue(image);
 
-  return rectangle;
+  return image;
+}
+
+function createMockLoader(): MockLoader {
+  return {
+    image: vi.fn(),
+  };
 }
 
 function createMockRenderer(): MockRenderer {
@@ -131,68 +113,23 @@ function createMockScale(): MockScale {
   };
 }
 
-function createMockText(): MockText {
-  const text = {
-    setColor: vi.fn(),
-    setFontSize: vi.fn(),
-    setOrigin: vi.fn(),
-    setWordWrapWidth: vi.fn(),
-    setY: vi.fn(),
-  };
-
-  text.setColor.mockReturnValue(text);
-  text.setFontSize.mockReturnValue(text);
-  text.setOrigin.mockReturnValue(text);
-  text.setWordWrapWidth.mockReturnValue(text);
-  text.setY.mockReturnValue(text);
-
-  return text;
-}
-
 const houseSceneMocks = vi.hoisted(() => {
   const cameras: MockCamera[] = [];
   const canvases: MockCanvas[] = [];
-  const containers: MockContainer[] = [];
   const events: MockEventEmitter[] = [];
+  const images: MockImage[] = [];
   const keys: unknown[] = [];
-  const rectangles: MockRectangle[] = [];
+  const loaders: MockLoader[] = [];
   const renderers: MockRenderer[] = [];
   const scales: MockScale[] = [];
-  const texts: MockText[] = [];
 
   class MockScene {
     add = {
-      container: vi.fn((_x: number, _y: number, _children: unknown[]) => {
-        const container = createMockContainer();
-        containers.push(container);
-        return container;
+      image: vi.fn((_x: number, _y: number, _key: string) => {
+        const image = createMockImage();
+        images.push(image);
+        return image;
       }),
-      rectangle: vi.fn(
-        (
-          _x: number,
-          _y: number,
-          _width: number,
-          _height: number,
-          _color: number,
-          _alpha?: number,
-        ) => {
-          const rectangle = createMockRectangle();
-          rectangles.push(rectangle);
-          return rectangle;
-        },
-      ),
-      text: vi.fn(
-        (
-          _x: number,
-          _y: number,
-          _value: string,
-          _style: Record<string, unknown>,
-        ) => {
-          const text = createMockText();
-          texts.push(text);
-          return text;
-        },
-      ),
     };
     cameras = {
       main: createMockCamera(),
@@ -202,6 +139,7 @@ const houseSceneMocks = vi.hoisted(() => {
       canvas: createMockCanvas(),
       renderer: createMockRenderer(),
     };
+    load = createMockLoader();
     scale = createMockScale();
 
     constructor(key?: unknown) {
@@ -209,6 +147,7 @@ const houseSceneMocks = vi.hoisted(() => {
       cameras.push(this.cameras.main);
       canvases.push(this.game.canvas);
       events.push(this.events);
+      loaders.push(this.load);
       renderers.push(this.game.renderer);
       scales.push(this.scale);
     }
@@ -217,14 +156,13 @@ const houseSceneMocks = vi.hoisted(() => {
   return {
     cameras,
     canvases,
-    MockScene,
-    containers,
     events,
+    images,
     keys,
-    rectangles,
+    loaders,
+    MockScene,
     renderers,
     scales,
-    texts,
   };
 });
 
@@ -236,9 +174,7 @@ vi.mock("phaser", () => ({
       },
     },
     GameObjects: {
-      Container: class Container {},
-      Rectangle: class Rectangle {},
-      Text: class Text {},
+      Image: class Image {},
     },
     Scale: {
       Events: {
@@ -258,13 +194,12 @@ afterEach(() => {
   document.documentElement.style.colorScheme = "";
   houseSceneMocks.cameras.length = 0;
   houseSceneMocks.canvases.length = 0;
-  houseSceneMocks.containers.length = 0;
   houseSceneMocks.events.length = 0;
+  houseSceneMocks.images.length = 0;
   houseSceneMocks.keys.length = 0;
-  houseSceneMocks.rectangles.length = 0;
+  houseSceneMocks.loaders.length = 0;
   houseSceneMocks.renderers.length = 0;
   houseSceneMocks.scales.length = 0;
-  houseSceneMocks.texts.length = 0;
   MockMutationObserver.instances.length = 0;
   vi.clearAllMocks();
   vi.resetModules();
@@ -272,7 +207,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("builds and lays out the fullscreen placeholder scene using the active palette", async () => {
+test("preloads and lays out the fullscreen house artwork using the active palette", async () => {
   document.documentElement.style.colorScheme = "dark";
   vi.stubGlobal("MutationObserver", MockMutationObserver);
 
@@ -282,13 +217,24 @@ test("builds and lays out the fullscreen placeholder scene using the active pale
   expect(HouseScene.key).toBe("house");
   expect(houseSceneMocks.keys[0]).toBe(HouseScene.key);
 
+  scene.preload();
+
+  const load = houseSceneMocks.loaders[0];
+
+  if (load === undefined) {
+    throw new Error("Expected the House scene loader to be created.");
+  }
+
+  expect(load.image).toHaveBeenNthCalledWith(
+    1,
+    "house-room-shell-v1",
+    "/world/v1/backgrounds/house-room-shell-v1.png",
+  );
+  expect(load.image).toHaveBeenCalledTimes(1);
+
   scene.create();
 
-  const glow = houseSceneMocks.rectangles[0];
-  const card = houseSceneMocks.rectangles[1];
-  const title = houseSceneMocks.texts[0];
-  const subtitle = houseSceneMocks.texts[1];
-  const panel = houseSceneMocks.containers[0];
+  const roomShell = houseSceneMocks.images[0];
   const camera = houseSceneMocks.cameras[0];
   const canvas = houseSceneMocks.canvases[0];
   const scale = houseSceneMocks.scales[0];
@@ -297,11 +243,7 @@ test("builds and lays out the fullscreen placeholder scene using the active pale
   const colorSchemeObserver = MockMutationObserver.instances[0];
 
   if (
-    glow === undefined ||
-    card === undefined ||
-    title === undefined ||
-    subtitle === undefined ||
-    panel === undefined ||
+    roomShell === undefined ||
     camera === undefined ||
     canvas === undefined ||
     scale === undefined ||
@@ -312,63 +254,23 @@ test("builds and lays out the fullscreen placeholder scene using the active pale
     throw new Error("Expected the House scene objects to be created.");
   }
 
-  expect(scene.add.rectangle).toHaveBeenCalledTimes(2);
-  expect(scene.add.text).toHaveBeenCalledTimes(2);
-  expect(scene.add.text).toHaveBeenNthCalledWith(
-    1,
-    0,
-    -48,
-    "OpenKitten",
-    expect.objectContaining({
-      color: "#fafaf9",
-      fontSize: "42px",
-      fontStyle: "700",
-    }),
-  );
-  expect(scene.add.text).toHaveBeenNthCalledWith(
-    2,
-    0,
-    28,
-    "Phaser is running fullscreen on `/`.\nThe real House comes next.",
-    expect.objectContaining({
-      color: "#a6a09b",
-      lineSpacing: 8,
-    }),
-  );
-  expect(scene.add.rectangle).toHaveBeenNthCalledWith(
+  const roomShellLayoutCall = roomShell.setDisplaySize.mock.calls[0];
+
+  if (roomShellLayoutCall === undefined) {
+    throw new Error("Expected the House scene artwork to be laid out.");
+  }
+
+  expect(scene.add.image).toHaveBeenCalledTimes(1);
+  expect(scene.add.image).toHaveBeenNthCalledWith(
     1,
     0,
     0,
-    612,
-    332,
-    0x973c00,
-    0.24,
+    "house-room-shell-v1",
   );
-  expect(scene.add.rectangle).toHaveBeenNthCalledWith(
-    2,
-    0,
-    0,
-    560,
-    280,
-    0x1c1917,
-    0.96,
-  );
-  expect(scene.add.container).toHaveBeenCalledWith(640, 360, [
-    glow,
-    card,
-    title,
-    subtitle,
-  ]);
-  expect(glow.setFillStyle).toHaveBeenCalledWith(0x973c00, 0.24);
-  expect(card.setFillStyle).toHaveBeenCalledWith(0x1c1917, 0.96);
-  expect(card.setStrokeStyle).toHaveBeenLastCalledWith(2, 0xffffff, 0.1);
-  expect(title.setColor).toHaveBeenCalledWith("#fafaf9");
-  expect(subtitle.setColor).toHaveBeenCalledWith("#a6a09b");
-  expect(glow.setSize).toHaveBeenCalledWith(612, 332);
-  expect(card.setSize).toHaveBeenCalledWith(560, 280);
-  expect(panel.setPosition).toHaveBeenCalledWith(640, 360);
-  expect(title.setFontSize).toHaveBeenCalledWith("42px");
-  expect(subtitle.setWordWrapWidth).toHaveBeenCalledWith(496, true);
+  expect(roomShell.setOrigin).toHaveBeenCalledWith(0.5);
+  expect(roomShellLayoutCall[0]).toBeCloseTo(1280);
+  expect(roomShellLayoutCall[1]).toBeCloseTo(853.3333333333);
+  expect(roomShell.setPosition).toHaveBeenCalledWith(640, 360);
   expect(camera.setBackgroundColor).toHaveBeenCalledWith("#0c0a09");
   expect(canvas.style.backgroundColor).toBe("#0c0a09");
   expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
@@ -400,6 +302,7 @@ test("builds the initial scene from the computed color scheme when inline style 
   const { HouseScene } = await import("~/lib/house-scene");
   const scene = new HouseScene();
 
+  scene.preload();
   scene.create();
 
   const camera = houseSceneMocks.cameras[0];
@@ -410,24 +313,6 @@ test("builds the initial scene from the computed color scheme when inline style 
     throw new Error("Expected the House scene to create its render targets.");
   }
 
-  expect(scene.add.text).toHaveBeenNthCalledWith(
-    1,
-    0,
-    -48,
-    "OpenKitten",
-    expect.objectContaining({
-      color: "#fafaf9",
-    }),
-  );
-  expect(scene.add.rectangle).toHaveBeenNthCalledWith(
-    1,
-    0,
-    0,
-    612,
-    332,
-    0x973c00,
-    0.24,
-  );
   expect(camera.setBackgroundColor).toHaveBeenCalledWith("#0c0a09");
   expect(canvas.style.backgroundColor).toBe("#0c0a09");
   expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
@@ -439,15 +324,12 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   const { HouseScene } = await import("~/lib/house-scene");
   const scene = new HouseScene();
 
+  scene.preload();
   scene.create();
 
-  const glow = houseSceneMocks.rectangles[0];
+  const roomShell = houseSceneMocks.images[0];
   const scale = houseSceneMocks.scales[0];
   const events = houseSceneMocks.events[0];
-  const card = houseSceneMocks.rectangles[1];
-  const panel = houseSceneMocks.containers[0];
-  const title = houseSceneMocks.texts[0];
-  const subtitle = houseSceneMocks.texts[1];
   const camera = houseSceneMocks.cameras[0];
   const canvas = houseSceneMocks.canvases[0];
   const renderer = houseSceneMocks.renderers[0];
@@ -456,15 +338,11 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   const shutdownHandler = events?.once.mock.calls[0]?.[1];
 
   if (
-    glow === undefined ||
+    roomShell === undefined ||
     scale === undefined ||
     events === undefined ||
     resizeHandler === undefined ||
     shutdownHandler === undefined ||
-    card === undefined ||
-    panel === undefined ||
-    title === undefined ||
-    subtitle === undefined ||
     camera === undefined ||
     canvas === undefined ||
     renderer === undefined ||
@@ -476,10 +354,6 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   document.documentElement.style.colorScheme = "dark";
   colorSchemeObserver.notify();
 
-  expect(glow.setFillStyle).toHaveBeenLastCalledWith(0x973c00, 0.24);
-  expect(card.setFillStyle).toHaveBeenLastCalledWith(0x1c1917, 0.96);
-  expect(title.setColor).toHaveBeenLastCalledWith("#fafaf9");
-  expect(subtitle.setColor).toHaveBeenLastCalledWith("#a6a09b");
   expect(camera.setBackgroundColor).toHaveBeenLastCalledWith("#0c0a09");
   expect(canvas.style.backgroundColor).toBe("#0c0a09");
   expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
@@ -488,19 +362,19 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   scale.height = 812;
   resizeHandler.call(scene);
 
-  expect(card.setSize).toHaveBeenLastCalledWith(472, 240);
-  expect(panel.setPosition).toHaveBeenLastCalledWith(260, 406);
-  expect(title.setFontSize).toHaveBeenLastCalledWith("30px");
-  expect(subtitle.setWordWrapWidth).toHaveBeenLastCalledWith(408, true);
+  expect(roomShell.setDisplaySize).toHaveBeenLastCalledWith(1218, 812);
+  expect(roomShell.setPosition).toHaveBeenLastCalledWith(260, 406);
 
   shutdownHandler.call(scene);
 
   expect(colorSchemeObserver.disconnect).toHaveBeenCalledTimes(1);
   expect(scale.off).toHaveBeenCalledWith("resize-event", resizeHandler, scene);
-  title.setColor.mockClear();
+  camera.setBackgroundColor.mockClear();
+  roomShell.setPosition.mockClear();
   colorSchemeObserver.notify();
   expect(() => {
     resizeHandler.call(scene);
   }).not.toThrow();
-  expect(title.setColor).not.toHaveBeenCalled();
+  expect(camera.setBackgroundColor).not.toHaveBeenCalled();
+  expect(roomShell.setPosition).not.toHaveBeenCalled();
 });
