@@ -55,11 +55,6 @@ FX:
 - `fx/hover-ring-v1.png`
   Final selected hover ring asset.
 
-UI:
-
-- `ui/inspect-panel-v1.png`
-  Selected game-native inspect plaque used behind the in-room focus text.
-
 ## Notes
 
 - This set is intended as a first candidate set, not a fully locked art pack.
