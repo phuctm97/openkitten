@@ -781,24 +781,37 @@ test("background task breaks on idle with no text response", async () => {
   expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
 });
 
-test("background task breaks when session not in status map", async () => {
+test("background task continues polling when session not in status map yet", async () => {
+  // First poll: session not in status map (not started yet) — should continue
   opencodeClient.session.status.mockResolvedValueOnce({ data: {} });
   opencodeClient.session.messages.mockResolvedValueOnce({
     data: [{ info: { role: "user" }, parts: [] }],
   });
+  // Second poll: session is idle with result
+  opencodeClient.session.status.mockResolvedValueOnce({
+    data: { "ephemeral-session-1": { type: "idle" } },
+  });
+  mockBackgroundResponse("Delayed result");
 
   const task = await scheduler.create({
     sessionId: "session-1",
     kind: "background",
     cron: "0 * * * *",
-    description: "no status",
+    description: "no status initially",
     prompt: "check",
     once: false,
   });
 
-  await triggerBackground(task.id);
+  const promise = scheduler.trigger(task.id);
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(2000);
+  await promise;
 
-  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
+  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+    123,
+    "Delayed result",
+    {},
+  );
 });
 
 test("background task skips execution when location is undefined", async () => {

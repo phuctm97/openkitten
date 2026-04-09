@@ -296,7 +296,7 @@ export class Scheduler implements Disposable {
           .join("");
         if (text) return text;
       }
-      if (!status || status.type === "idle") break;
+      if (status?.type === "idle") break;
     }
     logger.warn("Background task produced no text response", { taskId });
     return null;
