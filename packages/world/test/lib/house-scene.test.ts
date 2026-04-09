@@ -542,6 +542,73 @@ test("caps zoom on very small viewports so the world stops shrinking past the mi
   expect(camera.scrollY).toBeCloseTo(403.4666666667);
 });
 
+test("keeps dragging on mismatched pointer up and safely ignores scroll requests without a world", async () => {
+  vi.stubGlobal("MutationObserver", MockMutationObserver);
+
+  const { HouseScene } = await import("~/lib/house-scene");
+  const scene = new HouseScene();
+
+  scene.preload();
+  scene.create();
+
+  const camera = houseSceneMocks.cameras[0];
+  const canvas = houseSceneMocks.canvases[0];
+  const scale = houseSceneMocks.scales[0];
+  const events = houseSceneMocks.events[0];
+  const input = houseSceneMocks.inputs[0];
+  const pointerDownHandler = input?.on.mock.calls[0]?.[1];
+  const pointerMoveHandler = input?.on.mock.calls[1]?.[1];
+  const pointerUpHandler = input?.on.mock.calls[2]?.[1];
+  const resizeHandler = scale?.on.mock.calls[0]?.[1];
+  const shutdownHandler = events?.once.mock.calls[0]?.[1];
+
+  if (
+    camera === undefined ||
+    canvas === undefined ||
+    scale === undefined ||
+    events === undefined ||
+    input === undefined ||
+    pointerDownHandler === undefined ||
+    pointerMoveHandler === undefined ||
+    pointerUpHandler === undefined ||
+    resizeHandler === undefined ||
+    shutdownHandler === undefined
+  ) {
+    throw new Error("Expected the scene guard callbacks to be registered.");
+  }
+
+  pointerDownHandler.call(scene, { id: 11, x: 320, y: 180 });
+  pointerUpHandler.call(scene, { id: 12 });
+  expect(canvas.style.cursor).toBe("grabbing");
+
+  pointerMoveHandler.call(scene, { id: 11, x: 260, y: 120 });
+  expect(camera.scrollX).toBeCloseTo(175.2);
+  expect(camera.scrollY).toBeCloseTo(203.4666666667);
+
+  camera.width = 1510.3999999999999;
+  camera.height = 1006.9333333333333;
+  camera.zoom = 1;
+  camera.scrollX = 0;
+  camera.scrollY = 0;
+  resizeHandler.call(scene);
+  expect(camera.scrollX).toBeCloseTo(115.2);
+  expect(camera.scrollY).toBeCloseTo(143.4666666667);
+
+  shutdownHandler.call(scene);
+  camera.setScroll.mockClear();
+
+  const setCameraScroll = Reflect.get(scene, "setCameraScroll");
+
+  if (typeof setCameraScroll !== "function") {
+    throw new Error("Expected the House scene scroll helper to exist.");
+  }
+
+  expect(() => {
+    setCameraScroll.call(scene, 1, 1);
+  }).not.toThrow();
+  expect(camera.setScroll).not.toHaveBeenCalled();
+});
+
 test("responds to palette changes, resize events, and shutdown cleanup", async () => {
   vi.stubGlobal("MutationObserver", MockMutationObserver);
 
