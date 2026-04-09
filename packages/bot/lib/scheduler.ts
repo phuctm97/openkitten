@@ -1,11 +1,11 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
-import { eq } from "drizzle-orm";
+import type { Job, JobOptions } from "bunqueue/client";
+import { Bunqueue } from "bunqueue/client";
 import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { logger } from "~/lib/logger";
-import * as schema from "~/lib/schema";
 
 const sessionPromptPrefix = "[Scheduled Task] ";
 
@@ -18,12 +18,23 @@ const validKinds: ReadonlySet<string> = new Set<Scheduler.TaskKind>([
   "background",
 ]);
 
+interface TaskData {
+  readonly taskId: string;
+  readonly sessionId: string;
+  readonly kind: Scheduler.TaskKind;
+  readonly cron: string;
+  readonly description: string;
+  readonly prompt: string;
+  readonly once: boolean;
+}
+
 export class Scheduler implements Disposable {
   readonly #bot: Bot;
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
-  readonly #timers = new Map<string, Timer>();
+  readonly #queue: Bunqueue<TaskData>;
+  readonly #tasks = new Map<string, TaskData>();
 
   private constructor(
     bot: Bot,
@@ -35,191 +46,147 @@ export class Scheduler implements Disposable {
     this.#database = database;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
+    this.#queue = new Bunqueue<TaskData>("scheduler", {
+      embedded: true,
+      processor: (job: Job<TaskData>) => this.#processJob(job),
+      concurrency: 5,
+      removeOnComplete: true,
+      retry: {
+        strategy: "exponential",
+        maxAttempts: 3,
+        delay: 5000,
+      },
+    });
+    this.#queue.on("error", (error) => {
+      logger.error("Scheduler queue error", error);
+    });
   }
 
   async create(input: Scheduler.CreateInput): Promise<Scheduler.Task> {
     const id = crypto.randomUUID();
-    this.#database
-      .insert(schema.scheduledTask)
-      .values({
+    const taskData: TaskData = {
+      taskId: id,
+      sessionId: input.sessionId,
+      kind: input.kind,
+      cron: input.cron,
+      description: input.description,
+      prompt: input.prompt,
+      once: input.once,
+    };
+    if (input.once) {
+      await this.#queue.queue.upsertJobScheduler(
         id,
-        sessionId: input.sessionId,
-        kind: input.kind,
-        description: input.description,
-        prompt: input.prompt,
-        cron: input.cron,
-        once: input.once ? 1 : 0,
-      })
-      .run();
-    this.#startTimer(id, input.cron, input.once);
-    return this.#toTask(
-      id,
-      input.sessionId,
-      input.kind,
-      input.description,
-      input.prompt,
-      input.cron,
-      input.once,
-    );
+        { pattern: input.cron, limit: 1 },
+        { name: id, data: taskData },
+      );
+    } else {
+      await this.#queue.cron(id, input.cron, taskData);
+    }
+    this.#tasks.set(id, taskData);
+    return this.#toTask(taskData);
   }
 
   list(): Scheduler.Task[] {
-    const rows = this.#database.query.scheduledTask.findMany().sync();
-    return rows.map((row) =>
-      this.#toTask(
-        row.id,
-        row.sessionId,
-        row.kind,
-        row.description,
-        row.prompt,
-        row.cron,
-        row.once === 1,
-      ),
-    );
+    return [...this.#tasks.values()].map((data) => this.#toTask(data));
   }
 
   get(id: string): Scheduler.Task {
-    const row = this.#readTask(id);
-    if (!row) throw new Scheduler.NotFoundError(id);
-    return this.#toTask(
-      row.id,
-      row.sessionId,
-      row.kind,
-      row.description,
-      row.prompt,
-      row.cron,
-      row.once === 1,
-    );
+    const data = this.#tasks.get(id);
+    if (!data) throw new Scheduler.NotFoundError(id);
+    return this.#toTask(data);
   }
 
   async delete(id: string): Promise<void> {
-    const row = this.#readTask(id);
-    if (!row) throw new Scheduler.NotFoundError(id);
-    this.#stopTimer(id);
-    this.#deleteTask(id);
+    if (!this.#tasks.has(id)) throw new Scheduler.NotFoundError(id);
+    await this.#queue.removeCron(id);
+    this.#tasks.delete(id);
   }
 
   async trigger(id: string): Promise<void> {
-    const row = this.#readTask(id);
-    if (!row) throw new Scheduler.NotFoundError(id);
-    await this.#execute(row);
+    const data = this.#tasks.get(id);
+    if (!data) throw new Scheduler.NotFoundError(id);
+    await this.#execute(data);
   }
 
   async update(
     id: string,
     input: Scheduler.UpdateInput,
   ): Promise<Scheduler.Task> {
-    const existing = this.#readTask(id);
+    const existing = this.#tasks.get(id);
     if (!existing) throw new Scheduler.NotFoundError(id);
-    const values: Record<string, unknown> = {};
-    if (input.description !== undefined)
-      values["description"] = input.description;
-    if (input.prompt !== undefined) values["prompt"] = input.prompt;
-    if (input.cron !== undefined) values["cron"] = input.cron;
-    if (Object.keys(values).length > 0) {
-      this.#database
-        .update(schema.scheduledTask)
-        .set(values)
-        .where(eq(schema.scheduledTask.id, id))
-        .run();
-    }
     const cron = input.cron ?? existing.cron;
-    if (input.cron !== undefined && input.cron !== existing.cron) {
-      this.#stopTimer(id);
-      this.#startTimer(id, cron, existing.once === 1);
-    }
-    return this.#toTask(
-      id,
-      existing.sessionId,
-      existing.kind,
-      input.description ?? existing.description,
-      input.prompt ?? existing.prompt,
+    const description = input.description ?? existing.description;
+    const prompt = input.prompt ?? existing.prompt;
+    const updated: TaskData = {
+      ...existing,
       cron,
-      existing.once === 1,
-    );
-  }
-
-  #toTask(
-    id: string,
-    sessionId: string,
-    kind: string,
-    description: string,
-    prompt: string,
-    cron: string,
-    once: boolean,
-  ): Scheduler.Task {
-    if (!validKinds.has(kind))
-      throw new Error(`Unknown scheduled task kind: ${kind}`);
-    return {
-      id,
-      sessionId,
-      kind: kind as Scheduler.TaskKind,
       description,
       prompt,
-      cron,
-      once,
-      nextRun: this.#nextRun(cron),
     };
-  }
-
-  #readTask(id: string) {
-    return this.#database.query.scheduledTask
-      .findFirst({ where: eq(schema.scheduledTask.id, id) })
-      .sync();
-  }
-
-  #deleteTask(id: string): void {
-    this.#database
-      .delete(schema.scheduledTask)
-      .where(eq(schema.scheduledTask.id, id))
-      .run();
-  }
-
-  #startTimer(id: string, cron: string, once: boolean): void {
-    const scheduleNext = () => {
-      let next: Date | null;
+    const cronChanged =
+      input.cron !== undefined && input.cron !== existing.cron;
+    const dataChanged =
+      description !== existing.description || prompt !== existing.prompt;
+    if (cronChanged) {
+      await this.#queue.removeCron(id);
       try {
-        next = Bun.cron.parse(cron);
-      } catch {
-        logger.warn("Invalid cron expression, timer not started", {
-          taskId: id,
-          cron,
-        });
-        return;
-      }
-      if (!next) return;
-      const delay = Math.max(next.getTime() - Date.now(), 1000);
-      const timer = setTimeout(async () => {
-        this.#timers.delete(id);
-        try {
-          const task = this.#readTask(id);
-          if (!task) {
-            logger.debug("Timer fired for deleted task, skipping", {
-              taskId: id,
-            });
-            return;
-          }
-          await this.#execute(task);
-          if (once) {
-            this.#deleteTask(id);
-          } else {
-            scheduleNext();
-          }
-        } catch (error) {
-          logger.error("Scheduled task failed", error, { taskId: id });
-          if (!once) scheduleNext();
+        if (existing.once) {
+          await this.#queue.queue.upsertJobScheduler(
+            id,
+            { pattern: cron, limit: 1 },
+            { name: id, data: updated },
+          );
+        } else {
+          await this.#queue.cron(id, cron, updated);
         }
-      }, delay);
-      timer.unref();
-      this.#timers.set(id, timer);
-    };
-    scheduleNext();
+      } catch (error) {
+        if (existing.once) {
+          await this.#queue.queue
+            .upsertJobScheduler(
+              id,
+              { pattern: existing.cron, limit: 1 },
+              { name: id, data: existing },
+            )
+            .catch((restoreError) => {
+              logger.error(
+                "Failed to restore old cron after update failure",
+                restoreError,
+                { taskId: id },
+              );
+            });
+        } else {
+          await this.#queue
+            .cron(id, existing.cron, existing)
+            .catch((restoreError) => {
+              logger.error(
+                "Failed to restore old cron after update failure",
+                restoreError,
+                { taskId: id },
+              );
+            });
+        }
+        throw error;
+      }
+    } else if (dataChanged && !existing.once) {
+      await this.#queue.cron(id, cron, updated);
+    }
+    this.#tasks.set(id, updated);
+    return this.#toTask(updated);
   }
 
-  #stopTimer(id: string): void {
-    const timer = this.#timers.get(id);
-    if (timer) clearTimeout(timer);
-    this.#timers.delete(id);
+  #toTask(data: TaskData): Scheduler.Task {
+    if (!validKinds.has(data.kind))
+      throw new Error(`Unknown scheduled task kind: ${data.kind}`);
+    return {
+      id: data.taskId,
+      sessionId: data.sessionId,
+      kind: data.kind,
+      description: data.description,
+      prompt: data.prompt,
+      cron: data.cron,
+      once: data.once,
+      nextRun: this.#nextRun(data.cron),
+    };
   }
 
   #nextRun(cron: string): string | null {
@@ -231,32 +198,43 @@ export class Scheduler implements Disposable {
     }
   }
 
-  async #execute(
-    task: typeof schema.scheduledTask.$inferSelect,
-  ): Promise<void> {
-    if (task.kind === "background") {
-      await this.#executeBackground(task);
+  async #processJob(job: Job<TaskData>): Promise<void> {
+    const existing = this.#tasks.get(job.data.taskId);
+    const data = existing ?? job.data;
+    if (!existing) {
+      this.#tasks.set(data.taskId, data);
+    }
+    try {
+      await this.#execute(data);
+    } finally {
+      if (data.once) {
+        this.#tasks.delete(data.taskId);
+      }
+    }
+  }
+
+  async #execute(data: TaskData): Promise<void> {
+    if (data.kind === "background") {
+      await this.#executeBackground(data);
       return;
     }
-    const agent = getSessionAgent(this.#database, task.sessionId);
+    const agent = getSessionAgent(this.#database, data.sessionId);
     await this.#opencodeClient.session.promptAsync(
       {
-        sessionID: task.sessionId,
+        sessionID: data.sessionId,
         ...(agent && { agent }),
-        parts: [{ type: "text", text: `${sessionPromptPrefix}${task.prompt}` }],
+        parts: [{ type: "text", text: `${sessionPromptPrefix}${data.prompt}` }],
       },
       { throwOnError: true },
     );
   }
 
-  async #executeBackground(
-    task: typeof schema.scheduledTask.$inferSelect,
-  ): Promise<void> {
-    const location = this.#existingSessions.get(task.sessionId);
+  async #executeBackground(data: TaskData): Promise<void> {
+    const location = this.#existingSessions.get(data.sessionId);
     if (!location) {
       logger.warn("Background task session not found, skipping", {
-        taskId: task.id,
-        sessionId: task.sessionId,
+        taskId: data.taskId,
+        sessionId: data.sessionId,
       });
       return;
     }
@@ -270,13 +248,13 @@ export class Scheduler implements Disposable {
           parts: [
             {
               type: "text",
-              text: `${backgroundPromptPrefix}${task.prompt}`,
+              text: `${backgroundPromptPrefix}${data.prompt}`,
             },
           ],
         },
         { throwOnError: true },
       );
-      const text = await this.#waitForText(ephemeralId, task.id);
+      const text = await this.#waitForText(ephemeralId, data.taskId);
       if (!text || text.includes(noReportMarker)) return;
       await this.#bot.api.sendMessage(location.chatId, text, {
         ...(location.threadId && { message_thread_id: location.threadId }),
@@ -299,7 +277,7 @@ export class Scheduler implements Disposable {
     const maxAttempts = 90;
     const intervalMs = 2000;
     for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((r) => setTimeout(r, intervalMs));
+      await Bun.sleep(intervalMs);
       const { data: statuses } = await this.#opencodeClient.session.status(
         {},
         { throwOnError: true },
@@ -324,10 +302,33 @@ export class Scheduler implements Disposable {
     return null;
   }
 
+  async addJob(
+    sessionId: string,
+    kind: Scheduler.TaskKind,
+    description: string,
+    prompt: string,
+    opts?: JobOptions | undefined,
+  ): Promise<Job<TaskData>> {
+    const taskData: TaskData = {
+      taskId: crypto.randomUUID(),
+      sessionId,
+      kind,
+      cron: "",
+      description,
+      prompt,
+      once: true,
+    };
+    return this.#queue.queue.add(taskData.taskId, taskData, opts);
+  }
+
+  get bunqueue(): Bunqueue<TaskData> {
+    return this.#queue;
+  }
+
   [Symbol.dispose](): void {
-    for (const id of this.#timers.keys()) {
-      this.#stopTimer(id);
-    }
+    this.#queue.close().catch((error) => {
+      logger.error("Failed to close scheduler queue", error);
+    });
     logger.info("Scheduler is terminated");
   }
 
@@ -351,19 +352,8 @@ export class Scheduler implements Disposable {
       opencodeClient,
       existingSessions,
     );
-    const tasks = scheduler.#database.query.scheduledTask.findMany().sync();
-    for (const task of tasks) {
-      scheduler.#startTimer(task.id, task.cron, task.once === 1);
-    }
-    logger.info("Scheduler started", { taskCount: tasks.length });
+    logger.info("Scheduler started");
     return scheduler;
-  }
-}
-
-// Bun.cron.parse types are not yet in @types/bun.
-declare namespace Bun {
-  namespace cron {
-    function parse(expression: string, cursor?: Date): Date | null;
   }
 }
 

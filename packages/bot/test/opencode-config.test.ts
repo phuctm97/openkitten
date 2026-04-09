@@ -279,7 +279,7 @@ test("injects default runtime OpenCode plugins", async () => {
     throw new Error("Expected OPENCODE_CONFIG_CONTENT to be defined");
   }
   const runtimeConfig = JSON.parse(runtimeConfigContent);
-  expect(runtimeConfig.plugin).toEqual(["opencode-claude-auth"]);
+  expect(runtimeConfig.plugin).toBeUndefined();
 });
 
 test("disables autoupdate", async () => {
