@@ -10,11 +10,11 @@ export const worldAssets = {
   cats: {
     catAAwake: {
       key: "world-v1-cat-a-awake",
-      path: `${worldAssetBasePath}/cats/cat-a-awake-v3.png`,
+      path: `${worldAssetBasePath}/cats/cat-a-awake-v4.png`,
     },
     catBResting: {
       key: "world-v1-cat-b-resting",
-      path: `${worldAssetBasePath}/cats/cat-b-resting-v3.png`,
+      path: `${worldAssetBasePath}/cats/cat-b-resting-v4.png`,
     },
   },
   fx: {
@@ -30,11 +30,11 @@ export const worldAssets = {
     },
     {
       key: "world-v1-cat-a-awake",
-      path: `${worldAssetBasePath}/cats/cat-a-awake-v3.png`,
+      path: `${worldAssetBasePath}/cats/cat-a-awake-v4.png`,
     },
     {
       key: "world-v1-cat-b-resting",
-      path: `${worldAssetBasePath}/cats/cat-b-resting-v3.png`,
+      path: `${worldAssetBasePath}/cats/cat-b-resting-v4.png`,
     },
     {
       key: "world-v1-cat-shadow",

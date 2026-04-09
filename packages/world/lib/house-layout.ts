@@ -5,7 +5,7 @@ export const houseLayout = {
     {
       depth: 620,
       id: "cat-a",
-      scale: 0.22,
+      scale: 0.245,
       shadowAlpha: 0.22,
       shadowScale: 0.22,
       shadowX: 872,

@@ -39,14 +39,14 @@ Props:
 
 Cats:
 
-- `cats/cat-a-awake-v3.png`
-  Final selected awake variant for cat A after the room-fit refresh pass.
+- `cats/cat-a-awake-v4.png`
+  Final selected awake variant for cat A after the softness-and-scale refinement pass.
 - `cats/cat-a-resting-v1.png`
   Resting variant for cat A produced from the awake version during the generation pass.
 - `cats/cat-b-awake-v1.png`
   Final selected awake variant for cat B.
-- `cats/cat-b-resting-v3.png`
-  Final selected resting variant for cat B after the room-fit refresh pass.
+- `cats/cat-b-resting-v4.png`
+  Final selected resting variant for cat B after the softness-and-scale refinement pass.
 
 FX:
 
@@ -58,5 +58,5 @@ FX:
 ## Notes
 
 - This set is intended as a first candidate set, not a fully locked art pack.
-- The live room shell currently uses `cat-a-awake-v3.png`, `cat-b-resting-v3.png`, and `cat-shadow-v2.png`.
+- The live room shell currently uses `cat-a-awake-v4.png`, `cat-b-resting-v4.png`, and `cat-shadow-v2.png`.
 - Follow-up edits should start from the saved prompts and these curated finals.
