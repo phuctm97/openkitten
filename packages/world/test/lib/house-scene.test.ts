@@ -1,5 +1,18 @@
 import { afterEach, expect, test, vi } from "vitest";
 
+const phaserEventNames = vi.hoisted(() => ({
+  gameObjectPointerDown: "gameobject-pointer-down-event",
+  gameObjectPointerOut: "gameobject-pointer-out-event",
+  gameObjectPointerOver: "gameobject-pointer-over-event",
+  gameObjectPointerUp: "gameobject-pointer-up-event",
+  pointerDown: "pointer-down-event",
+  pointerMove: "pointer-move-event",
+  pointerUp: "pointer-up-event",
+  pointerUpOutside: "pointer-up-outside-event",
+  resize: "resize-event",
+  shutdown: "shutdown-event",
+}));
+
 type MockCamera = {
   height: number;
   scrollX: number;
@@ -8,8 +21,8 @@ type MockCamera = {
   setBounds: ReturnType<typeof vi.fn>;
   setScroll: ReturnType<typeof vi.fn>;
   setSize: ReturnType<typeof vi.fn>;
-  setZoom: ReturnType<typeof vi.fn>;
   setViewport: ReturnType<typeof vi.fn>;
+  setZoom: ReturnType<typeof vi.fn>;
   width: number;
   zoom: number;
 };
@@ -26,15 +39,26 @@ type MockEventEmitter = {
   once: ReturnType<typeof vi.fn>;
 };
 
+type MockImage = {
+  alpha: number;
+  depth: number;
+  emit: (event: string, ...args: unknown[]) => void;
+  interactive: boolean;
+  key: string;
+  on: ReturnType<typeof vi.fn>;
+  setAlpha: ReturnType<typeof vi.fn>;
+  setDepth: ReturnType<typeof vi.fn>;
+  setDisplaySize: ReturnType<typeof vi.fn>;
+  setInteractive: ReturnType<typeof vi.fn>;
+  setOrigin: ReturnType<typeof vi.fn>;
+  setPosition: ReturnType<typeof vi.fn>;
+  setVisible: ReturnType<typeof vi.fn>;
+  visible: boolean;
+};
+
 type MockInput = {
   off: ReturnType<typeof vi.fn>;
   on: ReturnType<typeof vi.fn>;
-};
-
-type MockImage = {
-  setDisplaySize: ReturnType<typeof vi.fn>;
-  setOrigin: ReturnType<typeof vi.fn>;
-  setPosition: ReturnType<typeof vi.fn>;
 };
 
 type MockLoader = {
@@ -93,11 +117,11 @@ function createMockCamera(): MockCamera {
       camera.height = height;
       return camera;
     }),
+    setViewport: vi.fn(),
     setZoom: vi.fn((zoom: number) => {
       camera.zoom = zoom;
       return camera;
     }),
-    setViewport: vi.fn(),
     width: 1280,
     zoom: 1,
   };
@@ -125,11 +149,40 @@ function createMockEventEmitter(): MockEventEmitter {
   };
 }
 
-function createMockImage(): MockImage {
+function createMockImage(key: string): MockImage {
+  const eventHandlers = new Map<string, (...args: unknown[]) => void>();
   const image = {
+    alpha: 1,
+    depth: 0,
+    emit(event: string, ...args: unknown[]) {
+      eventHandlers.get(event)?.(...args);
+    },
+    interactive: false,
+    key,
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+      eventHandlers.set(event, handler);
+      return image;
+    }),
+    setAlpha: vi.fn((alpha: number) => {
+      image.alpha = alpha;
+      return image;
+    }),
+    setDepth: vi.fn((depth: number) => {
+      image.depth = depth;
+      return image;
+    }),
     setDisplaySize: vi.fn(),
+    setInteractive: vi.fn(() => {
+      image.interactive = true;
+      return image;
+    }),
     setOrigin: vi.fn(),
     setPosition: vi.fn(),
+    setVisible: vi.fn((visible: boolean) => {
+      image.visible = visible;
+      return image;
+    }),
+    visible: true,
   };
 
   image.setDisplaySize.mockReturnValue(image);
@@ -139,16 +192,16 @@ function createMockImage(): MockImage {
   return image;
 }
 
-function createMockLoader(): MockLoader {
-  return {
-    image: vi.fn(),
-  };
-}
-
 function createMockInput(): MockInput {
   return {
     off: vi.fn(),
     on: vi.fn(),
+  };
+}
+
+function createMockLoader(): MockLoader {
+  return {
+    image: vi.fn(),
   };
 }
 
@@ -185,6 +238,12 @@ function createMockShape(): MockShape {
   return shape;
 }
 
+function findImage(key: string, occurrence = 0) {
+  const images = houseSceneMocks.images.filter((image) => image.key === key);
+
+  return images[occurrence];
+}
+
 const houseSceneMocks = vi.hoisted(() => {
   const cameras: MockCamera[] = [];
   const canvases: MockCanvas[] = [];
@@ -199,8 +258,8 @@ const houseSceneMocks = vi.hoisted(() => {
 
   class MockScene {
     add = {
-      image: vi.fn((_x: number, _y: number, _key: string) => {
-        const image = createMockImage();
+      image: vi.fn((_x: number, _y: number, key: string) => {
+        const image = createMockImage(key);
         images.push(image);
         return image;
       }),
@@ -271,22 +330,26 @@ vi.mock("phaser", () => ({
     },
     Input: {
       Events: {
-        POINTER_DOWN: "pointer-down-event",
-        POINTER_MOVE: "pointer-move-event",
-        POINTER_UP: "pointer-up-event",
-        POINTER_UP_OUTSIDE: "pointer-up-outside-event",
+        GAMEOBJECT_POINTER_DOWN: phaserEventNames.gameObjectPointerDown,
+        GAMEOBJECT_POINTER_OUT: phaserEventNames.gameObjectPointerOut,
+        GAMEOBJECT_POINTER_OVER: phaserEventNames.gameObjectPointerOver,
+        GAMEOBJECT_POINTER_UP: phaserEventNames.gameObjectPointerUp,
+        POINTER_DOWN: phaserEventNames.pointerDown,
+        POINTER_MOVE: phaserEventNames.pointerMove,
+        POINTER_UP: phaserEventNames.pointerUp,
+        POINTER_UP_OUTSIDE: phaserEventNames.pointerUpOutside,
       },
       Pointer: class Pointer {},
     },
     Scale: {
       Events: {
-        RESIZE: "resize-event",
+        RESIZE: phaserEventNames.resize,
       },
     },
     Scene: houseSceneMocks.MockScene,
     Scenes: {
       Events: {
-        SHUTDOWN: "shutdown-event",
+        SHUTDOWN: phaserEventNames.shutdown,
       },
     },
   },
@@ -311,7 +374,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("preloads and lays out the fullscreen house artwork and ambient night shadow using the active palette", async () => {
+test("preloads and lays out the fullscreen house scene with two interactive cats using the active palette", async () => {
   document.documentElement.style.colorScheme = "dark";
   vi.stubGlobal("MutationObserver", MockMutationObserver);
 
@@ -334,12 +397,38 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
     "house-room-shell-v1",
     "/world/v1/backgrounds/house-room-shell-v1.png",
   );
-  expect(load.image).toHaveBeenCalledTimes(1);
+  expect(load.image).toHaveBeenNthCalledWith(
+    2,
+    "cat-shadow-v1",
+    "/world/v1/fx/cat-shadow-v1.png",
+  );
+  expect(load.image).toHaveBeenNthCalledWith(
+    3,
+    "hover-ring-v1",
+    "/world/v1/fx/hover-ring-v1.png",
+  );
+  expect(load.image).toHaveBeenNthCalledWith(
+    4,
+    "cat-a-awake-v1",
+    "/world/v1/cats/cat-a-awake-v1.png",
+  );
+  expect(load.image).toHaveBeenNthCalledWith(
+    5,
+    "cat-b-resting-v1",
+    "/world/v1/cats/cat-b-resting-v1.png",
+  );
+  expect(load.image).toHaveBeenCalledTimes(5);
 
   scene.create();
 
-  const roomShell = houseSceneMocks.images[0];
+  const roomShell = findImage("house-room-shell-v1");
   const ambientShadow = houseSceneMocks.rectangles[0];
+  const hoverRingA = findImage("hover-ring-v1", 0);
+  const shadowA = findImage("cat-shadow-v1", 0);
+  const catA = findImage("cat-a-awake-v1");
+  const hoverRingB = findImage("hover-ring-v1", 1);
+  const shadowB = findImage("cat-shadow-v1", 1);
+  const catB = findImage("cat-b-resting-v1");
   const camera = houseSceneMocks.cameras[0];
   const canvas = houseSceneMocks.canvases[0];
   const scale = houseSceneMocks.scales[0];
@@ -351,6 +440,12 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
   if (
     roomShell === undefined ||
     ambientShadow === undefined ||
+    hoverRingA === undefined ||
+    shadowA === undefined ||
+    catA === undefined ||
+    hoverRingB === undefined ||
+    shadowB === undefined ||
+    catB === undefined ||
     camera === undefined ||
     canvas === undefined ||
     scale === undefined ||
@@ -372,12 +467,28 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
     throw new Error("Expected the House scene artwork to be laid out.");
   }
 
-  expect(scene.add.image).toHaveBeenCalledTimes(1);
+  expect(scene.add.image).toHaveBeenCalledTimes(7);
   expect(scene.add.image).toHaveBeenNthCalledWith(
     1,
     0,
     0,
     "house-room-shell-v1",
+  );
+  expect(scene.add.image).toHaveBeenNthCalledWith(2, 560, 714, "hover-ring-v1");
+  expect(scene.add.image).toHaveBeenNthCalledWith(3, 560, 714, "cat-shadow-v1");
+  expect(scene.add.image).toHaveBeenNthCalledWith(
+    4,
+    560,
+    620,
+    "cat-a-awake-v1",
+  );
+  expect(scene.add.image).toHaveBeenNthCalledWith(5, 332, 824, "hover-ring-v1");
+  expect(scene.add.image).toHaveBeenNthCalledWith(6, 332, 824, "cat-shadow-v1");
+  expect(scene.add.image).toHaveBeenNthCalledWith(
+    7,
+    332,
+    768,
+    "cat-b-resting-v1",
   );
   expect(scene.add.rectangle).toHaveBeenNthCalledWith(
     1,
@@ -403,6 +514,46 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
     503.46666666666664,
   );
   expect(ambientShadow.setFillStyle).toHaveBeenCalledWith(0x120d0b, 0.22);
+  expect(hoverRingA.setDepth).toHaveBeenCalledWith(2);
+  expect(hoverRingA.setDisplaySize).toHaveBeenLastCalledWith(190.4, 67.2);
+  expect(hoverRingA.setPosition).toHaveBeenLastCalledWith(560, 714);
+  expect(hoverRingA.visible).toBe(false);
+  expect(hoverRingA.alpha).toBe(0.84);
+  expect(shadowA.setDepth).toHaveBeenCalledWith(3);
+  expect(shadowA.setDisplaySize).toHaveBeenLastCalledWith(170, 60);
+  expect(shadowA.setPosition).toHaveBeenLastCalledWith(560, 714);
+  expect(shadowA.alpha).toBe(0.56);
+  expect(catA.setDepth).toHaveBeenCalledWith(4);
+  expect(catA.setDisplaySize).toHaveBeenLastCalledWith(232, 232);
+  expect(catA.setPosition).toHaveBeenLastCalledWith(560, 620);
+  expect(catA.setInteractive).toHaveBeenCalledTimes(1);
+  expect(catA.on).toHaveBeenCalledWith(
+    phaserEventNames.gameObjectPointerDown,
+    expect.any(Function),
+  );
+  expect(catA.on).toHaveBeenCalledWith(
+    phaserEventNames.gameObjectPointerOver,
+    expect.any(Function),
+  );
+  expect(catA.on).toHaveBeenCalledWith(
+    phaserEventNames.gameObjectPointerOut,
+    expect.any(Function),
+  );
+  expect(catA.on).toHaveBeenCalledWith(
+    phaserEventNames.gameObjectPointerUp,
+    expect.any(Function),
+  );
+  expect(hoverRingB.setDisplaySize).toHaveBeenLastCalledWith(
+    239.68000000000004,
+    80.64000000000001,
+  );
+  expect(hoverRingB.setPosition).toHaveBeenLastCalledWith(332, 824);
+  expect(hoverRingB.visible).toBe(false);
+  expect(shadowB.setDisplaySize).toHaveBeenLastCalledWith(214, 72);
+  expect(shadowB.setPosition).toHaveBeenLastCalledWith(332, 824);
+  expect(catB.setDisplaySize).toHaveBeenLastCalledWith(252, 252);
+  expect(catB.setPosition).toHaveBeenLastCalledWith(332, 768);
+  expect(catB.setInteractive).toHaveBeenCalledTimes(1);
   expect(camera.setBackgroundColor).toHaveBeenCalledWith("#0c0a09");
   expect(camera.setSize).toHaveBeenCalledWith(1280, 720);
   expect(camera.setZoom).toHaveBeenCalledWith(1);
@@ -432,32 +583,32 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
     },
   );
   expect(input.on).toHaveBeenCalledWith(
-    "pointer-down-event",
+    phaserEventNames.pointerDown,
     expect.any(Function),
     scene,
   );
   expect(input.on).toHaveBeenCalledWith(
-    "pointer-move-event",
+    phaserEventNames.pointerMove,
     expect.any(Function),
     scene,
   );
   expect(input.on).toHaveBeenCalledWith(
-    "pointer-up-event",
+    phaserEventNames.pointerUp,
     expect.any(Function),
     scene,
   );
   expect(input.on).toHaveBeenCalledWith(
-    "pointer-up-outside-event",
+    phaserEventNames.pointerUpOutside,
     expect.any(Function),
     scene,
   );
   expect(scale.on).toHaveBeenCalledWith(
-    "resize-event",
+    phaserEventNames.resize,
     expect.any(Function),
     scene,
   );
   expect(events.once).toHaveBeenCalledWith(
-    "shutdown-event",
+    phaserEventNames.shutdown,
     expect.any(Function),
     scene,
   );
@@ -479,12 +630,16 @@ test("builds the initial scene from the computed color scheme when inline style 
   const camera = houseSceneMocks.cameras[0];
   const canvas = houseSceneMocks.canvases[0];
   const renderer = houseSceneMocks.renderers[0];
+  const hoverRingA = findImage("hover-ring-v1", 0);
+  const hoverRingB = findImage("hover-ring-v1", 1);
 
   if (
     ambientShadow === undefined ||
     camera === undefined ||
     canvas === undefined ||
-    renderer === undefined
+    renderer === undefined ||
+    hoverRingA === undefined ||
+    hoverRingB === undefined
   ) {
     throw new Error("Expected the House scene to create its render targets.");
   }
@@ -493,6 +648,102 @@ test("builds the initial scene from the computed color scheme when inline style 
   expect(camera.setBackgroundColor).toHaveBeenCalledWith("#0c0a09");
   expect(canvas.style.backgroundColor).toBe("#0c0a09");
   expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
+  expect(hoverRingA.visible).toBe(false);
+  expect(hoverRingB.visible).toBe(false);
+});
+
+test("shows hover rings, selection state, and pointer cursor for cat interactions", async () => {
+  vi.stubGlobal("MutationObserver", MockMutationObserver);
+
+  const { HouseScene } = await import("~/lib/house-scene");
+  const scene = new HouseScene();
+
+  scene.preload();
+  scene.create();
+
+  const catA = findImage("cat-a-awake-v1");
+  const catB = findImage("cat-b-resting-v1");
+  const hoverRingA = findImage("hover-ring-v1", 0);
+  const hoverRingB = findImage("hover-ring-v1", 1);
+  const canvas = houseSceneMocks.canvases[0];
+
+  if (
+    catA === undefined ||
+    catB === undefined ||
+    hoverRingA === undefined ||
+    hoverRingB === undefined ||
+    canvas === undefined
+  ) {
+    throw new Error("Expected the cat fixtures to be created.");
+  }
+
+  catA.emit(phaserEventNames.gameObjectPointerOver);
+  expect(hoverRingA.visible).toBe(true);
+  expect(hoverRingA.alpha).toBe(0.84);
+  expect(hoverRingB.visible).toBe(false);
+  expect(canvas.style.cursor).toBe("pointer");
+
+  const pointerDownEvent = {
+    stopPropagation: vi.fn(),
+  };
+  catA.emit(
+    phaserEventNames.gameObjectPointerDown,
+    { id: 1 },
+    0,
+    0,
+    pointerDownEvent,
+  );
+  expect(pointerDownEvent.stopPropagation).toHaveBeenCalledTimes(1);
+  expect(canvas.style.cursor).toBe("pointer");
+
+  const pointerUpEvent = {
+    stopPropagation: vi.fn(),
+  };
+  catA.emit(
+    phaserEventNames.gameObjectPointerUp,
+    { id: 1 },
+    0,
+    0,
+    pointerUpEvent,
+  );
+  expect(pointerUpEvent.stopPropagation).toHaveBeenCalledTimes(1);
+  expect(hoverRingA.visible).toBe(true);
+  expect(hoverRingA.alpha).toBe(1);
+
+  catA.emit(phaserEventNames.gameObjectPointerOut);
+  expect(hoverRingA.visible).toBe(true);
+  expect(canvas.style.cursor).toBe("grab");
+
+  catB.emit(phaserEventNames.gameObjectPointerOver);
+  expect(hoverRingA.visible).toBe(true);
+  expect(hoverRingB.visible).toBe(true);
+  expect(hoverRingB.alpha).toBe(0.84);
+  expect(canvas.style.cursor).toBe("pointer");
+
+  catA.emit(phaserEventNames.gameObjectPointerOut);
+  expect(hoverRingA.visible).toBe(true);
+  expect(hoverRingB.visible).toBe(true);
+  expect(canvas.style.cursor).toBe("pointer");
+
+  const pointerUpEventB = {
+    stopPropagation: vi.fn(),
+  };
+  catB.emit(
+    phaserEventNames.gameObjectPointerUp,
+    { id: 2 },
+    0,
+    0,
+    pointerUpEventB,
+  );
+  expect(pointerUpEventB.stopPropagation).toHaveBeenCalledTimes(1);
+  expect(hoverRingA.visible).toBe(false);
+  expect(hoverRingB.visible).toBe(true);
+  expect(hoverRingB.alpha).toBe(1);
+
+  catB.emit(phaserEventNames.gameObjectPointerOut);
+  expect(hoverRingA.visible).toBe(false);
+  expect(hoverRingB.visible).toBe(true);
+  expect(canvas.style.cursor).toBe("grab");
 });
 
 test("caps zoom on very small viewports so the world stops shrinking past the minimum scale", async () => {
@@ -609,7 +860,7 @@ test("keeps dragging on mismatched pointer up and safely ignores scroll requests
   expect(camera.setScroll).not.toHaveBeenCalled();
 });
 
-test("responds to palette changes, resize events, and shutdown cleanup", async () => {
+test("responds to palette changes, resize events, cat callbacks after shutdown, and shutdown cleanup", async () => {
   vi.stubGlobal("MutationObserver", MockMutationObserver);
 
   const { HouseScene } = await import("~/lib/house-scene");
@@ -618,8 +869,11 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   scene.preload();
   scene.create();
 
-  const roomShell = houseSceneMocks.images[0];
+  const roomShell = findImage("house-room-shell-v1");
   const ambientShadow = houseSceneMocks.rectangles[0];
+  const hoverRingA = findImage("hover-ring-v1", 0);
+  const shadowA = findImage("cat-shadow-v1", 0);
+  const catA = findImage("cat-a-awake-v1");
   const scale = houseSceneMocks.scales[0];
   const events = houseSceneMocks.events[0];
   const camera = houseSceneMocks.cameras[0];
@@ -636,6 +890,9 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   if (
     roomShell === undefined ||
     ambientShadow === undefined ||
+    hoverRingA === undefined ||
+    shadowA === undefined ||
+    catA === undefined ||
     scale === undefined ||
     events === undefined ||
     input === undefined ||
@@ -706,6 +963,12 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
     755.1999999999999,
     503.46666666666664,
   );
+  expect(hoverRingA.setDisplaySize).toHaveBeenLastCalledWith(190.4, 67.2);
+  expect(hoverRingA.setPosition).toHaveBeenLastCalledWith(560, 714);
+  expect(shadowA.setDisplaySize).toHaveBeenLastCalledWith(170, 60);
+  expect(shadowA.setPosition).toHaveBeenLastCalledWith(560, 714);
+  expect(catA.setDisplaySize).toHaveBeenLastCalledWith(232, 232);
+  expect(catA.setPosition).toHaveBeenLastCalledWith(560, 620);
 
   pointerDownHandler.call(scene, { id: 8, x: 512, y: 300 });
   pointerMoveHandler.call(scene, { id: 8, x: 462, y: 250 });
@@ -720,32 +983,41 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
 
   expect(colorSchemeObserver.disconnect).toHaveBeenCalledTimes(1);
   expect(input.off).toHaveBeenCalledWith(
-    "pointer-down-event",
+    phaserEventNames.pointerDown,
     pointerDownHandler,
     scene,
   );
   expect(input.off).toHaveBeenCalledWith(
-    "pointer-move-event",
+    phaserEventNames.pointerMove,
     pointerMoveHandler,
     scene,
   );
   expect(input.off).toHaveBeenCalledWith(
-    "pointer-up-event",
+    phaserEventNames.pointerUp,
     pointerUpHandler,
     scene,
   );
   expect(input.off).toHaveBeenCalledWith(
-    "pointer-up-outside-event",
+    phaserEventNames.pointerUpOutside,
     pointerUpHandler,
     scene,
   );
-  expect(scale.off).toHaveBeenCalledWith("resize-event", resizeHandler, scene);
+  expect(scale.off).toHaveBeenCalledWith(
+    phaserEventNames.resize,
+    resizeHandler,
+    scene,
+  );
   ambientShadow.setFillStyle.mockClear();
   roomShell.setPosition.mockClear();
+  hoverRingA.setVisible.mockClear();
   colorSchemeObserver.notify();
   expect(() => {
     resizeHandler.call(scene);
   }).not.toThrow();
   expect(ambientShadow.setFillStyle).not.toHaveBeenCalled();
   expect(roomShell.setPosition).not.toHaveBeenCalled();
+  expect(() => {
+    catA.emit(phaserEventNames.gameObjectPointerOver);
+  }).not.toThrow();
+  expect(hoverRingA.setVisible).not.toHaveBeenCalled();
 });

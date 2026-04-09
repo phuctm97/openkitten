@@ -1,9 +1,21 @@
 import Phaser from "phaser";
 import { getColorScheme } from "~/lib/get-color-scheme";
 import { getHousePalette } from "~/lib/get-house-palette";
+import { houseCats } from "~/lib/house-cats";
+
+type HouseCat = (typeof houseCats)[number];
+
+type HouseCatView = {
+  catId: string;
+  fixture: HouseCat;
+  hoverRing: Phaser.GameObjects.Image;
+  shadow: Phaser.GameObjects.Image;
+  sprite: Phaser.GameObjects.Image;
+};
 
 type HouseView = {
   ambientShadow: Phaser.GameObjects.Rectangle;
+  cats: HouseCatView[];
   roomShell: Phaser.GameObjects.Image;
 };
 
@@ -33,6 +45,11 @@ const ambientShadowWidth = 1;
 const designViewportHeight = 720;
 const designViewportWidth = 1280;
 const minimumCameraZoom = 0.75;
+const catHoverRingScaleMultiplier = 1.12;
+const catHoverRingTextureKey = "hover-ring-v1";
+const catHoverRingTexturePath = "/world/v1/fx/hover-ring-v1.png";
+const catShadowTextureKey = "cat-shadow-v1";
+const catShadowTexturePath = "/world/v1/fx/cat-shadow-v1.png";
 const roomShellHeight = 1024;
 const roomShellTextureKey = "house-room-shell-v1";
 const roomShellTexturePath = "/world/v1/backgrounds/house-room-shell-v1.png";
@@ -114,6 +131,8 @@ export class HouseScene extends Phaser.Scene {
 
   private colorSchemeObserver: MutationObserver | null = null;
   private dragState: DragState | null = null;
+  private hoveredCatId: string | null = null;
+  private selectedCatId: string | null = null;
   private view: HouseView | null = null;
   private worldSize: WorldSize | null = null;
 
@@ -123,6 +142,12 @@ export class HouseScene extends Phaser.Scene {
 
   preload() {
     this.load.image(roomShellTextureKey, roomShellTexturePath);
+    this.load.image(catShadowTextureKey, catShadowTexturePath);
+    this.load.image(catHoverRingTextureKey, catHoverRingTexturePath);
+
+    for (const { textureKey, texturePath } of houseCats) {
+      this.load.image(textureKey, texturePath);
+    }
   }
 
   create() {
@@ -138,14 +163,17 @@ export class HouseScene extends Phaser.Scene {
         palette.ambientShadowAlpha,
       )
       .setOrigin(0.5);
+    const cats = houseCats.map((houseCat) => this.createCatView(houseCat));
 
     this.view = {
       ambientShadow,
+      cats,
       roomShell,
     };
 
-    this.game.canvas.style.cursor = "grab";
     this.game.canvas.style.touchAction = "none";
+    this.syncCatHighlights();
+    this.syncCursor();
     this.syncPalette();
     this.layout();
     this.colorSchemeObserver = new MutationObserver(() => {
@@ -179,6 +207,105 @@ export class HouseScene extends Phaser.Scene {
     this.layout();
   }
 
+  private createCatView(houseCat: HouseCat) {
+    const hoverRing = this.add
+      .image(houseCat.position.x, houseCat.floorY, catHoverRingTextureKey)
+      .setOrigin(0.5)
+      .setDepth(2)
+      .setDisplaySize(
+        houseCat.floorWidth * catHoverRingScaleMultiplier,
+        houseCat.floorHeight * catHoverRingScaleMultiplier,
+      )
+      .setVisible(false)
+      .setAlpha(0.84);
+    const shadow = this.add
+      .image(houseCat.position.x, houseCat.floorY, catShadowTextureKey)
+      .setOrigin(0.5)
+      .setDepth(3)
+      .setDisplaySize(houseCat.floorWidth, houseCat.floorHeight)
+      .setAlpha(0.56);
+    const sprite = this.add
+      .image(houseCat.position.x, houseCat.position.y, houseCat.textureKey)
+      .setOrigin(0.5)
+      .setDepth(4)
+      .setDisplaySize(houseCat.spriteSize, houseCat.spriteSize)
+      .setInteractive();
+
+    sprite.on(
+      Phaser.Input.Events.GAMEOBJECT_POINTER_DOWN,
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        this.handleCatPointerDown(houseCat.cat.id, event);
+      },
+    );
+    sprite.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OVER, () => {
+      this.handleCatPointerOver(houseCat.cat.id);
+    });
+    sprite.on(Phaser.Input.Events.GAMEOBJECT_POINTER_OUT, () => {
+      this.handleCatPointerOut(houseCat.cat.id);
+    });
+    sprite.on(
+      Phaser.Input.Events.GAMEOBJECT_POINTER_UP,
+      (
+        _pointer: Phaser.Input.Pointer,
+        _localX: number,
+        _localY: number,
+        event: Phaser.Types.Input.EventData,
+      ) => {
+        this.handleCatPointerUp(houseCat.cat.id, event);
+      },
+    );
+
+    return {
+      catId: houseCat.cat.id,
+      fixture: houseCat,
+      hoverRing,
+      shadow,
+      sprite,
+    };
+  }
+
+  private handleCatPointerDown(
+    catId: string,
+    event: Phaser.Types.Input.EventData,
+  ) {
+    event.stopPropagation();
+    this.hoveredCatId = catId;
+    this.syncCatHighlights();
+    this.syncCursor();
+  }
+
+  private handleCatPointerOver(catId: string) {
+    this.hoveredCatId = catId;
+    this.syncCatHighlights();
+    this.syncCursor();
+  }
+
+  private handleCatPointerOut(catId: string) {
+    if (this.hoveredCatId !== catId) {
+      return;
+    }
+
+    this.hoveredCatId = null;
+    this.syncCatHighlights();
+    this.syncCursor();
+  }
+
+  private handleCatPointerUp(
+    catId: string,
+    event: Phaser.Types.Input.EventData,
+  ) {
+    event.stopPropagation();
+    this.hoveredCatId = catId;
+    this.selectedCatId = catId;
+    this.syncCatHighlights();
+    this.syncCursor();
+  }
+
   private handlePointerDown(pointer: Phaser.Input.Pointer) {
     const camera = this.cameras.main;
 
@@ -190,7 +317,7 @@ export class HouseScene extends Phaser.Scene {
       startScrollY: camera.scrollY,
       startZoom: camera.zoom,
     };
-    this.game.canvas.style.cursor = "grabbing";
+    this.syncCursor();
   }
 
   private handlePointerMove(pointer: Phaser.Input.Pointer) {
@@ -214,13 +341,15 @@ export class HouseScene extends Phaser.Scene {
     }
 
     this.dragState = null;
-    this.game.canvas.style.cursor = "grab";
+    this.syncCursor();
   }
 
   private handleShutdown() {
     this.colorSchemeObserver?.disconnect();
     this.colorSchemeObserver = null;
     this.dragState = null;
+    this.hoveredCatId = null;
+    this.selectedCatId = null;
     this.input.off(
       Phaser.Input.Events.POINTER_DOWN,
       this.handlePointerDown,
@@ -240,6 +369,31 @@ export class HouseScene extends Phaser.Scene {
     this.scale.off(Phaser.Scale.Events.RESIZE, this.handleResize, this);
     this.view = null;
     this.worldSize = null;
+  }
+
+  private syncCatHighlights() {
+    const view = this.view;
+
+    if (view === null) {
+      return;
+    }
+
+    for (const { catId, hoverRing } of view.cats) {
+      const isSelected = catId === this.selectedCatId;
+      const isHovered = catId === this.hoveredCatId;
+
+      hoverRing.setVisible(isSelected || isHovered);
+      hoverRing.setAlpha(isSelected ? 1 : 0.84);
+    }
+  }
+
+  private syncCursor() {
+    this.game.canvas.style.cursor =
+      this.dragState === null
+        ? this.hoveredCatId === null
+          ? "grab"
+          : "pointer"
+        : "grabbing";
   }
 
   private syncPalette() {
@@ -346,5 +500,17 @@ export class HouseScene extends Phaser.Scene {
     view.ambientShadow.setPosition(worldSize.width / 2, worldSize.height / 2);
     view.roomShell.setDisplaySize(worldSize.width, worldSize.height);
     view.roomShell.setPosition(worldSize.width / 2, worldSize.height / 2);
+
+    for (const { fixture, hoverRing, shadow, sprite } of view.cats) {
+      hoverRing.setDisplaySize(
+        fixture.floorWidth * catHoverRingScaleMultiplier,
+        fixture.floorHeight * catHoverRingScaleMultiplier,
+      );
+      hoverRing.setPosition(fixture.position.x, fixture.floorY);
+      shadow.setDisplaySize(fixture.floorWidth, fixture.floorHeight);
+      shadow.setPosition(fixture.position.x, fixture.floorY);
+      sprite.setDisplaySize(fixture.spriteSize, fixture.spriteSize);
+      sprite.setPosition(fixture.position.x, fixture.position.y);
+    }
   }
 }
