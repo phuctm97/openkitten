@@ -159,7 +159,7 @@ test("create() returns task with all fields", async () => {
   expect(task.description).toBe("hourly");
   expect(task.prompt).toBe("do something");
   expect(task.once).toBe(false);
-  expect(task.nextRun).toBe(new Date(Date.now() + 60_000).toISOString());
+  expect(task.nextRunAt).toBe(0);
 });
 
 test("create() registers cron in bunqueue for recurring tasks", async () => {
@@ -229,7 +229,7 @@ test("create() returns null nextRun when Bun.cron.parse returns null", async () 
     once: false,
   });
 
-  expect(task.nextRun).toBeNull();
+  expect(task.nextRunAt).toBe(0);
 });
 
 test("create() returns null nextRun when Bun.cron.parse throws", async () => {
@@ -246,7 +246,7 @@ test("create() returns null nextRun when Bun.cron.parse throws", async () => {
     once: false,
   });
 
-  expect(task.nextRun).toBeNull();
+  expect(task.nextRunAt).toBe(0);
 });
 
 // ---------------------------------------------------------------------------
@@ -351,8 +351,11 @@ test("trigger() enqueues a job via bunqueue instead of executing inline", async 
     once: false,
   });
 
-  await scheduler.trigger(task.id);
+  const result = await scheduler.trigger(task.id);
 
+  expect(result.scheduleId).toBe(task.id);
+  expect(result.jobId).toBe("triggered-1");
+  expect(result.enqueuedAt).toBeTypeOf("number");
   expect(mockAdd).toHaveBeenCalledWith(
     `trigger-${task.id}`,
     expect.objectContaining({
@@ -1029,6 +1032,172 @@ test("processor deletes once-task even when execution fails", async () => {
   ).rejects.toThrow("once fail");
 
   expect(() => scheduler.get("once-fail")).toThrow(Scheduler.NotFoundError);
+});
+
+// ---------------------------------------------------------------------------
+// dispose
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// getRuns()
+// ---------------------------------------------------------------------------
+
+test("getRuns() returns run history after execution", async () => {
+  await fireJob("run-test", {
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    prompt: "run me",
+    description: "d",
+    once: false,
+  });
+
+  const runs = scheduler.getRuns("run-test");
+  expect(runs).toHaveLength(1);
+  expect(runs[0]?.status).toBe("completed_notified");
+  expect(runs[0]?.error).toBeNull();
+  expect(runs[0]?.startedAt).toBeLessThanOrEqual(runs[0]?.finishedAt ?? 0);
+});
+
+test("getRuns() throws NotFoundError for missing ID", () => {
+  expect(() => scheduler.getRuns("nonexistent")).toThrow(
+    Scheduler.NotFoundError,
+  );
+});
+
+test("getRuns() records failed status with error message", async () => {
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(
+    new Error("api error"),
+  );
+
+  await expect(
+    fireJob("fail-run", {
+      sessionId: "session-1",
+      kind: "session",
+      cron: "0 * * * *",
+      prompt: "fail",
+      description: "d",
+      once: false,
+    }),
+  ).rejects.toThrow("api error");
+
+  const runs = scheduler.getRuns("fail-run");
+  expect(runs).toHaveLength(1);
+  expect(runs[0]?.status).toBe("failed");
+  expect(runs[0]?.error).toBe("api error");
+});
+
+test("getRuns() records non-Error thrown values", async () => {
+  opencodeClient.session.promptAsync.mockRejectedValueOnce("string error");
+
+  await expect(
+    fireJob("string-err", {
+      sessionId: "session-1",
+      kind: "session",
+      cron: "0 * * * *",
+      prompt: "fail",
+      description: "d",
+      once: false,
+    }),
+  ).rejects.toBe("string error");
+
+  const runs = scheduler.getRuns("string-err");
+  expect(runs[0]?.error).toBe("string error");
+});
+
+test("create() stores null nextRunAt when cron returns null info", async () => {
+  mockCron.mockResolvedValueOnce(null);
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "null info",
+    prompt: "p",
+    once: false,
+  });
+
+  expect(task.nextRunAt).toBeNull();
+});
+
+test("create() stores null nextRunAt when once-task upsert returns null", async () => {
+  mockQueue.upsertJobScheduler.mockResolvedValueOnce(null);
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "null once",
+    prompt: "p",
+    once: true,
+  });
+
+  expect(task.nextRunAt).toBeNull();
+});
+
+test("update() stores null nextRunAt when once-task upsert returns null on cron change", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: true,
+  });
+
+  mockQueue.upsertJobScheduler.mockResolvedValueOnce(null);
+
+  const updated = await scheduler.update(task.id, { cron: "@daily" });
+  expect(updated.nextRunAt).toBeNull();
+});
+
+test("update() stores null nextRunAt when cron returns null info", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+
+  mockCron.mockResolvedValueOnce(null);
+
+  const updated = await scheduler.update(task.id, { cron: "@daily" });
+  expect(updated.nextRunAt).toBeNull();
+});
+
+test("update() stores null nextRunAt when data-only cron returns null", async () => {
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "session",
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+
+  mockCron.mockResolvedValueOnce(null);
+
+  const updated = await scheduler.update(task.id, { prompt: "new" });
+  expect(updated.nextRunAt).toBeNull();
+});
+
+test("run history trims to last 20 entries", async () => {
+  // Fire 22 jobs to exceed maxRunHistory (20)
+  for (let i = 0; i < 22; i++) {
+    await fireJob("trim-test", {
+      sessionId: "session-1",
+      kind: "session",
+      cron: "0 * * * *",
+      prompt: `run ${i}`,
+      description: "d",
+      once: false,
+    });
+  }
+
+  const runs = scheduler.getRuns("trim-test");
+  expect(runs).toHaveLength(20);
 });
 
 // ---------------------------------------------------------------------------

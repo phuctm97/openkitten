@@ -18,6 +18,8 @@ const validKinds: ReadonlySet<string> = new Set<Scheduler.TaskKind>([
   "background",
 ]);
 
+const maxRunHistory = 20;
+
 interface TaskData {
   readonly taskId: string;
   readonly sessionId: string;
@@ -28,13 +30,22 @@ interface TaskData {
   readonly once: boolean;
 }
 
+interface TaskMeta {
+  data: TaskData;
+  createdAt: number;
+  updatedAt: number;
+  lastTriggeredAt: number | null;
+  nextRunAt: number | null;
+  runs: Scheduler.RunRecord[];
+}
+
 export class Scheduler implements Disposable {
   readonly #bot: Bot;
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #queue: Bunqueue<TaskData>;
-  readonly #tasks = new Map<string, TaskData>();
+  readonly #tasks = new Map<string, TaskMeta>();
 
   private constructor(
     bot: Bot,
@@ -73,27 +84,45 @@ export class Scheduler implements Disposable {
       prompt: input.prompt,
       once: input.once,
     };
+    let nextRunAt: number | null = null;
     if (input.once) {
-      await this.#queue.queue.upsertJobScheduler(
+      const info = await this.#queue.queue.upsertJobScheduler(
         id,
         { pattern: input.cron, limit: 1 },
         { name: id, data: taskData },
       );
+      nextRunAt = info?.next ?? null;
     } else {
-      await this.#queue.cron(id, input.cron, taskData);
+      const info = await this.#queue.cron(id, input.cron, taskData);
+      nextRunAt = info?.next ?? null;
     }
-    this.#tasks.set(id, taskData);
-    return this.#toTask(taskData);
+    const now = Date.now();
+    const meta: TaskMeta = {
+      data: taskData,
+      createdAt: now,
+      updatedAt: now,
+      lastTriggeredAt: null,
+      nextRunAt,
+      runs: [],
+    };
+    this.#tasks.set(id, meta);
+    return this.#toTask(meta);
   }
 
   list(): Scheduler.Task[] {
-    return [...this.#tasks.values()].map((data) => this.#toTask(data));
+    return [...this.#tasks.values()].map((meta) => this.#toTask(meta));
   }
 
   get(id: string): Scheduler.Task {
-    const data = this.#tasks.get(id);
-    if (!data) throw new Scheduler.NotFoundError(id);
-    return this.#toTask(data);
+    const meta = this.#tasks.get(id);
+    if (!meta) throw new Scheduler.NotFoundError(id);
+    return this.#toTask(meta);
+  }
+
+  getRuns(id: string): Scheduler.RunRecord[] {
+    const meta = this.#tasks.get(id);
+    if (!meta) throw new Scheduler.NotFoundError(id);
+    return [...meta.runs];
   }
 
   async delete(id: string): Promise<void> {
@@ -102,18 +131,29 @@ export class Scheduler implements Disposable {
     this.#tasks.delete(id);
   }
 
-  async trigger(id: string): Promise<void> {
-    const data = this.#tasks.get(id);
-    if (!data) throw new Scheduler.NotFoundError(id);
-    await this.#queue.queue.add(`trigger-${data.taskId}`, data);
+  async trigger(id: string): Promise<Scheduler.TriggerResult> {
+    const meta = this.#tasks.get(id);
+    if (!meta) throw new Scheduler.NotFoundError(id);
+    const now = Date.now();
+    meta.lastTriggeredAt = now;
+    const job = await this.#queue.queue.add(
+      `trigger-${meta.data.taskId}`,
+      meta.data,
+    );
+    return {
+      scheduleId: id,
+      jobId: job.id,
+      enqueuedAt: now,
+    };
   }
 
   async update(
     id: string,
     input: Scheduler.UpdateInput,
   ): Promise<Scheduler.Task> {
-    const existing = this.#tasks.get(id);
-    if (!existing) throw new Scheduler.NotFoundError(id);
+    const meta = this.#tasks.get(id);
+    if (!meta) throw new Scheduler.NotFoundError(id);
+    const existing = meta.data;
     const cron = input.cron ?? existing.cron;
     const description = input.description ?? existing.description;
     const prompt = input.prompt ?? existing.prompt;
@@ -127,17 +167,20 @@ export class Scheduler implements Disposable {
       input.cron !== undefined && input.cron !== existing.cron;
     const dataChanged =
       description !== existing.description || prompt !== existing.prompt;
+    let nextRunAt = meta.nextRunAt;
     if (cronChanged) {
       await this.#queue.removeCron(id);
       try {
         if (existing.once) {
-          await this.#queue.queue.upsertJobScheduler(
+          const info = await this.#queue.queue.upsertJobScheduler(
             id,
             { pattern: cron, limit: 1 },
             { name: id, data: updated },
           );
+          nextRunAt = info?.next ?? null;
         } else {
-          await this.#queue.cron(id, cron, updated);
+          const info = await this.#queue.cron(id, cron, updated);
+          nextRunAt = info?.next ?? null;
         }
       } catch (error) {
         if (existing.once) {
@@ -168,13 +211,17 @@ export class Scheduler implements Disposable {
         throw error;
       }
     } else if (dataChanged && !existing.once) {
-      await this.#queue.cron(id, cron, updated);
+      const info = await this.#queue.cron(id, cron, updated);
+      nextRunAt = info?.next ?? null;
     }
-    this.#tasks.set(id, updated);
-    return this.#toTask(updated);
+    meta.data = updated;
+    meta.updatedAt = Date.now();
+    meta.nextRunAt = nextRunAt;
+    return this.#toTask(meta);
   }
 
-  #toTask(data: TaskData): Scheduler.Task {
+  #toTask(meta: TaskMeta): Scheduler.Task {
+    const { data } = meta;
     if (!validKinds.has(data.kind))
       throw new Error(`Unknown scheduled task kind: ${data.kind}`);
     return {
@@ -185,39 +232,58 @@ export class Scheduler implements Disposable {
       prompt: data.prompt,
       cron: data.cron,
       once: data.once,
-      nextRun: this.#nextRun(data.cron),
+      createdAt: meta.createdAt,
+      updatedAt: meta.updatedAt,
+      lastTriggeredAt: meta.lastTriggeredAt,
+      nextRunAt: meta.nextRunAt,
+      lastRun: meta.runs[meta.runs.length - 1] ?? null,
     };
   }
 
-  #nextRun(cron: string): string | null {
-    try {
-      const next = Bun.cron.parse(cron);
-      return next ? next.toISOString() : null;
-    } catch {
-      return null;
-    }
-  }
-
   async #processJob(job: Job<TaskData>): Promise<void> {
+    const isManualTrigger = job.name.startsWith("trigger-");
     const existing = this.#tasks.get(job.data.taskId);
-    const data = existing ?? job.data;
+    const data = existing?.data ?? job.data;
+    const meta: TaskMeta = existing ?? {
+      data,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      lastTriggeredAt: null,
+      nextRunAt: null,
+      runs: [],
+    };
     if (!existing) {
-      this.#tasks.set(data.taskId, data);
+      this.#tasks.set(data.taskId, meta);
     }
+    const run: Scheduler.RunRecord = {
+      jobId: job.id,
+      startedAt: Date.now(),
+      finishedAt: 0,
+      status: "completed_silent",
+      error: null,
+    };
     try {
-      await this.#execute(data);
+      const result = await this.#execute(data);
+      run.status = result;
+    } catch (error) {
+      run.status = "failed";
+      run.error = error instanceof Error ? error.message : String(error);
+      throw error;
     } finally {
-      const isManualTrigger = job.name.startsWith("trigger-");
+      run.finishedAt = Date.now();
+      meta.runs.push(run);
+      if (meta.runs.length > maxRunHistory) {
+        meta.runs.splice(0, meta.runs.length - maxRunHistory);
+      }
       if (data.once && !isManualTrigger) {
         this.#tasks.delete(data.taskId);
       }
     }
   }
 
-  async #execute(data: TaskData): Promise<void> {
+  async #execute(data: TaskData): Promise<Scheduler.RunStatus> {
     if (data.kind === "background") {
-      await this.#executeBackground(data);
-      return;
+      return this.#executeBackground(data);
     }
     const agent = getSessionAgent(this.#database, data.sessionId);
     await this.#opencodeClient.session.promptAsync(
@@ -228,16 +294,17 @@ export class Scheduler implements Disposable {
       },
       { throwOnError: true },
     );
+    return "completed_notified";
   }
 
-  async #executeBackground(data: TaskData): Promise<void> {
+  async #executeBackground(data: TaskData): Promise<Scheduler.RunStatus> {
     const location = this.#existingSessions.get(data.sessionId);
     if (!location) {
       logger.warn("Background task session not found, skipping", {
         taskId: data.taskId,
         sessionId: data.sessionId,
       });
-      return;
+      return "completed_silent";
     }
     const {
       data: { id: ephemeralId },
@@ -256,10 +323,11 @@ export class Scheduler implements Disposable {
         { throwOnError: true },
       );
       const text = await this.#waitForText(ephemeralId, data.taskId);
-      if (!text || text.includes(noReportMarker)) return;
+      if (!text || text.includes(noReportMarker)) return "completed_silent";
       await this.#bot.api.sendMessage(location.chatId, text, {
         ...(location.threadId && { message_thread_id: location.threadId }),
       });
+      return "completed_notified";
     } finally {
       await this.#opencodeClient.session
         .abort({ sessionID: ephemeralId })
@@ -360,6 +428,7 @@ export class Scheduler implements Disposable {
 
 export namespace Scheduler {
   export type TaskKind = "session" | "background";
+  export type RunStatus = "completed_notified" | "completed_silent" | "failed";
 
   export interface CreateInput {
     readonly sessionId: string;
@@ -376,6 +445,20 @@ export namespace Scheduler {
     readonly cron?: string;
   }
 
+  export interface RunRecord {
+    readonly jobId: string;
+    startedAt: number;
+    finishedAt: number;
+    status: RunStatus;
+    error: string | null;
+  }
+
+  export interface TriggerResult {
+    readonly scheduleId: string;
+    readonly jobId: string;
+    readonly enqueuedAt: number;
+  }
+
   export interface Task {
     readonly id: string;
     readonly sessionId: string;
@@ -384,6 +467,10 @@ export namespace Scheduler {
     readonly description: string;
     readonly prompt: string;
     readonly once: boolean;
-    readonly nextRun: string | null;
+    readonly createdAt: number;
+    readonly updatedAt: number;
+    readonly lastTriggeredAt: number | null;
+    readonly nextRunAt: number | null;
+    readonly lastRun: RunRecord | null;
   }
 }

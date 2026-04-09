@@ -5,6 +5,14 @@ import type { Scheduler } from "~/lib/scheduler";
 
 const taskKindSchema = zod.enum(["session", "background"]);
 
+const runRecordSchema = zod.object({
+  jobId: zod.string(),
+  startedAt: zod.number(),
+  finishedAt: zod.number(),
+  status: zod.enum(["completed_notified", "completed_silent", "failed"]),
+  error: zod.string().nullable(),
+});
+
 const scheduleTaskSchema = zod.object({
   id: zod.string(),
   sessionId: zod.string(),
@@ -13,7 +21,11 @@ const scheduleTaskSchema = zod.object({
   description: zod.string(),
   prompt: zod.string(),
   once: zod.boolean(),
-  nextRun: zod.string().nullable(),
+  createdAt: zod.number(),
+  updatedAt: zod.number(),
+  lastTriggeredAt: zod.number().nullable(),
+  nextRunAt: zod.number().nullable(),
+  lastRun: runRecordSchema.nullable(),
 });
 
 const scheduleCreateInputSchema = zod.looseObject({
@@ -138,7 +150,7 @@ export function registerScheduleTools(
         content: [
           {
             type: "text",
-            text: `Created schedule [${task.id}]: "${task.description}" (${task.kind}, cron: ${task.cron}, next: ${task.nextRun ?? "N/A"})`,
+            text: `Created schedule [${task.id}]: "${task.description}" (${task.kind}, cron: ${task.cron}, nextRunAt: ${task.nextRunAt ? new Date(task.nextRunAt).toISOString() : "N/A"})`,
           },
         ],
         structuredContent: { ...task },
@@ -161,7 +173,7 @@ export function registerScheduleTools(
       const tasks = ctx.scheduler.list();
       const lines = tasks.map(
         (t) =>
-          `- [${t.id}] (${t.kind}) "${t.description}" | cron: ${t.cron} | prompt: ${t.prompt} | next: ${t.nextRun ?? "N/A"}`,
+          `- [${t.id}] (${t.kind}) "${t.description}" | cron: ${t.cron} | prompt: ${t.prompt} | nextRunAt: ${t.nextRunAt ? new Date(t.nextRunAt).toISOString() : "N/A"} | lastRun: ${t.lastRun?.status ?? "none"}`,
       );
       const text =
         tasks.length === 0
@@ -196,16 +208,25 @@ export function registerScheduleTools(
     "queue_schedule_trigger",
     {
       description:
-        "Enqueue a scheduled task for immediate execution without waiting for the next cron tick. The job is processed asynchronously — for background tasks, execution may take several minutes as the AI processes the prompt. Use queue_status or queue_list_jobs to monitor progress.",
+        "Enqueue a scheduled task for immediate execution without waiting for the next cron tick. The job is processed asynchronously — for background tasks, execution may take several minutes as the AI processes the prompt. Returns scheduleId, jobId, and enqueuedAt for tracking. Use queue_status, queue_list_jobs, or queue_schedule_runs to monitor progress.",
       inputSchema: scheduleIdInputSchema,
-      outputSchema: zod.object({ triggered: zod.boolean() }),
+      outputSchema: zod.object({
+        scheduleId: zod.string(),
+        jobId: zod.string(),
+        enqueuedAt: zod.number(),
+      }),
     },
     async (args) => {
       ctx.getMetadata(args);
-      await ctx.scheduler.trigger(args.id);
+      const result = await ctx.scheduler.trigger(args.id);
       return {
-        content: [{ type: "text", text: `Triggered schedule ${args.id}.` }],
-        structuredContent: { triggered: true },
+        content: [
+          {
+            type: "text",
+            text: `Triggered schedule ${result.scheduleId} → job ${result.jobId}`,
+          },
+        ],
+        structuredContent: { ...result },
       };
     },
   );
@@ -231,10 +252,34 @@ export function registerScheduleTools(
         content: [
           {
             type: "text",
-            text: `Updated schedule [${task.id}]: "${task.description}" (cron: ${task.cron}, next: ${task.nextRun ?? "N/A"})`,
+            text: `Updated schedule [${task.id}]: "${task.description}" (cron: ${task.cron}, nextRunAt: ${task.nextRunAt ? new Date(task.nextRunAt).toISOString() : "N/A"})`,
           },
         ],
         structuredContent: { ...task },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_schedule_runs",
+    {
+      description:
+        "Get execution history for a scheduled task. Shows the last 20 runs with jobId, startedAt, finishedAt, status (completed_notified, completed_silent, failed), and error details.",
+      inputSchema: scheduleIdInputSchema,
+      outputSchema: zod.object({
+        runs: zod.array(runRecordSchema),
+      }),
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const runs = ctx.scheduler.getRuns(args.id);
+      const text =
+        runs.length === 0
+          ? "No execution history."
+          : `${runs.length} run(s):\n${runs.map((r) => `- [${r.jobId}] ${r.status} (${new Date(r.startedAt).toISOString()} → ${new Date(r.finishedAt).toISOString()}, ${r.finishedAt - r.startedAt}ms)${r.error ? ` error: ${r.error}` : ""}`).join("\n")}`;
+      return {
+        content: [{ type: "text", text }],
+        structuredContent: { runs: runs.map((r) => ({ ...r })) },
       };
     },
   );

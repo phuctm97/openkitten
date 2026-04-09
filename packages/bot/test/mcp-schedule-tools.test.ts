@@ -30,7 +30,11 @@ function makeTask(overrides?: Partial<Scheduler.Task>): Scheduler.Task {
     description: "Hourly task",
     prompt: "Do something",
     once: false,
-    nextRun: "2026-04-07T01:00:00.000Z",
+    createdAt: 1712448000000,
+    updatedAt: 1712448000000,
+    lastTriggeredAt: null,
+    nextRunAt: 1712451600000,
+    lastRun: null,
     ...overrides,
   };
 }
@@ -39,7 +43,7 @@ describe("registerScheduleTools", () => {
   const mockSchedulerCreate = vi.fn<() => Promise<Scheduler.Task>>();
   const mockSchedulerList = vi.fn<() => Scheduler.Task[]>();
   const mockSchedulerDelete = vi.fn<() => Promise<void>>();
-  const mockSchedulerTrigger = vi.fn<() => Promise<void>>();
+  const mockSchedulerTrigger = vi.fn<() => Promise<Scheduler.TriggerResult>>();
   const mockSchedulerUpdate = vi.fn<() => Promise<Scheduler.Task>>();
 
   const mockBunqueue = {
@@ -93,6 +97,7 @@ describe("registerScheduleTools", () => {
     delete: mockSchedulerDelete,
     trigger: mockSchedulerTrigger,
     update: mockSchedulerUpdate,
+    getRuns: vi.fn().mockReturnValue([]),
     addJob: vi.fn().mockResolvedValue({
       id: "job-1",
       name: "job-1",
@@ -142,13 +147,14 @@ describe("registerScheduleTools", () => {
 
   test("registers all schedule and queue tools", () => {
     const tools = setup();
-    expect(tools.size).toBe(21);
+    expect(tools.size).toBe(22);
     expect([...tools.keys()]).toEqual([
       "queue_schedule_create",
       "queue_schedule_list",
       "queue_schedule_delete",
       "queue_schedule_trigger",
       "queue_schedule_update",
+      "queue_schedule_runs",
       "queue_server_time",
       "queue_add_job",
       "queue_status",
@@ -206,7 +212,7 @@ describe("registerScheduleTools", () => {
     });
 
     test("shows N/A in content when nextRun is null", async () => {
-      const task = makeTask({ nextRun: null });
+      const task = makeTask({ nextRunAt: null });
       mockSchedulerCreate.mockResolvedValue(task);
 
       const tools = setup();
@@ -351,7 +357,7 @@ describe("registerScheduleTools", () => {
     });
 
     test("list content shows N/A for null nextRun", async () => {
-      mockSchedulerList.mockReturnValue([makeTask({ nextRun: null })]);
+      mockSchedulerList.mockReturnValue([makeTask({ nextRunAt: null })]);
 
       const tools = setup();
       const tool = tools.get("queue_schedule_list");
@@ -414,8 +420,12 @@ describe("registerScheduleTools", () => {
   });
 
   describe("queue_schedule_trigger", () => {
-    test("triggers a task and returns triggered: true", async () => {
-      mockSchedulerTrigger.mockResolvedValue(undefined);
+    test("triggers a task and returns scheduleId and jobId", async () => {
+      mockSchedulerTrigger.mockResolvedValue({
+        scheduleId: "task-1",
+        jobId: "job-99",
+        enqueuedAt: 1712448000000,
+      });
 
       const tools = setup();
       const tool = tools.get("queue_schedule_trigger");
@@ -427,8 +437,17 @@ describe("registerScheduleTools", () => {
       expect(mockGetMetadata).toHaveBeenCalledWith(args);
       expect(mockSchedulerTrigger).toHaveBeenCalledWith("task-1");
       expect(result).toEqual({
-        content: [{ type: "text", text: "Triggered schedule task-1." }],
-        structuredContent: { triggered: true },
+        content: [
+          {
+            type: "text",
+            text: "Triggered schedule task-1 → job job-99",
+          },
+        ],
+        structuredContent: {
+          scheduleId: "task-1",
+          jobId: "job-99",
+          enqueuedAt: 1712448000000,
+        },
       });
     });
 
@@ -473,7 +492,7 @@ describe("registerScheduleTools", () => {
     });
 
     test("update content shows N/A for null nextRun", async () => {
-      const updated = makeTask({ nextRun: null });
+      const updated = makeTask({ nextRunAt: null });
       mockSchedulerUpdate.mockResolvedValue(updated);
 
       const tools = setup();
@@ -522,6 +541,50 @@ describe("registerScheduleTools", () => {
     });
   });
 
+  describe("queue_schedule_runs", () => {
+    test("returns empty run history", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_schedule_runs");
+      if (!tool) throw new Error("queue_schedule_runs not registered");
+
+      const result = await tool.handler({ ...metadataArgs, id: "task-1" });
+
+      expect(result).toHaveProperty("content");
+      expect(result).toHaveProperty("structuredContent");
+    });
+
+    test("returns run history with entries", async () => {
+      (mockScheduler.getRuns as ReturnType<typeof vi.fn>).mockReturnValueOnce([
+        {
+          jobId: "j-1",
+          startedAt: 1712448000000,
+          finishedAt: 1712448060000,
+          status: "completed_notified",
+          error: null,
+        },
+        {
+          jobId: "j-2",
+          startedAt: 1712448060000,
+          finishedAt: 1712448120000,
+          status: "failed",
+          error: "timeout",
+        },
+      ]);
+
+      const tools = setup();
+      const tool = tools.get("queue_schedule_runs");
+      if (!tool) throw new Error("queue_schedule_runs not registered");
+
+      const result = (await tool.handler({
+        ...metadataArgs,
+        id: "task-1",
+      })) as { content: { text: string }[] };
+
+      expect(result.content[0]?.text).toContain("completed_notified");
+      expect(result.content[0]?.text).toContain("error: timeout");
+    });
+  });
+
   describe("queue_server_time", () => {
     test("returns current server time with all fields", async () => {
       const tools = setup();
@@ -563,7 +626,11 @@ describe("registerScheduleTools", () => {
       mockSchedulerCreate.mockResolvedValue(makeTask());
       mockSchedulerList.mockReturnValue([]);
       mockSchedulerDelete.mockResolvedValue(undefined);
-      mockSchedulerTrigger.mockResolvedValue(undefined);
+      mockSchedulerTrigger.mockResolvedValue({
+        scheduleId: "task-1",
+        jobId: "job-1",
+        enqueuedAt: Date.now(),
+      });
       mockSchedulerUpdate.mockResolvedValue(makeTask());
 
       const tools = setup();
