@@ -10,6 +10,8 @@ const runRecordSchema = zod.object({
   startedAt: zod.number(),
   finishedAt: zod.number(),
   status: zod.enum(["completed_notified", "completed_silent", "failed"]),
+  notifiedUser: zod.boolean(),
+  output: zod.string().nullable(),
   error: zod.string().nullable(),
 });
 
@@ -264,7 +266,7 @@ export function registerScheduleTools(
     "queue_schedule_runs",
     {
       description:
-        "Get execution history for a scheduled task. Shows the last 20 runs with jobId, startedAt, finishedAt, status (completed_notified, completed_silent, failed), and error details.",
+        "Get execution history for a scheduled task. Shows the last 20 runs with jobId, startedAt, finishedAt, status (completed_notified, completed_silent, failed), notifiedUser, output preview, and error details. Use this to inspect background task behavior without polluting the main chat context.",
       inputSchema: scheduleIdInputSchema,
       outputSchema: zod.object({
         runs: zod.array(runRecordSchema),
@@ -276,7 +278,7 @@ export function registerScheduleTools(
       const text =
         runs.length === 0
           ? "No execution history."
-          : `${runs.length} run(s):\n${runs.map((r) => `- [${r.jobId}] ${r.status} (${new Date(r.startedAt).toISOString()} → ${new Date(r.finishedAt).toISOString()}, ${r.finishedAt - r.startedAt}ms)${r.error ? ` error: ${r.error}` : ""}`).join("\n")}`;
+          : `${runs.length} run(s):\n${runs.map((r) => `- [${r.jobId}] ${r.status} notified:${r.notifiedUser} (${new Date(r.startedAt).toISOString()} → ${new Date(r.finishedAt).toISOString()}, ${r.finishedAt - r.startedAt}ms)${r.output ? ` output: ${r.output.slice(0, 200)}` : ""}${r.error ? ` error: ${r.error}` : ""}`).join("\n")}`;
       return {
         content: [{ type: "text", text }],
         structuredContent: { runs: runs.map((r) => ({ ...r })) },

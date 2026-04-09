@@ -260,11 +260,15 @@ export class Scheduler implements Disposable {
       startedAt: Date.now(),
       finishedAt: 0,
       status: "completed_silent",
+      notifiedUser: false,
+      output: null,
       error: null,
     };
     try {
       const result = await this.#execute(data);
-      run.status = result;
+      run.status = result.status;
+      run.notifiedUser = result.status === "completed_notified";
+      run.output = result.output;
     } catch (error) {
       run.status = "failed";
       run.error = error instanceof Error ? error.message : String(error);
@@ -281,7 +285,9 @@ export class Scheduler implements Disposable {
     }
   }
 
-  async #execute(data: TaskData): Promise<Scheduler.RunStatus> {
+  async #execute(
+    data: TaskData,
+  ): Promise<{ status: Scheduler.RunStatus; output: string | null }> {
     if (data.kind === "background") {
       return this.#executeBackground(data);
     }
@@ -294,17 +300,19 @@ export class Scheduler implements Disposable {
       },
       { throwOnError: true },
     );
-    return "completed_notified";
+    return { status: "completed_notified", output: null };
   }
 
-  async #executeBackground(data: TaskData): Promise<Scheduler.RunStatus> {
+  async #executeBackground(
+    data: TaskData,
+  ): Promise<{ status: Scheduler.RunStatus; output: string | null }> {
     const location = this.#existingSessions.get(data.sessionId);
     if (!location) {
       logger.warn("Background task session not found, skipping", {
         taskId: data.taskId,
         sessionId: data.sessionId,
       });
-      return "completed_silent";
+      return { status: "completed_silent", output: null };
     }
     const {
       data: { id: ephemeralId },
@@ -323,11 +331,13 @@ export class Scheduler implements Disposable {
         { throwOnError: true },
       );
       const text = await this.#waitForText(ephemeralId, data.taskId);
-      if (!text || text.includes(noReportMarker)) return "completed_silent";
+      if (!text || text.includes(noReportMarker)) {
+        return { status: "completed_silent", output: text };
+      }
       await this.#bot.api.sendMessage(location.chatId, text, {
         ...(location.threadId && { message_thread_id: location.threadId }),
       });
-      return "completed_notified";
+      return { status: "completed_notified", output: text };
     } finally {
       await this.#opencodeClient.session
         .abort({ sessionID: ephemeralId })
@@ -450,6 +460,8 @@ export namespace Scheduler {
     startedAt: number;
     finishedAt: number;
     status: RunStatus;
+    notifiedUser: boolean;
+    output: string | null;
     error: string | null;
   }
 

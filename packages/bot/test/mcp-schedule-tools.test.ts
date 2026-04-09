@@ -560,6 +560,8 @@ describe("registerScheduleTools", () => {
           startedAt: 1712448000000,
           finishedAt: 1712448060000,
           status: "completed_notified",
+          notifiedUser: true,
+          output: "Important report data",
           error: null,
         },
         {
@@ -567,6 +569,8 @@ describe("registerScheduleTools", () => {
           startedAt: 1712448060000,
           finishedAt: 1712448120000,
           status: "failed",
+          notifiedUser: false,
+          output: null,
           error: "timeout",
         },
       ]);
@@ -581,6 +585,9 @@ describe("registerScheduleTools", () => {
       })) as { content: { text: string }[] };
 
       expect(result.content[0]?.text).toContain("completed_notified");
+      expect(result.content[0]?.text).toContain(
+        "output: Important report data",
+      );
       expect(result.content[0]?.text).toContain("error: timeout");
     });
   });
