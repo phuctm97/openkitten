@@ -104,8 +104,6 @@ function createMockCamera(): MockCamera {
 
   camera.setBackgroundColor.mockReturnValue(camera);
   camera.setBounds.mockReturnValue(camera);
-  camera.setSize.mockReturnValue(camera);
-  camera.setZoom.mockReturnValue(camera);
   camera.setViewport.mockReturnValue(camera);
 
   return camera;
@@ -564,13 +562,13 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   pointerMoveHandler.call(scene, { id: 7, x: 250, y: 250 });
   expect(camera.setScroll).not.toHaveBeenCalled();
 
-  scale.width = 520;
-  scale.height = 812;
+  scale.width = 640;
+  scale.height = 360;
   resizeHandler.call(scene);
 
-  expect(camera.setSize).toHaveBeenLastCalledWith(520, 812);
-  expect(camera.setZoom).toHaveBeenLastCalledWith(1.1277777777777778);
-  expect(camera.setViewport).toHaveBeenLastCalledWith(0, 0, 520, 812);
+  expect(camera.setSize).toHaveBeenLastCalledWith(640, 360);
+  expect(camera.setZoom).toHaveBeenLastCalledWith(0.5);
+  expect(camera.setViewport).toHaveBeenLastCalledWith(0, 0, 640, 360);
   expect(camera.setBounds).toHaveBeenLastCalledWith(
     0,
     0,
@@ -594,6 +592,15 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
     755.1999999999999,
     503.46666666666664,
   );
+
+  pointerDownHandler.call(scene, { id: 8, x: 320, y: 180 });
+  pointerMoveHandler.call(scene, { id: 8, x: 270, y: 130 });
+  expect(camera.scrollX).toBeCloseTo(100);
+  expect(camera.scrollY).toBeCloseTo(100);
+
+  pointerMoveHandler.call(scene, { id: 8, x: 120, y: -20 });
+  expect(camera.scrollX).toBeCloseTo(230.4);
+  expect(camera.scrollY).toBeCloseTo(286.9333333333);
 
   shutdownHandler.call(scene);
 

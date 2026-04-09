@@ -13,6 +13,7 @@ type DragState = {
   startPointerY: number;
   startScrollX: number;
   startScrollY: number;
+  startZoom: number;
 };
 
 type WorldSize = {
@@ -157,6 +158,7 @@ export class HouseScene extends Phaser.Scene {
       startPointerY: pointer.y,
       startScrollX: camera.scrollX,
       startScrollY: camera.scrollY,
+      startZoom: camera.zoom,
     };
     this.game.canvas.style.cursor = "grabbing";
   }
@@ -169,8 +171,10 @@ export class HouseScene extends Phaser.Scene {
     }
 
     this.setCameraScroll(
-      dragState.startScrollX - (pointer.x - dragState.startPointerX),
-      dragState.startScrollY - (pointer.y - dragState.startPointerY),
+      dragState.startScrollX -
+        (pointer.x - dragState.startPointerX) / dragState.startZoom,
+      dragState.startScrollY -
+        (pointer.y - dragState.startPointerY) / dragState.startZoom,
     );
   }
 
