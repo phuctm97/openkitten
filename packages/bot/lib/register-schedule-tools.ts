@@ -36,7 +36,7 @@ const scheduleCreateInputSchema = zod.looseObject({
     .describe(
       [
         'Task execution mode. "session" executes the prompt inside the current Telegram chat — the AI response appears in the conversation just like a normal message, and the chat history is preserved across runs.',
-        '"background" executes the prompt in an isolated session and only sends a Telegram message when the AI determines there is meaningful data to report. Use "background" for monitoring, alerts, and silent periodic checks.',
+        '"background" executes the prompt in an isolated ephemeral session and only sends a Telegram message when the AI determines there is meaningful data to report. Background tasks can run for up to 15 minutes, making them suitable for complex workflows with external tools (Gmail, Sheets, APIs). Results are recorded in execution history (queue_schedule_runs) with status, output, and notification state — NOT injected into the main chat context.',
         'Default: "session".',
       ].join(" "),
     ),
@@ -134,7 +134,7 @@ export function registerScheduleTools(
     "queue_schedule_create",
     {
       description:
-        'Create a scheduled task that runs on a cron schedule. Use kind "session" for tasks that respond in the chat (reminders, summaries, recurring analysis). Use kind "background" for silent monitoring that only notifies the user when something noteworthy is found.',
+        'Create a scheduled task that runs on a cron schedule. Use kind "session" for tasks that respond in the chat (reminders, summaries, recurring analysis). Use kind "background" for silent monitoring that only notifies the user when something noteworthy is found. Background tasks run in an isolated session and poll for up to 15 minutes — suitable for workflows involving external tools (Gmail, Sheets, APIs). Results are visible via queue_schedule_runs, not in the main chat.',
       inputSchema: scheduleCreateInputSchema,
       outputSchema: scheduleTaskSchema,
     },
@@ -210,7 +210,7 @@ export function registerScheduleTools(
     "queue_schedule_trigger",
     {
       description:
-        "Enqueue a scheduled task for immediate execution without waiting for the next cron tick. The job is processed asynchronously — for background tasks, execution may take several minutes as the AI processes the prompt. Returns scheduleId, jobId, and enqueuedAt for tracking. Use queue_status, queue_list_jobs, or queue_schedule_runs to monitor progress.",
+        "Enqueue a scheduled task for immediate execution without waiting for the next cron tick. The job is processed asynchronously. Background tasks may take up to 15 minutes for complex workflows (e.g. Gmail/Sheets with multiple tool calls). Returns scheduleId, jobId, and enqueuedAt for tracking. Use queue_schedule_runs to check execution result, output, and whether the user was notified.",
       inputSchema: scheduleIdInputSchema,
       outputSchema: zod.object({
         scheduleId: zod.string(),
