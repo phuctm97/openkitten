@@ -353,7 +353,7 @@ export class Scheduler implements Disposable {
     sessionId: string,
     taskId: string,
   ): Promise<string | null> {
-    const maxAttempts = 90;
+    const maxAttempts = 450;
     const intervalMs = 2000;
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
