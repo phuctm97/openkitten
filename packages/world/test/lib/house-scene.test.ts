@@ -431,9 +431,12 @@ test("preloads and lays out the fullscreen house artwork, two nearby cats, and a
     755.1999999999999,
     503.46666666666664,
   );
-  expect(awakeCat.setPosition).toHaveBeenCalledWith(573.952, 684.7146666666666);
+  expect(awakeCat.setPosition).toHaveBeenCalledWith(
+    543.7439999999999,
+    714.9226666666666,
+  );
   expect(restingCat.setPosition).toHaveBeenCalledWith(
-    951.5519999999999,
+    891.1359999999999,
     735.0613333333333,
   );
   expect(ambientShadow.setPosition).toHaveBeenCalledWith(
@@ -753,15 +756,15 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
     261.80266666666665,
   );
   expect(awakeCat.setPosition).toHaveBeenLastCalledWith(
-    573.952,
-    684.7146666666666,
+    543.7439999999999,
+    714.9226666666666,
   );
   expect(restingCat.setDisplaySize).toHaveBeenLastCalledWith(
     281.9413333333333,
     281.9413333333333,
   );
   expect(restingCat.setPosition).toHaveBeenLastCalledWith(
-    951.5519999999999,
+    891.1359999999999,
     735.0613333333333,
   );
 
