@@ -32,6 +32,7 @@ type MockInput = {
 };
 
 type MockImage = {
+  setDepth: ReturnType<typeof vi.fn>;
   setDisplaySize: ReturnType<typeof vi.fn>;
   setOrigin: ReturnType<typeof vi.fn>;
   setPosition: ReturnType<typeof vi.fn>;
@@ -55,6 +56,7 @@ type MockScale = {
 };
 
 type MockShape = {
+  setDepth: ReturnType<typeof vi.fn>;
   setDisplaySize: ReturnType<typeof vi.fn>;
   setFillStyle: ReturnType<typeof vi.fn>;
   setOrigin: ReturnType<typeof vi.fn>;
@@ -127,11 +129,13 @@ function createMockEventEmitter(): MockEventEmitter {
 
 function createMockImage(): MockImage {
   const image = {
+    setDepth: vi.fn(),
     setDisplaySize: vi.fn(),
     setOrigin: vi.fn(),
     setPosition: vi.fn(),
   };
 
+  image.setDepth.mockReturnValue(image);
   image.setDisplaySize.mockReturnValue(image);
   image.setOrigin.mockReturnValue(image);
   image.setPosition.mockReturnValue(image);
@@ -171,12 +175,14 @@ function createMockScale(): MockScale {
 
 function createMockShape(): MockShape {
   const shape = {
+    setDepth: vi.fn(),
     setDisplaySize: vi.fn(),
     setFillStyle: vi.fn(),
     setOrigin: vi.fn(),
     setPosition: vi.fn(),
   };
 
+  shape.setDepth.mockReturnValue(shape);
   shape.setDisplaySize.mockReturnValue(shape);
   shape.setFillStyle.mockReturnValue(shape);
   shape.setOrigin.mockReturnValue(shape);
@@ -311,7 +317,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-test("preloads and lays out the fullscreen house artwork and ambient night shadow using the active palette", async () => {
+test("preloads and lays out the fullscreen house artwork, two nearby cats, and ambient night shadow using the active palette", async () => {
   document.documentElement.style.colorScheme = "dark";
   vi.stubGlobal("MutationObserver", MockMutationObserver);
 
@@ -334,11 +340,23 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
     "house-room-shell-v1",
     "/world/v1/backgrounds/house-room-shell-v1.png",
   );
-  expect(load.image).toHaveBeenCalledTimes(1);
+  expect(load.image).toHaveBeenNthCalledWith(
+    2,
+    "cat-a-awake-v1",
+    "/world/v1/cats/cat-a-awake-v1.png",
+  );
+  expect(load.image).toHaveBeenNthCalledWith(
+    3,
+    "cat-b-resting-v1",
+    "/world/v1/cats/cat-b-resting-v1.png",
+  );
+  expect(load.image).toHaveBeenCalledTimes(3);
 
   scene.create();
 
   const roomShell = houseSceneMocks.images[0];
+  const awakeCat = houseSceneMocks.images[1];
+  const restingCat = houseSceneMocks.images[2];
   const ambientShadow = houseSceneMocks.rectangles[0];
   const camera = houseSceneMocks.cameras[0];
   const canvas = houseSceneMocks.canvases[0];
@@ -350,6 +368,8 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
 
   if (
     roomShell === undefined ||
+    awakeCat === undefined ||
+    restingCat === undefined ||
     ambientShadow === undefined ||
     camera === undefined ||
     canvas === undefined ||
@@ -363,22 +383,28 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
   }
 
   const roomShellLayoutCall = roomShell.setDisplaySize.mock.calls[0];
+  const awakeCatLayoutCall = awakeCat.setDisplaySize.mock.calls[0];
+  const restingCatLayoutCall = restingCat.setDisplaySize.mock.calls[0];
   const ambientShadowLayoutCall = ambientShadow.setDisplaySize.mock.calls[0];
 
   if (
     roomShellLayoutCall === undefined ||
+    awakeCatLayoutCall === undefined ||
+    restingCatLayoutCall === undefined ||
     ambientShadowLayoutCall === undefined
   ) {
     throw new Error("Expected the House scene artwork to be laid out.");
   }
 
-  expect(scene.add.image).toHaveBeenCalledTimes(1);
+  expect(scene.add.image).toHaveBeenCalledTimes(3);
   expect(scene.add.image).toHaveBeenNthCalledWith(
     1,
     0,
     0,
     "house-room-shell-v1",
   );
+  expect(scene.add.image).toHaveBeenNthCalledWith(2, 0, 0, "cat-a-awake-v1");
+  expect(scene.add.image).toHaveBeenNthCalledWith(3, 0, 0, "cat-b-resting-v1");
   expect(scene.add.rectangle).toHaveBeenNthCalledWith(
     1,
     0,
@@ -390,13 +416,25 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
   );
   expect(roomShell.setOrigin).toHaveBeenCalledWith(0.5);
   expect(ambientShadow.setOrigin).toHaveBeenCalledWith(0.5);
+  expect(ambientShadow.setDepth).toHaveBeenCalledWith(1);
+  expect(awakeCat.setOrigin).toHaveBeenCalledWith(0.5, 0.95);
+  expect(restingCat.setOrigin).toHaveBeenCalledWith(0.5, 0.78);
   expect(roomShellLayoutCall[0]).toBeCloseTo(1510.4);
   expect(roomShellLayoutCall[1]).toBeCloseTo(1006.9333333333);
+  expect(awakeCatLayoutCall[0]).toBeCloseTo(261.8026666667);
+  expect(awakeCatLayoutCall[1]).toBeCloseTo(261.8026666667);
+  expect(restingCatLayoutCall[0]).toBeCloseTo(281.9413333333);
+  expect(restingCatLayoutCall[1]).toBeCloseTo(281.9413333333);
   expect(ambientShadowLayoutCall[0]).toBeCloseTo(1510.4);
   expect(ambientShadowLayoutCall[1]).toBeCloseTo(1006.9333333333);
   expect(roomShell.setPosition).toHaveBeenCalledWith(
     755.1999999999999,
     503.46666666666664,
+  );
+  expect(awakeCat.setPosition).toHaveBeenCalledWith(573.952, 684.7146666666666);
+  expect(restingCat.setPosition).toHaveBeenCalledWith(
+    951.5519999999999,
+    735.0613333333333,
   );
   expect(ambientShadow.setPosition).toHaveBeenCalledWith(
     755.1999999999999,
@@ -619,6 +657,8 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   scene.create();
 
   const roomShell = houseSceneMocks.images[0];
+  const awakeCat = houseSceneMocks.images[1];
+  const restingCat = houseSceneMocks.images[2];
   const ambientShadow = houseSceneMocks.rectangles[0];
   const scale = houseSceneMocks.scales[0];
   const events = houseSceneMocks.events[0];
@@ -635,6 +675,8 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
 
   if (
     roomShell === undefined ||
+    awakeCat === undefined ||
+    restingCat === undefined ||
     ambientShadow === undefined ||
     scale === undefined ||
     events === undefined ||
@@ -706,6 +748,22 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
     755.1999999999999,
     503.46666666666664,
   );
+  expect(awakeCat.setDisplaySize).toHaveBeenLastCalledWith(
+    261.80266666666665,
+    261.80266666666665,
+  );
+  expect(awakeCat.setPosition).toHaveBeenLastCalledWith(
+    573.952,
+    684.7146666666666,
+  );
+  expect(restingCat.setDisplaySize).toHaveBeenLastCalledWith(
+    281.9413333333333,
+    281.9413333333333,
+  );
+  expect(restingCat.setPosition).toHaveBeenLastCalledWith(
+    951.5519999999999,
+    735.0613333333333,
+  );
 
   pointerDownHandler.call(scene, { id: 8, x: 512, y: 300 });
   pointerMoveHandler.call(scene, { id: 8, x: 462, y: 250 });
@@ -741,11 +799,15 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   );
   expect(scale.off).toHaveBeenCalledWith("resize-event", resizeHandler, scene);
   ambientShadow.setFillStyle.mockClear();
+  awakeCat.setPosition.mockClear();
+  restingCat.setPosition.mockClear();
   roomShell.setPosition.mockClear();
   colorSchemeObserver.notify();
   expect(() => {
     resizeHandler.call(scene);
   }).not.toThrow();
   expect(ambientShadow.setFillStyle).not.toHaveBeenCalled();
+  expect(awakeCat.setPosition).not.toHaveBeenCalled();
+  expect(restingCat.setPosition).not.toHaveBeenCalled();
   expect(roomShell.setPosition).not.toHaveBeenCalled();
 });

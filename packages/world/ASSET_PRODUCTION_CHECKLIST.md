@@ -122,7 +122,6 @@ packages/world/public/world/v1/cats/cat-a-awake-v1.png
 packages/world/public/world/v1/cats/cat-a-resting-v1.png
 packages/world/public/world/v1/cats/cat-b-awake-v1.png
 packages/world/public/world/v1/cats/cat-b-resting-v1.png
-packages/world/public/world/v1/fx/cat-shadow-v1.png
 packages/world/public/world/v1/fx/hover-ring-v1.png
 ```
 
@@ -137,7 +136,6 @@ This is the smallest useful set for MVP:
 - 5 to 7 atmospheric props
 - 2 cats
 - 2 states per cat: `awake` and `resting`
-- 1 shadow blob
 - 1 hover or selection marker
 
 ## Production Order
@@ -433,23 +431,6 @@ Color palette: preserve the exact character palette from the reference
 Materials/textures: preserve the same fur, markings, and accessory treatment
 Constraints: keep identity consistent, eyes closed or nearly closed, posture relaxed, no bed required, no new props, no text, no logo, no watermark
 Avoid: changing the character, flattening the silhouette too much, exaggerated cartoon snoring effects
-```
-
-### Step 12: Generate Support Assets
-
-Shadow prompt:
-
-```text
-Use case: stylized-concept
-Asset type: game support asset
-Primary request: create a soft ground shadow blob for small stylized characters and props in a cozy 2D room
-Scene/backdrop: isolated asset on transparent background if supported
-Subject: a simple soft oval shadow with painterly edges
-Style/medium: stylized 2D game asset
-Composition/framing: centered single asset
-Lighting/mood: soft warm indoor shadow
-Constraints: no text, no watermark, simple and reusable
-Avoid: hard black ellipse, photoreal shadow detail
 ```
 
 ## Iteration Prompts
