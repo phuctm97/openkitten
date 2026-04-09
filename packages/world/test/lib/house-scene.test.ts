@@ -1,17 +1,34 @@
 import { afterEach, expect, test, vi } from "vitest";
 
 type MockCamera = {
+  height: number;
+  scrollX: number;
+  scrollY: number;
   setBackgroundColor: ReturnType<typeof vi.fn>;
+  setBounds: ReturnType<typeof vi.fn>;
+  setScroll: ReturnType<typeof vi.fn>;
+  setSize: ReturnType<typeof vi.fn>;
+  setZoom: ReturnType<typeof vi.fn>;
+  setViewport: ReturnType<typeof vi.fn>;
+  width: number;
+  zoom: number;
 };
 
 type MockCanvas = {
   style: {
     backgroundColor: string;
+    cursor: string;
+    touchAction: string;
   };
 };
 
 type MockEventEmitter = {
   once: ReturnType<typeof vi.fn>;
+};
+
+type MockInput = {
+  off: ReturnType<typeof vi.fn>;
+  on: ReturnType<typeof vi.fn>;
 };
 
 type MockImage = {
@@ -61,10 +78,33 @@ class MockMutationObserver {
 
 function createMockCamera(): MockCamera {
   const camera = {
+    height: 720,
+    scrollX: 0,
+    scrollY: 0,
     setBackgroundColor: vi.fn(),
+    setBounds: vi.fn(),
+    setScroll: vi.fn((x: number, y: number) => {
+      camera.scrollX = x;
+      camera.scrollY = y;
+      return camera;
+    }),
+    setSize: vi.fn((width: number, height: number) => {
+      camera.width = width;
+      camera.height = height;
+      return camera;
+    }),
+    setZoom: vi.fn((zoom: number) => {
+      camera.zoom = zoom;
+      return camera;
+    }),
+    setViewport: vi.fn(),
+    width: 1280,
+    zoom: 1,
   };
 
   camera.setBackgroundColor.mockReturnValue(camera);
+  camera.setBounds.mockReturnValue(camera);
+  camera.setViewport.mockReturnValue(camera);
 
   return camera;
 }
@@ -73,6 +113,8 @@ function createMockCanvas(): MockCanvas {
   return {
     style: {
       backgroundColor: "",
+      cursor: "",
+      touchAction: "",
     },
   };
 }
@@ -100,6 +142,13 @@ function createMockImage(): MockImage {
 function createMockLoader(): MockLoader {
   return {
     image: vi.fn(),
+  };
+}
+
+function createMockInput(): MockInput {
+  return {
+    off: vi.fn(),
+    on: vi.fn(),
   };
 }
 
@@ -141,6 +190,7 @@ const houseSceneMocks = vi.hoisted(() => {
   const canvases: MockCanvas[] = [];
   const events: MockEventEmitter[] = [];
   const images: MockImage[] = [];
+  const inputs: MockInput[] = [];
   const keys: unknown[] = [];
   const loaders: MockLoader[] = [];
   const rectangles: MockShape[] = [];
@@ -177,6 +227,7 @@ const houseSceneMocks = vi.hoisted(() => {
       canvas: createMockCanvas(),
       renderer: createMockRenderer(),
     };
+    input = createMockInput();
     load = createMockLoader();
     scale = createMockScale();
 
@@ -185,6 +236,7 @@ const houseSceneMocks = vi.hoisted(() => {
       cameras.push(this.cameras.main);
       canvases.push(this.game.canvas);
       events.push(this.events);
+      inputs.push(this.input);
       loaders.push(this.load);
       renderers.push(this.game.renderer);
       scales.push(this.scale);
@@ -196,6 +248,7 @@ const houseSceneMocks = vi.hoisted(() => {
     canvases,
     events,
     images,
+    inputs,
     keys,
     loaders,
     MockScene,
@@ -215,6 +268,15 @@ vi.mock("phaser", () => ({
     GameObjects: {
       Image: class Image {},
       Rectangle: class Rectangle {},
+    },
+    Input: {
+      Events: {
+        POINTER_DOWN: "pointer-down-event",
+        POINTER_MOVE: "pointer-move-event",
+        POINTER_UP: "pointer-up-event",
+        POINTER_UP_OUTSIDE: "pointer-up-outside-event",
+      },
+      Pointer: class Pointer {},
     },
     Scale: {
       Events: {
@@ -236,6 +298,7 @@ afterEach(() => {
   houseSceneMocks.canvases.length = 0;
   houseSceneMocks.events.length = 0;
   houseSceneMocks.images.length = 0;
+  houseSceneMocks.inputs.length = 0;
   houseSceneMocks.keys.length = 0;
   houseSceneMocks.loaders.length = 0;
   houseSceneMocks.rectangles.length = 0;
@@ -282,6 +345,7 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
   const scale = houseSceneMocks.scales[0];
   const renderer = houseSceneMocks.renderers[0];
   const events = houseSceneMocks.events[0];
+  const input = houseSceneMocks.inputs[0];
   const colorSchemeObserver = MockMutationObserver.instances[0];
 
   if (
@@ -292,6 +356,7 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
     scale === undefined ||
     renderer === undefined ||
     events === undefined ||
+    input === undefined ||
     colorSchemeObserver === undefined
   ) {
     throw new Error("Expected the House scene objects to be created.");
@@ -325,14 +390,39 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
   );
   expect(roomShell.setOrigin).toHaveBeenCalledWith(0.5);
   expect(ambientShadow.setOrigin).toHaveBeenCalledWith(0.5);
-  expect(roomShellLayoutCall[0]).toBeCloseTo(1280);
-  expect(roomShellLayoutCall[1]).toBeCloseTo(853.3333333333);
-  expect(ambientShadowLayoutCall).toEqual([1280, 720]);
-  expect(roomShell.setPosition).toHaveBeenCalledWith(640, 360);
-  expect(ambientShadow.setPosition).toHaveBeenCalledWith(640, 360);
+  expect(roomShellLayoutCall[0]).toBeCloseTo(1510.4);
+  expect(roomShellLayoutCall[1]).toBeCloseTo(1006.9333333333);
+  expect(ambientShadowLayoutCall[0]).toBeCloseTo(1510.4);
+  expect(ambientShadowLayoutCall[1]).toBeCloseTo(1006.9333333333);
+  expect(roomShell.setPosition).toHaveBeenCalledWith(
+    755.1999999999999,
+    503.46666666666664,
+  );
+  expect(ambientShadow.setPosition).toHaveBeenCalledWith(
+    755.1999999999999,
+    503.46666666666664,
+  );
   expect(ambientShadow.setFillStyle).toHaveBeenCalledWith(0x120d0b, 0.22);
   expect(camera.setBackgroundColor).toHaveBeenCalledWith("#0c0a09");
+  expect(camera.setSize).toHaveBeenCalledWith(1280, 720);
+  expect(camera.setZoom).toHaveBeenCalledWith(1);
+  expect(camera.setViewport).toHaveBeenCalledWith(0, 0, 1280, 720);
+  const cameraBoundsCall = camera.setBounds.mock.calls[0];
+  const cameraScrollCall = camera.setScroll.mock.calls[0];
+
+  if (cameraBoundsCall === undefined || cameraScrollCall === undefined) {
+    throw new Error("Expected the House scene camera to be laid out.");
+  }
+
+  expect(cameraBoundsCall[0]).toBe(0);
+  expect(cameraBoundsCall[1]).toBe(0);
+  expect(cameraBoundsCall[2]).toBeCloseTo(1510.4);
+  expect(cameraBoundsCall[3]).toBeCloseTo(1006.9333333333);
+  expect(cameraScrollCall[0]).toBeCloseTo(115.2);
+  expect(cameraScrollCall[1]).toBeCloseTo(143.4666666667);
   expect(canvas.style.backgroundColor).toBe("#0c0a09");
+  expect(canvas.style.cursor).toBe("grab");
+  expect(canvas.style.touchAction).toBe("none");
   expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
   expect(colorSchemeObserver.observe).toHaveBeenCalledWith(
     document.documentElement,
@@ -340,6 +430,26 @@ test("preloads and lays out the fullscreen house artwork and ambient night shado
       attributeFilter: ["style"],
       attributes: true,
     },
+  );
+  expect(input.on).toHaveBeenCalledWith(
+    "pointer-down-event",
+    expect.any(Function),
+    scene,
+  );
+  expect(input.on).toHaveBeenCalledWith(
+    "pointer-move-event",
+    expect.any(Function),
+    scene,
+  );
+  expect(input.on).toHaveBeenCalledWith(
+    "pointer-up-event",
+    expect.any(Function),
+    scene,
+  );
+  expect(input.on).toHaveBeenCalledWith(
+    "pointer-up-outside-event",
+    expect.any(Function),
+    scene,
   );
   expect(scale.on).toHaveBeenCalledWith(
     "resize-event",
@@ -385,6 +495,120 @@ test("builds the initial scene from the computed color scheme when inline style 
   expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
 });
 
+test("caps zoom on very small viewports so the world stops shrinking past the minimum scale", async () => {
+  vi.stubGlobal("MutationObserver", MockMutationObserver);
+
+  const { HouseScene } = await import("~/lib/house-scene");
+  const scene = new HouseScene();
+
+  scene.preload();
+  scene.create();
+
+  const camera = houseSceneMocks.cameras[0];
+  const scale = houseSceneMocks.scales[0];
+  const input = houseSceneMocks.inputs[0];
+  const pointerDownHandler = input?.on.mock.calls[0]?.[1];
+  const pointerMoveHandler = input?.on.mock.calls[1]?.[1];
+  const resizeHandler = scale?.on.mock.calls[0]?.[1];
+
+  if (
+    camera === undefined ||
+    scale === undefined ||
+    input === undefined ||
+    pointerDownHandler === undefined ||
+    pointerMoveHandler === undefined ||
+    resizeHandler === undefined
+  ) {
+    throw new Error("Expected the scene resize callbacks to be registered.");
+  }
+
+  scale.width = 640;
+  scale.height = 360;
+  resizeHandler.call(scene);
+
+  expect(camera.setZoom).toHaveBeenLastCalledWith(0.75);
+  const cameraScrollCall = camera.setScroll.mock.calls.at(-1);
+
+  if (cameraScrollCall === undefined) {
+    throw new Error("Expected the camera scroll to be updated.");
+  }
+
+  expect(cameraScrollCall[0]).toBeCloseTo(435.2);
+  expect(cameraScrollCall[1]).toBeCloseTo(323.4666666667);
+
+  pointerDownHandler.call(scene, { id: 9, x: 320, y: 180 });
+  pointerMoveHandler.call(scene, { id: 9, x: 260, y: 120 });
+  expect(camera.scrollX).toBeCloseTo(515.2);
+  expect(camera.scrollY).toBeCloseTo(403.4666666667);
+});
+
+test("keeps dragging on mismatched pointer up and safely ignores scroll requests without a world", async () => {
+  vi.stubGlobal("MutationObserver", MockMutationObserver);
+
+  const { HouseScene } = await import("~/lib/house-scene");
+  const scene = new HouseScene();
+
+  scene.preload();
+  scene.create();
+
+  const camera = houseSceneMocks.cameras[0];
+  const canvas = houseSceneMocks.canvases[0];
+  const scale = houseSceneMocks.scales[0];
+  const events = houseSceneMocks.events[0];
+  const input = houseSceneMocks.inputs[0];
+  const pointerDownHandler = input?.on.mock.calls[0]?.[1];
+  const pointerMoveHandler = input?.on.mock.calls[1]?.[1];
+  const pointerUpHandler = input?.on.mock.calls[2]?.[1];
+  const resizeHandler = scale?.on.mock.calls[0]?.[1];
+  const shutdownHandler = events?.once.mock.calls[0]?.[1];
+
+  if (
+    camera === undefined ||
+    canvas === undefined ||
+    scale === undefined ||
+    events === undefined ||
+    input === undefined ||
+    pointerDownHandler === undefined ||
+    pointerMoveHandler === undefined ||
+    pointerUpHandler === undefined ||
+    resizeHandler === undefined ||
+    shutdownHandler === undefined
+  ) {
+    throw new Error("Expected the scene guard callbacks to be registered.");
+  }
+
+  pointerDownHandler.call(scene, { id: 11, x: 320, y: 180 });
+  pointerUpHandler.call(scene, { id: 12 });
+  expect(canvas.style.cursor).toBe("grabbing");
+
+  pointerMoveHandler.call(scene, { id: 11, x: 260, y: 120 });
+  expect(camera.scrollX).toBeCloseTo(175.2);
+  expect(camera.scrollY).toBeCloseTo(203.4666666667);
+
+  camera.width = 1510.3999999999999;
+  camera.height = 1006.9333333333333;
+  camera.zoom = 1;
+  camera.scrollX = 0;
+  camera.scrollY = 0;
+  resizeHandler.call(scene);
+  expect(camera.scrollX).toBeCloseTo(115.2);
+  expect(camera.scrollY).toBeCloseTo(143.4666666667);
+
+  shutdownHandler.call(scene);
+  camera.setScroll.mockClear();
+
+  const setCameraScroll = Reflect.get(scene, "setCameraScroll");
+
+  if (typeof setCameraScroll !== "function") {
+    throw new Error("Expected the House scene scroll helper to exist.");
+  }
+
+  expect(() => {
+    setCameraScroll.call(scene, 1, 1);
+  }).not.toThrow();
+  expect(camera.setScroll).not.toHaveBeenCalled();
+});
+
 test("responds to palette changes, resize events, and shutdown cleanup", async () => {
   vi.stubGlobal("MutationObserver", MockMutationObserver);
 
@@ -400,8 +624,12 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   const events = houseSceneMocks.events[0];
   const camera = houseSceneMocks.cameras[0];
   const canvas = houseSceneMocks.canvases[0];
+  const input = houseSceneMocks.inputs[0];
   const renderer = houseSceneMocks.renderers[0];
   const colorSchemeObserver = MockMutationObserver.instances[0];
+  const pointerDownHandler = input?.on.mock.calls[0]?.[1];
+  const pointerMoveHandler = input?.on.mock.calls[1]?.[1];
+  const pointerUpHandler = input?.on.mock.calls[2]?.[1];
   const resizeHandler = scale?.on.mock.calls[0]?.[1];
   const shutdownHandler = events?.once.mock.calls[0]?.[1];
 
@@ -410,6 +638,10 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
     ambientShadow === undefined ||
     scale === undefined ||
     events === undefined ||
+    input === undefined ||
+    pointerDownHandler === undefined ||
+    pointerMoveHandler === undefined ||
+    pointerUpHandler === undefined ||
     resizeHandler === undefined ||
     shutdownHandler === undefined ||
     camera === undefined ||
@@ -428,18 +660,85 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   expect(canvas.style.backgroundColor).toBe("#0c0a09");
   expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
 
-  scale.width = 520;
-  scale.height = 812;
+  pointerDownHandler.call(scene, { id: 7, x: 300, y: 260 });
+  expect(canvas.style.cursor).toBe("grabbing");
+
+  pointerMoveHandler.call(scene, { id: 7, x: 240, y: 200 });
+  expect(camera.scrollX).toBeCloseTo(175.2);
+  expect(camera.scrollY).toBeCloseTo(203.4666666667);
+
+  pointerMoveHandler.call(scene, { id: 7, x: 700, y: 900 });
+  expect(camera.setScroll).toHaveBeenLastCalledWith(0, 0);
+
+  pointerUpHandler.call(scene, { id: 7 });
+  expect(canvas.style.cursor).toBe("grab");
+  camera.setScroll.mockClear();
+  pointerMoveHandler.call(scene, { id: 7, x: 250, y: 250 });
+  expect(camera.setScroll).not.toHaveBeenCalled();
+
+  scale.width = 1024;
+  scale.height = 600;
   resizeHandler.call(scene);
 
-  expect(ambientShadow.setDisplaySize).toHaveBeenLastCalledWith(520, 812);
-  expect(ambientShadow.setPosition).toHaveBeenLastCalledWith(260, 406);
-  expect(roomShell.setDisplaySize).toHaveBeenLastCalledWith(1218, 812);
-  expect(roomShell.setPosition).toHaveBeenLastCalledWith(260, 406);
+  expect(camera.setSize).toHaveBeenLastCalledWith(1024, 600);
+  expect(camera.setZoom).toHaveBeenLastCalledWith(0.8333333333333334);
+  expect(camera.setViewport).toHaveBeenLastCalledWith(0, 0, 1024, 600);
+  expect(camera.setBounds).toHaveBeenLastCalledWith(
+    0,
+    0,
+    1510.3999999999999,
+    1006.9333333333333,
+  );
+  expect(camera.setScroll).toHaveBeenLastCalledWith(102.39999999999998, 60);
+  expect(ambientShadow.setDisplaySize).toHaveBeenLastCalledWith(
+    1510.3999999999999,
+    1006.9333333333333,
+  );
+  expect(ambientShadow.setPosition).toHaveBeenLastCalledWith(
+    755.1999999999999,
+    503.46666666666664,
+  );
+  expect(roomShell.setDisplaySize).toHaveBeenLastCalledWith(
+    1510.3999999999999,
+    1006.9333333333333,
+  );
+  expect(roomShell.setPosition).toHaveBeenLastCalledWith(
+    755.1999999999999,
+    503.46666666666664,
+  );
+
+  pointerDownHandler.call(scene, { id: 8, x: 512, y: 300 });
+  pointerMoveHandler.call(scene, { id: 8, x: 462, y: 250 });
+  expect(camera.scrollX).toBeCloseTo(162.4);
+  expect(camera.scrollY).toBeCloseTo(120);
+
+  pointerMoveHandler.call(scene, { id: 8, x: 252, y: 0 });
+  expect(camera.scrollX).toBeCloseTo(384);
+  expect(camera.scrollY).toBeCloseTo(346.9333333333);
 
   shutdownHandler.call(scene);
 
   expect(colorSchemeObserver.disconnect).toHaveBeenCalledTimes(1);
+  expect(input.off).toHaveBeenCalledWith(
+    "pointer-down-event",
+    pointerDownHandler,
+    scene,
+  );
+  expect(input.off).toHaveBeenCalledWith(
+    "pointer-move-event",
+    pointerMoveHandler,
+    scene,
+  );
+  expect(input.off).toHaveBeenCalledWith(
+    "pointer-up-event",
+    pointerUpHandler,
+    scene,
+  );
+  expect(input.off).toHaveBeenCalledWith(
+    "pointer-up-outside-event",
+    pointerUpHandler,
+    scene,
+  );
   expect(scale.off).toHaveBeenCalledWith("resize-event", resizeHandler, scene);
   ambientShadow.setFillStyle.mockClear();
   roomShell.setPosition.mockClear();
