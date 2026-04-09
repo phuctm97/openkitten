@@ -240,6 +240,13 @@ export class Scheduler implements Disposable {
     };
   }
 
+  #addRun(meta: TaskMeta, run: Scheduler.RunRecord): void {
+    meta.runs.push(run);
+    if (meta.runs.length > maxRunHistory) {
+      meta.runs.splice(0, meta.runs.length - maxRunHistory);
+    }
+  }
+
   async #processJob(job: Job<TaskData>): Promise<void> {
     const isManualTrigger = job.name.startsWith("trigger-");
     const existing = this.#tasks.get(job.data.taskId);
@@ -255,6 +262,13 @@ export class Scheduler implements Disposable {
     if (!existing) {
       this.#tasks.set(data.taskId, meta);
     }
+    if (data.kind === "background") {
+      this.#startBackgroundExecution(data, meta, job.id);
+      if (data.once && !isManualTrigger) {
+        this.#tasks.delete(data.taskId);
+      }
+      return;
+    }
     const run: Scheduler.RunRecord = {
       jobId: job.id,
       startedAt: Date.now(),
@@ -265,54 +279,66 @@ export class Scheduler implements Disposable {
       error: null,
     };
     try {
-      const result = await this.#execute(data);
-      run.status = result.status;
-      run.notifiedUser = result.status === "completed_notified";
-      run.output = result.output;
+      const agent = getSessionAgent(this.#database, data.sessionId);
+      await this.#opencodeClient.session.promptAsync(
+        {
+          sessionID: data.sessionId,
+          ...(agent && { agent }),
+          parts: [
+            { type: "text", text: `${sessionPromptPrefix}${data.prompt}` },
+          ],
+        },
+        { throwOnError: true },
+      );
+      run.status = "completed_notified";
+      run.notifiedUser = true;
     } catch (error) {
       run.status = "failed";
       run.error = error instanceof Error ? error.message : String(error);
       throw error;
     } finally {
       run.finishedAt = Date.now();
-      meta.runs.push(run);
-      if (meta.runs.length > maxRunHistory) {
-        meta.runs.splice(0, meta.runs.length - maxRunHistory);
-      }
+      this.#addRun(meta, run);
       if (data.once && !isManualTrigger) {
         this.#tasks.delete(data.taskId);
       }
     }
   }
 
-  async #execute(
+  #startBackgroundExecution(
     data: TaskData,
-  ): Promise<{ status: Scheduler.RunStatus; output: string | null }> {
-    if (data.kind === "background") {
-      return this.#executeBackground(data);
-    }
-    const agent = getSessionAgent(this.#database, data.sessionId);
-    await this.#opencodeClient.session.promptAsync(
-      {
-        sessionID: data.sessionId,
-        ...(agent && { agent }),
-        parts: [{ type: "text", text: `${sessionPromptPrefix}${data.prompt}` }],
-      },
-      { throwOnError: true },
-    );
-    return { status: "completed_notified", output: null };
+    meta: TaskMeta,
+    jobId: string,
+  ): void {
+    const run: Scheduler.RunRecord = {
+      jobId,
+      startedAt: Date.now(),
+      finishedAt: 0,
+      status: "completed_silent",
+      notifiedUser: false,
+      output: null,
+      error: null,
+    };
+    this.#addRun(meta, run);
+    this.#executeBackground(data, run).catch((error) => {
+      logger.error("Background task failed", error, {
+        taskId: data.taskId,
+      });
+    });
   }
 
   async #executeBackground(
     data: TaskData,
-  ): Promise<{ status: Scheduler.RunStatus; output: string | null }> {
+    run: Scheduler.RunRecord,
+  ): Promise<void> {
     const location = this.#existingSessions.get(data.sessionId);
     if (!location) {
       logger.warn("Background task session not found, skipping", {
         taskId: data.taskId,
         sessionId: data.sessionId,
       });
-      return { status: "completed_silent", output: null };
+      run.finishedAt = Date.now();
+      return;
     }
     const {
       data: { id: ephemeralId },
@@ -331,13 +357,22 @@ export class Scheduler implements Disposable {
         { throwOnError: true },
       );
       const text = await this.#waitForText(ephemeralId, data.taskId);
+      run.output = text;
       if (!text || text.includes(noReportMarker)) {
-        return { status: "completed_silent", output: text };
+        run.finishedAt = Date.now();
+        return;
       }
       await this.#bot.api.sendMessage(location.chatId, text, {
         ...(location.threadId && { message_thread_id: location.threadId }),
       });
-      return { status: "completed_notified", output: text };
+      run.status = "completed_notified";
+      run.notifiedUser = true;
+      run.finishedAt = Date.now();
+    } catch (error) {
+      run.status = "failed";
+      run.error = error instanceof Error ? error.message : String(error);
+      run.finishedAt = Date.now();
+      throw error;
     } finally {
       await this.#opencodeClient.session
         .abort({ sessionID: ephemeralId })
