@@ -48,8 +48,6 @@ Cats:
 
 FX:
 
-- `fx/cat-shadow-v1.png`
-  Final selected character shadow asset.
 - `fx/hover-ring-v1.png`
   Final selected hover ring asset.
 

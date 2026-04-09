@@ -3,6 +3,8 @@ import { getColorScheme } from "~/lib/get-color-scheme";
 import { getHousePalette } from "~/lib/get-house-palette";
 
 type HouseView = {
+  awakeCat: Phaser.GameObjects.Image;
+  restingCat: Phaser.GameObjects.Image;
   ambientShadow: Phaser.GameObjects.Rectangle;
   roomShell: Phaser.GameObjects.Image;
 };
@@ -30,6 +32,19 @@ type ScrollBounds = {
 
 const ambientShadowHeight = 1;
 const ambientShadowWidth = 1;
+const ambientShadowDepth = 1;
+const awakeCatDisplaySizeRatio = 0.26;
+const restingCatDisplaySizeRatio = 0.28;
+const awakeCatFloorXRatio = 0.36;
+const restingCatFloorXRatio = 0.59;
+const awakeCatFloorYRatio = 0.71;
+const restingCatFloorYRatio = 0.73;
+const awakeCatOriginY = 0.95;
+const restingCatOriginY = 0.78;
+const awakeCatTextureKey = "cat-a-awake-v1";
+const restingCatTextureKey = "cat-b-resting-v1";
+const awakeCatTexturePath = "/world/v1/cats/cat-a-awake-v1.png";
+const restingCatTexturePath = "/world/v1/cats/cat-b-resting-v1.png";
 const designViewportHeight = 720;
 const designViewportWidth = 1280;
 const minimumCameraZoom = 0.75;
@@ -109,6 +124,26 @@ function getCameraScrollBounds(
   };
 }
 
+function getPositionFromRatios(
+  worldSize: WorldSize,
+  xRatio: number,
+  yRatio: number,
+) {
+  return {
+    x: worldSize.width * xRatio,
+    y: worldSize.height * yRatio,
+  };
+}
+
+function getSquareDisplaySize(worldSize: WorldSize, ratio: number) {
+  const size = worldSize.height * ratio;
+
+  return {
+    height: size,
+    width: size,
+  };
+}
+
 export class HouseScene extends Phaser.Scene {
   static readonly key = "house";
 
@@ -123,11 +158,19 @@ export class HouseScene extends Phaser.Scene {
 
   preload() {
     this.load.image(roomShellTextureKey, roomShellTexturePath);
+    this.load.image(awakeCatTextureKey, awakeCatTexturePath);
+    this.load.image(restingCatTextureKey, restingCatTexturePath);
   }
 
   create() {
     const palette = getHousePalette(getColorScheme());
     const roomShell = this.add.image(0, 0, roomShellTextureKey).setOrigin(0.5);
+    const awakeCat = this.add
+      .image(0, 0, awakeCatTextureKey)
+      .setOrigin(0.5, awakeCatOriginY);
+    const restingCat = this.add
+      .image(0, 0, restingCatTextureKey)
+      .setOrigin(0.5, restingCatOriginY);
     const ambientShadow = this.add
       .rectangle(
         0,
@@ -137,9 +180,12 @@ export class HouseScene extends Phaser.Scene {
         palette.ambientShadowColor,
         palette.ambientShadowAlpha,
       )
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(ambientShadowDepth);
 
     this.view = {
+      awakeCat,
+      restingCat,
       ambientShadow,
       roomShell,
     };
@@ -346,5 +392,34 @@ export class HouseScene extends Phaser.Scene {
     view.ambientShadow.setPosition(worldSize.width / 2, worldSize.height / 2);
     view.roomShell.setDisplaySize(worldSize.width, worldSize.height);
     view.roomShell.setPosition(worldSize.width / 2, worldSize.height / 2);
+    const awakeCatPosition = getPositionFromRatios(
+      worldSize,
+      awakeCatFloorXRatio,
+      awakeCatFloorYRatio,
+    );
+    const restingCatPosition = getPositionFromRatios(
+      worldSize,
+      restingCatFloorXRatio,
+      restingCatFloorYRatio,
+    );
+    const awakeCatDisplaySize = getSquareDisplaySize(
+      worldSize,
+      awakeCatDisplaySizeRatio,
+    );
+    const restingCatDisplaySize = getSquareDisplaySize(
+      worldSize,
+      restingCatDisplaySizeRatio,
+    );
+
+    view.awakeCat.setDisplaySize(
+      awakeCatDisplaySize.width,
+      awakeCatDisplaySize.height,
+    );
+    view.awakeCat.setPosition(awakeCatPosition.x, awakeCatPosition.y);
+    view.restingCat.setDisplaySize(
+      restingCatDisplaySize.width,
+      restingCatDisplaySize.height,
+    );
+    view.restingCat.setPosition(restingCatPosition.x, restingCatPosition.y);
   }
 }
