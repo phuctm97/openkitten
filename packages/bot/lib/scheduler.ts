@@ -278,7 +278,7 @@ export class Scheduler implements Disposable {
     const maxAttempts = 90;
     const intervalMs = 2000;
     for (let i = 0; i < maxAttempts; i++) {
-      await Bun.sleep(intervalMs);
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
       const { data: statuses } = await this.#opencodeClient.session.status(
         {},
         { throwOnError: true },

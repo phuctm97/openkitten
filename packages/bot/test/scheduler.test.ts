@@ -78,7 +78,9 @@ beforeEach(async () => {
         .fn()
         .mockResolvedValue({ data: { id: "ephemeral-session-1" } }),
       abort: vi.fn().mockResolvedValue(undefined),
-      status: vi.fn().mockResolvedValue({ data: {} }),
+      status: vi.fn().mockResolvedValue({
+        data: { "ephemeral-session-1": { type: "idle" } },
+      }),
       messages: vi.fn().mockResolvedValue({
         data: [
           {
@@ -842,7 +844,14 @@ test("background task continues polling when session not in status map yet", asy
     once: false,
   });
 
-  const promise = scheduler.trigger(task.id);
+  const promise = fireJob(task.id, {
+    sessionId: task.sessionId,
+    kind: task.kind,
+    cron: task.cron,
+    prompt: task.prompt,
+    description: task.description,
+    once: task.once,
+  });
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(2000);
   await promise;
