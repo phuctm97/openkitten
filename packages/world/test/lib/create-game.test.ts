@@ -22,6 +22,7 @@ afterEach(() => {
 });
 
 test("creates a fullscreen Phaser game bound to the provided parent", async () => {
+  const { HouseScene } = await import("~/lib/house-scene");
   const { createGame } = await import("~/lib/create-game");
   const parent = document.createElement("div");
 
@@ -34,11 +35,12 @@ test("creates a fullscreen Phaser game bound to the provided parent", async () =
     backgroundColor: "#0c0a09",
     roundPixels: true,
     scale: { mode: "RESIZE" },
-    scene: [expect.any(Function), expect.any(Function)],
+    scene: [HouseScene],
   });
 });
 
 test("uses the computed document color scheme when inline style is unset", async () => {
+  const { HouseScene } = await import("~/lib/house-scene");
   const { createGame } = await import("~/lib/create-game");
   const parent = document.createElement("div");
 
@@ -53,6 +55,6 @@ test("uses the computed document color scheme when inline style is unset", async
     backgroundColor: "#0c0a09",
     roundPixels: true,
     scale: { mode: "RESIZE" },
-    scene: [expect.any(Function), expect.any(Function)],
+    scene: [HouseScene],
   });
 });

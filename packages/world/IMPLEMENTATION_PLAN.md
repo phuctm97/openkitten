@@ -149,7 +149,6 @@ This is the primary runtime for `/`.
 
 It should contain:
 
-- boot scene
 - house scene
 - optional UI scene
 - world object placement
@@ -222,15 +221,15 @@ It should not become the experience.
 
 ## Suggested Phase Plan
 
-### Phase 1: Phaser Bootstrap
+### Phase 1: Phaser Startup
 
 Set up the home route as a runnable fullscreen Phaser client.
 
 Deliverables:
 
 - a fullscreen `/` route with no surrounding app chrome
-- a Phaser game bootstrap
-- one boot scene and one house scene
+- a Phaser game startup
+- one house scene that preloads and renders the room
 - a working dev script
 - passing build and test checks
 
