@@ -562,20 +562,20 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   pointerMoveHandler.call(scene, { id: 7, x: 250, y: 250 });
   expect(camera.setScroll).not.toHaveBeenCalled();
 
-  scale.width = 640;
-  scale.height = 360;
+  scale.width = 1024;
+  scale.height = 600;
   resizeHandler.call(scene);
 
-  expect(camera.setSize).toHaveBeenLastCalledWith(640, 360);
-  expect(camera.setZoom).toHaveBeenLastCalledWith(0.5);
-  expect(camera.setViewport).toHaveBeenLastCalledWith(0, 0, 640, 360);
+  expect(camera.setSize).toHaveBeenLastCalledWith(1024, 600);
+  expect(camera.setZoom).toHaveBeenLastCalledWith(0.8333333333333334);
+  expect(camera.setViewport).toHaveBeenLastCalledWith(0, 0, 1024, 600);
   expect(camera.setBounds).toHaveBeenLastCalledWith(
     0,
     0,
     1510.3999999999999,
     1006.9333333333333,
   );
-  expect(camera.setScroll).toHaveBeenLastCalledWith(0, 0);
+  expect(camera.setScroll).toHaveBeenLastCalledWith(102.39999999999998, 60);
   expect(ambientShadow.setDisplaySize).toHaveBeenLastCalledWith(
     1510.3999999999999,
     1006.9333333333333,
@@ -593,14 +593,14 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
     503.46666666666664,
   );
 
-  pointerDownHandler.call(scene, { id: 8, x: 320, y: 180 });
-  pointerMoveHandler.call(scene, { id: 8, x: 270, y: 130 });
-  expect(camera.scrollX).toBeCloseTo(100);
-  expect(camera.scrollY).toBeCloseTo(100);
+  pointerDownHandler.call(scene, { id: 8, x: 512, y: 300 });
+  pointerMoveHandler.call(scene, { id: 8, x: 462, y: 250 });
+  expect(camera.scrollX).toBeCloseTo(162.4);
+  expect(camera.scrollY).toBeCloseTo(120);
 
-  pointerMoveHandler.call(scene, { id: 8, x: 120, y: -20 });
-  expect(camera.scrollX).toBeCloseTo(230.4);
-  expect(camera.scrollY).toBeCloseTo(286.9333333333);
+  pointerMoveHandler.call(scene, { id: 8, x: 252, y: 0 });
+  expect(camera.scrollX).toBeCloseTo(384);
+  expect(camera.scrollY).toBeCloseTo(346.9333333333);
 
   shutdownHandler.call(scene);
 

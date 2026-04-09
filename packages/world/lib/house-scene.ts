@@ -21,6 +21,13 @@ type WorldSize = {
   width: number;
 };
 
+type ScrollBounds = {
+  maxX: number;
+  maxY: number;
+  minX: number;
+  minY: number;
+};
+
 const ambientShadowHeight = 1;
 const ambientShadowWidth = 1;
 const designViewportHeight = 720;
@@ -44,20 +51,20 @@ function getCoverSize(width: number, height: number) {
   };
 }
 
-function getDefaultScroll(maxScroll: number) {
-  return maxScroll / 2;
-}
-
 function getCameraZoom(width: number, height: number) {
   return Math.max(width / designViewportWidth, height / designViewportHeight);
 }
 
-function getScrollProgress(scroll: number, maxScroll: number) {
-  if (maxScroll <= 0) {
+function getScrollProgress(
+  scroll: number,
+  minScroll: number,
+  maxScroll: number,
+) {
+  if (maxScroll <= minScroll) {
     return 0.5;
   }
 
-  return clamp(scroll / maxScroll, 0, 1);
+  return clamp((scroll - minScroll) / (maxScroll - minScroll), 0, 1);
 }
 
 function getVisibleSize(width: number, height: number, zoom: number) {
@@ -76,6 +83,24 @@ function getWorldSize(): WorldSize {
   return {
     height: displayHeight * worldOverscanMultiplier,
     width: displayWidth * worldOverscanMultiplier,
+  };
+}
+
+function getCameraScrollBounds(
+  worldSize: WorldSize,
+  width: number,
+  height: number,
+  zoom: number,
+): ScrollBounds {
+  const visibleSize = getVisibleSize(width, height, zoom);
+  const minX = (visibleSize.width - width) / 2;
+  const minY = (visibleSize.height - height) / 2;
+
+  return {
+    maxX: Math.max(minX, minX + worldSize.width - visibleSize.width),
+    maxY: Math.max(minY, minY + worldSize.height - visibleSize.height),
+    minX,
+    minY,
   };
 }
 
@@ -243,15 +268,14 @@ export class HouseScene extends Phaser.Scene {
     }
 
     const camera = this.cameras.main;
-    const { height, width } = getVisibleSize(
+    const { maxX, maxY, minX, minY } = getCameraScrollBounds(
+      worldSize,
       camera.width,
       camera.height,
       camera.zoom,
     );
-    const maxScrollX = Math.max(worldSize.width - width, 0);
-    const maxScrollY = Math.max(worldSize.height - height, 0);
 
-    camera.setScroll(clamp(x, 0, maxScrollX), clamp(y, 0, maxScrollY));
+    camera.setScroll(clamp(x, minX, maxX), clamp(y, minY, maxY));
   }
 
   private layout() {
@@ -266,30 +290,37 @@ export class HouseScene extends Phaser.Scene {
     const { height, width } = this.scale;
     const zoom = getCameraZoom(width, height);
     const worldSize = getWorldSize();
-    const previousVisibleSize = getVisibleSize(
-      camera.width,
-      camera.height,
-      camera.zoom,
+    const previousScrollBounds =
+      previousWorldSize === null
+        ? null
+        : getCameraScrollBounds(
+            previousWorldSize,
+            camera.width,
+            camera.height,
+            camera.zoom,
+          );
+    const nextScrollBounds = getCameraScrollBounds(
+      worldSize,
+      width,
+      height,
+      zoom,
     );
-    const visibleSize = getVisibleSize(width, height, zoom);
-    const previousMaxScrollX =
-      previousWorldSize === null
-        ? 0
-        : Math.max(previousWorldSize.width - previousVisibleSize.width, 0);
-    const previousMaxScrollY =
-      previousWorldSize === null
-        ? 0
-        : Math.max(previousWorldSize.height - previousVisibleSize.height, 0);
     const scrollProgressX =
-      previousWorldSize === null
+      previousScrollBounds === null
         ? 0.5
-        : getScrollProgress(camera.scrollX, previousMaxScrollX);
+        : getScrollProgress(
+            camera.scrollX,
+            previousScrollBounds.minX,
+            previousScrollBounds.maxX,
+          );
     const scrollProgressY =
-      previousWorldSize === null
+      previousScrollBounds === null
         ? 0.5
-        : getScrollProgress(camera.scrollY, previousMaxScrollY);
-    const maxScrollX = Math.max(worldSize.width - visibleSize.width, 0);
-    const maxScrollY = Math.max(worldSize.height - visibleSize.height, 0);
+        : getScrollProgress(
+            camera.scrollY,
+            previousScrollBounds.minY,
+            previousScrollBounds.maxY,
+          );
 
     this.worldSize = worldSize;
     camera.setSize(width, height);
@@ -297,12 +328,14 @@ export class HouseScene extends Phaser.Scene {
     camera.setViewport(0, 0, width, height);
     camera.setBounds(0, 0, worldSize.width, worldSize.height);
     this.setCameraScroll(
-      previousWorldSize === null
-        ? getDefaultScroll(maxScrollX)
-        : maxScrollX * scrollProgressX,
-      previousWorldSize === null
-        ? getDefaultScroll(maxScrollY)
-        : maxScrollY * scrollProgressY,
+      previousScrollBounds === null
+        ? (nextScrollBounds.minX + nextScrollBounds.maxX) / 2
+        : nextScrollBounds.minX +
+            (nextScrollBounds.maxX - nextScrollBounds.minX) * scrollProgressX,
+      previousScrollBounds === null
+        ? (nextScrollBounds.minY + nextScrollBounds.maxY) / 2
+        : nextScrollBounds.minY +
+            (nextScrollBounds.maxY - nextScrollBounds.minY) * scrollProgressY,
     );
     view.ambientShadow.setDisplaySize(worldSize.width, worldSize.height);
     view.ambientShadow.setPosition(worldSize.width / 2, worldSize.height / 2);
