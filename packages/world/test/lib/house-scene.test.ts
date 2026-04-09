@@ -495,6 +495,53 @@ test("builds the initial scene from the computed color scheme when inline style 
   expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
 });
 
+test("caps zoom on very small viewports so the world stops shrinking past the minimum scale", async () => {
+  vi.stubGlobal("MutationObserver", MockMutationObserver);
+
+  const { HouseScene } = await import("~/lib/house-scene");
+  const scene = new HouseScene();
+
+  scene.preload();
+  scene.create();
+
+  const camera = houseSceneMocks.cameras[0];
+  const scale = houseSceneMocks.scales[0];
+  const input = houseSceneMocks.inputs[0];
+  const pointerDownHandler = input?.on.mock.calls[0]?.[1];
+  const pointerMoveHandler = input?.on.mock.calls[1]?.[1];
+  const resizeHandler = scale?.on.mock.calls[0]?.[1];
+
+  if (
+    camera === undefined ||
+    scale === undefined ||
+    input === undefined ||
+    pointerDownHandler === undefined ||
+    pointerMoveHandler === undefined ||
+    resizeHandler === undefined
+  ) {
+    throw new Error("Expected the scene resize callbacks to be registered.");
+  }
+
+  scale.width = 640;
+  scale.height = 360;
+  resizeHandler.call(scene);
+
+  expect(camera.setZoom).toHaveBeenLastCalledWith(0.75);
+  const cameraScrollCall = camera.setScroll.mock.calls.at(-1);
+
+  if (cameraScrollCall === undefined) {
+    throw new Error("Expected the camera scroll to be updated.");
+  }
+
+  expect(cameraScrollCall[0]).toBeCloseTo(435.2);
+  expect(cameraScrollCall[1]).toBeCloseTo(323.4666666667);
+
+  pointerDownHandler.call(scene, { id: 9, x: 320, y: 180 });
+  pointerMoveHandler.call(scene, { id: 9, x: 260, y: 120 });
+  expect(camera.scrollX).toBeCloseTo(515.2);
+  expect(camera.scrollY).toBeCloseTo(403.4666666667);
+});
+
 test("responds to palette changes, resize events, and shutdown cleanup", async () => {
   vi.stubGlobal("MutationObserver", MockMutationObserver);
 

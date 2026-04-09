@@ -32,6 +32,7 @@ const ambientShadowHeight = 1;
 const ambientShadowWidth = 1;
 const designViewportHeight = 720;
 const designViewportWidth = 1280;
+const minimumCameraZoom = 0.75;
 const roomShellHeight = 1024;
 const roomShellTextureKey = "house-room-shell-v1";
 const roomShellTexturePath = "/world/v1/backgrounds/house-room-shell-v1.png";
@@ -52,7 +53,11 @@ function getCoverSize(width: number, height: number) {
 }
 
 function getCameraZoom(width: number, height: number) {
-  return Math.max(width / designViewportWidth, height / designViewportHeight);
+  return Math.max(
+    minimumCameraZoom,
+    width / designViewportWidth,
+    height / designViewportHeight,
+  );
 }
 
 function getScrollProgress(
