@@ -75,8 +75,9 @@ That means:
 - `/` should be fullscreen
 - the House should render through a Phaser-driven world
 - the world should be the primary runtime, not an embedded visual layer
-- most interaction should happen through the game scene and game-native UI
-- React DOM on `/` should be optional, minimal, and clearly subordinate to the world
+- most interaction should begin from the game scene, with Phaser owning spatial behavior, selection, and visible reactions
+- text-heavy work surfaces on `/` may render in React DOM when that materially improves readability, input, or accessibility
+- React work surfaces should stay clearly subordinate to the world and should not reintroduce app-shell chrome
 
 This shift matters because the intended vibe depends on the user feeling present inside a House, not adjacent to one.
 
@@ -188,5 +189,5 @@ In that future:
 - houses feel alive even when the human is not actively driving them
 - cats feel distinct and inspectable
 - work objects are visible and understandable in-world
-- productivity surfaces feel native to the House instead of pasted on top
+- productivity surfaces feel native to the House instead of pasted on top, regardless of whether Phaser or React renders them
 - the product remains useful because of the game-like presentation, not in spite of it

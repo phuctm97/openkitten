@@ -41,8 +41,8 @@ The home route should present:
 
 - a fullscreen world
 - no surrounding browser-style chrome
-- game-native windows, menus, or HUD when needed
-- optional DOM overlays only when they clearly improve clarity
+- Phaser-native world cues, transitions, and lightweight HUD when needed
+- React or DOM work surfaces when they clearly improve reading or input
 
 If a UI surface appears on `/`, the first question should be:
 
@@ -77,13 +77,16 @@ The user should quickly understand:
 
 ## UI Grammar
 
-UI on the home route should feel game-native by default.
+UI on the home route should feel native to the House by default.
 
 That means:
 
+- world interactions, selection states, and visible reactions should be rendered by Phaser
 - windows, inspect surfaces, and HUD elements should feel like they belong to the world
+- text-heavy panels may be rendered in React DOM if they preserve that feeling
 - overlays should have a strong visual language instead of default website framing
 - transitions should support the feeling of entering, focusing, and returning
+- larger reading surfaces should usually sit in stable screen space instead of being attached to moving world objects
 
 Avoid:
 
@@ -185,6 +188,7 @@ That means:
 - use information windows sparingly and intentionally
 - keep hierarchy strong
 - keep reading surfaces focused
+- use native browser strengths for dense text, scrolling, selection, and input when they improve the experience
 - avoid the visual feel of a generic web admin panel
 
 ## AI-Assisted Art Direction
@@ -230,7 +234,7 @@ The next step can add:
 The north star is:
 
 - a rich but calm living House
-- game-native productivity surfaces
+- productivity surfaces that feel like part of the House, whether Phaser or React renders them
 - stronger atmosphere and attachment
 - deeper worldbuilding without losing clarity
 

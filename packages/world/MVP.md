@@ -7,7 +7,7 @@ This document defines the MVP target for OpenKitten World.
 The MVP assumes:
 
 - a fullscreen Phaser House on `/`
-- game-native inspection as the default interaction model
+- inspection flows that begin in the world and may open React-rendered work surfaces when text density demands it
 - mocked but believable work objects and cats
 
 ## MVP Goal
@@ -24,7 +24,7 @@ The MVP is successful if a user can enter a House, observe cats, inspect work, a
 - the House is a place
 - the cats are alive
 - the work model is understandable
-- the game-native UI is readable
+- the surfaces used for reading and steering feel native to the House
 - the product becomes more compelling because it feels like a world
 
 ## Core Question
@@ -41,7 +41,7 @@ It only needs to prove these five things:
 
 1. A `House` can feel spatial and alive.
 2. A `Cat` can feel like a persistent individual, not a disposable run.
-3. `Threads`, `Notices`, and `Sessions` can be understood through game-native inspection flows.
+3. `Threads`, `Notices`, and `Sessions` can be understood through inspection flows that begin in the world and feel native to the House.
 4. The interface can support real reading and steering without feeling like a dashboard.
 5. The game presentation makes the product more emotionally convincing rather than less practical.
 
@@ -71,7 +71,7 @@ The first user journey should be:
 1. The user opens `/` and enters a fullscreen House.
 2. The user sees a small, readable, living room-like workspace with two visible cats.
 3. One cat is clearly awake and one cat is clearly resting or asleep.
-4. The user clicks a cat and opens a game-native inspect surface.
+4. The user clicks a cat and opens a House-styled inspect surface.
 5. The user sees the cat's identity, current status, assigned threads, and active session.
 6. The user opens the active session transcript and reads a mock live feed.
 7. The user opens the inbox and reads a few notices.
@@ -127,8 +127,9 @@ Clicking a cat should open a surface that shows:
 - assigned threads
 - active session, if any
 
-This surface should preferably feel game-native.
-DOM is acceptable only if it materially improves readability.
+This surface should feel native to the House.
+Lightweight summary states can stay Phaser-native.
+Detailed reading or editing may use React DOM when it materially improves readability or input comfort.
 
 ### 4. Inbox And Notices
 
@@ -139,6 +140,9 @@ These notices should help the user understand:
 - what needs attention
 - what changed recently
 - what the cats are doing
+
+The inbox may be rendered as a React surface if that makes review more comfortable.
+It should still open from the House, inherit the House visual language, and avoid feeling like separate app chrome.
 
 ### 5. Thread View
 
@@ -152,6 +156,8 @@ The MVP should include at least one readable thread view with:
 The goal is not workflow depth.
 The goal is proving that durable work objects fit naturally inside the House.
 
+The thread view is a strong candidate for React rendering in the MVP because it is text-heavy, scrollable, and likely to include authored input.
+
 ### 6. Session View
 
 The MVP should include one active session with a mock transcript.
@@ -161,6 +167,8 @@ The transcript should communicate:
 - what the cat is working on
 - that the cat is actually doing something
 - that sessions are inspectable, not magical black boxes
+
+The session transcript may also be React-rendered for reading comfort, as long as the transition into it still feels world-first.
 
 ### 7. One Human Steering Action
 
@@ -172,6 +180,7 @@ Recommended options:
 - add a memo
 
 This action should produce a visible reaction in the House or UI.
+The input control itself may be standard React DOM if that makes writing materially better.
 
 ### 8. Visible House Props
 
@@ -211,7 +220,7 @@ The MVP should feel:
 - calm
 - spatial
 - readable
-- game-native
+- world-first
 - emotionally warm
 - useful enough to inspect real work
 
@@ -275,8 +284,9 @@ The MVP should be built with:
 
 - Phaser as the primary runtime on `/`
 - fixture-driven data
-- game-native UI where practical
-- optional DOM overlays only when clearly beneficial
+- Phaser-owned world interaction, selection, and effects
+- React-rendered work surfaces for dense reading and writing on `/` when DOM is clearly better
+- styling that makes React surfaces feel native to the House instead of like generic app panels
 
 The implementation should keep the domain model independent from the renderer so future evolution stays possible.
 

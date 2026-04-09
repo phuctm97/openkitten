@@ -19,7 +19,7 @@ The implementation should preserve these principles:
 - the core domain model stays independent from rendering details
 - Phaser owns the frame loop and primary interaction model on `/`
 - React remains available for routes that are not game experiences
-- React DOM on `/` should be optional and intentionally minimized
+- React DOM on `/` should be intentional: strong for dense reading and writing, but never a permanent dashboard shell around the world
 
 This plan should optimize for product feel, not only for implementation familiarity.
 
@@ -40,7 +40,7 @@ Concretely, that means:
 
 - `Phaser` for the main `/` runtime
 - `React Router` for routing and route composition
-- `React` for non-game routes and optional overlays
+- `React` for non-game routes and text-heavy work surfaces that are clearer in DOM
 - `Jotai` for a small renderer-agnostic shared store when needed
 - `Bun` workspace tooling for package management and scripts
 
@@ -138,8 +138,10 @@ It can use Jotai for:
 
 - current inspect target
 - selected cat or object
+- opened work surface
 - coarse navigation intent
 - maybe summary-level notice or thread state
+- maybe lightweight anchor metadata for small world-attached callouts
 
 It should not become a chatty, frame-by-frame coordination bus.
 
@@ -155,6 +157,7 @@ It should contain:
 - selection and hover behavior
 - camera behavior, if needed
 - animations and moment-to-moment feedback
+- opening and closing cues for inspect flows
 
 The game layer should own:
 
@@ -162,19 +165,23 @@ The game layer should own:
 - pointer and keyboard interaction
 - object hit testing
 - game-native presentation of the House
+- visible reactions that connect user actions back to the world
 
-### 5. Optional React Surface Layer
+### 5. React Work Surface Layer
 
-React should still exist in the package, but with narrower responsibility.
+React should still exist in the package, but with narrower responsibility than the world runtime.
 
 It should own:
 
 - routes that are not primarily game experiences
-- overlays that are clearly better as DOM
+- text-heavy work surfaces such as inboxes, threads, transcripts, and detailed cat panels
+- authored input surfaces such as comment and memo composers
 - accessibility-heavy forms or settings flows
 - supporting product infrastructure around the game route
 
-If an inspect surface can live naturally inside Phaser, prefer that first.
+If a surface is lightweight, spatial, or mainly expressive, prefer Phaser.
+If a surface is dense, scrollable, or editable, prefer React DOM.
+Large reading surfaces should usually stay in stable screen space instead of tracking moving world objects.
 
 ### 6. Integration Boundary
 
@@ -185,11 +192,13 @@ The preferred shape is:
 - shared domain types
 - a small shared store
 - coarse messages or intents
+- optional screen-space or anchor metadata when a small surface truly needs to point back into the world
 
 The avoided shape is:
 
 - React controlling the game loop
-- Phaser delegating routine UI ownership back to React on every interaction
+- Phaser and React constantly syncing fine-grained layout state
+- large DOM surfaces that chase moving objects or camera transforms by default
 - permanent dashboard chrome around the game
 
 ## Recommended First World Scope
@@ -249,7 +258,7 @@ Deliverables:
 - readable world layout
 - click and hover targets
 
-### Phase 3: Game-Native Inspection Flow
+### Phase 3: World-Triggered Inspection Flow
 
 Build the first inspection surfaces.
 
@@ -261,8 +270,9 @@ Deliverables:
 - session transcript surface
 - navigation between world selection and inspect state
 
-These surfaces should default to game-native UI.
-Use DOM only where it clearly improves the result.
+These surfaces should begin from the world and feel native to the House.
+Phaser should own the opening cue, selection state, and world reaction.
+React DOM should be the default for dense reading and writing surfaces when it clearly improves comfort and implementation simplicity.
 
 ### Phase 4: Human Steering
 
@@ -312,17 +322,22 @@ Avoid over-investing in content volume before the core feel is proven.
 The default UI strategy on `/` should be:
 
 - world-first
-- game-native
+- Phaser-driven in motion and effects
 - spatially coherent
 - calm and readable
 
 This means:
 
 - no permanent browser-style sidebars around the world
+- no assumption that every surface should be Phaser-drawn
 - no assumption that every surface should be a DOM card
 - no pressure to rebuild every productivity panel before the world feels convincing
+- text-heavy work surfaces may use React DOM if they inherit the House visual language
+- larger reading surfaces should usually live in stable screen space
+- small anchored callouts are the better use case for world-tracked DOM
 
-If a DOM overlay is used, it should feel like an exception chosen for clarity, not the main composition model.
+React work surfaces are acceptable on `/` when they improve clarity.
+They should still read as part of the House, not as a separate admin shell layered over it.
 
 ## Engineering Boundaries To Preserve
 
@@ -346,7 +361,7 @@ The implementation should also preserve these boundaries:
 
 The first convincing milestone is:
 
-`A runnable local Phaser client that opens one House scene fullscreen, shows two cats, and lets the user inspect one active session through a coherent in-world or game-native UI flow.`
+`A runnable local Phaser client that opens one House scene fullscreen, shows two cats, and lets the user inspect one active session through a coherent world-triggered UI flow that feels native to the House.`
 
 If that milestone is not convincing, the team should improve the slice before adding more backend or product complexity.
 
@@ -354,7 +369,7 @@ If that milestone is not convincing, the team should improve the slice before ad
 
 After the first milestone, the likely next steps are:
 
-- stronger game-native UI language
+- stronger House-native UI language across Phaser and React surfaces
 - richer cat behavior
 - more visible work reactions
 - a better steering loop
@@ -362,4 +377,4 @@ After the first milestone, the likely next steps are:
 
 ## One-Sentence Summary
 
-Build OpenKitten World first as a fixture-driven fullscreen Phaser House, prove that the game-first route makes the product feel alive and useful, and only then expand the surrounding product surface.
+Build OpenKitten World first as a fixture-driven fullscreen Phaser House, let Phaser own the world and its reactions, let React own dense reading and writing where DOM is better, and prove that the combined result still feels like entering a living House.

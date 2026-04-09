@@ -100,8 +100,9 @@ That means:
 
 - `/` should be fullscreen
 - the primary runtime should be Phaser
-- game-native UI should be the default on `/`
-- React DOM should be secondary on `/`
+- Phaser should own world presentation, selection, camera behavior, and visible reactions on `/`
+- React DOM may render text-heavy work surfaces on `/` when it materially improves reading, writing, or accessibility
+- those React surfaces should still feel subordinate to the world and native to the House
 
 Other routes may still be normal React pages.
 
@@ -392,14 +393,15 @@ The preferred client model is:
 
 - `/` is the fullscreen House experience
 - Phaser is the primary runtime for `/`
-- game-native UI is the default on `/`
+- Phaser owns the world-first interaction grammar on `/`
 - React may render non-game routes separately
-- DOM overlays on `/` are allowed only when they clearly improve clarity
+- React DOM may render dense work surfaces on `/` when it clearly improves clarity and input
 
 This implies:
 
 - no permanent dashboard shell around the world
 - no assumption that every inspect surface should be a DOM card
+- no default assumption that large work surfaces need to chase moving world objects
 - a route architecture that allows game and non-game routes to coexist cleanly
 
 ## Implementation Boundaries
@@ -408,6 +410,8 @@ The implementation should preserve these boundaries:
 
 - the domain model stays renderer-agnostic
 - Phaser owns the home-route frame loop and real-time interaction
+- Phaser owns world positioning, camera behavior, selection, and visible effects
+- React may own dense reading and writing surfaces on `/`
 - React Router owns routing
 - Jotai may be used as a narrow shared store between Phaser and React
 - executor integration stays separate from the world client

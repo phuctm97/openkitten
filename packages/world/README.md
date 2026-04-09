@@ -9,7 +9,7 @@ OpenKitten World is planned and built as a Phaser-first browser client:
 - `/` is a fullscreen Phaser experience
 - React Router owns routing
 - non-game routes can stay conventional React pages
-- React DOM on `/` is optional and secondary
+- React-rendered work surfaces on `/` may be used for text-heavy reading and writing, as long as they stay visually subordinate to the House
 - Jotai may be used as a narrow bridge between Phaser and React when needed
 
 These docs assume that architecture throughout.
