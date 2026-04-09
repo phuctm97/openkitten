@@ -310,12 +310,12 @@ describe("McpServer", () => {
 
     const toolNames = registeredTools.map((t: { name: string }) => t.name);
     expect(toolNames).toContain("send_file");
-    expect(toolNames).toContain("schedule_create");
-    expect(toolNames).toContain("schedule_list");
-    expect(toolNames).toContain("schedule_delete");
-    expect(toolNames).toContain("schedule_trigger");
-    expect(toolNames).toContain("schedule_update");
-    expect(toolNames).toContain("get_server_time");
+    expect(toolNames).toContain("queue_schedule_create");
+    expect(toolNames).toContain("queue_schedule_list");
+    expect(toolNames).toContain("queue_schedule_delete");
+    expect(toolNames).toContain("queue_schedule_trigger");
+    expect(toolNames).toContain("queue_schedule_update");
+    expect(toolNames).toContain("queue_server_time");
     expect(toolNames).toContain("command_create");
     expect(toolNames).toContain("command_delete");
     expect(toolNames).toContain("command_list");
@@ -342,9 +342,9 @@ describe("McpServer", () => {
     );
 
     const tool = registeredTools.find(
-      (t: { name: string }) => t.name === "schedule_list",
+      (t: { name: string }) => t.name === "queue_schedule_list",
     );
-    if (!tool) throw new Error("Expected schedule_list tool");
+    if (!tool) throw new Error("Expected queue_schedule_list tool");
     const result = (await tool.handler({
       __OPENKITTEN__: { sessionID: "sess-1", callID: "call-1" },
     })) as { structuredContent: { tasks: unknown[] } };

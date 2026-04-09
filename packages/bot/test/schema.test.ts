@@ -7,9 +7,3 @@ test("message references session", () => {
   const fk = config.foreignKeys[0];
   expect(fk?.reference().foreignTable).toBe(schema.session);
 });
-
-test("scheduledTask references session", () => {
-  const config = getTableConfig(schema.scheduledTask);
-  const fk = config.foreignKeys[0];
-  expect(fk?.reference().foreignTable).toBe(schema.session);
-});

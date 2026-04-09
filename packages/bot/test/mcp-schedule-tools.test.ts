@@ -42,12 +42,78 @@ describe("registerScheduleTools", () => {
   const mockSchedulerTrigger = vi.fn<() => Promise<void>>();
   const mockSchedulerUpdate = vi.fn<() => Promise<Scheduler.Task>>();
 
+  const mockBunqueue = {
+    queue: {
+      add: vi.fn().mockResolvedValue({
+        id: "job-1",
+        name: "job-1",
+        data: {},
+        delay: 0,
+        priority: 0,
+        timestamp: Date.now(),
+        getState: vi.fn().mockResolvedValue("waiting"),
+      }),
+      getJobsAsync: vi.fn().mockResolvedValue([]),
+      removeAsync: vi.fn().mockResolvedValue(undefined),
+      retryJob: vi.fn().mockResolvedValue(undefined),
+      cleanAsync: vi.fn().mockResolvedValue([]),
+      promoteJob: vi.fn().mockResolvedValue(undefined),
+    },
+    getJobCountsAsync: vi.fn().mockResolvedValue({
+      waiting: 0,
+      active: 0,
+      completed: 0,
+      failed: 0,
+      delayed: 0,
+      prioritized: 0,
+      paused: 0,
+    }),
+    pause: vi.fn(),
+    resume: vi.fn(),
+    isPaused: vi.fn().mockReturnValue(false),
+    getDlq: vi.fn().mockReturnValue([]),
+    getDlqStats: vi.fn().mockReturnValue({
+      total: 0,
+      byReason: {},
+      pendingRetry: 0,
+      expired: 0,
+      oldestEntry: null,
+      newestEntry: null,
+    }),
+    retryDlq: vi.fn().mockReturnValue(0),
+    purgeDlq: vi.fn().mockReturnValue(0),
+    cancel: vi.fn(),
+    getJob: vi.fn().mockResolvedValue(null),
+    listCrons: vi.fn().mockResolvedValue([]),
+  };
+
   const mockScheduler = {
     create: mockSchedulerCreate,
     list: mockSchedulerList,
     delete: mockSchedulerDelete,
     trigger: mockSchedulerTrigger,
     update: mockSchedulerUpdate,
+    addJob: vi.fn().mockResolvedValue({
+      id: "job-1",
+      name: "job-1",
+      data: {},
+      delay: 0,
+      priority: 0,
+      timestamp: Date.now(),
+      toJSON: () => ({
+        id: "job-1",
+        name: "job-1",
+        data: {},
+        opts: {},
+        progress: 0,
+        delay: 0,
+        timestamp: Date.now(),
+        attemptsMade: 0,
+        stacktrace: null,
+        queueQualifiedName: "scheduler",
+      }),
+    }),
+    bunqueue: mockBunqueue,
   } as never as Scheduler;
 
   const mockGetMetadata = vi.fn<(args: unknown) => { sessionID: string }>();
@@ -74,27 +140,42 @@ describe("registerScheduleTools", () => {
     return registeredTools;
   }
 
-  test("registers exactly 6 tools", () => {
+  test("registers all schedule and queue tools", () => {
     const tools = setup();
-    expect(tools.size).toBe(6);
+    expect(tools.size).toBe(21);
     expect([...tools.keys()]).toEqual([
-      "schedule_create",
-      "schedule_list",
-      "schedule_delete",
-      "schedule_trigger",
-      "schedule_update",
-      "get_server_time",
+      "queue_schedule_create",
+      "queue_schedule_list",
+      "queue_schedule_delete",
+      "queue_schedule_trigger",
+      "queue_schedule_update",
+      "queue_server_time",
+      "queue_add_job",
+      "queue_status",
+      "queue_pause",
+      "queue_resume",
+      "queue_cancel_job",
+      "queue_get_job",
+      "queue_list_crons",
+      "queue_dlq_list",
+      "queue_dlq_retry",
+      "queue_dlq_purge",
+      "queue_list_jobs",
+      "queue_remove_job",
+      "queue_retry_job",
+      "queue_clean",
+      "queue_promote_job",
     ]);
   });
 
-  describe("schedule_create", () => {
+  describe("queue_schedule_create", () => {
     test("creates a recurring session task", async () => {
       const task = makeTask();
       mockSchedulerCreate.mockResolvedValue(task);
 
       const tools = setup();
-      const tool = tools.get("schedule_create");
-      if (!tool) throw new Error("schedule_create not registered");
+      const tool = tools.get("queue_schedule_create");
+      if (!tool) throw new Error("queue_schedule_create not registered");
 
       const args = {
         ...metadataArgs,
@@ -129,8 +210,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerCreate.mockResolvedValue(task);
 
       const tools = setup();
-      const tool = tools.get("schedule_create");
-      if (!tool) throw new Error("schedule_create not registered");
+      const tool = tools.get("queue_schedule_create");
+      if (!tool) throw new Error("queue_schedule_create not registered");
 
       const result = (await tool.handler({
         ...metadataArgs,
@@ -147,8 +228,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerCreate.mockResolvedValue(task);
 
       const tools = setup();
-      const tool = tools.get("schedule_create");
-      if (!tool) throw new Error("schedule_create not registered");
+      const tool = tools.get("queue_schedule_create");
+      if (!tool) throw new Error("queue_schedule_create not registered");
 
       await tool.handler({
         ...metadataArgs,
@@ -167,8 +248,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerCreate.mockResolvedValue(makeTask());
 
       const tools = setup();
-      const tool = tools.get("schedule_create");
-      if (!tool) throw new Error("schedule_create not registered");
+      const tool = tools.get("queue_schedule_create");
+      if (!tool) throw new Error("queue_schedule_create not registered");
 
       await tool.handler({
         ...metadataArgs,
@@ -187,8 +268,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerCreate.mockResolvedValue(task);
 
       const tools = setup();
-      const tool = tools.get("schedule_create");
-      if (!tool) throw new Error("schedule_create not registered");
+      const tool = tools.get("queue_schedule_create");
+      if (!tool) throw new Error("queue_schedule_create not registered");
 
       await tool.handler({
         ...metadataArgs,
@@ -207,8 +288,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerCreate.mockResolvedValue(makeTask());
 
       const tools = setup();
-      const tool = tools.get("schedule_create");
-      if (!tool) throw new Error("schedule_create not registered");
+      const tool = tools.get("queue_schedule_create");
+      if (!tool) throw new Error("queue_schedule_create not registered");
 
       await tool.handler({
         ...metadataArgs,
@@ -227,8 +308,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerCreate.mockRejectedValue(error);
 
       const tools = setup();
-      const tool = tools.get("schedule_create");
-      if (!tool) throw new Error("schedule_create not registered");
+      const tool = tools.get("queue_schedule_create");
+      if (!tool) throw new Error("queue_schedule_create not registered");
 
       await expect(
         tool.handler({
@@ -241,7 +322,7 @@ describe("registerScheduleTools", () => {
     });
   });
 
-  describe("schedule_list", () => {
+  describe("queue_schedule_list", () => {
     test("lists tasks and returns them", async () => {
       const tasks = [
         makeTask(),
@@ -250,8 +331,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerList.mockReturnValue(tasks);
 
       const tools = setup();
-      const tool = tools.get("schedule_list");
-      if (!tool) throw new Error("schedule_list not registered");
+      const tool = tools.get("queue_schedule_list");
+      if (!tool) throw new Error("queue_schedule_list not registered");
 
       const args = { ...metadataArgs };
       const result = await tool.handler(args);
@@ -273,8 +354,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerList.mockReturnValue([makeTask({ nextRun: null })]);
 
       const tools = setup();
-      const tool = tools.get("schedule_list");
-      if (!tool) throw new Error("schedule_list not registered");
+      const tool = tools.get("queue_schedule_list");
+      if (!tool) throw new Error("queue_schedule_list not registered");
 
       const result = (await tool.handler({ ...metadataArgs })) as {
         content: { text: string }[];
@@ -287,8 +368,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerList.mockReturnValue([]);
 
       const tools = setup();
-      const tool = tools.get("schedule_list");
-      if (!tool) throw new Error("schedule_list not registered");
+      const tool = tools.get("queue_schedule_list");
+      if (!tool) throw new Error("queue_schedule_list not registered");
 
       const result = await tool.handler({ ...metadataArgs });
 
@@ -299,13 +380,13 @@ describe("registerScheduleTools", () => {
     });
   });
 
-  describe("schedule_delete", () => {
+  describe("queue_schedule_delete", () => {
     test("deletes a task and returns deleted: true", async () => {
       mockSchedulerDelete.mockResolvedValue(undefined);
 
       const tools = setup();
-      const tool = tools.get("schedule_delete");
-      if (!tool) throw new Error("schedule_delete not registered");
+      const tool = tools.get("queue_schedule_delete");
+      if (!tool) throw new Error("queue_schedule_delete not registered");
 
       const args = { ...metadataArgs, id: "task-1" };
       const result = await tool.handler(args);
@@ -323,8 +404,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerDelete.mockRejectedValue(error);
 
       const tools = setup();
-      const tool = tools.get("schedule_delete");
-      if (!tool) throw new Error("schedule_delete not registered");
+      const tool = tools.get("queue_schedule_delete");
+      if (!tool) throw new Error("queue_schedule_delete not registered");
 
       await expect(
         tool.handler({ ...metadataArgs, id: "missing" }),
@@ -332,13 +413,13 @@ describe("registerScheduleTools", () => {
     });
   });
 
-  describe("schedule_trigger", () => {
+  describe("queue_schedule_trigger", () => {
     test("triggers a task and returns triggered: true", async () => {
       mockSchedulerTrigger.mockResolvedValue(undefined);
 
       const tools = setup();
-      const tool = tools.get("schedule_trigger");
-      if (!tool) throw new Error("schedule_trigger not registered");
+      const tool = tools.get("queue_schedule_trigger");
+      if (!tool) throw new Error("queue_schedule_trigger not registered");
 
       const args = { ...metadataArgs, id: "task-1" };
       const result = await tool.handler(args);
@@ -356,8 +437,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerTrigger.mockRejectedValue(error);
 
       const tools = setup();
-      const tool = tools.get("schedule_trigger");
-      if (!tool) throw new Error("schedule_trigger not registered");
+      const tool = tools.get("queue_schedule_trigger");
+      if (!tool) throw new Error("queue_schedule_trigger not registered");
 
       await expect(
         tool.handler({ ...metadataArgs, id: "missing" }),
@@ -365,14 +446,14 @@ describe("registerScheduleTools", () => {
     });
   });
 
-  describe("schedule_update", () => {
+  describe("queue_schedule_update", () => {
     test("updates task and returns updated result", async () => {
       const updated = makeTask({ description: "Updated" });
       mockSchedulerUpdate.mockResolvedValue(updated);
 
       const tools = setup();
-      const tool = tools.get("schedule_update");
-      if (!tool) throw new Error("schedule_update not registered");
+      const tool = tools.get("queue_schedule_update");
+      if (!tool) throw new Error("queue_schedule_update not registered");
 
       const args = {
         ...metadataArgs,
@@ -396,8 +477,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerUpdate.mockResolvedValue(updated);
 
       const tools = setup();
-      const tool = tools.get("schedule_update");
-      if (!tool) throw new Error("schedule_update not registered");
+      const tool = tools.get("queue_schedule_update");
+      if (!tool) throw new Error("queue_schedule_update not registered");
 
       const result = (await tool.handler({
         ...metadataArgs,
@@ -413,8 +494,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerUpdate.mockResolvedValue(updated);
 
       const tools = setup();
-      const tool = tools.get("schedule_update");
-      if (!tool) throw new Error("schedule_update not registered");
+      const tool = tools.get("queue_schedule_update");
+      if (!tool) throw new Error("queue_schedule_update not registered");
 
       await tool.handler({
         ...metadataArgs,
@@ -432,8 +513,8 @@ describe("registerScheduleTools", () => {
       mockSchedulerUpdate.mockRejectedValue(error);
 
       const tools = setup();
-      const tool = tools.get("schedule_update");
-      if (!tool) throw new Error("schedule_update not registered");
+      const tool = tools.get("queue_schedule_update");
+      if (!tool) throw new Error("queue_schedule_update not registered");
 
       await expect(
         tool.handler({ ...metadataArgs, id: "missing", prompt: "x" }),
@@ -441,11 +522,11 @@ describe("registerScheduleTools", () => {
     });
   });
 
-  describe("get_server_time", () => {
+  describe("queue_server_time", () => {
     test("returns current server time with all fields", async () => {
       const tools = setup();
-      const tool = tools.get("get_server_time");
-      if (!tool) throw new Error("get_server_time not registered");
+      const tool = tools.get("queue_server_time");
+      if (!tool) throw new Error("queue_server_time not registered");
 
       const result = (await tool.handler({})) as {
         structuredContent: Record<string, unknown>;
@@ -473,11 +554,11 @@ describe("registerScheduleTools", () => {
 
   describe("getMetadata verification", () => {
     test.each([
-      "schedule_create",
-      "schedule_list",
-      "schedule_delete",
-      "schedule_trigger",
-      "schedule_update",
+      "queue_schedule_create",
+      "queue_schedule_list",
+      "queue_schedule_delete",
+      "queue_schedule_trigger",
+      "queue_schedule_update",
     ] as const)("%s calls getMetadata with the full args object", async (toolName) => {
       mockSchedulerCreate.mockResolvedValue(makeTask());
       mockSchedulerList.mockReturnValue([]);
@@ -499,6 +580,422 @@ describe("registerScheduleTools", () => {
       await tool.handler(args);
 
       expect(mockGetMetadata).toHaveBeenCalledWith(args);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Queue tools (bunqueue pass-through)
+  // -------------------------------------------------------------------------
+
+  describe("queue_add_job", () => {
+    test("calls scheduler.addJob and returns toJSON result", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_add_job");
+      if (!tool) throw new Error("queue_add_job not registered");
+
+      const result = await tool.handler({
+        ...metadataArgs,
+        description: "one-off",
+        prompt: "do it",
+      });
+
+      expect(result).toHaveProperty("content");
+      expect(mockScheduler.addJob).toHaveBeenCalledWith(
+        "sess-1",
+        "session",
+        "one-off",
+        "do it",
+        undefined,
+      );
+    });
+
+    test("passes all JobOptions through to addJob", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_add_job");
+      if (!tool) throw new Error("queue_add_job not registered");
+
+      await tool.handler({
+        ...metadataArgs,
+        kind: "background",
+        description: "full opts",
+        prompt: "run",
+        priority: 10,
+        delay: 5000,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 1000 },
+        timeout: 30000,
+        jobId: "custom-id",
+        removeOnComplete: true,
+        removeOnFail: true,
+        lifo: true,
+        stallTimeout: 60000,
+        durable: true,
+      });
+
+      expect(mockScheduler.addJob).toHaveBeenCalledWith(
+        "sess-1",
+        "background",
+        "full opts",
+        "run",
+        {
+          priority: 10,
+          delay: 5000,
+          attempts: 3,
+          backoff: { type: "exponential", delay: 1000 },
+          timeout: 30000,
+          jobId: "custom-id",
+          removeOnComplete: true,
+          removeOnFail: true,
+          lifo: true,
+          stallTimeout: 60000,
+          durable: true,
+        },
+      );
+    });
+  });
+
+  describe("queue_status", () => {
+    test("returns counts and paused state", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_status");
+      if (!tool) throw new Error("queue_status not registered");
+
+      const result = await tool.handler(metadataArgs);
+
+      expect(result).toHaveProperty("content");
+      expect(mockBunqueue.getJobCountsAsync).toHaveBeenCalled();
+      expect(mockBunqueue.isPaused).toHaveBeenCalled();
+    });
+  });
+
+  describe("queue_pause", () => {
+    test("pauses the queue", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_pause");
+      if (!tool) throw new Error("queue_pause not registered");
+
+      await tool.handler(metadataArgs);
+
+      expect(mockBunqueue.pause).toHaveBeenCalled();
+    });
+  });
+
+  describe("queue_resume", () => {
+    test("resumes the queue", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_resume");
+      if (!tool) throw new Error("queue_resume not registered");
+
+      await tool.handler(metadataArgs);
+
+      expect(mockBunqueue.resume).toHaveBeenCalled();
+    });
+  });
+
+  describe("queue_cancel_job", () => {
+    test("cancels a job by ID", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_cancel_job");
+      if (!tool) throw new Error("queue_cancel_job not registered");
+
+      await tool.handler({ ...metadataArgs, jobId: "j-1" });
+
+      expect(mockBunqueue.cancel).toHaveBeenCalledWith("j-1", undefined);
+    });
+  });
+
+  describe("queue_get_job", () => {
+    test("returns not found when job does not exist", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_get_job");
+      if (!tool) throw new Error("queue_get_job not registered");
+
+      const result = (await tool.handler({
+        ...metadataArgs,
+        jobId: "missing",
+      })) as { content: { text: string }[] };
+
+      expect(result.content[0]?.text).toContain("not found");
+    });
+
+    test("returns job details when found", async () => {
+      mockBunqueue.getJob.mockResolvedValueOnce({
+        id: "j-1",
+        name: "j-1",
+        data: { prompt: "test" },
+        delay: 0,
+        priority: 5,
+        timestamp: 12345,
+        attemptsMade: 0,
+        progress: 0,
+        failedReason: undefined,
+        processedOn: undefined,
+        finishedOn: undefined,
+        getState: vi.fn().mockResolvedValue("active"),
+        toJSON: () => ({
+          id: "j-1",
+          name: "j-1",
+          data: { prompt: "test" },
+          opts: {},
+          progress: 0,
+          delay: 0,
+          timestamp: 12345,
+          attemptsMade: 0,
+          stacktrace: null,
+          queueQualifiedName: "scheduler",
+        }),
+      });
+
+      const tools = setup();
+      const tool = tools.get("queue_get_job");
+      if (!tool) throw new Error("queue_get_job not registered");
+
+      const result = (await tool.handler({
+        ...metadataArgs,
+        jobId: "j-1",
+      })) as { content: { text: string }[] };
+
+      expect(result.content[0]?.text).toContain("j-1");
+    });
+  });
+
+  describe("queue_list_crons", () => {
+    test("returns cron list", async () => {
+      mockBunqueue.listCrons.mockResolvedValueOnce([
+        { id: "c-1", name: "c-1", next: 99999 },
+      ]);
+
+      const tools = setup();
+      const tool = tools.get("queue_list_crons");
+      if (!tool) throw new Error("queue_list_crons not registered");
+
+      const result = await tool.handler(metadataArgs);
+
+      expect(result).toHaveProperty("content");
+      expect(mockBunqueue.listCrons).toHaveBeenCalled();
+    });
+  });
+
+  describe("queue_dlq_list", () => {
+    test("returns DLQ stats and entries without filter", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_dlq_list");
+      if (!tool) throw new Error("queue_dlq_list not registered");
+
+      const result = await tool.handler(metadataArgs);
+
+      expect(result).toHaveProperty("content");
+      expect(mockBunqueue.getDlqStats).toHaveBeenCalled();
+      expect(mockBunqueue.getDlq).toHaveBeenCalledWith();
+    });
+
+    test("passes filter to getDlq when provided", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_dlq_list");
+      if (!tool) throw new Error("queue_dlq_list not registered");
+
+      await tool.handler({
+        ...metadataArgs,
+        reason: "timeout",
+        olderThan: 1000,
+        newerThan: 500,
+        retriable: true,
+        expired: false,
+        limit: 10,
+        offset: 5,
+      });
+
+      expect(mockBunqueue.getDlq).toHaveBeenCalledWith({
+        reason: "timeout",
+        olderThan: 1000,
+        newerThan: 500,
+        retriable: true,
+        expired: false,
+        limit: 10,
+        offset: 5,
+      });
+    });
+
+    test("serializes DlqEntry.job via toJSON()", async () => {
+      const mockToJSON = vi.fn().mockReturnValue({ id: "j-1", name: "j-1" });
+      mockBunqueue.getDlq.mockReturnValueOnce([
+        {
+          job: { id: "j-1", toJSON: mockToJSON },
+          enteredAt: 1000,
+          reason: "timeout",
+          error: null,
+          attempts: [],
+          retryCount: 0,
+          lastRetryAt: null,
+          nextRetryAt: null,
+          expiresAt: null,
+        },
+      ]);
+
+      const tools = setup();
+      const tool = tools.get("queue_dlq_list");
+      if (!tool) throw new Error("queue_dlq_list not registered");
+
+      await tool.handler(metadataArgs);
+
+      expect(mockToJSON).toHaveBeenCalled();
+    });
+  });
+
+  describe("queue_dlq_retry", () => {
+    test("retries DLQ entries", async () => {
+      mockBunqueue.retryDlq.mockReturnValue(2);
+
+      const tools = setup();
+      const tool = tools.get("queue_dlq_retry");
+      if (!tool) throw new Error("queue_dlq_retry not registered");
+
+      const result = (await tool.handler(metadataArgs)) as {
+        content: { text: string }[];
+      };
+
+      expect(result.content[0]?.text).toContain("2");
+      expect(mockBunqueue.retryDlq).toHaveBeenCalled();
+    });
+  });
+
+  describe("queue_dlq_purge", () => {
+    test("purges DLQ entries", async () => {
+      mockBunqueue.purgeDlq.mockReturnValue(3);
+
+      const tools = setup();
+      const tool = tools.get("queue_dlq_purge");
+      if (!tool) throw new Error("queue_dlq_purge not registered");
+
+      const result = (await tool.handler(metadataArgs)) as {
+        content: { text: string }[];
+      };
+
+      expect(result.content[0]?.text).toContain("3");
+      expect(mockBunqueue.purgeDlq).toHaveBeenCalled();
+    });
+  });
+
+  describe("queue_list_jobs", () => {
+    test("lists jobs by state", async () => {
+      mockBunqueue.queue.getJobsAsync.mockResolvedValueOnce([
+        {
+          id: "j-1",
+          toJSON: () => ({ id: "j-1", name: "j-1", data: {} }),
+        },
+      ]);
+
+      const tools = setup();
+      const tool = tools.get("queue_list_jobs");
+      if (!tool) throw new Error("queue_list_jobs not registered");
+
+      const result = await tool.handler({
+        ...metadataArgs,
+        state: "waiting",
+      });
+
+      expect(result).toHaveProperty("content");
+      expect(mockBunqueue.queue.getJobsAsync).toHaveBeenCalledWith({
+        state: "waiting",
+        start: undefined,
+        end: undefined,
+        asc: undefined,
+      });
+    });
+
+    test("lists all jobs when no state specified", async () => {
+      mockBunqueue.queue.getJobsAsync.mockResolvedValueOnce([]);
+
+      const tools = setup();
+      const tool = tools.get("queue_list_jobs");
+      if (!tool) throw new Error("queue_list_jobs not registered");
+
+      await tool.handler(metadataArgs);
+
+      expect(mockBunqueue.queue.getJobsAsync).toHaveBeenCalledWith({});
+    });
+
+    test("passes all pagination params", async () => {
+      mockBunqueue.queue.getJobsAsync.mockResolvedValueOnce([]);
+
+      const tools = setup();
+      const tool = tools.get("queue_list_jobs");
+      if (!tool) throw new Error("queue_list_jobs not registered");
+
+      await tool.handler({
+        ...metadataArgs,
+        state: "failed",
+        start: 0,
+        end: 10,
+        asc: true,
+      });
+
+      expect(mockBunqueue.queue.getJobsAsync).toHaveBeenCalledWith({
+        state: "failed",
+        start: 0,
+        end: 10,
+        asc: true,
+      });
+    });
+  });
+
+  describe("queue_remove_job", () => {
+    test("removes a job by ID", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_remove_job");
+      if (!tool) throw new Error("queue_remove_job not registered");
+
+      await tool.handler({ ...metadataArgs, jobId: "j-1" });
+
+      expect(mockBunqueue.queue.removeAsync).toHaveBeenCalledWith("j-1");
+    });
+  });
+
+  describe("queue_retry_job", () => {
+    test("retries a failed job", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_retry_job");
+      if (!tool) throw new Error("queue_retry_job not registered");
+
+      await tool.handler({ ...metadataArgs, jobId: "j-1" });
+
+      expect(mockBunqueue.queue.retryJob).toHaveBeenCalledWith("j-1");
+    });
+  });
+
+  describe("queue_clean", () => {
+    test("cleans old jobs by state", async () => {
+      mockBunqueue.queue.cleanAsync.mockResolvedValueOnce(["j-1", "j-2"]);
+
+      const tools = setup();
+      const tool = tools.get("queue_clean");
+      if (!tool) throw new Error("queue_clean not registered");
+
+      const result = (await tool.handler({
+        ...metadataArgs,
+        grace: 60000,
+        limit: 100,
+        state: "completed",
+      })) as { content: { text: string }[] };
+
+      expect(mockBunqueue.queue.cleanAsync).toHaveBeenCalledWith(
+        60000,
+        100,
+        "completed",
+      );
+      expect(result.content[0]?.text).toContain("j-1");
+    });
+  });
+
+  describe("queue_promote_job", () => {
+    test("promotes a delayed job", async () => {
+      const tools = setup();
+      const tool = tools.get("queue_promote_job");
+      if (!tool) throw new Error("queue_promote_job not registered");
+
+      await tool.handler({ ...metadataArgs, jobId: "j-1" });
+
+      expect(mockBunqueue.queue.promoteJob).toHaveBeenCalledWith("j-1");
     });
   });
 });

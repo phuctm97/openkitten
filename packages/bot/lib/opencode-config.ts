@@ -196,7 +196,6 @@ export namespace OpencodeConfig {
             mdnsDomain: "opencode.local",
             cors: ["https://opencode.local"],
           },
-          plugin: ["opencode-claude-auth"],
         }),
         OPENCODE_SERVER_USERNAME: username,
         OPENCODE_SERVER_PASSWORD: password,
