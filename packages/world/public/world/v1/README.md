@@ -39,24 +39,24 @@ Props:
 
 Cats:
 
-- `cats/cat-a-awake-v1.png`
-  Final selected awake variant for cat A.
+- `cats/cat-a-awake-v3.png`
+  Final selected awake variant for cat A after the room-fit refresh pass.
 - `cats/cat-a-resting-v1.png`
   Resting variant for cat A produced from the awake version during the generation pass.
 - `cats/cat-b-awake-v1.png`
   Final selected awake variant for cat B.
-- `cats/cat-b-resting-v1.png`
-  Resting variant for cat B produced from the awake version during the generation pass.
+- `cats/cat-b-resting-v3.png`
+  Final selected resting variant for cat B after the room-fit refresh pass.
 
 FX:
 
-- `fx/cat-shadow-v1.png`
-  Final selected character shadow asset.
+- `fx/cat-shadow-v2.png`
+  Final selected character shadow asset for the simplified room shell.
 - `fx/hover-ring-v1.png`
   Final selected hover ring asset.
 
 ## Notes
 
 - This set is intended as a first candidate set, not a fully locked art pack.
-- The strongest assets from this pass are the room shell and the cat-state pairings.
+- The live room shell currently uses `cat-a-awake-v3.png`, `cat-b-resting-v3.png`, and `cat-shadow-v2.png`.
 - Follow-up edits should start from the saved prompts and these curated finals.

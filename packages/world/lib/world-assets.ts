@@ -10,17 +10,17 @@ export const worldAssets = {
   cats: {
     catAAwake: {
       key: "world-v1-cat-a-awake",
-      path: `${worldAssetBasePath}/cats/cat-a-awake-v1.png`,
+      path: `${worldAssetBasePath}/cats/cat-a-awake-v3.png`,
     },
     catBResting: {
       key: "world-v1-cat-b-resting",
-      path: `${worldAssetBasePath}/cats/cat-b-resting-v1.png`,
+      path: `${worldAssetBasePath}/cats/cat-b-resting-v3.png`,
     },
   },
   fx: {
     catShadow: {
       key: "world-v1-cat-shadow",
-      path: `${worldAssetBasePath}/fx/cat-shadow-v1.png`,
+      path: `${worldAssetBasePath}/fx/cat-shadow-v2.png`,
     },
   },
   preloadEntries: [
@@ -30,15 +30,15 @@ export const worldAssets = {
     },
     {
       key: "world-v1-cat-a-awake",
-      path: `${worldAssetBasePath}/cats/cat-a-awake-v1.png`,
+      path: `${worldAssetBasePath}/cats/cat-a-awake-v3.png`,
     },
     {
       key: "world-v1-cat-b-resting",
-      path: `${worldAssetBasePath}/cats/cat-b-resting-v1.png`,
+      path: `${worldAssetBasePath}/cats/cat-b-resting-v3.png`,
     },
     {
       key: "world-v1-cat-shadow",
-      path: `${worldAssetBasePath}/fx/cat-shadow-v1.png`,
+      path: `${worldAssetBasePath}/fx/cat-shadow-v2.png`,
     },
   ],
 } as const;
