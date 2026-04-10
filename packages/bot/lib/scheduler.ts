@@ -265,10 +265,11 @@ export class Scheduler implements Disposable {
       this.#tasks.set(data.taskId, meta);
     }
     if (data.kind === "background") {
-      this.#startBackgroundExecution(data, meta, job.id);
-      if (data.once && !isManualTrigger) {
-        this.#tasks.delete(data.taskId);
-      }
+      this.#startBackgroundExecution(data, meta, job.id, () => {
+        if (data.once && !isManualTrigger) {
+          this.#tasks.delete(data.taskId);
+        }
+      });
       return;
     }
     const run: Scheduler.RunRecord = {
@@ -311,6 +312,7 @@ export class Scheduler implements Disposable {
     data: TaskData,
     meta: TaskMeta,
     jobId: string,
+    onComplete: () => void,
   ): void {
     const run: Scheduler.RunRecord = {
       jobId,
@@ -322,11 +324,13 @@ export class Scheduler implements Disposable {
       error: null,
     };
     this.#addRun(meta, run);
-    this.#executeBackground(data, run).catch((error) => {
-      logger.error("Background task failed", error, {
-        taskId: data.taskId,
-      });
-    });
+    this.#executeBackground(data, run)
+      .catch((error) => {
+        logger.error("Background task failed", error, {
+          taskId: data.taskId,
+        });
+      })
+      .finally(onComplete);
   }
 
   async #executeBackground(
@@ -363,7 +367,7 @@ export class Scheduler implements Disposable {
         { throwOnError: true },
       );
       const text = await this.#waitForText(ephemeralId, data.taskId, run);
-      run.output = text;
+      if (text) run.output = text;
       if (!text || text.includes(noReportMarker)) {
         run.status = "completed_silent";
         run.finishedAt = Date.now();
@@ -426,12 +430,14 @@ export class Scheduler implements Disposable {
     sessionId: string,
     timeoutMs: number,
   ): Promise<string | "busy" | "idle" | null> {
+    let timer: Timer | undefined;
     const result = await Promise.race([
       this.#pollSession(sessionId),
-      new Promise<typeof pollTimeout>((resolve) =>
-        setTimeout(resolve, timeoutMs, pollTimeout),
-      ),
+      new Promise<typeof pollTimeout>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs, pollTimeout);
+      }),
     ]);
+    clearTimeout(timer);
     if (result === pollTimeout) throw new Error("Poll timeout");
     return result;
   }

@@ -1295,8 +1295,7 @@ test("background task records non-Error thrown values", async () => {
   expect(runs[0]?.error).toBe("string error");
 });
 
-test("background once-task fired by cron is removed from Map", async () => {
-  // Simulate a cron-fired background once-task (job name = taskId, not trigger-*)
+test("background once-task fired by cron is removed from Map after completion", async () => {
   await fireJob("bg-once", {
     sessionId: "session-1",
     kind: "background",
@@ -1305,6 +1304,9 @@ test("background once-task fired by cron is removed from Map", async () => {
     description: "d",
     once: true,
   });
+  // Background execution is async — advance timers to let polling and onComplete run
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
 
   expect(() => scheduler.get("bg-once")).toThrow(Scheduler.NotFoundError);
 });
