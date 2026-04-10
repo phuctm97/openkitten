@@ -9,7 +9,12 @@ const runRecordSchema = zod.object({
   jobId: zod.string(),
   startedAt: zod.number(),
   finishedAt: zod.number(),
-  status: zod.enum(["completed_notified", "completed_silent", "failed"]),
+  status: zod.enum([
+    "running",
+    "completed_notified",
+    "completed_silent",
+    "failed",
+  ]),
   notifiedUser: zod.boolean(),
   output: zod.string().nullable(),
   error: zod.string().nullable(),
@@ -278,7 +283,7 @@ export function registerScheduleTools(
       const text =
         runs.length === 0
           ? "No execution history."
-          : `${runs.length} run(s):\n${runs.map((r) => `- [${r.jobId}] ${r.status} notified:${r.notifiedUser} (${new Date(r.startedAt).toISOString()} → ${new Date(r.finishedAt).toISOString()}, ${r.finishedAt - r.startedAt}ms)${r.output ? ` output: ${r.output.slice(0, 200)}` : ""}${r.error ? ` error: ${r.error}` : ""}`).join("\n")}`;
+          : `${runs.length} run(s):\n${runs.map((r) => `- [${r.jobId}] ${r.status} notified:${r.notifiedUser} (${new Date(r.startedAt).toISOString()} → ${r.finishedAt ? new Date(r.finishedAt).toISOString() : "pending"}, ${r.finishedAt ? `${r.finishedAt - r.startedAt}ms` : "running"})${r.output ? ` output: ${r.output.slice(0, 200)}` : ""}${r.error ? ` error: ${r.error}` : ""}`).join("\n")}`;
       return {
         content: [{ type: "text", text }],
         structuredContent: { runs: runs.map((r) => ({ ...r })) },

@@ -553,6 +553,32 @@ describe("registerScheduleTools", () => {
       expect(result).toHaveProperty("structuredContent");
     });
 
+    test("displays running state correctly for in-progress background runs", async () => {
+      (mockScheduler.getRuns as ReturnType<typeof vi.fn>).mockReturnValueOnce([
+        {
+          jobId: "j-running",
+          startedAt: 1712448000000,
+          finishedAt: 0,
+          status: "running",
+          notifiedUser: false,
+          output: null,
+          error: null,
+        },
+      ]);
+
+      const tools = setup();
+      const tool = tools.get("queue_schedule_runs");
+      if (!tool) throw new Error("queue_schedule_runs not registered");
+
+      const result = (await tool.handler({
+        ...metadataArgs,
+        id: "task-1",
+      })) as { content: { text: string }[] };
+
+      expect(result.content[0]?.text).toContain("running");
+      expect(result.content[0]?.text).toContain("pending");
+    });
+
     test("returns run history with entries", async () => {
       (mockScheduler.getRuns as ReturnType<typeof vi.fn>).mockReturnValueOnce([
         {

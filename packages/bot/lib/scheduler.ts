@@ -314,7 +314,7 @@ export class Scheduler implements Disposable {
       jobId,
       startedAt: Date.now(),
       finishedAt: 0,
-      status: "completed_silent",
+      status: "running",
       notifiedUser: false,
       output: null,
       error: null,
@@ -337,6 +337,7 @@ export class Scheduler implements Disposable {
         taskId: data.taskId,
         sessionId: data.sessionId,
       });
+      run.status = "completed_silent";
       run.finishedAt = Date.now();
       return;
     }
@@ -359,6 +360,7 @@ export class Scheduler implements Disposable {
       const text = await this.#waitForText(ephemeralId, data.taskId);
       run.output = text;
       if (!text || text.includes(noReportMarker)) {
+        run.status = "completed_silent";
         run.finishedAt = Date.now();
         return;
       }
@@ -473,7 +475,11 @@ export class Scheduler implements Disposable {
 
 export namespace Scheduler {
   export type TaskKind = "session" | "background";
-  export type RunStatus = "completed_notified" | "completed_silent" | "failed";
+  export type RunStatus =
+    | "running"
+    | "completed_notified"
+    | "completed_silent"
+    | "failed";
 
   export interface CreateInput {
     readonly sessionId: string;
