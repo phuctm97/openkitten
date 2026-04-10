@@ -43,6 +43,13 @@
       "when": 1775754059944,
       "tag": "0005_lowly_husk",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1775801520676,
+      "tag": "0006_worthless_hulk",
+      "breakpoints": true
     }
   ]
 }

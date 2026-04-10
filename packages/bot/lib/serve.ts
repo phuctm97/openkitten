@@ -74,7 +74,7 @@ export const serve = defineCommand({
         database,
         opencodeServer.client,
       );
-      using scheduler = Scheduler.create(
+      using scheduler = await Scheduler.create(
         bot,
         database,
         opencodeServer.client,

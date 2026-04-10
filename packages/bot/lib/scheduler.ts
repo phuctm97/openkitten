@@ -1,11 +1,13 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { Job, JobOptions } from "bunqueue/client";
 import { Bunqueue } from "bunqueue/client";
+import { eq } from "drizzle-orm";
 import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { logger } from "~/lib/logger";
+import { schedule as scheduleTable } from "~/lib/schema";
 
 const sessionPromptPrefix = "[Scheduled Task] ";
 
@@ -86,18 +88,36 @@ export class Scheduler implements Disposable {
       prompt: input.prompt,
       once: input.once,
     };
-    let nextRunAt: number | null = null;
-    if (input.once) {
-      const info = await this.#queue.queue.upsertJobScheduler(
+    this.#database
+      .insert(scheduleTable)
+      .values({
         id,
-        { pattern: input.cron, limit: 1 },
-        { name: id, data: taskData },
-      );
-      nextRunAt = info?.next ?? null;
-    } else {
-      const info = await this.#queue.cron(id, input.cron, taskData);
-      nextRunAt = info?.next ?? null;
+        sessionId: input.sessionId,
+        kind: input.kind,
+        description: input.description,
+        prompt: input.prompt,
+        cron: input.cron,
+        once: input.once,
+      })
+      .run();
+    try {
+      if (input.once) {
+        await this.#queue.queue.upsertJobScheduler(
+          id,
+          { pattern: input.cron, limit: 1 },
+          { name: id, data: taskData },
+        );
+      } else {
+        await this.#queue.cron(id, input.cron, taskData);
+      }
+    } catch (error) {
+      this.#database
+        .delete(scheduleTable)
+        .where(eq(scheduleTable.id, id))
+        .run();
+      throw error;
     }
+    const nextRunAt = await this.#fetchNextRunAt(id);
     const now = Date.now();
     const meta: TaskMeta = {
       data: taskData,
@@ -128,8 +148,26 @@ export class Scheduler implements Disposable {
   }
 
   async delete(id: string): Promise<void> {
-    if (!this.#tasks.has(id)) throw new Scheduler.NotFoundError(id);
-    await this.#queue.removeCron(id);
+    const meta = this.#tasks.get(id);
+    if (!meta) throw new Scheduler.NotFoundError(id);
+    this.#database.delete(scheduleTable).where(eq(scheduleTable.id, id)).run();
+    try {
+      await this.#queue.removeCron(id);
+    } catch (error) {
+      this.#database
+        .insert(scheduleTable)
+        .values({
+          id,
+          sessionId: meta.data.sessionId,
+          kind: meta.data.kind,
+          description: meta.data.description,
+          prompt: meta.data.prompt,
+          cron: meta.data.cron,
+          once: meta.data.once,
+        })
+        .run();
+      throw error;
+    }
     this.#tasks.delete(id);
   }
 
@@ -170,51 +208,74 @@ export class Scheduler implements Disposable {
     const dataChanged =
       description !== existing.description || prompt !== existing.prompt;
     let nextRunAt = meta.nextRunAt;
-    if (cronChanged) {
-      await this.#queue.removeCron(id);
-      try {
-        if (existing.once) {
-          const info = await this.#queue.queue.upsertJobScheduler(
-            id,
-            { pattern: cron, limit: 1 },
-            { name: id, data: updated },
-          );
-          nextRunAt = info?.next ?? null;
-        } else {
-          const info = await this.#queue.cron(id, cron, updated);
-          nextRunAt = info?.next ?? null;
-        }
-      } catch (error) {
-        if (existing.once) {
-          await this.#queue.queue
-            .upsertJobScheduler(
+    if (cronChanged || dataChanged) {
+      this.#database
+        .update(scheduleTable)
+        .set({
+          description,
+          prompt,
+          cron,
+        })
+        .where(eq(scheduleTable.id, id))
+        .run();
+    }
+    try {
+      if (cronChanged) {
+        await this.#queue.removeCron(id);
+        try {
+          if (existing.once) {
+            await this.#queue.queue.upsertJobScheduler(
               id,
-              { pattern: existing.cron, limit: 1 },
-              { name: id, data: existing },
-            )
-            .catch((restoreError) => {
-              logger.error(
-                "Failed to restore old cron after update failure",
-                restoreError,
-                { taskId: id },
-              );
-            });
-        } else {
-          await this.#queue
-            .cron(id, existing.cron, existing)
-            .catch((restoreError) => {
-              logger.error(
-                "Failed to restore old cron after update failure",
-                restoreError,
-                { taskId: id },
-              );
-            });
+              { pattern: cron, limit: 1 },
+              { name: id, data: updated },
+            );
+          } else {
+            await this.#queue.cron(id, cron, updated);
+          }
+          nextRunAt = await this.#fetchNextRunAt(id);
+        } catch (error) {
+          if (existing.once) {
+            await this.#queue.queue
+              .upsertJobScheduler(
+                id,
+                { pattern: existing.cron, limit: 1 },
+                { name: id, data: existing },
+              )
+              .catch((restoreError) => {
+                logger.error(
+                  "Failed to restore old cron after update failure",
+                  restoreError,
+                  { taskId: id },
+                );
+              });
+          } else {
+            await this.#queue
+              .cron(id, existing.cron, existing)
+              .catch((restoreError) => {
+                logger.error(
+                  "Failed to restore old cron after update failure",
+                  restoreError,
+                  { taskId: id },
+                );
+              });
+          }
+          throw error;
         }
-        throw error;
+      } else if (dataChanged && !existing.once) {
+        await this.#queue.cron(id, cron, updated);
+        nextRunAt = await this.#fetchNextRunAt(id);
       }
-    } else if (dataChanged && !existing.once) {
-      const info = await this.#queue.cron(id, cron, updated);
-      nextRunAt = info?.next ?? null;
+    } catch (error) {
+      this.#database
+        .update(scheduleTable)
+        .set({
+          description: existing.description,
+          prompt: existing.prompt,
+          cron: existing.cron,
+        })
+        .where(eq(scheduleTable.id, id))
+        .run();
+      throw error;
     }
     meta.data = updated;
     meta.updatedAt = Date.now();
@@ -242,6 +303,11 @@ export class Scheduler implements Disposable {
     };
   }
 
+  async #fetchNextRunAt(taskId: string): Promise<number | null> {
+    const crons = await this.#queue.listCrons();
+    return crons.find((c) => c.id === taskId)?.next ?? null;
+  }
+
   #addRun(meta: TaskMeta, run: Scheduler.RunRecord): void {
     meta.runs.push(run);
     if (meta.runs.length > maxRunHistory) {
@@ -264,9 +330,16 @@ export class Scheduler implements Disposable {
     if (!existing) {
       this.#tasks.set(data.taskId, meta);
     }
+    if (!data.once) {
+      meta.nextRunAt = await this.#fetchNextRunAt(data.taskId);
+    }
     if (data.kind === "background") {
       this.#startBackgroundExecution(data, meta, job.id, () => {
         if (data.once && !isManualTrigger) {
+          this.#database
+            .delete(scheduleTable)
+            .where(eq(scheduleTable.id, data.taskId))
+            .run();
           this.#tasks.delete(data.taskId);
         }
       });
@@ -303,6 +376,10 @@ export class Scheduler implements Disposable {
       run.finishedAt = Date.now();
       this.#addRun(meta, run);
       if (data.once && !isManualTrigger) {
+        this.#database
+          .delete(scheduleTable)
+          .where(eq(scheduleTable.id, data.taskId))
+          .run();
         this.#tasks.delete(data.taskId);
       }
     }
@@ -490,6 +567,44 @@ export class Scheduler implements Disposable {
     return this.#queue;
   }
 
+  async #recover(): Promise<void> {
+    const rows = this.#database.select().from(scheduleTable).all();
+    const cronIds = new Set((await this.#queue.listCrons()).map((c) => c.id));
+    for (const row of rows) {
+      const taskData: TaskData = {
+        taskId: row.id,
+        sessionId: row.sessionId,
+        kind: row.kind as Scheduler.TaskKind,
+        cron: row.cron,
+        description: row.description,
+        prompt: row.prompt,
+        once: row.once,
+      };
+      if (!cronIds.has(row.id)) {
+        if (row.once) {
+          await this.#queue.queue.upsertJobScheduler(
+            row.id,
+            { pattern: row.cron, limit: 1 },
+            { name: row.id, data: taskData },
+          );
+        } else {
+          await this.#queue.cron(row.id, row.cron, taskData);
+        }
+      }
+      this.#tasks.set(row.id, {
+        data: taskData,
+        createdAt: row.createdAt.getTime(),
+        updatedAt: row.updatedAt.getTime(),
+        lastTriggeredAt: null,
+        nextRunAt: await this.#fetchNextRunAt(row.id),
+        runs: [],
+      });
+    }
+    if (rows.length > 0) {
+      logger.info("Recovered scheduled tasks", { count: rows.length });
+    }
+  }
+
   [Symbol.dispose](): void {
     this.#queue.close().catch((error) => {
       logger.error("Failed to close scheduler queue", error);
@@ -505,18 +620,19 @@ export class Scheduler implements Disposable {
     }
   };
 
-  static create(
+  static async create(
     bot: Bot,
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
-  ): Scheduler {
+  ): Promise<Scheduler> {
     const scheduler = new Scheduler(
       bot,
       database,
       opencodeClient,
       existingSessions,
     );
+    await scheduler.#recover();
     logger.info("Scheduler started");
     return scheduler;
   }
