@@ -120,7 +120,7 @@ In the MVP, a cat's state should read primarily from the cat itself:
 The cat does not need to stand at a desk to look active.
 The cat does not need to lie in a dedicated rest area to look asleep.
 
-## House And Props
+## House And Room Cues
 
 The House should feel like:
 
