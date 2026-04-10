@@ -24,15 +24,6 @@ const maxRunHistory = 20;
 
 const pollTimeout = Symbol("pollTimeout");
 
-function computeNextRunAt(cron: string): number | null {
-  try {
-    const next = Bun.cron.parse(cron);
-    return next ? next.getTime() : null;
-  } catch {
-    return null;
-  }
-}
-
 interface TaskData {
   readonly taskId: string;
   readonly sessionId: string;
@@ -136,7 +127,7 @@ export class Scheduler implements Disposable {
       bunqueueNext: registered?.next ?? null,
       bunqueueCronCount: registeredCrons.length,
     });
-    const nextRunAt = computeNextRunAt(input.cron);
+    const nextRunAt = await this.#fetchNextRunAt(id);
     const now = Date.now();
     const meta: TaskMeta = {
       data: taskData,
@@ -251,7 +242,7 @@ export class Scheduler implements Disposable {
           } else {
             await this.#queue.cron(id, cron, updated);
           }
-          nextRunAt = computeNextRunAt(cron);
+          nextRunAt = await this.#fetchNextRunAt(id);
         } catch (error) {
           if (existing.once) {
             await this.#queue.queue
@@ -282,7 +273,7 @@ export class Scheduler implements Disposable {
         }
       } else if (dataChanged && !existing.once) {
         await this.#queue.cron(id, cron, updated);
-        nextRunAt = computeNextRunAt(cron);
+        nextRunAt = await this.#fetchNextRunAt(id);
       }
     } catch (error) {
       this.#database
@@ -322,6 +313,11 @@ export class Scheduler implements Disposable {
     };
   }
 
+  async #fetchNextRunAt(taskId: string): Promise<number | null> {
+    const crons = await this.#queue.listCrons();
+    return crons.find((c) => c.id === taskId)?.next ?? null;
+  }
+
   #addRun(meta: TaskMeta, run: Scheduler.RunRecord): void {
     meta.runs.push(run);
     if (meta.runs.length > maxRunHistory) {
@@ -352,7 +348,7 @@ export class Scheduler implements Disposable {
       this.#tasks.set(data.taskId, meta);
     }
     if (!data.once) {
-      meta.nextRunAt = computeNextRunAt(data.cron);
+      meta.nextRunAt = await this.#fetchNextRunAt(data.taskId);
     }
     if (data.kind === "background") {
       this.#startBackgroundExecution(data, meta, job.id, () => {
@@ -617,7 +613,7 @@ export class Scheduler implements Disposable {
         createdAt: row.createdAt.getTime(),
         updatedAt: row.updatedAt.getTime(),
         lastTriggeredAt: null,
-        nextRunAt: computeNextRunAt(row.cron),
+        nextRunAt: await this.#fetchNextRunAt(row.id),
         runs: [],
       });
     }

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, type Mock, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import { Scheduler } from "~/lib/scheduler";
 import { schedule as scheduleTable, session } from "~/lib/schema";
@@ -6,17 +6,24 @@ import { schedule as scheduleTable, session } from "~/lib/schema";
 let capturedProcessor: ((job: unknown) => Promise<unknown>) | undefined;
 
 const mockQueue = {
-  upsertJobScheduler: vi
-    .fn()
-    .mockResolvedValue({ id: "x", name: "x", next: 0 }),
+  upsertJobScheduler: vi.fn().mockImplementation((id: string) => {
+    cronRegistry.push({ id, name: id, next: Date.now() + 60_000 });
+    return Promise.resolve({ id, name: id, next: Date.now() + 60_000 });
+  }),
   removeJobScheduler: vi.fn().mockResolvedValue(true),
   getJobSchedulers: vi.fn().mockResolvedValue([]),
   add: vi.fn(),
 };
 
-const mockCron = vi.fn().mockResolvedValue({ id: "x", name: "x", next: 0 });
+const mockCron = vi.fn().mockImplementation((id: string) => {
+  cronRegistry.push({ id, name: id, next: Date.now() + 60_000 });
+  return Promise.resolve({ id, name: id, next: Date.now() + 60_000 });
+});
 const mockRemoveCron = vi.fn().mockResolvedValue(true);
-const mockListCrons = vi.fn().mockResolvedValue([]);
+const cronRegistry: Array<{ id: string; name: string; next: number }> = [];
+const mockListCrons = vi
+  .fn()
+  .mockImplementation(() => Promise.resolve([...cronRegistry]));
 const mockClose = vi.fn().mockResolvedValue(undefined);
 const mockOn = vi.fn();
 
@@ -43,7 +50,6 @@ vi.mock("~/lib/get-session-agent", () => ({
   getSessionAgent: () => mockGetSessionAgent(),
 }));
 
-let cronParseSpy: Mock<(expression: string, cursor?: Date) => Date | null>;
 let database: Database;
 let mockBot: {
   api: { sendMessage: ReturnType<typeof vi.fn> };
@@ -65,10 +71,6 @@ let scheduler: Scheduler;
 
 beforeEach(async () => {
   vi.useFakeTimers();
-
-  cronParseSpy = vi
-    .spyOn(Bun.cron, "parse")
-    .mockImplementation(() => new Date(Date.now() + 60_000));
 
   database = Database.create();
   mockBot = { api: { sendMessage: vi.fn().mockResolvedValue(undefined) } };
@@ -114,6 +116,7 @@ beforeEach(async () => {
     .run();
 
   capturedProcessor = undefined;
+  cronRegistry.length = 0;
   mockCron.mockClear();
   mockRemoveCron.mockClear();
   mockListCrons.mockClear();
@@ -218,30 +221,13 @@ test("create() with background kind", async () => {
   expect(task.kind).toBe("background");
 });
 
-test("create() returns null nextRun when Bun.cron.parse returns null", async () => {
-  cronParseSpy.mockReturnValue(null);
+test("create() returns null nextRunAt when cron not found in listCrons", async () => {
+  mockCron.mockImplementationOnce(() => Promise.resolve(null));
 
   const task = await scheduler.create({
     sessionId: "session-1",
     kind: "session",
-    cron: "invalid",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-
-  expect(task.nextRunAt).toBeNull();
-});
-
-test("create() returns null nextRun when Bun.cron.parse throws", async () => {
-  cronParseSpy.mockImplementation(() => {
-    throw new Error("bad cron");
-  });
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "broken",
+    cron: "0 * * * *",
     description: "d",
     prompt: "p",
     once: false,
@@ -1178,7 +1164,7 @@ test("getRuns() records non-Error thrown values", async () => {
   expect(runs[0]?.error).toBe("string error");
 });
 
-test("create() computes nextRunAt from Bun.cron.parse when cron returns null info", async () => {
+test("create() returns null nextRunAt when cron does not register in bunqueue", async () => {
   mockCron.mockResolvedValueOnce(null);
 
   const task = await scheduler.create({
@@ -1190,10 +1176,10 @@ test("create() computes nextRunAt from Bun.cron.parse when cron returns null inf
     once: false,
   });
 
-  expect(task.nextRunAt).toBe(Date.now() + 60_000);
+  expect(task.nextRunAt).toBeNull();
 });
 
-test("create() computes nextRunAt from Bun.cron.parse when once-task upsert returns null", async () => {
+test("create() returns null nextRunAt when once-task upsert does not register cron", async () => {
   mockQueue.upsertJobScheduler.mockResolvedValueOnce(null);
 
   const task = await scheduler.create({
@@ -1205,10 +1191,10 @@ test("create() computes nextRunAt from Bun.cron.parse when once-task upsert retu
     once: true,
   });
 
-  expect(task.nextRunAt).toBe(Date.now() + 60_000);
+  expect(task.nextRunAt).toBeNull();
 });
 
-test("update() computes nextRunAt from Bun.cron.parse when once-task upsert returns null on cron change", async () => {
+test("update() fetches nextRunAt from bunqueue when once-task upsert returns null on cron change", async () => {
   const task = await scheduler.create({
     sessionId: "session-1",
     kind: "session",
@@ -1224,7 +1210,7 @@ test("update() computes nextRunAt from Bun.cron.parse when once-task upsert retu
   expect(updated.nextRunAt).toBe(Date.now() + 60_000);
 });
 
-test("update() computes nextRunAt from Bun.cron.parse when cron returns null info", async () => {
+test("update() fetches nextRunAt from bunqueue when cron returns null info", async () => {
   const task = await scheduler.create({
     sessionId: "session-1",
     kind: "session",
@@ -1240,7 +1226,7 @@ test("update() computes nextRunAt from Bun.cron.parse when cron returns null inf
   expect(updated.nextRunAt).toBe(Date.now() + 60_000);
 });
 
-test("update() computes nextRunAt from Bun.cron.parse when data-only cron returns null", async () => {
+test("update() fetches nextRunAt from bunqueue when data-only cron returns null", async () => {
   const task = await scheduler.create({
     sessionId: "session-1",
     kind: "session",
