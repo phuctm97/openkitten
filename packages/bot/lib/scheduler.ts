@@ -322,26 +322,11 @@ export class Scheduler implements Disposable {
       error: null,
     };
     this.#addRun(meta, run);
-    logger.info("Background execution started", {
-      taskId: data.taskId,
-      jobId,
-    });
-    this.#executeBackground(data, run)
-      .then(() => {
-        logger.info("Background execution finished", {
-          taskId: data.taskId,
-          jobId,
-          status: run.status,
-          notifiedUser: run.notifiedUser,
-        });
-      })
-      .catch((error) => {
-        logger.error("Background task failed", error, {
-          taskId: data.taskId,
-          jobId,
-          status: run.status,
-        });
+    this.#executeBackground(data, run).catch((error) => {
+      logger.error("Background task failed", error, {
+        taskId: data.taskId,
       });
+    });
   }
 
   async #executeBackground(
@@ -416,7 +401,6 @@ export class Scheduler implements Disposable {
     const maxAttempts = 450;
     const intervalMs = 2000;
     const pollTimeoutMs = 30_000;
-    logger.debug("Background poll started", { taskId, sessionId });
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
       try {
@@ -425,25 +409,8 @@ export class Scheduler implements Disposable {
           run.output = `Polling... attempt ${i + 1}/${maxAttempts}, session busy`;
           continue;
         }
-        if (result === "idle") {
-          logger.debug("Background poll: session idle, no text", {
-            taskId,
-            attempt: i,
-          });
-          break;
-        }
-        if (result) {
-          logger.debug("Background poll: got response", {
-            taskId,
-            attempt: i,
-            length: result.length,
-          });
-          return result;
-        }
-        logger.debug("Background poll: no status yet", {
-          taskId,
-          attempt: i,
-        });
+        if (result === "idle") break;
+        if (result) return result;
       } catch (error) {
         logger.warn("Background poll iteration failed, retrying", error, {
           taskId,
@@ -451,10 +418,7 @@ export class Scheduler implements Disposable {
         });
       }
     }
-    logger.warn("Background task produced no text response", {
-      taskId,
-      maxAttempts,
-    });
+    logger.warn("Background task produced no text response", { taskId });
     return null;
   }
 
