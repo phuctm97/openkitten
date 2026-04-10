@@ -338,17 +338,17 @@ test("preloads and lays out the fullscreen house artwork, two nearby cats, and a
   expect(load.image).toHaveBeenNthCalledWith(
     1,
     "house-room-shell-v1",
-    "/world/v1/backgrounds/house-room-shell-v1.png",
+    "/world/v1/backgrounds/house-room-shell-v1.webp",
   );
   expect(load.image).toHaveBeenNthCalledWith(
     2,
     "cat-a-awake-v1",
-    "/world/v1/cats/cat-a-awake-v1.png",
+    "/world/v1/cats/cat-a-awake-v1.webp",
   );
   expect(load.image).toHaveBeenNthCalledWith(
     3,
     "cat-b-resting-v1",
-    "/world/v1/cats/cat-b-resting-v1.png",
+    "/world/v1/cats/cat-b-resting-v1.webp",
   );
   expect(load.image).toHaveBeenCalledTimes(3);
 
