@@ -341,10 +341,13 @@ export class Scheduler implements Disposable {
       run.finishedAt = Date.now();
       return;
     }
-    const {
-      data: { id: ephemeralId },
-    } = await this.#opencodeClient.session.create({}, { throwOnError: true });
+    let ephemeralId: string | undefined;
     try {
+      const created = await this.#opencodeClient.session.create(
+        {},
+        { throwOnError: true },
+      );
+      ephemeralId = created.data.id;
       await this.#opencodeClient.session.promptAsync(
         {
           sessionID: ephemeralId,
@@ -376,13 +379,15 @@ export class Scheduler implements Disposable {
       run.finishedAt = Date.now();
       throw error;
     } finally {
-      await this.#opencodeClient.session
-        .abort({ sessionID: ephemeralId })
-        .catch((error) => {
-          logger.warn("Failed to abort ephemeral session", error, {
-            sessionID: ephemeralId,
+      if (ephemeralId) {
+        await this.#opencodeClient.session
+          .abort({ sessionID: ephemeralId })
+          .catch((error) => {
+            logger.warn("Failed to abort ephemeral session", error, {
+              sessionID: ephemeralId,
+            });
           });
-        });
+      }
     }
   }
 

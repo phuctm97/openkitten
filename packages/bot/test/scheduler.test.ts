@@ -1185,6 +1185,28 @@ test("update() stores null nextRunAt when data-only cron returns null", async ()
   expect(updated.nextRunAt).toBeNull();
 });
 
+test("background task records failure when session.create fails", async () => {
+  opencodeClient.session.create.mockRejectedValueOnce(
+    new Error("session create failed"),
+  );
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "bg create fail",
+    prompt: "check",
+    once: false,
+  });
+
+  await triggerBackground(task);
+
+  const runs = scheduler.getRuns(task.id);
+  expect(runs[0]?.status).toBe("failed");
+  expect(runs[0]?.error).toBe("session create failed");
+  expect(runs[0]?.finishedAt).toBeGreaterThan(0);
+});
+
 test("background task records non-Error thrown values", async () => {
   opencodeClient.session.promptAsync.mockRejectedValueOnce("string error");
 
