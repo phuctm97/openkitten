@@ -128,21 +128,20 @@ The House should feel like:
 - a workshop
 - a place where thinking and doing both happen
 
-Recommended early props:
+Recommended early room cues:
 
-- a whiteboard
-- a cabinet
-- a notice or inbox area
-- desks, lamps, shelves, rugs, or cushions
-- a few small atmospheric objects
+- a readable whiteboard zone
+- a readable cabinet zone
+- a readable notice or inbox zone
+- a few baked-in atmospheric objects that make the room feel lived in
 
 The MVP should distinguish between:
 
-- OpenKitten-significant objects such as the whiteboard, cabinet, and inbox area
-- atmospheric house props that mainly make the room feel cute, warm, and believable
+- OpenKitten-significant room cues such as the whiteboard, cabinet, and inbox area
+- atmospheric details that mainly make the room feel cute, warm, and believable
 
-Most house props can be presentational in the MVP.
-They do not need deep interaction unless they are part of the core OpenKitten model.
+Most environmental detail can stay baked into the room shell in the MVP.
+It does not need deep interaction unless it is part of the core OpenKitten model.
 
 ## Motion Direction
 
@@ -212,7 +211,7 @@ The first convincing version should focus on:
 
 - one strong room
 - two readable cats
-- a few strong props
+- a few strong environmental cues
 - one or two inspection surfaces
 - coherent fullscreen presentation
 

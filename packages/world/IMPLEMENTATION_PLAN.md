@@ -200,7 +200,7 @@ The first meaningful Phaser slice should still be intentionally small:
 - two visible cats
 - two clearly readable cat states
 - one or two visible OpenKitten surfaces
-- a few visible house props
+- a few visible room cues baked into the environment
 - one readable inspect flow
 
 This is enough to answer whether the game-first route feels right.
@@ -240,7 +240,7 @@ Add:
 - core client-side domain types
 - a fixed demo House scenario
 - two cats
-- basic room props and placements
+- readable room cues and cat placements
 - a few OpenKitten-significant objects with readable positions in the room
 
 Deliverables:
@@ -301,7 +301,7 @@ The first implementation should favor:
 
 - simple but strong silhouettes
 - one reusable room background or room shell
-- reusable room props
+- a small set of reusable cat and environment assets
 - lightweight 2D animation
 - a small number of assets that read clearly at fullscreen size
 

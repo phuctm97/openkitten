@@ -24,8 +24,6 @@ These docs assume that architecture throughout.
   Why Phaser is the right runtime for the home route and how it should relate to React.
 - [Visual Direction](./VISUAL_DIRECTION.md)
   The visual, spatial, and UI principles for a fullscreen game-first product.
-- [Asset Production Checklist](./ASSET_PRODUCTION_CHECKLIST.md)
-  The step-by-step graphics workflow, asset list, and AI-generation prompts for the MVP room slice.
 - [MVP](./MVP.md)
   The first vertical slice that should prove the product direction.
 - [Implementation Plan](./IMPLEMENTATION_PLAN.md)
@@ -37,9 +35,8 @@ Recommended reading order:
 2. [Spec](./SPEC.md)
 3. [Client Strategy](./CLIENT_STRATEGY.md)
 4. [Visual Direction](./VISUAL_DIRECTION.md)
-5. [Asset Production Checklist](./ASSET_PRODUCTION_CHECKLIST.md)
-6. [MVP](./MVP.md)
-7. [Implementation Plan](./IMPLEMENTATION_PLAN.md)
+5. [MVP](./MVP.md)
+6. [Implementation Plan](./IMPLEMENTATION_PLAN.md)
 
 ## Commands
 

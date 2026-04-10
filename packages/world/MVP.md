@@ -173,19 +173,19 @@ Recommended options:
 
 This action should produce a visible reaction in the House or UI.
 
-### 8. Visible House Props
+### 8. Visible House Cues
 
-The MVP should include a few visible props that make work feel situated.
+The MVP should include a few visible room cues that make work feel situated.
 
 Recommended examples:
 
-- a whiteboard
-- a cabinet
-- a notice board or inbox station
-- a few warm household props such as desks, lamps, rugs, shelves, or cushions
+- a readable whiteboard zone
+- a readable cabinet zone
+- a readable notice or inbox zone
+- a few baked-in household details that make the room feel warm and believable
 
-Only OpenKitten-significant objects need to carry interaction in the MVP.
-Most other room props can stay presentational and mainly exist to make the House feel cute, warm, and believable.
+Only OpenKitten-significant cues need to carry interaction in the MVP.
+Most other environmental detail can stay presentational inside the room shell.
 
 ## MVP Interaction Rules
 
