@@ -126,6 +126,16 @@ export class Scheduler implements Disposable {
         .run();
       throw error;
     }
+    const registeredCrons = await this.#queue.listCrons();
+    const registered = registeredCrons.find((c) => c.id === id);
+    logger.info("Schedule created", {
+      taskId: id,
+      cron: input.cron,
+      once: input.once,
+      registeredInBunqueue: registered !== undefined,
+      bunqueueNext: registered?.next ?? null,
+      bunqueueCronCount: registeredCrons.length,
+    });
     const nextRunAt = computeNextRunAt(input.cron);
     const now = Date.now();
     const meta: TaskMeta = {
@@ -321,6 +331,13 @@ export class Scheduler implements Disposable {
 
   async #processJob(job: Job<TaskData>): Promise<void> {
     const isManualTrigger = job.name.startsWith("trigger-");
+    logger.info("Processing scheduled job", {
+      jobId: job.id,
+      jobName: job.name,
+      taskId: job.data.taskId,
+      kind: job.data.kind,
+      isManualTrigger,
+    });
     const existing = this.#tasks.get(job.data.taskId);
     const data = existing?.data ?? job.data;
     const meta: TaskMeta = existing ?? {
