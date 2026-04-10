@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, type Mock, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import { Scheduler } from "~/lib/scheduler";
 import { schedule as scheduleTable, session } from "~/lib/schema";
-import { WorkingSessions } from "~/lib/working-sessions";
 
 let capturedProcessor: ((job: unknown) => Promise<unknown>) | undefined;
 
@@ -62,9 +61,6 @@ let existingSessions: {
   find: ReturnType<typeof vi.fn>;
   get: ReturnType<typeof vi.fn>;
 };
-let mockWorkingSessions: {
-  lock: ReturnType<typeof vi.fn>;
-};
 let scheduler: Scheduler;
 
 beforeEach(async () => {
@@ -109,13 +105,6 @@ beforeEach(async () => {
     find: vi.fn().mockResolvedValue("session-1"),
     get: vi.fn().mockReturnValue({ chatId: 123, threadId: undefined }),
   };
-  mockWorkingSessions = {
-    lock: vi
-      .fn()
-      .mockImplementation((_sessionId: string, fn: () => Promise<void>) =>
-        fn(),
-      ),
-  };
   mockGetSessionAgent.mockReturnValue(undefined);
 
   const schema = await import("~/lib/schema");
@@ -138,7 +127,6 @@ beforeEach(async () => {
     database,
     opencodeClient as never,
     existingSessions as never,
-    mockWorkingSessions as never,
   );
 });
 
@@ -549,17 +537,6 @@ async function fireJob(
 // ---------------------------------------------------------------------------
 // #execute — background kind
 // ---------------------------------------------------------------------------
-
-async function triggerSession(task: Scheduler.Task) {
-  await fireJob(task.id, {
-    sessionId: task.sessionId,
-    kind: task.kind,
-    cron: task.cron,
-    prompt: task.prompt,
-    description: task.description,
-    once: task.once,
-  });
-}
 
 async function triggerBackground(task: Scheduler.Task) {
   await fireJob(task.id, {
@@ -1708,7 +1685,6 @@ test("recover() restores tasks from database on startup", async () => {
     freshDb,
     opencodeClient as never,
     existingSessions as never,
-    mockWorkingSessions as never,
   );
 
   const tasks = restored.list();
@@ -1736,7 +1712,6 @@ test("recover() re-registers missing crons in bunqueue", async () => {
     freshDb,
     opencodeClient as never,
     existingSessions as never,
-    mockWorkingSessions as never,
   );
 
   expect(mockCron).toHaveBeenCalledWith(
@@ -1762,7 +1737,6 @@ test("recover() re-registers once-task via upsertJobScheduler", async () => {
     freshDb,
     opencodeClient as never,
     existingSessions as never,
-    mockWorkingSessions as never,
   );
 
   expect(mockQueue.upsertJobScheduler).toHaveBeenCalledWith(
@@ -1791,7 +1765,6 @@ test("recover() skips cron registration when already in bunqueue", async () => {
     freshDb,
     opencodeClient as never,
     existingSessions as never,
-    mockWorkingSessions as never,
   );
 
   expect(mockCron).not.toHaveBeenCalled();
@@ -1847,65 +1820,4 @@ test("delete() removes schedule from database", async () => {
 
   const rows = database.select().from(scheduleTable).all();
   expect(rows).toHaveLength(0);
-});
-
-// ---------------------------------------------------------------------------
-// Session lock concurrency
-// ---------------------------------------------------------------------------
-
-test("session task throws LockedError when session is busy (Bunqueue retries)", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "locked",
-    prompt: "p",
-    once: false,
-  });
-
-  mockWorkingSessions.lock.mockRejectedValueOnce(
-    new WorkingSessions.LockedError("session-1"),
-  );
-
-  await expect(triggerSession(task)).rejects.toThrow(
-    WorkingSessions.LockedError,
-  );
-  expect(scheduler.getRuns(task.id)).toHaveLength(0);
-});
-
-test("session task acquires lock and records run on success", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "locked ok",
-    prompt: "p",
-    once: false,
-  });
-
-  await triggerSession(task);
-
-  expect(mockWorkingSessions.lock).toHaveBeenCalledWith(
-    "session-1",
-    expect.any(Function),
-  );
-  const runs = scheduler.getRuns(task.id);
-  expect(runs).toHaveLength(1);
-  expect(runs[0]?.status).toBe("completed_notified");
-});
-
-test("background task does not acquire session lock", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "0 * * * *",
-    description: "bg",
-    prompt: "p",
-    once: false,
-  });
-
-  mockWorkingSessions.lock.mockClear();
-  await triggerBackground(task);
-
-  expect(mockWorkingSessions.lock).not.toHaveBeenCalled();
 });

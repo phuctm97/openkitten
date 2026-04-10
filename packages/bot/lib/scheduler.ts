@@ -8,7 +8,6 @@ import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { logger } from "~/lib/logger";
 import { schedule as scheduleTable } from "~/lib/schema";
-import type { WorkingSessions } from "~/lib/working-sessions";
 
 const sessionPromptPrefix = "[Scheduled Task] ";
 
@@ -58,7 +57,6 @@ export class Scheduler implements Disposable {
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
-  readonly #workingSessions: WorkingSessions;
   readonly #queue: Bunqueue<TaskData>;
   readonly #tasks = new Map<string, TaskMeta>();
 
@@ -67,13 +65,11 @@ export class Scheduler implements Disposable {
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
-    workingSessions: WorkingSessions,
   ) {
     this.#bot = bot;
     this.#database = database;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
-    this.#workingSessions = workingSessions;
     this.#queue = new Bunqueue<TaskData>("scheduler", {
       embedded: true,
       processor: (job: Job<TaskData>) => this.#processJob(job),
@@ -353,46 +349,44 @@ export class Scheduler implements Disposable {
       });
       return;
     }
-    await this.#workingSessions.lock(data.sessionId, async () => {
-      const run: Scheduler.RunRecord = {
-        jobId: job.id,
-        startedAt: Date.now(),
-        finishedAt: 0,
-        status: "completed_silent",
-        notifiedUser: false,
-        output: null,
-        error: null,
-      };
-      try {
-        const agent = getSessionAgent(this.#database, data.sessionId);
-        await this.#opencodeClient.session.promptAsync(
-          {
-            sessionID: data.sessionId,
-            ...(agent && { agent }),
-            parts: [
-              { type: "text", text: `${sessionPromptPrefix}${data.prompt}` },
-            ],
-          },
-          { throwOnError: true },
-        );
-        run.status = "completed_notified";
-        run.notifiedUser = true;
-      } catch (error) {
-        run.status = "failed";
-        run.error = error instanceof Error ? error.message : String(error);
-        throw error;
-      } finally {
-        run.finishedAt = Date.now();
-        this.#addRun(meta, run);
-        if (data.once && !isManualTrigger) {
-          this.#database
-            .delete(scheduleTable)
-            .where(eq(scheduleTable.id, data.taskId))
-            .run();
-          this.#tasks.delete(data.taskId);
-        }
+    const run: Scheduler.RunRecord = {
+      jobId: job.id,
+      startedAt: Date.now(),
+      finishedAt: 0,
+      status: "completed_silent",
+      notifiedUser: false,
+      output: null,
+      error: null,
+    };
+    try {
+      const agent = getSessionAgent(this.#database, data.sessionId);
+      await this.#opencodeClient.session.promptAsync(
+        {
+          sessionID: data.sessionId,
+          ...(agent && { agent }),
+          parts: [
+            { type: "text", text: `${sessionPromptPrefix}${data.prompt}` },
+          ],
+        },
+        { throwOnError: true },
+      );
+      run.status = "completed_notified";
+      run.notifiedUser = true;
+    } catch (error) {
+      run.status = "failed";
+      run.error = error instanceof Error ? error.message : String(error);
+      throw error;
+    } finally {
+      run.finishedAt = Date.now();
+      this.#addRun(meta, run);
+      if (data.once && !isManualTrigger) {
+        this.#database
+          .delete(scheduleTable)
+          .where(eq(scheduleTable.id, data.taskId))
+          .run();
+        this.#tasks.delete(data.taskId);
       }
-    });
+    }
   }
 
   #startBackgroundExecution(
@@ -635,14 +629,12 @@ export class Scheduler implements Disposable {
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
-    workingSessions: WorkingSessions,
   ): Promise<Scheduler> {
     const scheduler = new Scheduler(
       bot,
       database,
       opencodeClient,
       existingSessions,
-      workingSessions,
     );
     await scheduler.#recover();
     logger.info("Scheduler started");

@@ -74,13 +74,11 @@ export const serve = defineCommand({
         database,
         opencodeServer.client,
       );
-      using workingSessions = WorkingSessions.create(existingSessions);
       using scheduler = await Scheduler.create(
         bot,
         database,
         opencodeServer.client,
         existingSessions,
-        workingSessions,
       );
       using mcpServer = await McpServer.create(
         bot,
@@ -90,6 +88,7 @@ export const serve = defineCommand({
         commandSkillsDir,
         telegramConfig.botToken,
       );
+      using workingSessions = WorkingSessions.create(existingSessions);
       await using pendingPrompts = PendingPrompts.create(
         bot,
         shutdown,
