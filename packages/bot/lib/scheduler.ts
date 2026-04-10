@@ -377,7 +377,7 @@ export class Scheduler implements Disposable {
         },
         { throwOnError: true },
       );
-      const text = await this.#waitForText(ephemeralId, data.taskId);
+      const text = await this.#waitForText(ephemeralId, data.taskId, run);
       run.output = text;
       if (!text || text.includes(noReportMarker)) {
         run.status = "completed_silent";
@@ -411,6 +411,7 @@ export class Scheduler implements Disposable {
   async #waitForText(
     sessionId: string,
     taskId: string,
+    run: Scheduler.RunRecord,
   ): Promise<string | null> {
     const maxAttempts = 450;
     const intervalMs = 2000;
@@ -420,7 +421,10 @@ export class Scheduler implements Disposable {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
       try {
         const result = await this.#pollOnce(sessionId, pollTimeoutMs);
-        if (result === "busy") continue;
+        if (result === "busy") {
+          run.output = `Polling... attempt ${i + 1}/${maxAttempts}, session busy`;
+          continue;
+        }
         if (result === "idle") {
           logger.debug("Background poll: session idle, no text", {
             taskId,
