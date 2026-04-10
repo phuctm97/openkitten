@@ -40,8 +40,9 @@ const scheduleCreateInputSchema = zod.looseObject({
     .default("session")
     .describe(
       [
-        'Task execution mode. "session" executes the prompt inside the current Telegram chat — the AI response appears in the conversation just like a normal message, and the chat history is preserved across runs.',
-        '"background" executes the prompt in an isolated ephemeral session and only sends a Telegram message when the AI determines there is meaningful data to report. Background tasks can run for up to 15 minutes, making them suitable for complex workflows with external tools (Gmail, Sheets, APIs). Results are recorded in execution history (queue_schedule_runs) with status, output, and notification state — NOT injected into the main chat context.',
+        "Task execution mode.",
+        '"session" (recommended for most workflows): executes inside the current Telegram chat. The user sees the response directly and can reply naturally. Best for workflows expecting user interaction (e.g. expense classification where the user replies "chung"/"riêng").',
+        '"background": executes in an isolated ephemeral session. Only sends a Telegram message when something noteworthy is found. Can run up to 15 minutes for complex external-tool workflows (Gmail, Sheets, APIs). Results are recorded in queue_schedule_runs — NOT injected into the main chat context. Best for silent monitoring and alerting where no user reply is expected.',
         'Default: "session".',
       ].join(" "),
     ),
@@ -90,9 +91,9 @@ const scheduleIdInputSchema = zod.looseObject({
   id: zod
     .string()
     .trim()
-    .min(1)
+    .uuid()
     .describe(
-      "The scheduled task ID. Use queue_schedule_list to find task IDs first.",
+      "The scheduled task UUID. Use queue_schedule_list to find task IDs. Must be a plain UUID — do not include extra text or serialized data.",
     ),
 });
 
@@ -100,9 +101,9 @@ const scheduleUpdateInputSchema = zod.looseObject({
   id: zod
     .string()
     .trim()
-    .min(1)
+    .uuid()
     .describe(
-      "The scheduled task ID to update. Use queue_schedule_list to find task IDs first.",
+      "The scheduled task UUID to update. Use queue_schedule_list to find task IDs. Must be a plain UUID.",
     ),
   description: zod
     .string()
@@ -503,7 +504,13 @@ export function registerScheduleTools(
     {
       description: "Cancel a job via bunqueue cancel(jobId, gracePeriodMs?).",
       inputSchema: zod.looseObject({
-        jobId: zod.string().trim().min(1).describe("The job ID to cancel."),
+        jobId: zod
+          .string()
+          .trim()
+          .min(1)
+          .describe(
+            "The job ID to cancel. Must be a plain ID string — do not include extra text.",
+          ),
         gracePeriodMs: zod
           .number()
           .int()
@@ -532,7 +539,13 @@ export function registerScheduleTools(
       description:
         "Get a job by ID via bunqueue getJob(). Returns the full bunqueue Job as JSON (toJSON()).",
       inputSchema: zod.looseObject({
-        jobId: zod.string().trim().min(1).describe("The job ID to look up."),
+        jobId: zod
+          .string()
+          .trim()
+          .min(1)
+          .describe(
+            "The job ID to look up. Must be a plain ID string — do not include extra text.",
+          ),
       }),
     },
     async (args) => {
@@ -757,7 +770,11 @@ export function registerScheduleTools(
       description:
         "Remove a specific job from the queue via bunqueue queue.removeAsync().",
       inputSchema: zod.looseObject({
-        jobId: zod.string().trim().min(1).describe("The job ID to remove."),
+        jobId: zod
+          .string()
+          .trim()
+          .min(1)
+          .describe("The job ID to remove. Must be a plain ID string."),
       }),
     },
     async (args) => {
@@ -774,7 +791,11 @@ export function registerScheduleTools(
     {
       description: "Retry a specific failed job via bunqueue queue.retryJob().",
       inputSchema: zod.looseObject({
-        jobId: zod.string().trim().min(1).describe("The job ID to retry."),
+        jobId: zod
+          .string()
+          .trim()
+          .min(1)
+          .describe("The job ID to retry. Must be a plain ID string."),
       }),
     },
     async (args) => {
@@ -838,7 +859,9 @@ export function registerScheduleTools(
           .string()
           .trim()
           .min(1)
-          .describe("The delayed job ID to promote."),
+          .describe(
+            "The delayed job ID to promote. Must be a plain ID string.",
+          ),
       }),
     },
     async (args) => {
