@@ -20,6 +20,8 @@ const validKinds: ReadonlySet<string> = new Set<Scheduler.TaskKind>([
 
 const maxRunHistory = 20;
 
+const pollTimeout = Symbol("pollTimeout");
+
 interface TaskData {
   readonly taskId: string;
   readonly sessionId: string;
@@ -397,29 +399,61 @@ export class Scheduler implements Disposable {
   ): Promise<string | null> {
     const maxAttempts = 450;
     const intervalMs = 2000;
+    const pollTimeoutMs = 30_000;
     for (let i = 0; i < maxAttempts; i++) {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
-      const { data: statuses } = await this.#opencodeClient.session.status(
-        {},
-        { throwOnError: true },
-      );
-      const status = statuses[sessionId];
-      if (status && status.type === "busy") continue;
-      const { data: messages } = await this.#opencodeClient.session.messages(
-        { sessionID: sessionId },
-        { throwOnError: true },
-      );
-      for (const msg of [...messages].reverse()) {
-        if (msg.info.role !== "assistant") continue;
-        const text = msg.parts
-          .filter((part) => part.type === "text")
-          .map((part) => part.text)
-          .join("");
-        if (text) return text;
+      try {
+        const result = await this.#pollOnce(sessionId, pollTimeoutMs);
+        if (result === "busy") continue;
+        if (result === "idle") break;
+        if (result) return result;
+      } catch (error) {
+        logger.warn("Background poll iteration failed, retrying", error, {
+          taskId,
+          attempt: i,
+        });
       }
-      if (status?.type === "idle") break;
     }
     logger.warn("Background task produced no text response", { taskId });
+    return null;
+  }
+
+  async #pollOnce(
+    sessionId: string,
+    timeoutMs: number,
+  ): Promise<string | "busy" | "idle" | null> {
+    const result = await Promise.race([
+      this.#pollSession(sessionId),
+      new Promise<typeof pollTimeout>((resolve) =>
+        setTimeout(resolve, timeoutMs, pollTimeout),
+      ),
+    ]);
+    if (result === pollTimeout) throw new Error("Poll timeout");
+    return result;
+  }
+
+  async #pollSession(
+    sessionId: string,
+  ): Promise<string | "busy" | "idle" | null> {
+    const { data: statuses } = await this.#opencodeClient.session.status(
+      {},
+      { throwOnError: true },
+    );
+    const status = statuses[sessionId];
+    if (status && status.type === "busy") return "busy";
+    const { data: messages } = await this.#opencodeClient.session.messages(
+      { sessionID: sessionId },
+      { throwOnError: true },
+    );
+    for (const msg of [...messages].reverse()) {
+      if (msg.info.role !== "assistant") continue;
+      const text = msg.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("");
+      if (text) return text;
+    }
+    if (status?.type === "idle") return "idle";
     return null;
   }
 

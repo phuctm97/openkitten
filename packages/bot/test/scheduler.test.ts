@@ -705,7 +705,7 @@ test("background task logs warning when ephemeral session abort fails", async ()
     sessionId: "session-1",
     kind: "background",
     cron: "0 * * * *",
-    description: "abort error test",
+    description: "abort error",
     prompt: "check",
     once: false,
   });
@@ -757,6 +757,76 @@ test("background task polls while session is busy then reads result", async () =
   expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
     123,
     "Polled result",
+    {},
+  );
+});
+
+test("background task recovers when poll times out (30s)", async () => {
+  // First poll: status call hangs — never resolves, timeout wins
+  opencodeClient.session.status.mockImplementationOnce(
+    () => new Promise(() => {}),
+  );
+  // Second poll: idle with result
+  mockBackgroundResponse("After timeout");
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "poll timeout",
+    prompt: "check",
+    once: false,
+  });
+
+  await fireJob(task.id, {
+    sessionId: task.sessionId,
+    kind: task.kind,
+    cron: task.cron,
+    prompt: task.prompt,
+    description: task.description,
+    once: task.once,
+  });
+  // First poll: 2s wait + 30s timeout
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(30_000);
+  await vi.advanceTimersByTimeAsync(0);
+  // Second poll: 2s wait + instant result
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+    123,
+    "After timeout",
+    {},
+  );
+});
+
+test("background task recovers from poll error and continues", async () => {
+  // First poll: status call hangs (will timeout after 30s in production,
+  // but in tests the mock just throws)
+  opencodeClient.session.status.mockRejectedValueOnce(
+    new Error("Poll timeout"),
+  );
+  // Second poll: idle with result
+  mockBackgroundResponse("After timeout");
+
+  const task = await scheduler.create({
+    sessionId: "session-1",
+    kind: "background",
+    cron: "0 * * * *",
+    description: "timeout recovery",
+    prompt: "check",
+    once: false,
+  });
+
+  await triggerBackground(task);
+  // Extra advance for the retry after timeout
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
+    123,
+    "After timeout",
     {},
   );
 });
