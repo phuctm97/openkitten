@@ -5,6 +5,21 @@ import type { Scheduler } from "~/lib/scheduler";
 
 const taskKindSchema = zod.enum(["session", "background"]);
 
+const runRecordSchema = zod.object({
+  jobId: zod.string(),
+  startedAt: zod.number(),
+  finishedAt: zod.number(),
+  status: zod.enum([
+    "running",
+    "completed_notified",
+    "completed_silent",
+    "failed",
+  ]),
+  notifiedUser: zod.boolean(),
+  output: zod.string().nullable(),
+  error: zod.string().nullable(),
+});
+
 const scheduleTaskSchema = zod.object({
   id: zod.string(),
   sessionId: zod.string(),
@@ -13,7 +28,11 @@ const scheduleTaskSchema = zod.object({
   description: zod.string(),
   prompt: zod.string(),
   once: zod.boolean(),
-  nextRun: zod.string().nullable(),
+  createdAt: zod.number(),
+  updatedAt: zod.number(),
+  lastTriggeredAt: zod.number().nullable(),
+  nextRunAt: zod.number().nullable(),
+  lastRun: runRecordSchema.nullable(),
 });
 
 const scheduleCreateInputSchema = zod.looseObject({
@@ -21,8 +40,9 @@ const scheduleCreateInputSchema = zod.looseObject({
     .default("session")
     .describe(
       [
-        'Task execution mode. "session" executes the prompt inside the current Telegram chat — the AI response appears in the conversation just like a normal message, and the chat history is preserved across runs.',
-        '"background" executes the prompt in an isolated session and only sends a Telegram message when the AI determines there is meaningful data to report. Use "background" for monitoring, alerts, and silent periodic checks.',
+        "Task execution mode.",
+        '"session" (recommended for most workflows): executes inside the current Telegram chat. The user sees the response directly and can reply naturally. Best for workflows expecting user interaction (e.g. expense classification where the user replies "chung"/"riêng").',
+        '"background": executes in an isolated ephemeral session. Only sends a Telegram message when something noteworthy is found. Can run up to 15 minutes for complex external-tool workflows (Gmail, Sheets, APIs). Results are recorded in queue_schedule_runs — NOT injected into the main chat context. Best for silent monitoring and alerting where no user reply is expected.',
         'Default: "session".',
       ].join(" "),
     ),
@@ -71,9 +91,9 @@ const scheduleIdInputSchema = zod.looseObject({
   id: zod
     .string()
     .trim()
-    .min(1)
+    .uuid()
     .describe(
-      "The scheduled task ID. Use queue_schedule_list to find task IDs first.",
+      "The scheduled task UUID. Use queue_schedule_list to find task IDs. Must be a plain UUID — do not include extra text or serialized data.",
     ),
 });
 
@@ -81,9 +101,9 @@ const scheduleUpdateInputSchema = zod.looseObject({
   id: zod
     .string()
     .trim()
-    .min(1)
+    .uuid()
     .describe(
-      "The scheduled task ID to update. Use queue_schedule_list to find task IDs first.",
+      "The scheduled task UUID to update. Use queue_schedule_list to find task IDs. Must be a plain UUID.",
     ),
   description: zod
     .string()
@@ -120,7 +140,7 @@ export function registerScheduleTools(
     "queue_schedule_create",
     {
       description:
-        'Create a scheduled task that runs on a cron schedule. Use kind "session" for tasks that respond in the chat (reminders, summaries, recurring analysis). Use kind "background" for silent monitoring that only notifies the user when something noteworthy is found.',
+        'Create a scheduled task that runs on a cron schedule. Use kind "session" for tasks that respond in the chat (reminders, summaries, recurring analysis). Use kind "background" for silent monitoring that only notifies the user when something noteworthy is found. Background tasks run in an isolated session and poll for up to 15 minutes — suitable for workflows involving external tools (Gmail, Sheets, APIs). Results are visible via queue_schedule_runs, not in the main chat.',
       inputSchema: scheduleCreateInputSchema,
       outputSchema: scheduleTaskSchema,
     },
@@ -138,7 +158,7 @@ export function registerScheduleTools(
         content: [
           {
             type: "text",
-            text: `Created schedule [${task.id}]: "${task.description}" (${task.kind}, cron: ${task.cron}, next: ${task.nextRun ?? "N/A"})`,
+            text: `Created schedule [${task.id}]: "${task.description}" (${task.kind}, cron: ${task.cron}, nextRunAt: ${task.nextRunAt ? new Date(task.nextRunAt).toISOString() : "N/A"})`,
           },
         ],
         structuredContent: { ...task },
@@ -161,7 +181,7 @@ export function registerScheduleTools(
       const tasks = ctx.scheduler.list();
       const lines = tasks.map(
         (t) =>
-          `- [${t.id}] (${t.kind}) "${t.description}" | cron: ${t.cron} | prompt: ${t.prompt} | next: ${t.nextRun ?? "N/A"}`,
+          `- [${t.id}] (${t.kind}) "${t.description}" | cron: ${t.cron} | prompt: ${t.prompt} | nextRunAt: ${t.nextRunAt ? new Date(t.nextRunAt).toISOString() : "N/A"} | lastRun: ${t.lastRun?.status ?? "none"}`,
       );
       const text =
         tasks.length === 0
@@ -196,16 +216,25 @@ export function registerScheduleTools(
     "queue_schedule_trigger",
     {
       description:
-        "Run a scheduled task immediately without waiting for the next cron tick. Useful for testing or when the user wants results now.",
+        "Enqueue a scheduled task for immediate execution without waiting for the next cron tick. The job is processed asynchronously. Background tasks may take up to 15 minutes for complex workflows (e.g. Gmail/Sheets with multiple tool calls). Returns scheduleId, jobId, and enqueuedAt for tracking. Use queue_schedule_runs to check execution result, output, and whether the user was notified.",
       inputSchema: scheduleIdInputSchema,
-      outputSchema: zod.object({ triggered: zod.boolean() }),
+      outputSchema: zod.object({
+        scheduleId: zod.string(),
+        jobId: zod.string(),
+        enqueuedAt: zod.number(),
+      }),
     },
     async (args) => {
       ctx.getMetadata(args);
-      await ctx.scheduler.trigger(args.id);
+      const result = await ctx.scheduler.trigger(args.id);
       return {
-        content: [{ type: "text", text: `Triggered schedule ${args.id}.` }],
-        structuredContent: { triggered: true },
+        content: [
+          {
+            type: "text",
+            text: `Triggered schedule ${result.scheduleId} → job ${result.jobId}`,
+          },
+        ],
+        structuredContent: { ...result },
       };
     },
   );
@@ -231,10 +260,34 @@ export function registerScheduleTools(
         content: [
           {
             type: "text",
-            text: `Updated schedule [${task.id}]: "${task.description}" (cron: ${task.cron}, next: ${task.nextRun ?? "N/A"})`,
+            text: `Updated schedule [${task.id}]: "${task.description}" (cron: ${task.cron}, nextRunAt: ${task.nextRunAt ? new Date(task.nextRunAt).toISOString() : "N/A"})`,
           },
         ],
         structuredContent: { ...task },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_schedule_runs",
+    {
+      description:
+        "Get execution history for a scheduled task. Shows the last 20 runs with jobId, startedAt, finishedAt, status (completed_notified, completed_silent, failed), notifiedUser, output preview, and error details. Use this to inspect background task behavior without polluting the main chat context.",
+      inputSchema: scheduleIdInputSchema,
+      outputSchema: zod.object({
+        runs: zod.array(runRecordSchema),
+      }),
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const runs = ctx.scheduler.getRuns(args.id);
+      const text =
+        runs.length === 0
+          ? "No execution history."
+          : `${runs.length} run(s):\n${runs.map((r) => `- [${r.jobId}] ${r.status} notified:${r.notifiedUser} (${new Date(r.startedAt).toISOString()} → ${r.finishedAt ? new Date(r.finishedAt).toISOString() : "pending"}, ${r.finishedAt ? `${r.finishedAt - r.startedAt}ms` : "running"})${r.output ? ` output: ${r.output.slice(0, 200)}` : ""}${r.error ? ` error: ${r.error}` : ""}`).join("\n")}`;
+      return {
+        content: [{ type: "text", text }],
+        structuredContent: { runs: runs.map((r) => ({ ...r })) },
       };
     },
   );
@@ -451,7 +504,13 @@ export function registerScheduleTools(
     {
       description: "Cancel a job via bunqueue cancel(jobId, gracePeriodMs?).",
       inputSchema: zod.looseObject({
-        jobId: zod.string().trim().min(1).describe("The job ID to cancel."),
+        jobId: zod
+          .string()
+          .trim()
+          .min(1)
+          .describe(
+            "The job ID to cancel. Must be a plain ID string — do not include extra text.",
+          ),
         gracePeriodMs: zod
           .number()
           .int()
@@ -480,7 +539,13 @@ export function registerScheduleTools(
       description:
         "Get a job by ID via bunqueue getJob(). Returns the full bunqueue Job as JSON (toJSON()).",
       inputSchema: zod.looseObject({
-        jobId: zod.string().trim().min(1).describe("The job ID to look up."),
+        jobId: zod
+          .string()
+          .trim()
+          .min(1)
+          .describe(
+            "The job ID to look up. Must be a plain ID string — do not include extra text.",
+          ),
       }),
     },
     async (args) => {
@@ -705,7 +770,11 @@ export function registerScheduleTools(
       description:
         "Remove a specific job from the queue via bunqueue queue.removeAsync().",
       inputSchema: zod.looseObject({
-        jobId: zod.string().trim().min(1).describe("The job ID to remove."),
+        jobId: zod
+          .string()
+          .trim()
+          .min(1)
+          .describe("The job ID to remove. Must be a plain ID string."),
       }),
     },
     async (args) => {
@@ -722,7 +791,11 @@ export function registerScheduleTools(
     {
       description: "Retry a specific failed job via bunqueue queue.retryJob().",
       inputSchema: zod.looseObject({
-        jobId: zod.string().trim().min(1).describe("The job ID to retry."),
+        jobId: zod
+          .string()
+          .trim()
+          .min(1)
+          .describe("The job ID to retry. Must be a plain ID string."),
       }),
     },
     async (args) => {
@@ -786,7 +859,9 @@ export function registerScheduleTools(
           .string()
           .trim()
           .min(1)
-          .describe("The delayed job ID to promote."),
+          .describe(
+            "The delayed job ID to promote. Must be a plain ID string.",
+          ),
       }),
     },
     async (args) => {
