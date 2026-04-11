@@ -24,17 +24,19 @@ test("creates a fullscreen Phaser game bound to the provided parent", async () =
   const { createGame } = await import("~/lib/create-game");
   const parent = document.createElement("div");
 
+  document.documentElement.style.colorScheme = "dark";
   createGame(parent);
 
   expect(phaserMocks.game).toHaveBeenCalledTimes(1);
   expect(phaserMocks.game).toHaveBeenCalledWith({
     parent,
+    backgroundColor: "#0c0a09",
     scale: { mode: "RESIZE" },
     scene: [HouseScene],
   });
 });
 
-test("creates the game without deriving palette config from document color scheme", async () => {
+test("uses the computed document color scheme for the initial background color", async () => {
   const { HouseScene } = await import("~/lib/house-scene");
   const { createGame } = await import("~/lib/create-game");
   const parent = document.createElement("div");
@@ -47,6 +49,7 @@ test("creates the game without deriving palette config from document color schem
 
   expect(phaserMocks.game).toHaveBeenCalledWith({
     parent,
+    backgroundColor: "#0c0a09",
     scale: { mode: "RESIZE" },
     scene: [HouseScene],
   });
