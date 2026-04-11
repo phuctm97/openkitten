@@ -5,12 +5,10 @@ const phaserMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("phaser", () => ({
-  default: {
-    Game: phaserMocks.game,
-    Scene: class Scene {},
-    Scale: {
-      RESIZE: "RESIZE",
-    },
+  Game: phaserMocks.game,
+  Scene: class Scene {},
+  Scale: {
+    RESIZE: "RESIZE",
   },
 }));
 
@@ -33,13 +31,12 @@ test("creates a fullscreen Phaser game bound to the provided parent", async () =
   expect(phaserMocks.game).toHaveBeenCalledWith({
     parent,
     backgroundColor: "#0c0a09",
-    roundPixels: true,
     scale: { mode: "RESIZE" },
     scene: [HouseScene],
   });
 });
 
-test("uses the computed document color scheme when inline style is unset", async () => {
+test("uses the computed document color scheme for the initial background color", async () => {
   const { HouseScene } = await import("~/lib/house-scene");
   const { createGame } = await import("~/lib/create-game");
   const parent = document.createElement("div");
@@ -53,7 +50,6 @@ test("uses the computed document color scheme when inline style is unset", async
   expect(phaserMocks.game).toHaveBeenCalledWith({
     parent,
     backgroundColor: "#0c0a09",
-    roundPixels: true,
     scale: { mode: "RESIZE" },
     scene: [HouseScene],
   });

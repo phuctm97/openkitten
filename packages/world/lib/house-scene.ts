@@ -1,4 +1,7 @@
-import Phaser from "phaser";
+import * as Phaser from "phaser";
+import awakeCatTexturePath from "~/assets/cat-a-awake-v1.webp";
+import restingCatTexturePath from "~/assets/cat-b-resting-v1.webp";
+import roomShellTexturePath from "~/assets/house-room-shell-v1.webp";
 import { getColorScheme } from "~/lib/get-color-scheme";
 import { getHousePalette } from "~/lib/get-house-palette";
 
@@ -43,14 +46,11 @@ const awakeCatOriginY = 0.95;
 const restingCatOriginY = 0.78;
 const awakeCatTextureKey = "cat-a-awake-v1";
 const restingCatTextureKey = "cat-b-resting-v1";
-const awakeCatTexturePath = "/world/v1/cats/cat-a-awake-v1.webp";
-const restingCatTexturePath = "/world/v1/cats/cat-b-resting-v1.webp";
 const designViewportHeight = 720;
 const designViewportWidth = 1280;
 const minimumCameraZoom = 0.75;
 const roomShellHeight = 1024;
 const roomShellTextureKey = "house-room-shell-v1";
-const roomShellTexturePath = "/world/v1/backgrounds/house-room-shell-v1.webp";
 const roomShellWidth = 1536;
 const worldOverscanMultiplier = 1.18;
 
