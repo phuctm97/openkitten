@@ -1,4 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest";
+import awakeCatTexturePath from "~/assets/cat-a-awake-v1.webp";
+import restingCatTexturePath from "~/assets/cat-b-resting-v1.webp";
+import roomShellTexturePath from "~/assets/house-room-shell-v1.webp";
 
 type MockCamera = {
   height: number;
@@ -265,35 +268,33 @@ const houseSceneMocks = vi.hoisted(() => {
 });
 
 vi.mock("phaser", () => ({
-  default: {
-    Display: {
-      Color: {
-        ValueToColor: vi.fn((color: string) => `converted:${color}`),
-      },
+  Display: {
+    Color: {
+      ValueToColor: vi.fn((color: string) => `converted:${color}`),
     },
-    GameObjects: {
-      Image: class Image {},
-      Rectangle: class Rectangle {},
+  },
+  GameObjects: {
+    Image: class Image {},
+    Rectangle: class Rectangle {},
+  },
+  Input: {
+    Events: {
+      POINTER_DOWN: "pointer-down-event",
+      POINTER_MOVE: "pointer-move-event",
+      POINTER_UP: "pointer-up-event",
+      POINTER_UP_OUTSIDE: "pointer-up-outside-event",
     },
-    Input: {
-      Events: {
-        POINTER_DOWN: "pointer-down-event",
-        POINTER_MOVE: "pointer-move-event",
-        POINTER_UP: "pointer-up-event",
-        POINTER_UP_OUTSIDE: "pointer-up-outside-event",
-      },
-      Pointer: class Pointer {},
+    Pointer: class Pointer {},
+  },
+  Scale: {
+    Events: {
+      RESIZE: "resize-event",
     },
-    Scale: {
-      Events: {
-        RESIZE: "resize-event",
-      },
-    },
-    Scene: houseSceneMocks.MockScene,
-    Scenes: {
-      Events: {
-        SHUTDOWN: "shutdown-event",
-      },
+  },
+  Scene: houseSceneMocks.MockScene,
+  Scenes: {
+    Events: {
+      SHUTDOWN: "shutdown-event",
     },
   },
 }));
@@ -338,17 +339,17 @@ test("preloads and lays out the fullscreen house artwork, two nearby cats, and a
   expect(load.image).toHaveBeenNthCalledWith(
     1,
     "house-room-shell-v1",
-    "/world/v1/backgrounds/house-room-shell-v1.webp",
+    roomShellTexturePath,
   );
   expect(load.image).toHaveBeenNthCalledWith(
     2,
     "cat-a-awake-v1",
-    "/world/v1/cats/cat-a-awake-v1.webp",
+    awakeCatTexturePath,
   );
   expect(load.image).toHaveBeenNthCalledWith(
     3,
     "cat-b-resting-v1",
-    "/world/v1/cats/cat-b-resting-v1.webp",
+    restingCatTexturePath,
   );
   expect(load.image).toHaveBeenCalledTimes(3);
 

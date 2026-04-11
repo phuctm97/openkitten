@@ -94,7 +94,7 @@ The package should likely grow toward something like:
 - `packages/world/domain/`
 - `packages/world/fixtures/`
 - `packages/world/lib/`
-- `packages/world/public/`
+- `packages/world/assets/`
 - `packages/world/test/`
 
 ## Layered Client Architecture

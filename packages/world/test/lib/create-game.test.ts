@@ -5,12 +5,10 @@ const phaserMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("phaser", () => ({
-  default: {
-    Game: phaserMocks.game,
-    Scene: class Scene {},
-    Scale: {
-      RESIZE: "RESIZE",
-    },
+  Game: phaserMocks.game,
+  Scene: class Scene {},
+  Scale: {
+    RESIZE: "RESIZE",
   },
 }));
 

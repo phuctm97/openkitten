@@ -1,4 +1,4 @@
-import Phaser from "phaser";
+import * as Phaser from "phaser";
 import { getColorScheme } from "~/lib/get-color-scheme";
 import { getHousePalette } from "~/lib/get-house-palette";
 import { HouseScene } from "~/lib/house-scene";
