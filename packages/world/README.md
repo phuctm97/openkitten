@@ -1,33 +1,62 @@
 # OpenKitten World
 
-This package contains both the canonical product documents and the browser client for OpenKitten World.
+This package contains both the canonical product documents and the web client for OpenKitten World.
+
+OpenKitten World is the async multi-agent platform that sits alongside:
+
+- the root and `www` website, which remain SEO and marketing surfaces
+- `@openkitten/bot`, which remains the Telegram bot and sync chat surface
 
 ## Status
 
-OpenKitten World is planned and built as a Phaser-first browser client:
+OpenKitten World is planned as one product on `world.openkitten.com` with two modes:
 
-- `/` is a fullscreen Phaser experience
-- React Router owns routing
-- non-game routes can stay conventional React pages
-- React DOM on `/` is optional and secondary
-- Jotai may be used as a narrow bridge between Phaser and React when needed
+- `app` mode for fast, conventional productivity workflows
+- `game` mode for the living House experience
 
-These docs assume that architecture throughout.
+Both modes operate on the same core product model:
+
+- `House`
+- `Cat`
+- `Goal`
+- `Thread`
+- `Notice`
+- `Memo`
+- `Rule`
+- `Session`
+- the rest of the shared House state
+
+The shared core is the product.
+The two modes are different renderers and interaction styles over that same core.
+
+Game mode may keep extra state for:
+
+- camera and movement
+- room layout and prop placement
+- animation and interaction timing
+- house customization and other world-specific presentation
+
+But it must not fork the core domain model or business actions.
+
+These docs assume route shapes like:
+
+- `/app/houses/:houseId`
+- `/game/houses/:houseId`
 
 ## Documents
 
 - [Vision](./VISION.md)
-  The product north star and the experience OpenKitten World should ultimately create.
+  The product north star and the reason OpenKitten World should exist as both a useful tool and a lovable place.
 - [Spec](./SPEC.md)
-  The canonical product vocabulary, domain model, interaction model, and implementation boundaries.
+  The canonical vocabulary, domain model, mode model, and implementation boundaries.
 - [Client Strategy](./CLIENT_STRATEGY.md)
-  Why Phaser is the right runtime for the home route and how it should relate to React.
+  Why OpenKitten World should be one app with separate `app` and `game` route trees over a shared core.
 - [Visual Direction](./VISUAL_DIRECTION.md)
-  The visual, spatial, and UI principles for a fullscreen game-first product.
+  The visual principles for a useful app mode and a polished, complete game mode.
 - [MVP](./MVP.md)
-  The first vertical slice that should prove the product direction.
+  The first vertical slices that should prove utility in app mode and promise in game mode.
 - [Implementation Plan](./IMPLEMENTATION_PLAN.md)
-  The recommended package layout, architecture, and phased path for the Phaser-first client.
+  The recommended architecture, package layout, phased plan, and build-in-public loop.
 
 Recommended reading order:
 

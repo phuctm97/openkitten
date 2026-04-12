@@ -2,15 +2,15 @@
 
 ## What OpenKitten World Is
 
-OpenKitten World is a living house of cats that helps a human get meaningful work done.
+OpenKitten World is an async multi-agent platform where a human guides one or more `Houses` full of `Cats` doing real work.
 
-It is not just a chatbot, not just a dashboard, and not just a game with productivity pasted onto it.
+It is not just a chatbot, not just a dashboard, and not just a game skin over ordinary productivity software.
 
-It is a persistent world where:
+It is a product where:
 
 - the human sets direction
-- cats pursue goals
-- the house makes their work visible
+- cats pursue goals and carry work
+- the house makes that work legible
 - connected executors let the cats act in the real world
 
 The long-term ambition is to make the product feel like both:
@@ -36,49 +36,74 @@ This is the OpenKitten fantasy:
 - doing real work
 - in a way that feels alive, legible, and enjoyable
 
-## The Product Shape
+## One Product, Two Modes
 
-OpenKitten World should feel:
+OpenKitten World should be one product with two complementary modes:
 
-- asynchronous-first
-- observable
-- calm
-- spatial
-- playful without becoming unserious
-- game-like without becoming toy-like
+- `app` mode for speed, clarity, and efficient control
+- `game` mode for presence, attachment, and embodied observation
 
-The product should not feel like:
+These are not two separate apps hiding behind one brand.
+They are two ways of inhabiting the same Houses, Cats, Threads, Notices, Sessions, and other shared state.
 
-- a noisy notification center
-- a web dashboard with a canvas in the middle
-- a chatbot with cat avatars
-- a generic agent IDE with cute branding
+The human should be able to move between them without losing context.
 
-The House itself should be the interface.
+## Why Both Modes Matter
 
-Important system states should have natural places in that world:
+`App` mode matters because the product must become useful early.
 
-- goals tell the house what outcomes matter
-- threads hold durable work
-- comments hold async communication
-- notices land in the inbox
-- whiteboards hold active thinking
-- cabinets hold durable artifacts
-- sessions show what cats are doing right now
+It is where the human should be able to:
 
-## Why The Home Route Should Feel Like A Game
+- review inbox items quickly
+- inspect threads and sessions efficiently
+- add comments and memos
+- adjust rules and direction
+- move through serious work without friction
 
-The main route should feel like entering a place, not opening an app shell.
+`Game` mode matters because the product promise is larger than utility alone.
+
+It is where the human should be able to:
+
+- enter a House as a place
+- observe cats as persistent individuals
+- feel the house as a living system
+- build attachment, curiosity, and return motivation
+
+The product needs both.
+But usefulness should not wait on the full game presentation being finished.
+
+## Useful First, World Second
+
+The shared core must become useful before game mode is asked to carry the product.
+
+That means OpenKitten World should first prove:
+
+- the work model is valuable
+- the cats are understandable
+- the steering loop is useful
+- the system is worth returning to
+
+Then game mode can deepen that value by making the same system feel alive.
+
+This is not a retreat from the House idea.
+It is how the House earns its importance instead of borrowing it from concept art.
+
+## Why The Game Must Be Real
+
+Game mode cannot succeed as a static scene with a few interactions pasted on top.
+
+If OpenKitten asks users to judge a game-like experience, it has to feel like a complete and polished game surface.
 
 That means:
 
-- `/` should be fullscreen
-- the House should render through a Phaser-driven world
-- the world should be the primary runtime, not an embedded visual layer
-- most interaction should happen through the game scene and game-native UI
-- React DOM on `/` should be optional, minimal, and clearly subordinate to the world
+- the house cannot just be one flattened background image
+- the room should be built from modular pieces
+- depth, layering, and movement should create a 2.5D feeling
+- cats should feel present through pose, motion, and state
+- props and house surfaces should support later customization
 
-This shift matters because the intended vibe depends on the user feeling present inside a House, not adjacent to one.
+The goal is not to build a huge game.
+The goal is to build a believable, ownable place.
 
 ## Human Role
 
@@ -138,31 +163,31 @@ It gives OpenKitten World:
 - room for attachment, growth, and atmosphere
 - a world model that can get richer over time without losing clarity
 
-The House should make work feel situated.
+The House should make work feel situated in both modes.
 
-Threads are not just rows in a list.
-Sessions are not just logs.
-Notices are not just badges.
-They all live somewhere inside the same place.
+In app mode, the house may be abstracted into fast tools and views.
+In game mode, the same house should become spatial and explorable.
 
-## Serious Work, Not Cute Theater
+But in either mode:
 
-OpenKitten World should be emotionally compelling because it makes real work feel alive, not because it hides weak substance behind mascots.
+- threads are not just rows in a list
+- notices are not just badges
+- sessions are not just logs
 
-The cats are not decoration.
-They are the product's workers.
+They all belong to the same place.
 
-The house is not a theme.
-It is the product's world model.
+## Multiple Houses
 
-The game-like presentation should make the system:
+OpenKitten World should assume that a human may manage multiple `Houses`.
 
-- easier to observe
-- easier to remember
-- more emotionally resonant
-- more pleasant to return to
+That means the product should support:
 
-not less useful.
+- selecting between houses
+- preserving each house as its own durable world
+- switching modes for a specific house
+- letting each house become visually and behaviorally distinct over time
+
+The House model should scale to many houses without losing personality.
 
 ## Relationship To The Current Bot
 
@@ -174,19 +199,19 @@ The bot can continue to exist as:
 - a notification surface
 - a remote steering surface
 
-But the long-term product center of gravity should move toward the House.
+But the long-term product center of gravity should move toward the Houses.
 
 The bot is an access point.
-The House is the product.
+OpenKitten World is the async system of record.
 
 ## North Star
 
-The north star is a persistent House that feels like a game world people want to return to, while remaining a serious system for planning, observing, and steering autonomous work.
+The north star is a product where:
 
-In that future:
-
+- `app` mode is genuinely useful for serious async work
+- `game` mode is polished enough to feel like a real place, not a static mockup
+- both modes operate on the same shared core
 - houses feel alive even when the human is not actively driving them
 - cats feel distinct and inspectable
-- work objects are visible and understandable in-world
-- productivity surfaces feel native to the House instead of pasted on top
-- the product remains useful because of the game-like presentation, not in spite of it
+- work objects are visible and understandable
+- the product remains useful because of the world model, not in spite of it

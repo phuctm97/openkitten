@@ -2,146 +2,140 @@
 
 ## Status
 
-This document defines the visual direction for OpenKitten World.
+This document defines the visual direction for OpenKitten World across both `app` mode and `game` mode.
 
-The visual goal is a fullscreen browser game that also carries serious productivity work.
+The visual goal is not one blended compromise.
+It is two distinct but coherent surfaces over the same Houses.
 
 ## Core Visual Thesis
 
-OpenKitten World should feel like entering a calm, lovable, working place.
+OpenKitten World should feel like a calm, lovable, working place.
 
 The visual direction should balance:
 
-- game-like presence
 - strong readability
 - emotional warmth
 - serious information handling
+- world identity
 
 The product should not look like:
 
-- a flat SaaS dashboard
+- a flat SaaS dashboard with cats pasted onto it
 - a fake game skin over standard panels
 - a noisy gamified productivity toy
 
-## Main Constraint
+## Shared Design Language
 
-The main constraint is that the product still needs to carry real information:
+Both modes should still feel like the same product.
 
-- thread state
-- notices
-- session inspection
-- steering actions
-- house structure
+Shared elements should include:
 
-So the visual direction must make the world more legible, not less.
+- the same core vocabulary
+- the same house and cat identities
+- compatible color logic
+- compatible typography and tone
+- durable object meanings across both modes
 
-## Presentation Model
+The user should never wonder whether app mode and game mode belong to different products.
 
-The home route should present:
+## App Mode Direction
 
-- a fullscreen world
-- no surrounding browser-style chrome
-- game-native windows, menus, or HUD when needed
-- optional DOM overlays only when they clearly improve clarity
+App mode should feel:
 
-If a UI surface appears on `/`, the first question should be:
+- calm
+- clear
+- efficient
+- trustworthy
+- fast to scan
 
-- does this feel like part of the House?
+It should privilege:
 
-not:
+- hierarchy
+- density where useful
+- crisp information grouping
+- obvious actions
+- low-friction reading and writing
 
-- does this look like a nice React card?
+App mode does not need to look generic.
+But it should never trade usefulness for atmosphere.
 
-## World Grammar
+## Game Mode Direction
 
-The world should be:
+Game mode should feel:
 
-- top-down or lightly angled 2D
-- spatially clear
-- easy to read at a glance
-- rich enough to feel inhabited
+- complete
+- polished
+- spatial
+- warm
+- alive
+- worth returning to
 
-The early world should favor:
+It should not feel like:
 
-- one room or one room-like slice
-- strong silhouettes
-- a few clearly placed OpenKitten surfaces
-- open floor space that lets cats read clearly anywhere in the room
-- obvious interaction targets
+- one background image with static sprites on top
+- a dashboard hidden inside a canvas
+- a concept piece that only works in screenshots
 
-The user should quickly understand:
+If OpenKitten asks users to take game mode seriously, game mode has to feel like a real interactive world.
 
-- where each cat is
-- what kind of place they are in
-- where important work objects live
+## House Construction
 
-## UI Grammar
-
-UI on the home route should feel game-native by default.
+The house should be built from modular pieces.
 
 That means:
 
-- windows, inspect surfaces, and HUD elements should feel like they belong to the world
-- overlays should have a strong visual language instead of default website framing
-- transitions should support the feeling of entering, focusing, and returning
+- walls, floors, openings, and foreground pieces should be separable
+- props should be placeable, layered, and reusable
+- depth should come from layering, perspective, and overlap
+- rooms should create a 2.5D feeling rather than reading as one flat plate
 
-Avoid:
+This matters for both polish and future customization.
 
-- persistent dashboard sidebars
-- a large browser-style header above the game
-- a stack of generic translucent cards that overpower the world
+Users should eventually be able to:
 
-If DOM overlays are used, they should still feel deliberate and atmospheric.
+- grow their houses
+- arrange their spaces
+- make different houses feel distinct
 
-## Cat Design Direction
+That becomes much harder if the visual model starts as one baked image.
+
+## Cat Direction
 
 Cats should feel:
 
 - distinct
 - warm
 - easy to recognize at a distance
-- believable as workers inside the House
+- believable as workers inside the house
 
 Early cat design should emphasize:
 
 - strong silhouette
 - readable pose
-- a few identifying details
 - clear awake versus resting states
+- a few memorable identity markers
 
-The cats do not need high asset complexity to feel alive.
+The cats do not need maximal asset complexity.
 They need clarity, charm, and enough motion to feel present.
-In the MVP, a cat's state should read primarily from the cat itself:
 
-- eyes open versus closed
-- posture
-- small idle motion
+## Props And House Surfaces
 
-The cat does not need to stand at a desk to look active.
-The cat does not need to lie in a dedicated rest area to look asleep.
+Important house surfaces should be visually supported from the start:
 
-## House And Room Cues
+- inbox area
+- whiteboard zone
+- cabinet zone
+- thread or session-adjacent work cues
 
-The House should feel like:
+These should not be random decoration.
+They should feel like real, reusable parts of the house grammar.
 
-- a home
-- a workshop
-- a place where thinking and doing both happen
+Atmospheric props matter too, but they should reinforce the same world:
 
-Recommended early room cues:
-
-- a readable whiteboard zone
-- a readable cabinet zone
-- a readable notice or inbox zone
-- a few baked-in atmospheric objects that make the room feel lived in
-
-The MVP should distinguish between:
-
-- OpenKitten-significant room cues such as the whiteboard, cabinet, and inbox area
-- atmospheric details that mainly make the room feel cute, warm, and believable
-
-Most environmental detail can stay baked into the room shell in the MVP.
-It does not need deep interaction unless it is part of the core OpenKitten model.
+- comfort
+- lived-in feeling
+- work-in-progress energy
+- household personality
 
 ## Motion Direction
 
@@ -154,37 +148,44 @@ Motion should be:
 
 Good early motion includes:
 
-- idle cat breathing or tail movement
-- awake versus resting state changes through pose, blink, or eye treatment
-- small hover reactions
-- gentle inspect transitions
-- subtle environmental life
+- idle cat breathing, blinking, or tail movement
+- subtle environment life
+- hover and focus feedback
+- calm inspect transitions
+- small reactions to steering or status changes
 
 Avoid:
 
 - excessive juice
-- busy particle systems
-- UI motion that makes reading harder
+- busy particles
+- motion that makes reading harder
+- animation that looks impressive in a clip but tiring in real use
 
-## Typography And Information Surfaces
+## Information Surfaces
 
-Text still matters.
+Text still matters in both modes.
 
-When text appears on `/`, it should feel:
+In app mode, text should optimize for speed and clarity.
 
-- integrated
-- legible
-- comfortable for real reading
-
-The goal is not to avoid text.
-The goal is to present text in a way that feels native to the House.
+In game mode, text should still be comfortable for real reading, but it should feel integrated with the world.
 
 That means:
 
-- use information windows sparingly and intentionally
-- keep hierarchy strong
-- keep reading surfaces focused
-- avoid the visual feel of a generic web admin panel
+- strong hierarchy
+- focused reading surfaces
+- deliberate inspect windows
+- no generic admin-card feeling by default
+
+## Mode Switching
+
+Switching between app mode and game mode should feel like changing lenses on the same house.
+
+That means:
+
+- the same cats should remain recognizable
+- the same house objects should remain legible
+- the same state changes should remain understandable
+- transitions should reinforce continuity, not reset it
 
 ## AI-Assisted Art Direction
 
@@ -194,14 +195,16 @@ AI-assisted art is acceptable for exploration, especially for:
 - color direction
 - prop concepts
 - rough cat variations
+- house customization studies
 
 But the product should avoid visual incoherence.
 
 Every asset and surface should still answer these questions:
 
-- does it belong to the same House?
+- does it belong to the same world?
 - does it preserve readability?
-- does it support calm game-first productivity?
+- does it support a useful product?
+- does it support future customization?
 
 ## V1 To North Star Design Ladder
 
@@ -209,11 +212,12 @@ Every asset and surface should still answer these questions:
 
 The first convincing version should focus on:
 
-- one strong room
+- a useful app mode
+- a clearly coherent game mode
+- one strong room slice
 - two readable cats
-- a few strong environmental cues
-- one or two inspection surfaces
-- coherent fullscreen presentation
+- modular room construction instead of one baked shell
+- one or two strong inspection surfaces
 
 ### V2
 
@@ -222,17 +226,18 @@ The next step can add:
 - richer animation
 - stronger material language
 - more expressive cat identity
-- better house-to-UI transitions
+- better customization primitives
+- stronger mode transitions
 
 ### North Star
 
 The north star is:
 
-- a rich but calm living House
-- game-native productivity surfaces
+- a useful async work product in app mode
+- a rich but calm living House in game mode
 - stronger atmosphere and attachment
-- deeper worldbuilding without losing clarity
+- deeper customization without losing clarity
 
 ## Final Direction Summary
 
-OpenKitten World should look like a serious browser game set inside a lovable House, not like a web app wearing a game costume.
+OpenKitten World should look like one coherent product whose `app` mode is useful and whose `game` mode feels like a real, polished House rather than static graphics wearing product language.
