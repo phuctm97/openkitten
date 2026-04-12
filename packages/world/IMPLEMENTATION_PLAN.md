@@ -6,42 +6,43 @@ This plan describes the intended implementation path for OpenKitten World.
 
 The implementation target is:
 
-- Phaser-first on `/`
-- React Router for routing
-- React pages for non-game routes
-- Jotai only as a narrow bridge when the two runtimes need to share state
+- one app on `world.openkitten.com`
+- separate `app` and `game` route trees
+- one shared domain, state, and action layer
+- utility proven in app mode first
+- game mode built as a real world surface, not a static mockup
 
 ## Planning Principles
 
 The implementation should preserve these principles:
 
-- the home route is a game experience first
+- the shared core comes first
+- app mode proves usefulness early
+- game mode is held to a real quality bar
 - the core domain model stays independent from rendering details
-- Phaser owns the frame loop and primary interaction model on `/`
-- React remains available for routes that are not game experiences
-- React DOM on `/` should be optional and intentionally minimized
+- app mode and game mode stay separate at the presentation layer
+- the team should iterate in public through small, demoable slices
 
-This plan should optimize for product feel, not only for implementation familiarity.
+This plan should optimize for usefulness, momentum, and honest feedback rather than long stealth branches.
 
 ## Immediate Focus
 
-Start with a fullscreen Phaser route and build outward from there.
+Start with the shared core and the app-mode slice, while shaping the codebase so game mode can grow over the same model.
 
 Concretely, that means:
 
-- keep the React Router app root neutral
-- let `app/routes/index.tsx` create and destroy one `Phaser.Game`
-- move world construction into Phaser scenes
-- stop designing `/` as a dashboard shell around a renderer
+- define domain types and fixtures first
+- define shared actions and selectors early
+- build useful app routes before chasing game polish
+- keep a clean boundary where game mode can later plug in
 
 ## Recommended Stack
 
 ### Core
 
-- `Phaser` for the main `/` runtime
 - `React Router` for routing and route composition
-- `React` for non-game routes and optional overlays
-- `Jotai` for a small renderer-agnostic shared store when needed
+- `React` for app mode and shared web infrastructure
+- a real game runtime for game mode, likely `Phaser`
 - `Bun` workspace tooling for package management and scripts
 
 ### Build And Dev Tooling
@@ -51,24 +52,25 @@ Concretely, that means:
 - TypeScript build checks through `bun --bun tsc --build`
 
 The build system can remain simple.
-The main architectural change is runtime ownership, not bundling strategy.
+The main architectural work is separating the shared core from the two renderers.
 
 ## Route Strategy
 
-The route model should be:
+The route model should be mode-first.
 
-- `/` for the fullscreen House experience
-- additional routes for conventional web flows where appropriate
+Examples:
 
-Examples of likely future non-game routes:
+- `/app/houses/:houseId`
+- `/game/houses/:houseId`
 
-- auth
-- onboarding
-- settings
-- account management
-- 404 or fallback routes
+Likely supporting routes later:
 
-These routes should not impose layout assumptions on `/`.
+- `/app/houses`
+- `/game/houses`
+- `/app/settings`
+- `/game/settings`
+
+These routes should share product state without forcing one mode's layout or runtime assumptions onto the other.
 
 ## Suggested Package Layout
 
@@ -86,16 +88,26 @@ The package should likely grow toward something like:
 - `packages/world/vite.config.ts`
 - `packages/world/vitest.config.ts`
 - `packages/world/app/`
+- `packages/world/app/routes/app/`
+- `packages/world/app/routes/game/`
+- `packages/world/components/`
+- `packages/world/domain/`
+- `packages/world/state/`
+- `packages/world/actions/`
+- `packages/world/selectors/`
 - `packages/world/game/`
 - `packages/world/game/scenes/`
 - `packages/world/game/objects/`
 - `packages/world/game/systems/`
-- `packages/world/state/`
-- `packages/world/domain/`
 - `packages/world/fixtures/`
-- `packages/world/lib/`
 - `packages/world/assets/`
 - `packages/world/test/`
+
+The exact folder names can evolve, but the conceptual split matters:
+
+- shared core
+- app renderer
+- game renderer
 
 ## Layered Client Architecture
 
@@ -103,7 +115,7 @@ The package should likely grow toward something like:
 
 The domain layer should hold renderer-agnostic product concepts:
 
-- house
+- houses
 - cats
 - goals
 - threads
@@ -113,9 +125,20 @@ The domain layer should hold renderer-agnostic product concepts:
 - sessions
 - transcript summaries
 
-This layer should not know whether the home route is rendered by Phaser or anything else.
+This layer should not know whether anything is rendered in app mode or game mode.
 
-### 2. Fixtures Layer
+### 2. Actions And Selectors Layer
+
+This layer should define:
+
+- shared reads
+- shared writes
+- view-model shaping that both modes can consume
+- permission and validation logic
+
+This is where the product becomes one system instead of two clients glued together later.
+
+### 3. Fixtures Layer
 
 The early client should still be fixture-driven.
 
@@ -128,207 +151,207 @@ It should provide:
 - a small inbox
 - one visible active session
 
-The point is to validate the world experience before deeper backend integration.
+The point is to validate the shared product model before deeper integration.
 
-### 3. Shared State Layer
+### 4. App Mode Layer
 
-The shared state layer should stay small and explicit.
-
-It can use Jotai for:
-
-- current inspect target
-- selected cat or object
-- coarse navigation intent
-- maybe summary-level notice or thread state
-
-It should not become a chatty, frame-by-frame coordination bus.
-
-### 4. Phaser Game Layer
-
-This is the primary runtime for `/`.
+This is the first useful renderer.
 
 It should contain:
 
-- house scene
-- optional UI scene
-- world object placement
-- selection and hover behavior
-- camera behavior, if needed
-- animations and moment-to-moment feedback
+- house overview surfaces
+- inbox views
+- thread views
+- cat and session inspection
+- steering actions
 
-The game layer should own:
+App mode should own:
+
+- dense information layout
+- conventional form flows
+- fast navigation
+- accessibility-heavy interactions
+
+### 5. Game Mode Layer
+
+This is the second renderer over the same house state.
+
+It should contain:
+
+- room composition
+- cats and props in world space
+- hit testing and interaction
+- camera behavior
+- animation and world-specific feedback
+- modular construction that supports customization later
+
+Game mode should own:
 
 - frame updates
 - pointer and keyboard interaction
-- object hit testing
-- game-native presentation of the House
+- world-native inspection
+- environmental presentation
 
-### 5. Optional React Surface Layer
+### 6. Mode-Specific Presentation State
 
-React should still exist in the package, but with narrower responsibility.
+Each mode may keep local state that the other mode does not need.
 
-It should own:
+Examples:
 
-- routes that are not primarily game experiences
-- overlays that are clearly better as DOM
-- accessibility-heavy forms or settings flows
-- supporting product infrastructure around the game route
+- app-mode panel state
+- game-mode camera state
+- hover and drag state
+- animation timing
+- room layout and prop placement
 
-If an inspect surface can live naturally inside Phaser, prefer that first.
-
-### 6. Integration Boundary
-
-The boundary between Phaser and React should be explicit.
-
-The preferred shape is:
-
-- shared domain types
-- a small shared store
-- coarse messages or intents
-
-The avoided shape is:
-
-- React controlling the game loop
-- Phaser delegating routine UI ownership back to React on every interaction
-- permanent dashboard chrome around the game
-
-## Recommended First World Scope
-
-The first meaningful Phaser slice should still be intentionally small:
-
-- one house room or room-like slice
-- two visible cats
-- two clearly readable cat states
-- one or two visible OpenKitten surfaces
-- a few visible room cues baked into the environment
-- one readable inspect flow
-
-This is enough to answer whether the game-first route feels right.
+This state should stay local unless it becomes part of the shared product meaning.
 
 ## Recommended First Data Flow
 
 The clean mental model is:
 
-1. Fixtures produce a stable House state.
-2. `app/routes/index.tsx` mounts the fullscreen Phaser container.
-3. `app/routes/index.tsx` creates a `Phaser.Game`.
-4. Phaser scenes render and interact with the House state.
-5. Selection or inspect actions may update a small shared store.
-6. Optional game-native or DOM overlays read from that store.
+1. Fixtures produce a stable house state.
+2. Shared selectors shape the data for presentation.
+3. `/app/...` routes render useful productivity views over that state.
+4. `/game/...` routes render the same house as a place.
+5. Shared actions mutate the same underlying model.
+6. Both modes re-read the same source of truth.
 
-The store should support the experience.
-It should not become the experience.
+The shared core should support the experience.
+It should not be replaced by two renderer-specific shadow models.
+
+## Public Iteration Strategy
+
+OpenKitten World should be built in public through very small slices.
+
+The preferred loop is:
+
+1. Choose one small product or world capability.
+2. Ship a visible version quickly.
+3. Share a clip, screenshot, or short write-up.
+4. Ask one focused question.
+5. Fold feedback into the next slice immediately.
+
+Good public slices:
+
+- a better thread view
+- a clearer cat inspection card
+- the first inbox
+- the first room composition pass
+- the first modular wall system
+- the first cat idle animation
+
+Avoid:
+
+- long private branches
+- giant reveals
+- waiting for an entire mode to feel complete before showing progress
 
 ## Suggested Phase Plan
 
-### Phase 1: Phaser Startup
+### Phase 1: Shared Core
 
-Set up the home route as a runnable fullscreen Phaser client.
+Define the product model that both modes will share.
 
 Deliverables:
 
-- a fullscreen `/` route with no surrounding app chrome
-- a Phaser game startup
-- one house scene that preloads and renders the room
-- a working dev script
+- domain types
+- shared actions
+- shared selectors
+- one demo house fixture
 - passing build and test checks
 
-### Phase 2: Fixture-Driven House Slice
+### Phase 2: App Mode MVP
 
-Add:
-
-- core client-side domain types
-- a fixed demo House scenario
-- two cats
-- readable room cues and cat placements
-- a few OpenKitten-significant objects with readable positions in the room
+Build the first useful app-mode slice.
 
 Deliverables:
 
-- stable mock data
-- readable world layout
-- click and hover targets
+- `/app/houses/:houseId`
+- inbox view
+- thread view
+- cat inspection
+- session view
+- one steering action
 
-### Phase 3: Game-Native Inspection Flow
+### Phase 3: First Game Slice
 
-Build the first inspection surfaces.
-
-Deliverables:
-
-- cat inspection surface
-- inbox or notice surface
-- thread inspection surface
-- session transcript surface
-- navigation between world selection and inspect state
-
-These surfaces should default to game-native UI.
-Use DOM only where it clearly improves the result.
-
-### Phase 4: Human Steering
-
-Add one or two meaningful write actions.
+Build the first honest game-mode slice over the same house.
 
 Deliverables:
 
-- add thread comment
-- optional add memo
-- local state update
-- visible House reaction
+- `/game/houses/:houseId`
+- one room slice
+- two visible cats
+- modular room construction
+- basic motion and interaction
+- one readable inspect flow
 
-### Phase 5: World Polish
+### Phase 4: Game Quality Bar
 
-Improve:
+Raise the world from promising to believable.
 
-- cat state readability and idle life
-- hover feedback
-- camera framing
-- panel transitions
-- readability of the world and HUD
+Deliverables:
+
+- better cat state readability
+- clearer hover and click feedback
+- stronger layering and depth
+- prop grammar for house surfaces
+- improved transitions and camera behavior
+
+### Phase 5: Mode Continuity
+
+Tighten the relationship between the two modes.
+
+Deliverables:
+
+- easy mode switching for the same house
+- stronger visual continuity
+- more shared actions exposed in both modes
+- clearer user understanding that both views reflect one system
 
 ### Phase 6: Real Integration Boundaries
 
-Prepare the client for future executor and backend integration.
+Prepare the client for future backend and executor integration.
 
 Deliverables:
 
-- clearer state ownership boundaries
 - replaceable fixture adapter
-- preserved separation between world runtime and executor runtime
+- clearer persistence boundaries
+- preserved separation between executor runtime and product rendering
 
 ## Asset Strategy
 
 The first implementation should favor:
 
-- simple but strong silhouettes
-- one reusable room background or room shell
-- a small set of reusable cat and environment assets
-- lightweight 2D animation
-- a small number of assets that read clearly at fullscreen size
+- modular room pieces instead of one flattened shell
+- strong silhouettes
+- reusable props
+- a small set of reusable cat variations
+- lightweight but readable 2D animation
 
-Avoid over-investing in content volume before the core feel is proven.
+Avoid over-investing in asset volume before the interaction grammar is proven.
 
 ## UI Strategy
 
-The default UI strategy on `/` should be:
+The default UI strategy should be:
 
-- world-first
-- game-native
-- spatially coherent
-- calm and readable
+- app mode is useful first
+- game mode is world-first
+- both modes stay calm and readable
+- neither mode is forced into the other's shell
 
-This means:
+That means:
 
-- no permanent browser-style sidebars around the world
-- no assumption that every surface should be a DOM card
-- no pressure to rebuild every productivity panel before the world feels convincing
-
-If a DOM overlay is used, it should feel like an exception chosen for clarity, not the main composition model.
+- no requirement that app-mode cards become game-mode panels
+- no requirement that game-mode windows become app-mode layouts
+- no pressure to fake a world before it is ready
 
 ## Engineering Boundaries To Preserve
 
 The implementation should not depend on:
 
-- a server for the first visual slice
+- a server for the first shared-core slice
 - websocket integration
 - authentication
 - real executor integration
@@ -337,29 +360,29 @@ The first client should be easy to run and easy to reason about locally.
 
 The implementation should also preserve these boundaries:
 
-- Phaser owns the home-route runtime
-- React Router owns routing
 - the domain model stays renderer-agnostic
-- executor integration stays separate from the world client
+- app mode and game mode share business logic
+- app mode and game mode keep presentation logic separate
+- executor integration stays separate from world rendering
 
 ## First Engineering Milestone
 
 The first convincing milestone is:
 
-`A runnable local Phaser client that opens one House scene fullscreen, shows two cats, and lets the user inspect one active session through a coherent in-world or game-native UI flow.`
+`A shared-core local client where /app/houses/:houseId is already useful for review and steering, and /game/houses/:houseId already makes that same house feel like the beginning of a real place instead of a static illustration.`
 
-If that milestone is not convincing, the team should improve the slice before adding more backend or product complexity.
+If that milestone is not convincing, the team should improve the slice before adding more complexity.
 
 ## What Comes After The First Milestone
 
 After the first milestone, the likely next steps are:
 
-- stronger game-native UI language
+- stronger app-mode workflows
 - richer cat behavior
 - more visible work reactions
-- a better steering loop
-- backend and executor integration that preserves the game-first route shape
+- better customization primitives
+- backend and executor integration that preserve the shared core
 
 ## One-Sentence Summary
 
-Build OpenKitten World first as a fixture-driven fullscreen Phaser House, prove that the game-first route makes the product feel alive and useful, and only then expand the surrounding product surface.
+Build OpenKitten World first as one shared-core product with useful `app` routes and honest `game` routes, then keep raising both sides in public without letting either fork the underlying system.

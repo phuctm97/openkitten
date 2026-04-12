@@ -4,139 +4,202 @@
 
 This document defines the client architecture for OpenKitten World.
 
-The package is built around:
+The package should be built around:
 
-- Phaser as the primary runtime for `/`
-- React Router for routing and route composition
-- React for non-game routes and optional overlays
-- Jotai as a narrow shared-state bridge when needed
+- one app on `world.openkitten.com`
+- separate `app` and `game` route trees
+- one shared domain, state, and action layer underneath
+- React for app mode and general web infrastructure
+- a real game runtime for game mode, likely Phaser
 
 ## Product Framing
 
-OpenKitten World should be treated as:
+OpenKitten World should be treated as one product with two complementary surfaces:
 
-- a serious productivity system
-- presented primarily as a game-like world
-- with `/` acting as the fullscreen home experience
+- `app` mode for serious, efficient async work
+- `game` mode for the embodied House experience
 
-The distinction matters because it determines who owns the main runtime:
+The distinction matters because it determines what should be shared and what should be isolated.
 
-- Phaser owns the home route
-- React becomes supporting infrastructure around that route
+Shared:
+
+- auth
+- houses
+- cats
+- work objects
+- actions
+- persistence
+
+Isolated:
+
+- route trees
+- presentation state
+- renderer-specific interaction patterns
+- runtime-specific code
+
+## Why One App Is The Right Shape
+
+OpenKitten World should not start as two separate apps on two separate subdomains.
+
+The stronger model is:
+
+- one product
+- one account and auth model
+- one shared backend
+- one shared domain model
+- one future desktop and mobile app shell
+
+This matters because the user should feel like they are switching lenses on the same house, not moving between two different products that happen to talk to the same data.
 
 ## Route Model
 
-The route model is:
+The route model should be mode-first.
 
-- `/` renders a fullscreen Phaser experience
-- other routes may remain normal React pages
-- React Router still owns navigation
-- React DOM overlays on `/` are allowed only when clearly useful
+Examples:
 
-This means OpenKitten can have both:
+- `/app/houses/:houseId`
+- `/game/houses/:houseId`
 
-- a strong game-first home route
-- conventional web routes for flows that are better served by traditional UI
+Likely supporting routes later:
 
-Examples of likely React routes:
+- `/app/houses`
+- `/game/houses`
+- `/app/settings`
+- `/game/settings`
 
-- auth
-- settings
-- legal or marketing-adjacent pages
-- 404 pages
-- future operational dashboards, if they exist
+This keeps the two modes operationally separate while preserving a shared product underneath.
 
-Those routes should not force `/` to become a dashboard-shaped application.
+## Why Utility Starts In App Mode
 
-## Why Phaser Fits
+The shared core should become useful in app mode before game mode is expected to carry the product.
 
-Phaser fits the product because the home route needs a real game runtime at its center.
+App mode should prove:
 
-The core benefits are:
+- inbox review
+- thread reading and writing
+- session inspection
+- cat inspection
+- memo and rule flows
+- clear steering and feedback loops
 
-- a scene-oriented mental model
-- built-in support for cameras, input, timing, tweens, and common game structure
-- a clearer place for game-native UI and HUD layers
-- a better fit for a fullscreen, game-first browser route
+This reduces product risk because usefulness is easier to validate and iterate on than world polish.
 
-Most importantly, Phaser encourages the right architectural question:
+## Why Game Mode Still Matters
 
-- how should the House behave as a playable world?
+Game mode is not optional branding.
+It is how OpenKitten World earns attachment, intrigue, and long-term distinctiveness.
 
-instead of:
+But game mode has to be real enough to stand on its own:
 
-- how should a React page render a world-shaped component?
+- not a static background
+- not a few sprites pasted over a dashboard
+- not a world-shaped skin around the same app shell
 
-## What React Still Owns
+It should be treated as a proper renderer with its own interaction grammar and quality bar.
 
-React is still important.
-It just should not own the core `/` runtime.
+## Renderer Ownership
 
-React should continue to own:
+`App` mode should own:
 
-- routing
-- non-game routes
-- traditional forms or operational pages
-- optional DOM overlays when they clearly improve readability
-- shared product code that does not belong to the frame loop
+- dense information surfaces
+- conventional editing flows
+- accessibility-heavy forms
+- fast navigation and review
 
-This keeps OpenKitten flexible without forcing the main route back into dashboard mode.
+`Game` mode should own:
 
-## State Boundary Between Phaser And React
+- spatial house presentation
+- animation and movement
+- camera behavior
+- world-native interaction
+- customization and environmental identity
+
+The same actions should still be reachable from both modes, even if the exact affordances differ.
+
+## Shared Core Boundary
 
 The cleanest model is:
 
-- Phaser owns the real-time scene, frame loop, input handling, and game-native UI on `/`
-- the domain model stays renderer-agnostic
-- React and Phaser only share state through a narrow explicit boundary
+- domain types are renderer-agnostic
+- actions and mutations are shared
+- selectors and view models can serve both modes
+- each renderer owns its own local presentation state
 
-Jotai is a reasonable bridge for that boundary when needed.
+The preferred shared state is coarse-grained:
 
-The preferred usage is coarse-grained:
+- selected house
+- current inspect target
+- persisted work objects
+- summaries that both modes need
 
-- selected object state
-- navigation intent
-- inspector target
-- maybe a small shared session or notice summary
+The preferred non-shared state is:
 
-The preferred usage is not:
+- camera and animation state
+- drag and hover state
+- modal or panel choreography
+- renderer-specific input state
 
-- React driving the game loop
-- Phaser and React constantly mutating the same fine-grained UI state
-- making the home route depend on tightly coupled cross-runtime chatter
+## Why Separate Route Trees Matter
 
-## Architectural Consequences
+One app should not mean one blended shell.
+
+The `app` routes and `game` routes should be free to diverge in:
+
+- layout
+- runtime behavior
+- loading strategy
+- visual language
+- component structure
+
+This prevents:
+
+- dashboard chrome leaking into game mode
+- game constraints polluting app mode
+- both modes converging into a compromised middle
+
+## Technology Guidance
+
+React Router should remain the routing layer.
+
+App mode can stay conventional React.
+
+Game mode should use a real game runtime with scene, input, and animation primitives.
+Phaser is the current likely choice because it fits:
+
+- scene composition
+- camera control
+- timing and tweening
+- input and hit testing
+- a browser-first 2D game workflow
+
+But the product decision is stronger than the library decision.
+The core requirement is a real game runtime, not one particular brand of runtime forever.
+
+## Operational Consequences
 
 This decision implies:
 
-- no surrounding product chrome on `/`
-- no permanent "app shell plus game viewport" layout
-- a neutral React root that can host both game and non-game routes
-- game-native menus, windows, and inspect flows should be the default on `/`
-- DOM overlays should stay optional and lightweight
-
-The home route should feel like entering the House, not opening an admin console.
+- one deployment target for the product
+- shared auth and session handling
+- shared packaging for future Tauri, Electron, or Capacitor apps
+- lazy loading so game mode does not burden app mode unnecessarily
+- a path to split later if scale demands it, without starting there now
 
 ## Risks And Guardrails
 
-Choosing Phaser means accepting:
+The main risk is accidental blending:
 
-- more game-specific architecture
-- less default leverage from standard React UI patterns on the home route
-- a higher bar for UI, input, and asset discipline
-- a need to think carefully about what belongs in-game versus in DOM
+- app mode becoming a weak pseudo-game
+- game mode becoming a weak pseudo-dashboard
 
-That trade is acceptable because the primary product risk is not browser delivery.
+Guardrails:
 
-It is:
-
-- can the product feel like the world it needs to be?
+- keep route trees separate
+- keep business logic shared
+- keep presentation logic local to each mode
+- keep the shared core free of renderer assumptions
+- never ask static graphics to do the job of a game
 
 ## Decision Summary
 
-OpenKitten World should move forward with:
-
-- Phaser as the primary runtime for `/`
-- React Router as the routing layer
-- React pages for routes that are not primarily game experiences
-- Jotai only as a narrow bridge when Phaser and React truly need shared state
+OpenKitten World should move forward as one app on `world.openkitten.com`, with separate `app` and `game` routes over a shared core, proving usefulness first and then layering a real House experience on top.

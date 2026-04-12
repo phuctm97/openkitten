@@ -2,27 +2,29 @@
 
 ## Status
 
-This document is the current canonical product and architecture spec for OpenKitten World.
+This document is the canonical product and architecture spec for OpenKitten World.
 
-The client model assumes:
+The product model assumes:
 
-- the product ontology stays House-and-Cats first
-- the home route should be a fullscreen Phaser experience
-- React remains available for routes and surfaces that are better served by conventional web UI
+- the ontology stays House-and-Cats first
+- OpenKitten World is one app on `world.openkitten.com`
+- the app has separate `app` and `game` route trees
+- both modes share one core domain model, backend, and action layer
+- game mode may add world-specific presentation state without forking the core
 
 ## Product Thesis
 
-OpenKitten is a living `House` of `Cats` that pursue human-defined outcomes, coordinate through durable work objects, and use connected `Executors` to act in the real world.
+OpenKitten World is a system of `Houses` full of `Cats` that pursue human-defined outcomes, coordinate through durable work objects, and use connected `Executors` to act in the real world.
 
 The product should feel:
 
 - serious enough to get real work done
-- playful and ownable enough to feel like a world
+- ownable enough to feel like a world
 - asynchronous-first
 - observable
 - not primarily chat-first
 
-The human should mostly steer the House at a high level and let the cats do the work.
+The human should mostly steer the Houses at a high level and let the cats do the work.
 
 ## Naming And Core Terms
 
@@ -56,11 +58,14 @@ These naming decisions are already settled:
 
 Plural labels are for collections and screens only.
 
+`Mode` is not a domain object.
+It is a presentation choice over the same shared core.
+
 ## Core Product Principles
 
 ### 1. Cats Act, The House Holds
 
-The House is the durable environment.
+The `House` is the durable environment.
 Cats and humans are the actors.
 
 - the `House` holds shared state and history
@@ -82,7 +87,37 @@ The human should mostly:
 
 OpenKitten should not collapse into "chat with cat avatars."
 
-### 3. Serious Work Inside A Lovable Place
+### 3. One Product, Two Modes
+
+OpenKitten World should present the same core system through:
+
+- `app` mode for clarity and efficiency
+- `game` mode for presence, attachment, and world feel
+
+These modes should share:
+
+- auth and identity
+- houses and cats
+- work objects and history
+- actions and permissions
+- backend and persistence
+
+They should not duplicate the core business model.
+
+### 4. Useful First, World Second
+
+The shared core must become useful before game mode is expected to carry the product.
+
+That means early implementation should first prove:
+
+- the work model is valuable
+- the steering loop is understandable
+- cats and sessions are inspectable
+- the system is worth returning to
+
+Game mode should deepen that value, not compensate for its absence.
+
+### 5. Serious Work Inside A Lovable Place
 
 The world-like presentation is not decoration.
 It is part of how the product communicates state, attachment, and legibility.
@@ -91,21 +126,9 @@ The product should not become:
 
 - a generic SaaS dashboard
 - a toy game with shallow work objects
+- a static art scene pretending to be a game
 
-### 4. Game-First Home Route
-
-The main route should feel like entering a House.
-
-That means:
-
-- `/` should be fullscreen
-- the primary runtime should be Phaser
-- game-native UI should be the default on `/`
-- React DOM should be secondary on `/`
-
-Other routes may still be normal React pages.
-
-### 5. Stable Concepts, Replaceable Mechanisms
+### 6. Stable Concepts, Replaceable Mechanisms
 
 Several concepts are core to the product, but their implementations should stay swappable:
 
@@ -114,17 +137,16 @@ Several concepts are core to the product, but their implementations should stay 
 - wake packet construction
 - transcript normalization
 - executor integration details
-- exact UI technology for non-game routes
+- exact UI technology for app mode
+- exact game runtime technology for game mode
 
 The product promises the concepts, not one permanent implementation detail for each.
 
-## World Model
-
-The House is the persistent world shared by the human and the cats.
+## Shared Domain Model
 
 The clean mental model is:
 
-- the `House` keeps shared facts and history
+- a `House` keeps shared facts and history
 - each `Cat` keeps its own memory
 - `Sessions` are temporary embodiments of cats inside executors
 
@@ -134,139 +156,28 @@ Another way to say it:
 - the executor is the body
 - the session is one embodiment
 
-## Core Domain Objects
+The core domain objects mean:
 
-### House
+- `House`: a durable home where cats, work, tools, and history live
+- `Human`: the person steering one or more houses
+- `Cat`: a persistent worker with identity, memory, and a default executor
+- `Goal`: a durable outcome the house is trying to achieve
+- `Thread`: the main durable work object, with a simple early lifecycle of `Open` or `Closed`
+- `Comment`: an authored message on a thread
+- `Activity`: a durable recorded event in the house
+- `Notice`: a calm, human-facing attention object
+- `Inbox`: the collection of notices waiting for review
+- `Memo`: durable steering from the human to cats or the house
+- `Rule`: a standing constraint or preference
+- `Whiteboard`: a shared thinking surface
+- `Cabinet`: durable storage for files and artifacts
+- `File`: a durable artifact the house can reference or store
+- `Executor`: the external runtime that can embody a cat and execute a session
+- `Session`: one active embodiment of a cat on an executor, including current work and status
+- `Transcript`: the readable record of session output
 
-A `House` is the persistent home where cats, work, tools, and history live.
-
-It exists to:
-
-- hold the durable shared world
-- give the product its visual and conceptual structure
-- contain human-facing and cat-facing state
-
-### Human
-
-A `Human` is the person steering the House.
-
-Their main role is to:
-
-- set direction
-- review state
-- steer work
-- intervene when needed
-
-### Cat
-
-A `Cat` is a persistent worker in the House.
-
-Each cat should have:
-
-- identity
-- memory
-- a default executor
-- the ability to wake, act, and sleep
-
-Cats are not disposable runs.
-
-### Goal
-
-A `Goal` is a durable outcome the House is trying to achieve.
-
-Goals should guide:
-
-- prioritization
-- thread creation
-- review and steering
-
-### Thread
-
-A `Thread` is the main durable work object.
-
-Threads hold:
-
-- discussion
-- work history
-- assignment context
-- related files or references
-
-The core thread lifecycle is intentionally simple:
-
-- `Open`
-- `Closed`
-
-### Comment
-
-A `Comment` is an authored message on a thread.
-
-Comments are the primary async communication surface for work.
-
-### Activity
-
-An `Activity` is a durable recorded event in the House.
-
-Activities capture system or workflow facts that should persist in history.
-
-### Notice
-
-A `Notice` is a human-facing attention object.
-
-Notices should feel calm and reviewable, not loud and alarm-like.
-
-### Inbox
-
-An `Inbox` is the collection of notices currently waiting for human review.
-
-### Memo
-
-A `Memo` is a durable piece of human steering for cats or the House.
-
-Memos are a core way to nudge behavior without micromanaging every turn.
-
-### Rule
-
-A `Rule` is a standing constraint or preference that shapes House behavior.
-
-Rules are durable guidance, not one-off instructions.
-
-### Whiteboard
-
-A `Whiteboard` is a shared thinking surface inside the House.
-
-It represents active planning and rough working state.
-
-### Cabinet
-
-A `Cabinet` is a durable storage surface for files and artifacts.
-
-### File
-
-A `File` is a durable artifact the House can reference or store.
-
-### Executor
-
-An `Executor` is the external runtime that can embody a cat and execute a session.
-
-OpenKitten owns the House.
-Executors run cat turns.
-
-### Session
-
-A `Session` is one active embodiment of a cat on an executor.
-
-A session should expose:
-
-- which cat is running
-- what it is working on
-- current status
-- transcript output
-
-### Transcript
-
-A `Transcript` is the readable record of session output.
-
-It should help the human inspect work without reading raw runtime internals.
+The domain model must support multiple `Houses`.
+Each house is its own durable world with its own cats, work, appearance, and history.
 
 ## Work Model
 
@@ -362,7 +273,7 @@ Executors own:
 
 This is a deliberate control-plane split:
 
-- OpenKitten owns the House
+- OpenKitten owns the Houses
 - executors run cat turns
 
 ## House Tools Versus Executor Tools
@@ -386,50 +297,99 @@ Examples of executor tools:
 - runtime-specific capabilities
 - environment-specific execution actions
 
+## Mode Model
+
+The route model should distinguish cleanly between the two modes:
+
+- `/app/...`
+- `/game/...`
+
+Examples:
+
+- `/app/houses/:houseId`
+- `/game/houses/:houseId`
+
+`App` mode should optimize for:
+
+- fast review
+- dense information handling
+- efficient editing and steering
+- accessibility and conventional web interaction
+
+`Game` mode should optimize for:
+
+- presence
+- spatial understanding
+- animation and atmosphere
+- emotional attachment
+- customization and house identity
+
+The same house should remain continuous across both modes.
+
+## Shared Core Versus Mode-Specific State
+
+The shared core should include:
+
+- domain types
+- persisted house state
+- actions and permissions
+- backend integration
+- selectors and view models that can serve both modes
+
+Mode-specific state may include:
+
+- route-local UI state in app mode
+- camera, movement, hover, and animation state in game mode
+- room composition, prop placement, and other presentation-specific state
+- game-only interaction state that does not change shared product meaning
+
+Mode-specific state must not become a second source of truth for core work objects.
+
 ## Client Model
 
 The preferred client model is:
 
-- `/` is the fullscreen House experience
-- Phaser is the primary runtime for `/`
-- game-native UI is the default on `/`
-- React may render non-game routes separately
-- DOM overlays on `/` are allowed only when they clearly improve clarity
+- one browser product on `world.openkitten.com`
+- separate `app` and `game` route trees
+- a shared auth, data, and action layer underneath
+- lazy loading and runtime isolation where appropriate
 
 This implies:
 
-- no permanent dashboard shell around the world
-- no assumption that every inspect surface should be a DOM card
-- a route architecture that allows game and non-game routes to coexist cleanly
+- no need to maintain two separate products for the same system
+- no requirement that app mode and game mode share the same shell layout
+- no assumption that game mode should inherit app-mode UI chrome
 
 ## Implementation Boundaries
 
 The implementation should preserve these boundaries:
 
 - the domain model stays renderer-agnostic
-- Phaser owns the home-route frame loop and real-time interaction
-- React Router owns routing
-- Jotai may be used as a narrow shared store between Phaser and React
-- executor integration stays separate from the world client
+- app mode and game mode share the same business actions
+- game mode presentation stays separate from app mode presentation
+- executor integration stays separate from world-client rendering details
 
 The implementation should avoid:
 
-- React driving the game loop
-- a chatty cross-runtime state model
-- world rendering trapped inside a permanent app shell
+- duplicated business logic across modes
+- game mode becoming a static visualization with no product meaning
+- app mode assumptions leaking into the game runtime
+- game runtime assumptions polluting the core domain model
 
 ## Near-Term Product Invariants
 
-The first convincing slice should preserve these invariants:
+The first convincing slices should preserve these invariants:
 
-- one House is enough
-- two cats are enough
-- one active session is enough
-- one readable steering action is enough
+- one house is enough to start
+- two cats are enough to start
+- one active session is enough to start
+- one readable steering action is enough to start
 - mocked data is acceptable
-- the route must already feel like a place
+- app mode must already be useful
+- game mode must already feel alive enough to justify itself
 
-If the product does not feel like a place, adding more objects will not fix the core problem.
+If the core is not useful, adding a world will not fix that.
+If the world does not feel alive, adding more static art will not fix that either.
 
 ## Future Concepts Worth Preserving
 
@@ -441,9 +401,10 @@ These concepts are worth preserving for future expansion even if they are not de
 - deeper traversal across multiple rooms
 - stronger file and artifact systems
 - more explicit collaboration between cats
+- richer house customization and ownership
 
 They should remain downstream of the core House-and-Cats model, not replacements for it.
 
 ## One-Sentence Summary
 
-OpenKitten World is a persistent House of Cats doing real work, presented primarily as a fullscreen game-like browser world while preserving a stable product model underneath.
+OpenKitten World is one product with `app` and `game` modes over a shared House-and-Cats core, proving utility first and then deepening it through a polished world experience.

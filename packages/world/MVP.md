@@ -6,50 +6,52 @@ This document defines the MVP target for OpenKitten World.
 
 The MVP assumes:
 
-- a fullscreen Phaser House on `/`
-- game-native inspection as the default interaction model
-- mocked but believable work objects and cats
+- one app on `world.openkitten.com`
+- a shared core underneath both modes
+- `app` mode proving usefulness first
+- `game` mode proving that the House can become a real, polished surface
 
 ## MVP Goal
 
-The MVP should prove that OpenKitten World can feel like:
+The MVP should prove that OpenKitten World can become:
 
-- a real productivity system
-- embodied as a living house
-- presented as a fullscreen game-first experience
-- without collapsing into either a generic dashboard or a generic toy
+- a real async productivity system
+- centered on Houses and Cats
+- useful in app mode
+- promising in game mode
 
-The MVP is successful if a user can enter a House, observe cats, inspect work, and feel:
+The MVP is successful if a user can work in app mode, switch to game mode for the same house, and feel:
 
-- the House is a place
-- the cats are alive
-- the work model is understandable
-- the game-native UI is readable
-- the product becomes more compelling because it feels like a world
+- the core work model is understandable
+- the house and cats are coherent across both modes
+- the game direction is intriguing rather than fake
+- the product is worth returning to
 
 ## Core Question
 
 The MVP is mainly trying to answer this question:
 
-`Can a fullscreen game-first House make serious async work feel alive, readable, and worth returning to?`
+`Can one shared House-and-Cats core support a genuinely useful app mode now and a genuinely compelling game mode later?`
 
 ## MVP Product Promise
 
 The MVP does not need to prove every part of the full product.
 
-It only needs to prove these five things:
+It only needs to prove these things:
 
-1. A `House` can feel spatial and alive.
-2. A `Cat` can feel like a persistent individual, not a disposable run.
-3. `Threads`, `Notices`, and `Sessions` can be understood through game-native inspection flows.
-4. The interface can support real reading and steering without feeling like a dashboard.
-5. The game presentation makes the product more emotionally convincing rather than less practical.
+1. The shared core model is useful enough to carry real async work concepts.
+2. `App` mode can support serious review, inspection, and steering.
+3. `Game` mode can make the same house feel alive instead of merely illustrated.
+4. The same house state can be understood across both modes.
+5. The product becomes more compelling because of the House model, not in spite of it.
 
-## MVP Slice
+## MVP Structure
 
-The first MVP should be a single playable House slice with mocked data.
+The MVP should be split into two linked slices:
 
-It should include:
+### 1. Shared Core + App Slice
+
+This slice should include:
 
 - one `House`
 - one `Human`
@@ -60,179 +62,120 @@ It should include:
 - one active `Session` with a mock transcript
 - one visible `Whiteboard`
 - one visible `Cabinet`
+- one meaningful steering action
 
-The point is not feature breadth.
-The point is to make the House feel believable as a working place.
+This is the slice that proves usefulness.
+
+### 2. First Game Slice
+
+This slice should reuse the same demo house and show:
+
+- one readable room slice
+- two visible cats with distinct states
+- modular room construction rather than one baked background
+- enough motion and feedback to feel alive
+- one or two readable inspect flows
+
+This is the slice that proves the world direction is real.
 
 ## First User Journey
 
 The first user journey should be:
 
-1. The user opens `/` and enters a fullscreen House.
-2. The user sees a small, readable, living room-like workspace with two visible cats.
-3. One cat is clearly awake and one cat is clearly resting or asleep.
-4. The user clicks a cat and opens a game-native inspect surface.
-5. The user sees the cat's identity, current status, assigned threads, and active session.
-6. The user opens the active session transcript and reads a mock live feed.
-7. The user opens the inbox and reads a few notices.
-8. The user opens a thread and reads comments and activities.
-9. The user adds a comment or memo.
-10. The House reacts in a visible way.
-
-This should be enough to communicate the core OpenKitten fantasy.
+1. The user opens `/app/houses/:houseId`.
+2. The user reviews notices, threads, cats, and one active session.
+3. The user opens a thread and reads comments and activities.
+4. The user adds a comment or memo.
+5. The user sees a visible state change.
+6. The user switches to `/game/houses/:houseId`.
+7. The user sees the same house represented as a place with two readable cats.
+8. The user inspects a cat and recognizes its work context.
+9. The user opens the active session transcript or equivalent inspect view.
+10. The user leaves feeling that app mode is useful and game mode is worth coming back for.
 
 ## MVP In-Scope Surfaces
 
-### 1. House View
+### 1. Shared Core
 
-The MVP needs one main House view that feels like a place.
+The MVP should have one stable fixture-driven house state that both modes consume.
 
-It should show:
+That should include:
 
-- a room or small house area
+- domain types
+- fixtures
+- selectors
+- actions for reading and steering
+
+### 2. App Mode
+
+The MVP app mode should include:
+
+- inbox view
+- thread view
+- cat inspection
+- session view
+- one steering action such as add comment or add memo
+
+App mode is allowed to be conventional.
+Its job is usefulness, not theater.
+
+### 3. Game Mode
+
+The MVP game mode should include:
+
+- one room or room-like slice
 - two cats in world space
-- a few recognizable objects and OpenKitten surfaces
-- enough visual structure for the user to orient themselves quickly
+- readable room cues
+- a clear interaction target
+- one or two inspect surfaces
 
-The House does not need multiple rooms or traversal yet.
-A single-screen slice is enough.
+Game mode does not need full product parity yet.
+But it must already feel like the beginning of a real game surface.
 
-### 2. Cat Presence
+### 4. Shared Mode Transition
 
-The MVP should include at least two cats with clearly different states.
+The MVP should include a clear way to move between app mode and game mode for the same house.
 
-For example:
+The transition should make it obvious that:
 
-- one awake cat
-- one resting or sleeping cat
+- this is the same house
+- this is the same cat state
+- this is the same product
 
-Each cat should have:
+## Game Slice Quality Bar
 
-- a name
-- a clear visual identity
-- a visible state
-- a clickable interaction target
+The first game slice does not need to be huge.
+But it does need to clear a quality bar.
 
-In the MVP, "awake" is enough to communicate that a cat is currently doing something.
-The cat does not need workstation-specific animations.
-State should read from the cat's own pose, face, or motion rather than from a required location in the room.
+It should not be:
 
-### 3. Cat Inspection Surface
+- a single static background image
+- static cat cutouts with no life
+- a dashboard hidden under a canvas
 
-Clicking a cat should open a surface that shows:
+It should already demonstrate:
 
-- identity
-- role or flavor
-- current status
-- assigned threads
-- active session, if any
-
-This surface should preferably feel game-native.
-DOM is acceptable only if it materially improves readability.
-
-### 4. Inbox And Notices
-
-The MVP should include a small inbox with a few notices representing common House attention items.
-
-These notices should help the user understand:
-
-- what needs attention
-- what changed recently
-- what the cats are doing
-
-### 5. Thread View
-
-The MVP should include at least one readable thread view with:
-
-- comments
-- activities
-- assignment context
-- open or closed state
-
-The goal is not workflow depth.
-The goal is proving that durable work objects fit naturally inside the House.
-
-### 6. Session View
-
-The MVP should include one active session with a mock transcript.
-
-The transcript should communicate:
-
-- what the cat is working on
-- that the cat is actually doing something
-- that sessions are inspectable, not magical black boxes
-
-### 7. One Human Steering Action
-
-The MVP should include one meaningful write action.
-
-Recommended options:
-
-- add a thread comment
-- add a memo
-
-This action should produce a visible reaction in the House or UI.
-
-### 8. Visible House Cues
-
-The MVP should include a few visible room cues that make work feel situated.
-
-Recommended examples:
-
-- a readable whiteboard zone
-- a readable cabinet zone
-- a readable notice or inbox zone
-- a few baked-in household details that make the room feel warm and believable
-
-Only OpenKitten-significant cues need to carry interaction in the MVP.
-Most other environmental detail can stay presentational inside the room shell.
+- modular room construction
+- readable depth and layering
+- clear cat states
+- motion or feedback that creates presence
 
 ## MVP Interaction Rules
 
-The MVP interaction model should be simple:
+The MVP interaction model should stay simple:
 
-- click or tap visible objects
-- open one inspection surface at a time
-- keep transitions calm and readable
-- allow the user to back out easily
+- inspect
+- review
+- steer
+- switch modes
 
 The MVP does not need:
 
-- free movement controls
-- combat-like verbs
 - broad traversal
-- complicated inventory systems
-
-## What The MVP Must Feel Like
-
-The MVP should feel:
-
-- fullscreen
-- calm
-- spatial
-- readable
-- game-native
-- emotionally warm
-- useful enough to inspect real work
-
-The user should feel like they entered a House, not like they opened a dashboard tab.
-
-## What The MVP Must Not Try To Do
-
-The MVP should not try to prove:
-
-- multi-room traversal
 - deep simulation systems
 - real multiplayer
-- full executor integration
-- a broad SaaS settings surface
-- every possible work object
-
-It should also avoid:
-
-- surrounding browser chrome around the world
-- giant panel stacks that dominate the route
-- chat-first interaction as the main loop
+- advanced customization
+- full feature parity between modes
 
 ## MVP Out Of Scope
 
@@ -243,50 +186,51 @@ These are explicitly out of scope for the MVP:
 - real executor sessions
 - cross-device sync
 - advanced house policies
-- rich customization systems
 - deep economy or progression systems
+- large-scale house building systems
 
 ## MVP Success Criteria
 
 The MVP is successful if a small number of users can say:
 
 - "I understood what the cats were doing."
-- "The House felt like a place."
-- "Inspecting work felt natural."
-- "This made me more interested in returning."
-- "It felt more like a product than a toy."
+- "The app mode already feels useful."
+- "The game mode feels promising, not fake."
+- "This feels like one product, not two unrelated surfaces."
+- "I want to come back and see it improve."
 
 ## MVP Acceptance Checklist
 
 The MVP should include:
 
-- a runnable fullscreen `/` route
-- one readable House slice
+- a shared fixture-driven house core
+- an `/app/houses/:houseId` route with useful inspection and steering
+- a `/game/houses/:houseId` route for the same house
 - two visible cats
 - one active session
 - one inbox with notices
 - one thread inspection flow
 - one steering action
 - one visible reaction to that action
+- a game slice that is not just one baked background plus static sprites
 
 ## MVP Technical Strategy
 
 The MVP should be built with:
 
-- Phaser as the primary runtime on `/`
+- a renderer-agnostic domain model
 - fixture-driven data
-- game-native UI where practical
-- optional DOM overlays only when clearly beneficial
-
-The implementation should keep the domain model independent from the renderer so future evolution stays possible.
+- a conventional app-mode client
+- a real game runtime for game mode
+- a shared action layer that both modes call into
 
 ## Next Step After MVP
 
-If the MVP works, the next step is not "add more screens."
+If the MVP works, the next step is not "pick one mode and abandon the other."
 
 The next step is:
 
-- deepen the House feel
-- strengthen cat presence
-- tighten the steering loop
-- integrate real system state without losing the game-first route shape
+- deepen the usefulness of app mode
+- raise the polish bar in game mode
+- increase continuity between the modes
+- introduce real system state without forking the core model
