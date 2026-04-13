@@ -6,7 +6,7 @@
   "main": "lib/main.ts",
   "scripts": {
     "dev": "bun --watch --no-clear-screen .",
-    "test": "bun --bun vitest run --coverage"
+    "test": "bun --bun vitest run"
   },
   "dependencies": {
     "hono": "^4.12.9"
