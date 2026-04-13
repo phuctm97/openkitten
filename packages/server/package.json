@@ -1,0 +1,18 @@
+{
+  "name": "@openkitten/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/main.ts",
+  "scripts": {
+    "dev": "bun --watch lib/main.ts",
+    "test": "bun --bun vitest run --coverage"
+  },
+  "dependencies": {
+    "hono": "^4.12.9"
+  },
+  "devDependencies": {
+    "@vitest/coverage-istanbul": "^4.1.4",
+    "vitest": "^4.1.4"
+  }
+}
