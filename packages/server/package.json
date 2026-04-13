@@ -9,10 +9,12 @@
     "test": "bun --bun vitest run"
   },
   "dependencies": {
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.12.9"
   },
   "devDependencies": {
     "@vitest/coverage-istanbul": "^4.1.4",
+    "drizzle-kit": "^0.31.10",
     "vitest": "^4.1.4"
   }
 }
