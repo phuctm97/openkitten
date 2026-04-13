@@ -42,6 +42,17 @@
         "vitest": "^4.1.4",
       },
     },
+    "packages/server": {
+      "name": "@openkitten/server",
+      "version": "0.0.0",
+      "dependencies": {
+        "hono": "^4.12.9",
+      },
+      "devDependencies": {
+        "@vitest/coverage-istanbul": "^4.1.4",
+        "vitest": "^4.1.4",
+      },
+    },
     "packages/world": {
       "name": "@openkitten/world",
       "version": "0.0.0",
@@ -338,6 +349,8 @@
     "@opencode-ai/sdk": ["@opencode-ai/sdk@1.4.3", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-X0CAVbwoGAjTY2iecpWkx2B+GAa2jSaQKYpJ+xILopeF/OGKZUN15mjqci+L7cEuwLHV5wk3x2TStUOVCa5p0A=="],
 
     "@openkitten/bot": ["@openkitten/bot@workspace:packages/bot"],
+
+    "@openkitten/server": ["@openkitten/server@workspace:packages/server"],
 
     "@openkitten/world": ["@openkitten/world@workspace:packages/world"],
 

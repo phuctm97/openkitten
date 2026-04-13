@@ -1,0 +1,18 @@
+{
+  "name": "@openkitten/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "lib/main.ts",
+  "scripts": {
+    "dev": "bun --watch --no-clear-screen .",
+    "test": "bun --bun vitest run"
+  },
+  "dependencies": {
+    "hono": "^4.12.9"
+  },
+  "devDependencies": {
+    "@vitest/coverage-istanbul": "^4.1.4",
+    "vitest": "^4.1.4"
+  }
+}
