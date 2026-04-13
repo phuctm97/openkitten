@@ -9,32 +9,191 @@ The implementation target is:
 - one app on `world.openkitten.com`
 - separate `app` and `game` route trees
 - one shared domain, state, and action layer
-- utility proven in app mode first
-- game mode built as a real world surface, not a static mockup
+- a capability ladder delivered `backend -> app -> game`
+- public iteration as early and as often as possible
 
 ## Planning Principles
 
 The implementation should preserve these principles:
 
-- the shared core comes first
-- app mode proves usefulness early
-- game mode is held to a real quality bar
-- the core domain model stays independent from rendering details
-- app mode and game mode stay separate at the presentation layer
-- the team should iterate in public through small, demoable slices
+- build the shared core one capability at a time
+- prove usefulness in app mode as early as possible
+- force game mode to earn its place through real quality
+- keep backend, app, and game tied to the same capability
+- avoid large stealth phases whenever possible
+- optimize for learnings, not just architecture neatness
 
-This plan should optimize for usefulness, momentum, and honest feedback rather than long stealth branches.
+This plan should optimize for usefulness, momentum, and honest feedback rather than long invisible infrastructure work.
 
-## Immediate Focus
+## Delivery Model
 
-Start with the shared core and the app-mode slice, while shaping the codebase so game mode can grow over the same model.
+The preferred delivery pattern for every capability is:
 
-Concretely, that means:
+1. backend
+2. app mode
+3. game mode
 
-- define domain types and fixtures first
-- define shared actions and selectors early
-- build useful app routes before chasing game polish
-- keep a clean boundary where game mode can later plug in
+This order is intentional:
+
+- backend makes the capability real
+- app mode makes it usable
+- game mode makes it embodied and shareable
+
+The goal is not to finish all backend work before anything public exists.
+The goal is to build the minimum backend needed for one capability, then expose that capability immediately through app mode and game mode.
+
+## Capability Order
+
+The preferred top-level capability ladder is:
+
+1. `Thin substrate`
+2. `Houses`
+3. `Cats`
+4. `Threads + comments`
+5. `Inbox + notices`
+6. `Executors`
+7. `Sessions + transcripts`
+8. `Direction + steering`
+9. `Activities + history`
+10. `Artifacts + house surfaces`
+11. `Game-specific house identity`
+
+This order should follow product dependency order, not just technical dependency order.
+
+In particular:
+
+- `Threads + comments` should arrive before user-facing `Activities`
+- low-level file storage primitives may exist inside `Thin substrate`
+- user-facing files, cabinets, and whiteboards should arrive later as product surfaces
+- `Executor` should be explicit instead of being buried inside sessions
+
+## Why This Order
+
+### Thin Substrate
+
+This is the minimum invisible foundation.
+
+It should include:
+
+- auth
+- identity
+- permissions and membership primitives
+- IDs and timestamps
+- blob or file storage primitives
+- minimal event or job plumbing
+
+This should stay intentionally thin.
+It is support work, not a public product phase.
+
+### Houses
+
+This is the first real product container.
+
+It should establish:
+
+- house identity
+- house membership
+- opening a house
+- routing into the same house in both modes
+
+### Cats
+
+This is the first actor layer.
+
+It should establish:
+
+- cat identity
+- cat state
+- cat-to-house relation
+- visible cat presence in both modes
+- an early default executor reference if needed
+
+This is also the first strong social-media layer.
+
+### Threads + Comments
+
+This is the first durable work loop.
+
+It should establish:
+
+- thread identity and lifecycle
+- comment writing and reading
+- understanding work in context
+- the first meaningful tryable slice
+
+### Inbox + Notices
+
+This is the first return loop.
+
+It should establish:
+
+- attention routing
+- a reason to revisit the product
+- a way to surface what changed or needs review
+
+### Executors
+
+This is the first runtime substrate for real cat work.
+
+It should establish:
+
+- executor identity or registry
+- cat-to-executor linkage
+- dispatch or wake primitives
+- the path toward real sessions
+
+### Sessions + Transcripts
+
+This is the first strong observability loop.
+
+It should establish:
+
+- session inspection
+- readable transcript output
+- understanding what a cat is doing
+- the first strong invite-only alpha gate
+
+### Direction + Steering
+
+This is the first deep async control layer.
+
+It should establish:
+
+- goals
+- memos
+- rules
+- a clear human steering loop
+
+This is where OpenKitten becomes much more than observation alone.
+
+### Activities + History
+
+This layer should be split internally:
+
+- internal event recording can begin earlier
+- user-facing activity or history surfaces should become prominent only once enough meaningful events exist
+
+### Artifacts + House Surfaces
+
+This is the first layer where the house’s durable work surfaces become real product surfaces.
+
+It should include:
+
+- files as a user-facing product surface
+- cabinets
+- whiteboards
+
+### Game-Specific House Identity
+
+This is where game mode becomes deeply ownable.
+
+It should include:
+
+- modular room construction
+- props and layering
+- layout persistence
+- customization
+- richer house identity
 
 ## Recommended Stack
 
@@ -51,12 +210,12 @@ Concretely, that means:
 - the current `bun run dev`, `bun run build`, and `bun run test` workflow
 - TypeScript build checks through `bun --bun tsc --build`
 
-The build system can remain simple.
-The main architectural work is separating the shared core from the two renderers.
+The main architectural work is not bundling.
+It is keeping the capability ladder coherent across backend, app, and game.
 
 ## Route Strategy
 
-The route model should be mode-first.
+The route model should remain mode-first.
 
 Examples:
 
@@ -70,9 +229,12 @@ Likely supporting routes later:
 - `/app/settings`
 - `/game/settings`
 
-These routes should share product state without forcing one mode's layout or runtime assumptions onto the other.
+The routing model should support one product with two renderers, not force the two modes into one compromised shell.
 
 ## Suggested Package Layout
+
+This package contains the docs and the web client.
+Backend implementation may live outside `packages/world`, but the delivery model should still be reflected in the client architecture.
 
 The package should likely grow toward something like:
 
@@ -103,9 +265,9 @@ The package should likely grow toward something like:
 - `packages/world/assets/`
 - `packages/world/test/`
 
-The exact folder names can evolve, but the conceptual split matters:
+The important conceptual split is:
 
-- shared core
+- shared capability core
 - app renderer
 - game renderer
 
@@ -117,13 +279,17 @@ The domain layer should hold renderer-agnostic product concepts:
 
 - houses
 - cats
-- goals
+- executors
 - threads
+- comments
 - notices
+- sessions
+- transcripts
+- goals
 - memos
 - rules
-- sessions
-- transcript summaries
+- activities
+- files and house surfaces
 
 This layer should not know whether anything is rendered in app mode or game mode.
 
@@ -133,68 +299,47 @@ This layer should define:
 
 - shared reads
 - shared writes
-- view-model shaping that both modes can consume
 - permission and validation logic
+- view-model shaping that both modes can consume
 
-This is where the product becomes one system instead of two clients glued together later.
+This is where the product becomes one system instead of two loosely related clients.
 
 ### 3. Fixtures Layer
 
-The early client should still be fixture-driven.
+The early client should still be fixture-driven when real integrations are not needed yet.
 
-It should provide:
+Fixtures should be capability-aware:
 
-- one demo house
-- one human
-- two cats
-- a few goals and threads
-- a small inbox
-- one visible active session
-
-The point is to validate the shared product model before deeper integration.
+- the house fixture evolves as the ladder evolves
+- app mode and game mode should consume the same fixture
+- fixtures should support public demos and early feedback, not just local development
 
 ### 4. App Mode Layer
 
-This is the first useful renderer.
-
-It should contain:
-
-- house overview surfaces
-- inbox views
-- thread views
-- cat and session inspection
-- steering actions
+This is the first useful renderer for most capabilities.
 
 App mode should own:
 
 - dense information layout
-- conventional form flows
+- conventional editing flows
 - fast navigation
 - accessibility-heavy interactions
 
 ### 5. Game Mode Layer
 
-This is the second renderer over the same house state.
-
-It should contain:
-
-- room composition
-- cats and props in world space
-- hit testing and interaction
-- camera behavior
-- animation and world-specific feedback
-- modular construction that supports customization later
+This is the second renderer over the same state.
 
 Game mode should own:
 
-- frame updates
-- pointer and keyboard interaction
+- spatial presentation
+- camera and movement
+- hit testing and animation
 - world-native inspection
-- environmental presentation
+- environmental identity
 
 ### 6. Mode-Specific Presentation State
 
-Each mode may keep local state that the other mode does not need.
+Each mode may keep local state that the other does not need.
 
 Examples:
 
@@ -206,183 +351,224 @@ Examples:
 
 This state should stay local unless it becomes part of the shared product meaning.
 
-## Recommended First Data Flow
+## Recommended Data Flow Per Capability
 
 The clean mental model is:
 
-1. Fixtures produce a stable house state.
-2. Shared selectors shape the data for presentation.
-3. `/app/...` routes render useful productivity views over that state.
-4. `/game/...` routes render the same house as a place.
-5. Shared actions mutate the same underlying model.
-6. Both modes re-read the same source of truth.
+1. The backend model defines the capability.
+2. Shared actions and selectors expose the capability.
+3. App mode makes the capability useful.
+4. Game mode makes the same capability visible or embodied.
+5. Public feedback informs the next refinement before the team climbs higher.
 
 The shared core should support the experience.
-It should not be replaced by two renderer-specific shadow models.
+It should not be replaced by separate app-mode and game-mode shadow models.
 
 ## Public Iteration Strategy
 
-OpenKitten World should be built in public through very small slices.
+OpenKitten World should be built in public through small slices that are either:
 
-The preferred loop is:
+- `shareable`
+- `tryable`
 
-1. Choose one small product or world capability.
-2. Ship a visible version quickly.
-3. Share a clip, screenshot, or short write-up.
-4. Ask one focused question.
-5. Fold feedback into the next slice immediately.
+Sometimes a slice will be both.
+Often it will be one before it becomes the other.
 
-Good public slices:
+### Shareable Slice Rules
 
-- a better thread view
-- a clearer cat inspection card
-- the first inbox
-- the first room composition pass
-- the first modular wall system
-- the first cat idle animation
+A good shareable slice should:
 
-Avoid:
+- read clearly in under 15 seconds
+- show one visible capability, not five
+- have one focused message
+- be honest about what is real
 
-- long private branches
-- giant reveals
-- waiting for an entire mode to feel complete before showing progress
+Good examples:
+
+- first real cat states
+- one notice flowing into a house
+- one transcript inspection flow
+- one modular room system
+
+### Tryable Slice Rules
+
+A good tryable slice should:
+
+- let someone complete one meaningful loop in under 10 minutes
+- ask one focused feedback question
+- include one real state change
+- be stable enough that failure is informative
+
+Good examples:
+
+- read and reply to one thread
+- inspect one session
+- review one inbox
+- add one memo and see what changed
+
+### Feedback Stages
+
+The preferred public stages are:
+
+1. social progress updates
+2. friendly testers
+3. invite-only alpha
+4. broader public alpha
+
+The likely earliest thresholds are:
+
+- first social progress: `Cats`
+- first meaningful tryable slice: `Threads + comments`
+- first strong invite-only alpha: `Sessions + transcripts`
+- first distinctly OpenKitten loop: `Direction + steering`
 
 ## Suggested Phase Plan
 
-### Phase 1: Shared Core
+### Phase 0: Thin Substrate
 
-Define the product model that both modes will share.
+Deliver:
 
-Deliverables:
+- minimal auth and identity
+- permissions primitives
+- membership primitives
+- IDs and storage primitives
 
-- domain types
-- shared actions
-- shared selectors
-- one demo house fixture
-- passing build and test checks
+### Phase 1: Houses
 
-### Phase 2: App Mode MVP
+Deliver:
 
-Build the first useful app-mode slice.
+- house model
+- open/select house
+- route the same house in both modes
 
-Deliverables:
+### Phase 2: Cats
 
-- `/app/houses/:houseId`
-- inbox view
-- thread view
-- cat inspection
-- session view
-- one steering action
+Deliver:
 
-### Phase 3: First Game Slice
+- cat model
+- visible cat state
+- first cat presence in app mode and game mode
 
-Build the first honest game-mode slice over the same house.
+### Phase 3: Threads + Comments
 
-Deliverables:
+Deliver:
 
-- `/game/houses/:houseId`
-- one room slice
-- two visible cats
-- modular room construction
-- basic motion and interaction
-- one readable inspect flow
+- thread model
+- comment model
+- first meaningful app-mode work loop
+- first friendly tryable slice
 
-### Phase 4: Game Quality Bar
+### Phase 4: Inbox + Notices
 
-Raise the world from promising to believable.
+Deliver:
 
-Deliverables:
+- notice model
+- inbox review
+- stronger return loop
 
-- better cat state readability
-- clearer hover and click feedback
-- stronger layering and depth
-- prop grammar for house surfaces
-- improved transitions and camera behavior
+### Phase 5: Executors
 
-### Phase 5: Mode Continuity
+Deliver:
 
-Tighten the relationship between the two modes.
+- executor model
+- cat-to-executor linkage
+- dispatch or wake primitives
 
-Deliverables:
+### Phase 6: Sessions + Transcripts
 
-- easy mode switching for the same house
-- stronger visual continuity
-- more shared actions exposed in both modes
-- clearer user understanding that both views reflect one system
+Deliver:
 
-### Phase 6: Real Integration Boundaries
+- session inspection
+- transcript reading
+- first strong invite-only alpha
 
-Prepare the client for future backend and executor integration.
+### Phase 7: Direction + Steering
 
-Deliverables:
+Deliver:
 
-- replaceable fixture adapter
-- clearer persistence boundaries
-- preserved separation between executor runtime and product rendering
+- goals
+- memos
+- rules
+- first distinctly OpenKitten async control loop
+
+### Phase 8: Activities + History
+
+Deliver:
+
+- meaningful event history
+- readable activity surfaces once enough signal exists
+
+### Phase 9: Artifacts + House Surfaces
+
+Deliver:
+
+- files as a product surface
+- cabinets
+- whiteboards
+
+### Phase 10: Game-Specific House Identity
+
+Deliver:
+
+- modular construction
+- props and layering
+- layout persistence
+- richer world customization
 
 ## Asset Strategy
 
 The first implementation should favor:
 
-- modular room pieces instead of one flattened shell
 - strong silhouettes
-- reusable props
-- a small set of reusable cat variations
-- lightweight but readable 2D animation
+- reusable cat variations
+- modular room pieces
+- props that can recur across many houses
+- lightweight but readable animation
 
-Avoid over-investing in asset volume before the interaction grammar is proven.
+Avoid investing in huge asset volume before the capability loop is clear.
 
 ## UI Strategy
 
 The default UI strategy should be:
 
-- app mode is useful first
-- game mode is world-first
-- both modes stay calm and readable
-- neither mode is forced into the other's shell
+- app mode proves usefulness first
+- game mode proves identity continuously
+- both modes remain calm and readable
+- neither mode is forced into the other’s shell
 
 That means:
 
-- no requirement that app-mode cards become game-mode panels
-- no requirement that game-mode windows become app-mode layouts
-- no pressure to fake a world before it is ready
+- no fake world before the underlying capability is real
+- no generic app shell leaking into game mode
+- no demand for feature parity at every layer before public sharing begins
 
 ## Engineering Boundaries To Preserve
 
-The implementation should not depend on:
-
-- a server for the first shared-core slice
-- websocket integration
-- authentication
-- real executor integration
-
-The first client should be easy to run and easy to reason about locally.
-
-The implementation should also preserve these boundaries:
+The implementation should preserve these boundaries:
 
 - the domain model stays renderer-agnostic
 - app mode and game mode share business logic
 - app mode and game mode keep presentation logic separate
-- executor integration stays separate from world rendering
+- executor integration stays separate from renderer-specific code
 
-## First Engineering Milestone
+The implementation should avoid:
 
-The first convincing milestone is:
+- endless invisible foundation work
+- duplicated business logic across modes
+- static world slices that carry no real product meaning
+- introducing user-facing history before there is enough history to show
 
-`A shared-core local client where /app/houses/:houseId is already useful for review and steering, and /game/houses/:houseId already makes that same house feel like the beginning of a real place instead of a static illustration.`
+## First Convincing Milestones
 
-If that milestone is not convincing, the team should improve the slice before adding more complexity.
+The first convincing milestones are:
 
-## What Comes After The First Milestone
+- a cat slice people want to share
+- a thread slice people can actually try
+- a session slice people can actually inspect
+- a steering slice that makes OpenKitten feel unique
 
-After the first milestone, the likely next steps are:
-
-- stronger app-mode workflows
-- richer cat behavior
-- more visible work reactions
-- better customization primitives
-- backend and executor integration that preserve the shared core
+If those milestones are not convincing, the team should improve the current layer before climbing much higher.
 
 ## One-Sentence Summary
 
-Build OpenKitten World first as one shared-core product with useful `app` routes and honest `game` routes, then keep raising both sides in public without letting either fork the underlying system.
+Build OpenKitten World as a public capability ladder where each layer is made real in the backend, useful in app mode, and embodied in game mode before the team moves up to the next layer.

@@ -29,6 +29,26 @@ Both modes operate on the same core product model:
 The shared core is the product.
 The two modes are different renderers and interaction styles over that same core.
 
+The implementation plan assumes a capability ladder built in this order:
+
+1. `Thin substrate`
+2. `Houses`
+3. `Cats`
+4. `Threads + comments`
+5. `Inbox + notices`
+6. `Executors`
+7. `Sessions + transcripts`
+8. `Direction + steering`
+9. `Activities + history`
+10. `Artifacts + house surfaces`
+11. `Game-specific house identity`
+
+Each capability should be delivered in this sequence:
+
+1. backend
+2. app mode
+3. game mode
+
 Game mode may keep extra state for:
 
 - camera and movement
@@ -54,9 +74,9 @@ These docs assume route shapes like:
 - [Visual Direction](./VISUAL_DIRECTION.md)
   The visual principles for a useful app mode and a polished, complete game mode.
 - [MVP](./MVP.md)
-  The first vertical slices that should prove utility in app mode and promise in game mode.
+  The capability ladder, public milestones, and the first shareable and tryable slices.
 - [Implementation Plan](./IMPLEMENTATION_PLAN.md)
-  The recommended architecture, package layout, phased plan, and build-in-public loop.
+  The delivery model, capability order, architecture boundaries, and build-in-public loop.
 
 Recommended reading order:
 

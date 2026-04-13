@@ -4,12 +4,16 @@
 
 This document defines the MVP target for OpenKitten World.
 
+The MVP should not be treated as one large stealth milestone.
+It should be treated as a public capability ladder with small, visible steps.
+
 The MVP assumes:
 
 - one app on `world.openkitten.com`
 - a shared core underneath both modes
-- `app` mode proving usefulness first
-- `game` mode proving that the House can become a real, polished surface
+- each capability is built `backend -> app -> game`
+- app mode proves usefulness as early as possible
+- game mode proves the world can become real as early as possible
 
 ## MVP Goal
 
@@ -18,151 +22,266 @@ The MVP should prove that OpenKitten World can become:
 - a real async productivity system
 - centered on Houses and Cats
 - useful in app mode
-- promising in game mode
+- increasingly compelling in game mode
+- easy to talk about and share in public while it is being built
 
-The MVP is successful if a user can work in app mode, switch to game mode for the same house, and feel:
-
-- the core work model is understandable
-- the house and cats are coherent across both modes
-- the game direction is intriguing rather than fake
-- the product is worth returning to
+The MVP is successful if a small number of early users can understand the work model, complete one meaningful async loop, and see why the House mode is worth continuing to build.
 
 ## Core Question
 
 The MVP is mainly trying to answer this question:
 
-`Can one shared House-and-Cats core support a genuinely useful app mode now and a genuinely compelling game mode later?`
+`Can OpenKitten World become useful early through a shared core and app mode, while continuously earning intrigue and attachment through game mode along the way?`
 
-## MVP Product Promise
+## MVP Shape
 
-The MVP does not need to prove every part of the full product.
+The MVP is a ladder, not a cliff.
 
-It only needs to prove these things:
+The preferred top-level capability order is:
 
-1. The shared core model is useful enough to carry real async work concepts.
-2. `App` mode can support serious review, inspection, and steering.
-3. `Game` mode can make the same house feel alive instead of merely illustrated.
-4. The same house state can be understood across both modes.
-5. The product becomes more compelling because of the House model, not in spite of it.
+1. `Thin substrate`
+2. `Houses`
+3. `Cats`
+4. `Threads + comments`
+5. `Inbox + notices`
+6. `Executors`
+7. `Sessions + transcripts`
+8. `Direction + steering`
+9. `Activities + history`
+10. `Artifacts + house surfaces`
+11. `Game-specific house identity`
 
-## MVP Structure
+Each capability should be delivered in this sequence:
 
-The MVP should be split into two linked slices:
+1. backend
+2. app mode
+3. game mode
 
-### 1. Shared Core + App Slice
+The purpose of this shape is:
 
-This slice should include:
+- backend keeps the capability real
+- app mode makes it useful
+- game mode makes it embodied and distinctive
 
-- one `House`
-- one `Human`
-- two `Cats`
-- one or two `Goals`
-- two or three `Threads`
-- a small `Inbox` with a few `Notices`
-- one active `Session` with a mock transcript
-- one visible `Whiteboard`
-- one visible `Cabinet`
-- one meaningful steering action
+## Public Milestones
 
-This is the slice that proves usefulness.
+The MVP should explicitly separate `shareable` milestones from `tryable` milestones.
 
-### 2. First Game Slice
+### Shareable Milestones
 
-This slice should reuse the same demo house and show:
+These are slices that are good for:
 
-- one readable room slice
-- two visible cats with distinct states
-- modular room construction rather than one baked background
-- enough motion and feedback to feel alive
-- one or two readable inspect flows
+- social posts
+- progress updates
+- short clips
+- screenshots
+- focused public questions
 
-This is the slice that proves the world direction is real.
+The earliest strong shareable layer is usually:
 
-## First User Journey
+- `Cats`
 
-The first user journey should be:
+After that, especially strong shareable layers are:
 
-1. The user opens `/app/houses/:houseId`.
-2. The user reviews notices, threads, cats, and one active session.
-3. The user opens a thread and reads comments and activities.
-4. The user adds a comment or memo.
-5. The user sees a visible state change.
-6. The user switches to `/game/houses/:houseId`.
-7. The user sees the same house represented as a place with two readable cats.
-8. The user inspects a cat and recognizes its work context.
-9. The user opens the active session transcript or equivalent inspect view.
-10. The user leaves feeling that app mode is useful and game mode is worth coming back for.
+- `Inbox + notices`
+- `Sessions + transcripts`
+- `Game-specific house identity`
 
-## MVP In-Scope Surfaces
+### Tryable Milestones
 
-### 1. Shared Core
+These are slices that are good for:
 
-The MVP should have one stable fixture-driven house state that both modes consume.
+- hands-on product testing
+- meaningful feedback
+- early user interviews
+- invite-only alpha access
 
-That should include:
+The first meaningful tryable milestone should start at:
 
-- domain types
-- fixtures
-- selectors
-- actions for reading and steering
+- `Threads + comments`
 
-### 2. App Mode
+The first strong invite-only alpha gate should start at:
 
-The MVP app mode should include:
+- `Sessions + transcripts`
 
-- inbox view
-- thread view
-- cat inspection
-- session view
-- one steering action such as add comment or add memo
+The first truly OpenKitten-shaped async control loop should appear at:
 
-App mode is allowed to be conventional.
-Its job is usefulness, not theater.
+- `Direction + steering`
 
-### 3. Game Mode
+## Recommended Early Milestone Gates
 
-The MVP game mode should include:
+### 1. First Socially Shareable Slice
 
-- one room or room-like slice
-- two cats in world space
-- readable room cues
-- a clear interaction target
-- one or two inspect surfaces
+The first socially shareable slice should land when:
 
-Game mode does not need full product parity yet.
-But it must already feel like the beginning of a real game surface.
+- one `House` exists
+- one or two `Cats` exist
+- cat identity and state are visible
+- game mode can show the same house without feeling like static decoration
 
-### 4. Shared Mode Transition
+This is enough to begin posting progress honestly.
 
-The MVP should include a clear way to move between app mode and game mode for the same house.
+### 2. First Friendly Tryable Slice
 
-The transition should make it obvious that:
+The first friendly tryable slice should land when:
 
-- this is the same house
-- this is the same cat state
-- this is the same product
+- one house can be opened in app mode
+- one thread can be read
+- comments can be added
+- users can understand what just happened
 
-## Game Slice Quality Bar
+This is the first point where product feedback becomes more useful than concept feedback.
 
-The first game slice does not need to be huge.
-But it does need to clear a quality bar.
+### 3. First Invite-Only Alpha
 
-It should not be:
+The first invite-only alpha should land when:
 
-- a single static background image
-- static cat cutouts with no life
-- a dashboard hidden under a canvas
+- inbox and notices exist
+- executors and sessions are connected enough to inspect work
+- transcripts make cat work legible
+- users can understand what a cat is doing and why
 
-It should already demonstrate:
+This is the first point where OpenKitten World starts feeling like a real system rather than a promising shell.
+
+### 4. First Distinctive OpenKitten Loop
+
+The first truly distinctive loop should land when:
+
+- goals, memos, or rules exist
+- the human can steer the house intentionally
+- app mode shows the result clearly
+- game mode can echo that same state as part of the house
+
+This is the point where OpenKitten becomes more than "agent dashboard plus world experiments."
+
+## Capability-Level MVP Expectations
+
+### Thin Substrate
+
+This layer should stay intentionally thin.
+
+It should include only the minimum needed to support the rest of the ladder:
+
+- auth
+- identity
+- membership and permissions primitives
+- IDs and timestamps
+- blob or file storage primitives
+- minimal event or job plumbing
+
+This layer is not itself a public milestone.
+
+### Houses
+
+This is the first real product container.
+
+It should enable:
+
+- one or more houses
+- membership in a house
+- selecting and opening a house
+- routing to the same house in both modes
+
+### Cats
+
+This is the first actor layer.
+
+It should enable:
+
+- cat identity
+- cat state
+- cat-to-house relation
+- visible cat presence in both modes
+
+### Threads + Comments
+
+This is the first real work loop.
+
+It should enable:
+
+- a durable thread
+- readable comments
+- one meaningful write action
+- understanding work in context
+
+### Inbox + Notices
+
+This is the first return loop.
+
+It should enable:
+
+- attention routing
+- a reason to open the product again
+- a reason to inspect a house, thread, cat, or session
+
+### Executors
+
+This is the runtime substrate for real cat work.
+
+It should enable:
+
+- executor identity or registry
+- cat-to-executor linkage
+- wake or dispatch primitives
+- the path toward real session execution
+
+### Sessions + Transcripts
+
+This is the first strong observability layer.
+
+It should enable:
+
+- session inspection
+- transcript reading
+- understanding what a cat is doing now
+- understanding why the system feels alive
+
+### Direction + Steering
+
+This is the first deep async control layer.
+
+It should enable:
+
+- goals
+- memos
+- rules
+- a clear human steering loop
+
+### Activities + History
+
+This should be treated in two stages:
+
+- internal event recording may exist earlier
+- user-facing history should become prominent only once there is enough meaningful activity to show
+
+### Artifacts + House Surfaces
+
+This layer should include:
+
+- product-level files
+- cabinets
+- whiteboards
+
+The low-level storage primitive may exist much earlier.
+The user-facing house surfaces belong here.
+
+### Game-Specific House Identity
+
+This is where the House becomes deeply ownable.
+
+It should include:
 
 - modular room construction
-- readable depth and layering
-- clear cat states
-- motion or feedback that creates presence
+- props and layering
+- layout persistence
+- customization
+- richer house identity in game mode
 
 ## MVP Interaction Rules
 
-The MVP interaction model should stay simple:
+At every stage, the product should stay simple enough to explain quickly.
+
+The MVP interaction model should prioritize:
 
 - inspect
 - review
@@ -174,63 +293,62 @@ The MVP does not need:
 - broad traversal
 - deep simulation systems
 - real multiplayer
-- advanced customization
-- full feature parity between modes
+- deep economy systems
+- full parity across every mode and every layer
 
 ## MVP Out Of Scope
 
 These are explicitly out of scope for the MVP:
 
-- authentication
-- real backend persistence
-- real executor sessions
+- broad multi-room traversal
+- polished progression systems
+- large-scale house customization
 - cross-device sync
-- advanced house policies
-- deep economy or progression systems
-- large-scale house building systems
+- real multiplayer
+- deep economy systems
+
+These can come later, after the shared async loop is already useful and the game presentation is already believable.
 
 ## MVP Success Criteria
 
-The MVP is successful if a small number of users can say:
+The MVP is successful if a small number of early users can say:
 
 - "I understood what the cats were doing."
-- "The app mode already feels useful."
+- "I could do something useful in app mode."
 - "The game mode feels promising, not fake."
 - "This feels like one product, not two unrelated surfaces."
-- "I want to come back and see it improve."
+- "I want to come back and see the next layer."
 
 ## MVP Acceptance Checklist
 
 The MVP should include:
 
-- a shared fixture-driven house core
-- an `/app/houses/:houseId` route with useful inspection and steering
-- a `/game/houses/:houseId` route for the same house
-- two visible cats
-- one active session
-- one inbox with notices
-- one thread inspection flow
-- one steering action
-- one visible reaction to that action
-- a game slice that is not just one baked background plus static sprites
+- a visible public capability ladder
+- a clear `backend -> app -> game` delivery model per capability
+- at least one early shareable slice
+- at least one early tryable slice
+- a first invite-only alpha gate centered on sessions and transcripts
+- a game slice that already feels alive enough to justify continued investment
 
 ## MVP Technical Strategy
 
 The MVP should be built with:
 
 - a renderer-agnostic domain model
-- fixture-driven data
+- thin infrastructure, not endless infrastructure
+- fixture-driven delivery where real backend behavior is not needed yet
 - a conventional app-mode client
 - a real game runtime for game mode
 - a shared action layer that both modes call into
 
 ## Next Step After MVP
 
-If the MVP works, the next step is not "pick one mode and abandon the other."
+If the MVP works, the next step is not to replace app mode with game mode.
 
 The next step is:
 
-- deepen the usefulness of app mode
-- raise the polish bar in game mode
+- keep climbing the same capability ladder
+- deepen usefulness in app mode
+- raise the quality bar in game mode
 - increase continuity between the modes
-- introduce real system state without forking the core model
+- let more users try the product at each stronger milestone

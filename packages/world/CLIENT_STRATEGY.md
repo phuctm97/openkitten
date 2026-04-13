@@ -84,6 +84,31 @@ App mode should prove:
 
 This reduces product risk because usefulness is easier to validate and iterate on than world polish.
 
+## Capability Delivery Model
+
+OpenKitten World should be delivered one capability at a time.
+
+For each capability, the preferred order is:
+
+1. backend
+2. app mode
+3. game mode
+
+This keeps the product honest:
+
+- backend makes the capability real
+- app mode makes it useful
+- game mode makes it embodied and distinctive
+
+This also keeps the public story clean:
+
+- app mode is where early product feedback becomes meaningful
+- game mode is where early social updates become visually compelling
+
+The capability order should follow product dependency order, not just technical dependency order.
+
+That means OpenKitten should first build the smallest layers that unlock a real async work loop, then deepen the world on top of that same loop.
+
 ## Why Game Mode Still Matters
 
 Game mode is not optional branding.
@@ -139,6 +164,9 @@ The preferred non-shared state is:
 - modal or panel choreography
 - renderer-specific input state
 
+The shared core should grow capability by capability.
+It should not wait until "everything" exists before app mode or game mode can use it.
+
 ## Why Separate Route Trees Matter
 
 One app should not mean one blended shell.
@@ -174,6 +202,19 @@ Phaser is the current likely choice because it fits:
 
 But the product decision is stronger than the library decision.
 The core requirement is a real game runtime, not one particular brand of runtime forever.
+
+## Public Iteration Consequences
+
+This architecture works best when the team distinguishes between:
+
+- `shareable slices`, which are good for social posts and public progress updates
+- `tryable slices`, which are good for hands-on product feedback
+
+Game mode will often produce the most shareable slices first.
+App mode will often produce the most tryable slices first.
+
+That is expected.
+The important thing is that both accumulate on the same shared core instead of becoming separate products.
 
 ## Operational Consequences
 

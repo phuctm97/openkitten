@@ -179,6 +179,13 @@ The core domain objects mean:
 The domain model must support multiple `Houses`.
 Each house is its own durable world with its own cats, work, appearance, and history.
 
+One implementation nuance matters here:
+
+- low-level file or blob storage primitives may exist very early
+- user-facing `Files`, `Cabinets`, and other house surfaces may arrive later as product capabilities
+
+The storage primitive and the product surface should not be treated as the same milestone.
+
 ## Work Model
 
 The preferred work model is:
@@ -190,6 +197,11 @@ The preferred work model is:
 - notices route attention to the human
 
 The system should avoid overcomplicated lifecycle taxonomies early on.
+
+`Activities` should also be treated carefully:
+
+- internal event recording may exist earlier
+- a user-facing activity or history surface should only become prominent once there are enough meaningful events to show
 
 ## Assignment And Concurrency
 
@@ -345,6 +357,31 @@ Mode-specific state may include:
 
 Mode-specific state must not become a second source of truth for core work objects.
 
+## Capability Ladder
+
+The preferred implementation order is:
+
+1. `Thin substrate`
+2. `Houses`
+3. `Cats`
+4. `Threads + comments`
+5. `Inbox + notices`
+6. `Executors`
+7. `Sessions + transcripts`
+8. `Direction + steering`
+9. `Activities + history`
+10. `Artifacts + house surfaces`
+11. `Game-specific house identity`
+
+The preferred delivery pattern for each capability is:
+
+1. backend
+2. app mode
+3. game mode
+
+This order is intentionally product-shaped rather than purely infra-shaped.
+It should follow the smallest layers that unlock real user loops, not the largest amount of hidden plumbing.
+
 ## Client Model
 
 The preferred client model is:
@@ -381,7 +418,8 @@ The implementation should avoid:
 The first convincing slices should preserve these invariants:
 
 - one house is enough to start
-- two cats are enough to start
+- one or two cats are enough to start
+- one thread loop is enough to start
 - one active session is enough to start
 - one readable steering action is enough to start
 - mocked data is acceptable
