@@ -39,6 +39,7 @@
         "@types/mime-types": "^3.0.1",
         "@vitest/coverage-istanbul": "^4.1.4",
         "drizzle-kit": "^0.31.10",
+        "vite": "^8.0.8",
         "vitest": "^4.1.4",
       },
     },
@@ -50,6 +51,7 @@
       },
       "devDependencies": {
         "@vitest/coverage-istanbul": "^4.1.4",
+        "vite": "^8.0.8",
         "vitest": "^4.1.4",
       },
     },
