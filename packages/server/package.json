@@ -5,7 +5,7 @@
   "type": "module",
   "main": "lib/main.ts",
   "scripts": {
-    "dev": "bun --watch lib/main.ts",
+    "dev": "bun --watch --no-clear-screen .",
     "test": "bun --bun vitest run --coverage"
   },
   "dependencies": {
