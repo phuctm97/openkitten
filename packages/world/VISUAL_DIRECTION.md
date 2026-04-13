@@ -130,6 +130,9 @@ Important house surfaces should be visually supported from the start:
 These should not be random decoration.
 They should feel like real, reusable parts of the house grammar.
 
+In early versions, some of these may begin as presentational cues before they become full product surfaces.
+That is acceptable as long as the visual grammar stays consistent with the later capability ladder.
+
 Atmospheric props matter too, but they should reinforce the same world:
 
 - comfort
