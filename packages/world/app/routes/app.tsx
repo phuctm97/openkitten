@@ -1,11 +1,11 @@
 import { ThemeAnchor } from "~/components/theme-anchor";
-import { Home } from "~/lib/home";
+import { App } from "~/lib/app";
 
 export default function Component() {
   return (
     <>
       <ThemeAnchor />
-      <Home />
+      <App />
     </>
   );
 }

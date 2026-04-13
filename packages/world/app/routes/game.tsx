@@ -1,11 +1,11 @@
+import { Game } from "~/components/game";
 import { ThemeAnchor } from "~/components/theme-anchor";
-import { Home } from "~/lib/home";
 
 export default function Component() {
   return (
     <>
       <ThemeAnchor />
-      <Home />
+      <Game />
     </>
   );
 }
