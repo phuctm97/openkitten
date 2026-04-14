@@ -1,0 +1,202 @@
+import {
+  Body,
+  Button,
+  Container,
+  Head,
+  Heading,
+  Html,
+  Img,
+  Preview,
+  Section,
+  Text,
+} from "@react-email/components";
+
+const productTitle = "OpenKitten";
+const websiteURL = "https://openkitten.com";
+const primaryColor = "#ba6836";
+const primaryShadowColor = "#8d4f28";
+const surfaceColor = "#fffdf9";
+const surfaceBorderColor = "#e8dccd";
+const backgroundColor = "#f6f1e8";
+const textColor = "#2d241e";
+const mutedTextColor = "#7a6659";
+const footerColor = "#a28c7d";
+
+export interface PasswordResetProps {
+  url?: string;
+}
+
+export default function PasswordReset({
+  url = websiteURL,
+}: PasswordResetProps) {
+  return (
+    <Html>
+      <Head />
+      <Preview>Reset your password on {productTitle}</Preview>
+      <Body style={main}>
+        <Container style={container}>
+          <Section style={logoSection}>
+            <table style={logoTable}>
+              <tr>
+                <td style={logoImageCell}>
+                  <Img
+                    src={`${websiteURL}/icon.png`}
+                    width={28}
+                    height={28}
+                    alt={productTitle}
+                  />
+                </td>
+                <td style={logoTextCell}>
+                  <Text style={logoText}>{productTitle}</Text>
+                </td>
+              </tr>
+            </table>
+          </Section>
+          <Section style={card}>
+            <div style={cardContent}>
+              <Heading style={heading}>Reset your password</Heading>
+              <Text style={subheading}>
+                We received a request to reset your password for your{" "}
+                {productTitle} account.
+              </Text>
+              <Text style={centeredParagraph}>
+                Click the button below to reset your password. This link will
+                expire in 1 hour.
+              </Text>
+              <Section style={buttonContainer}>
+                <Button style={button} href={url}>
+                  Reset password
+                </Button>
+              </Section>
+              <Text style={footerText}>
+                If you didn't request a password reset link, you can safely
+                ignore this email.
+              </Text>
+            </div>
+          </Section>
+          <Text style={footer}>
+            © {new Date().getFullYear()} {productTitle}. All rights reserved.
+          </Text>
+        </Container>
+      </Body>
+    </Html>
+  );
+}
+
+const main = {
+  backgroundColor,
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  padding: "32px 16px",
+};
+
+const container = {
+  margin: "0 auto",
+  maxWidth: "480px",
+};
+
+const logoSection = {
+  textAlign: "center" as const,
+  marginBottom: "32px",
+};
+
+const logoTable = {
+  margin: "0 auto",
+  borderCollapse: "collapse" as const,
+};
+
+const logoImageCell = {
+  padding: "0",
+  paddingRight: "8px",
+  verticalAlign: "middle" as const,
+};
+
+const logoTextCell = {
+  padding: "0",
+  verticalAlign: "middle" as const,
+};
+
+const logoText = {
+  fontFamily: '"Avenir Next", "Trebuchet MS", "Segoe UI", Arial, sans-serif',
+  fontSize: "20px",
+  fontWeight: "600" as const,
+  letterSpacing: "0.02em",
+  color: primaryColor,
+  margin: "0",
+  display: "inline-block",
+};
+
+const card = {
+  backgroundColor: surfaceColor,
+  borderRadius: "20px",
+  padding: "32px 16px",
+  border: `1px solid ${surfaceBorderColor}`,
+  boxShadow: `0 14px 36px -24px ${primaryShadowColor}`,
+};
+
+const cardContent = {
+  maxWidth: "400px",
+  margin: "0 auto",
+};
+
+const heading = {
+  fontFamily: '"Avenir Next", "Trebuchet MS", "Segoe UI", Arial, sans-serif',
+  color: textColor,
+  fontSize: "28px",
+  fontWeight: "700" as const,
+  letterSpacing: "-0.02em",
+  margin: "0 0 16px",
+  textAlign: "center" as const,
+};
+
+const subheading = {
+  color: mutedTextColor,
+  fontSize: "16px",
+  lineHeight: "24px",
+  margin: "0 0 32px",
+  textAlign: "center" as const,
+};
+
+const centeredParagraph = {
+  color: textColor,
+  fontSize: "15px",
+  lineHeight: "24px",
+  margin: "0 0 24px",
+  textAlign: "center" as const,
+};
+
+const buttonContainer = {
+  textAlign: "center" as const,
+  margin: "32px 0",
+};
+
+const button = {
+  backgroundColor: primaryColor,
+  borderRadius: "12px",
+  color: "#ffffff",
+  fontSize: "16px",
+  fontWeight: "600" as const,
+  boxShadow: `0 10px 24px -18px ${primaryShadowColor}`,
+  textDecoration: "none",
+  textAlign: "center" as const,
+  padding: "12px 32px",
+  display: "inline-block",
+  width: "100%",
+  maxWidth: "200px",
+};
+
+const footerText = {
+  color: mutedTextColor,
+  fontSize: "14px",
+  lineHeight: "20px",
+  margin: "24px auto 32px auto",
+  maxWidth: "340px",
+  textAlign: "center" as const,
+};
+
+const footer = {
+  color: footerColor,
+  fontSize: "12px",
+  margin: "32px 0 0",
+  textAlign: "center" as const,
+};

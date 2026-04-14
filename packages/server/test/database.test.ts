@@ -11,17 +11,17 @@ afterEach(() => {
 
 it("creates the database from PG_URL and runs migrations", async () => {
   vi.stubEnv("PG_URL", connectionString);
-  const database = { query: { house: { findMany: vi.fn() } } };
+  const pgDatabase = { query: { house: { findMany: vi.fn() } } };
   const drizzle = vi.fn(
     (url: string, config: { schema: Record<string, unknown> }) => {
       void url;
       void config;
-      return database;
+      return pgDatabase;
     },
   );
   const migrate = vi.fn(
     async (
-      targetDatabase: typeof database,
+      targetDatabase: typeof pgDatabase,
       config: { migrationsFolder: string },
     ) => {
       void targetDatabase;
@@ -32,7 +32,7 @@ it("creates the database from PG_URL and runs migrations", async () => {
   vi.doMock("drizzle-orm/bun-sql", () => ({ drizzle }));
   vi.doMock("drizzle-orm/bun-sql/migrator", () => ({ migrate }));
 
-  const module = await import("../lib/database");
+  const module = await import("../lib/pg-database");
   const drizzleCall = drizzle.mock.calls[0];
 
   expect(drizzleCall).toBeDefined();
@@ -42,29 +42,29 @@ it("creates the database from PG_URL and runs migrations", async () => {
 
   const [url, config] = drizzleCall;
 
-  expect(module.database).toBe(database);
+  expect(module.pgDatabase).toBe(pgDatabase);
   expect(drizzle).toHaveBeenCalledTimes(1);
   expect(url).toBe(connectionString);
   expect(Object.keys(config.schema)).toStrictEqual(["house"]);
   expect(migrate).toHaveBeenCalledTimes(1);
-  expect(migrate).toHaveBeenCalledWith(database, {
+  expect(migrate).toHaveBeenCalledWith(pgDatabase, {
     migrationsFolder: expect.stringContaining("/packages/server/drizzle"),
   });
 });
 
 it("falls back to the default local postgres URL", async () => {
   vi.stubEnv("PG_URL", "");
-  const database = { query: { house: { findFirst: vi.fn() } } };
+  const pgDatabase = { query: { house: { findFirst: vi.fn() } } };
   const drizzle = vi.fn(
     (url: string, config: { schema: Record<string, unknown> }) => {
       void url;
       void config;
-      return database;
+      return pgDatabase;
     },
   );
   const migrate = vi.fn(
     async (
-      targetDatabase: typeof database,
+      targetDatabase: typeof pgDatabase,
       config: { migrationsFolder: string },
     ) => {
       void targetDatabase;
@@ -75,7 +75,7 @@ it("falls back to the default local postgres URL", async () => {
   vi.doMock("drizzle-orm/bun-sql", () => ({ drizzle }));
   vi.doMock("drizzle-orm/bun-sql/migrator", () => ({ migrate }));
 
-  const module = await import("../lib/database");
+  const module = await import("../lib/pg-database");
   const drizzleCall = drizzle.mock.calls[0];
 
   expect(drizzleCall).toBeDefined();
@@ -85,10 +85,10 @@ it("falls back to the default local postgres URL", async () => {
 
   const [url, config] = drizzleCall;
 
-  expect(module.database).toBe(database);
+  expect(module.pgDatabase).toBe(pgDatabase);
   expect(url).toBe(defaultConnectionString);
   expect(Object.keys(config.schema)).toStrictEqual(["house"]);
-  expect(migrate).toHaveBeenCalledWith(database, {
+  expect(migrate).toHaveBeenCalledWith(pgDatabase, {
     migrationsFolder: expect.stringContaining("/packages/server/drizzle"),
   });
 });

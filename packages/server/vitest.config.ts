@@ -6,7 +6,7 @@ export default defineConfig({
     include: ["test/**/*.test.ts"],
     coverage: {
       provider: "istanbul",
-      include: ["lib/**/*.ts"],
+      include: ["lib/**/*.{ts,tsx}"],
       thresholds: {
         statements: 100,
         branches: 100,
