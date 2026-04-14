@@ -3,6 +3,7 @@
   "references": [
     { "path": "./packages/bot/tsconfig.json" },
     { "path": "./packages/server/tsconfig.json" },
+    { "path": "./packages/website/tsconfig.json" },
     { "path": "./packages/world/tsconfig.json" }
   ],
   "extends": "@tsconfig/bun/tsconfig.json",

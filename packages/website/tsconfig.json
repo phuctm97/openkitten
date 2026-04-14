@@ -2,13 +2,10 @@
   "include": [
     "package.json",
     "node-env.d.ts",
-    "vite.config.ts",
     "vitest.config.ts",
-    "react-router.config.ts",
-    ".react-router/types",
-    "assets",
-    "hooks",
-    "components",
+    "next.config.ts",
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
     "lib",
     "app",
     "test"
@@ -17,11 +14,10 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM"],
-    "types": ["node", "vite/client"],
+    "types": ["node"],
     "outDir": "dist",
     "paths": {
       "~/*": ["./*"]
-    },
-    "rootDirs": [".", "./.react-router/types"]
+    }
   }
 }

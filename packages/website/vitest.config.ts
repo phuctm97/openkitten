@@ -8,13 +8,7 @@ export default defineConfig({
     setupFiles: ["test/setup.ts"],
     coverage: {
       provider: "istanbul",
-      include: [
-        "hooks/**/*.{ts,tsx}",
-        "components/**/*.{ts,tsx}",
-        "lib/**/*.{ts,tsx}",
-        "app/**/*.{ts,tsx}",
-      ],
-      exclude: ["app/routes.ts"],
+      include: ["lib/**/*.{ts,tsx}", "app/**/*.{ts,tsx}"],
       thresholds: {
         statements: 100,
         branches: 100,
