@@ -98,6 +98,7 @@ test("renders agent files with self-file access", async () => {
   const agentDirectoryGlob = normalizePathPattern(
     join(configDir(), "agents", "*"),
   );
+  const skillsDirGlob = normalizePathPattern(join(skillsDir(), "**"));
 
   for (const agent of ["assist", "build", "plan"]) {
     const agentPath = join(configDir(), "agents", `${agent}.md`);
@@ -110,10 +111,12 @@ test("renders agent files with self-file access", async () => {
     expect(content).toContain(
       `    ${JSON.stringify(agentDirectoryGlob)}: allow`,
     );
+    expect(content).toContain(`    ${JSON.stringify(skillsDirGlob)}: allow`);
     expect(content).toContain("durable memory");
     expect(content).toContain("# Memory");
     expect(content).toContain("No durable memory recorded yet.");
     expect(content).not.toContain("__OPENKITTEN_AGENT_");
+    expect(content).not.toContain("__OPENKITTEN_SKILLS_");
   }
 });
 
@@ -166,6 +169,28 @@ test("copies skill directory with SKILL.md and scripts", async () => {
     "utf-8",
   );
   expect(getTokenTs).toContain("openkitten");
+});
+
+test("copies create-commands skill files", async () => {
+  await OpencodeConfig.create(profile);
+  const skillMd = await readFile(
+    join(skillsDir(), "create-commands", "SKILL.md"),
+    "utf-8",
+  );
+  expect(skillMd).toContain("# Custom Commands");
+  expect(skillMd).toContain("name: create-commands");
+
+  const opencodeMd = await readFile(
+    join(skillsDir(), "create-commands", "opencode-commands.md"),
+    "utf-8",
+  );
+  expect(opencodeMd).toContain("# OpenCode Built-in Commands");
+
+  const refreshTs = await readFile(
+    join(skillsDir(), "create-commands", "refresh-commands.ts"),
+    "utf-8",
+  );
+  expect(refreshTs).toContain("setMyCommands");
 });
 
 test("always overwrites skill files on startup", async () => {

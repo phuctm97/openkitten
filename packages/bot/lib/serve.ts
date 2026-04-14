@@ -85,8 +85,6 @@ export const serve = defineCommand({
         opencodeServer.client,
         existingSessions,
         scheduler,
-        commandSkillsDir,
-        telegramConfig.botToken,
       );
       using workingSessions = WorkingSessions.create(existingSessions);
       await using pendingPrompts = PendingPrompts.create(
