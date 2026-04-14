@@ -21,13 +21,15 @@ import {
   surfaceColor,
   textColor,
 } from "~/lib/emails/theme";
+import { iconURL } from "~/lib/icon-url";
+import { websiteURL } from "~/lib/website-url";
 
 export interface EmailVerificationProps {
   url?: string;
 }
 
 export default function EmailVerification({
-  url = "https://www.openkitten.com",
+  url = websiteURL,
 }: EmailVerificationProps) {
   return (
     <Html>
@@ -39,12 +41,7 @@ export default function EmailVerification({
             <table style={logoTable}>
               <tr>
                 <td style={logoImageCell}>
-                  <Img
-                    src="https://www.openkitten.com/icon.png"
-                    width={28}
-                    height={28}
-                    alt="OpenKitten"
-                  />
+                  <Img src={iconURL} width={28} height={28} alt="OpenKitten" />
                 </td>
                 <td style={logoTextCell}>
                   <Text style={logoText}>OpenKitten</Text>

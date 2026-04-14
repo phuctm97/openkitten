@@ -6,6 +6,8 @@ import * as schema from "~/lib/schema";
 
 export const pgDatabase = drizzle(pgURL, { schema });
 
-await migrate(pgDatabase, {
-  migrationsFolder: resolve(import.meta.dirname, "../drizzle"),
-});
+if (!Bun.argv.some((arg) => arg.includes("better-auth"))) {
+  await migrate(pgDatabase, {
+    migrationsFolder: resolve(import.meta.dirname, "../drizzle"),
+  });
+}

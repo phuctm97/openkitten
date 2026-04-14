@@ -3,8 +3,21 @@ import { afterEach, expect, it, vi } from "vitest";
 const connectionString = "postgres://postgres:postgres@127.0.0.1:1/postgres";
 const defaultConnectionString =
   "postgres://postgres:postgres@localhost:5432/postgres";
+const originalBunArgv = [...Bun.argv];
+
+const schemaKeys = [
+  "house",
+  "user",
+  "session",
+  "account",
+  "verification",
+  "userRelations",
+  "sessionRelations",
+  "accountRelations",
+];
 
 afterEach(() => {
+  Bun.argv.splice(0, Bun.argv.length, ...originalBunArgv);
   vi.resetModules();
   vi.unstubAllEnvs();
 });
@@ -45,7 +58,7 @@ it("creates the database from PG_URL and runs migrations", async () => {
   expect(module.pgDatabase).toBe(pgDatabase);
   expect(drizzle).toHaveBeenCalledTimes(1);
   expect(url).toBe(connectionString);
-  expect(Object.keys(config.schema)).toStrictEqual(["house"]);
+  expect(Object.keys(config.schema)).toStrictEqual(schemaKeys);
   expect(migrate).toHaveBeenCalledTimes(1);
   expect(migrate).toHaveBeenCalledWith(pgDatabase, {
     migrationsFolder: expect.stringContaining("/packages/server/drizzle"),
@@ -87,8 +100,30 @@ it("falls back to the default local postgres URL", async () => {
 
   expect(module.pgDatabase).toBe(pgDatabase);
   expect(url).toBe(defaultConnectionString);
-  expect(Object.keys(config.schema)).toStrictEqual(["house"]);
+  expect(Object.keys(config.schema)).toStrictEqual(schemaKeys);
   expect(migrate).toHaveBeenCalledWith(pgDatabase, {
     migrationsFolder: expect.stringContaining("/packages/server/drizzle"),
   });
+});
+
+it("skips migrations while the better-auth CLI is running", async () => {
+  Bun.argv.push("better-auth");
+  const pgDatabase = { query: { user: { findFirst: vi.fn() } } };
+  const drizzle = vi.fn(
+    (url: string, config: { schema: Record<string, unknown> }) => {
+      void url;
+      void config;
+      return pgDatabase;
+    },
+  );
+  const migrate = vi.fn(async () => undefined);
+
+  vi.doMock("drizzle-orm/bun-sql", () => ({ drizzle }));
+  vi.doMock("drizzle-orm/bun-sql/migrator", () => ({ migrate }));
+
+  const module = await import("../lib/pg-database");
+
+  expect(module.pgDatabase).toBe(pgDatabase);
+  expect(drizzle).toHaveBeenCalledTimes(1);
+  expect(migrate).not.toHaveBeenCalled();
 });
