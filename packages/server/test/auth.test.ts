@@ -47,8 +47,8 @@ it("uses the database and fallback auth URLs", async () => {
   expect(auth.options.basePath).toBe("/v1/auth");
   expect(auth.options.trustedOrigins).toStrictEqual([
     serverURL,
-    websiteURL,
     worldURL,
+    websiteURL,
   ]);
   expect(drizzleAdapter).toHaveBeenCalledWith(pgDatabase, {
     provider: "pg",
@@ -112,8 +112,8 @@ it("uses the runtime database and sends auth emails", async () => {
   expect(auth.options.baseURL).toBe(serverURL);
   expect(auth.options.trustedOrigins).toStrictEqual([
     serverURL,
-    websiteURL,
     worldURL,
+    websiteURL,
   ]);
   expect(auth.options.emailVerification.sendOnSignUp).toBe(true);
   await expect(auth.options.databaseHooks.user.create.before?.()).resolves.toBe(
