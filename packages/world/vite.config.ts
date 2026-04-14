@@ -5,6 +5,10 @@ import { defineConfig } from "vite";
 export default defineConfig({
   resolve: { tsconfigPaths: true },
   build: { chunkSizeWarningLimit: 2000 },
-  server: { watch: { ignored: ["**/build/**", "**/coverage/**"] } },
+  server: {
+    watch: { ignored: ["**/build/**", "**/coverage/**"] },
+    port: 41238,
+    strictPort: true,
+  },
   plugins: [reactRouter(), tailwindcss()],
 });
