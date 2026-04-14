@@ -119,7 +119,7 @@ test("uninstalls on darwin with custom profile", async () => {
 test("uninstalls on win32", async () => {
   Object.defineProperty(process, "platform", { value: "win32" });
   Object.defineProperty(process, "getuid", { value: undefined });
-  process.env["LOCALAPPDATA"] = "C:\\MockLocal";
+  Bun.env["LOCALAPPDATA"] = "C:\\MockLocal";
   const { rm } = await import("node:fs/promises");
   await runCommand(down, { rawArgs: [] });
   expect(vi.mocked(rm)).toHaveBeenCalledWith(

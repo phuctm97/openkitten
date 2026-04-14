@@ -1,21 +1,23 @@
 {
   "include": [
     "package.json",
-    "react-router.config.ts",
+    "node-env.d.ts",
     "vite.config.ts",
     "vitest.config.ts",
+    "react-router.config.ts",
     ".react-router/types",
-    "app",
-    "lib",
+    "assets",
     "hooks",
     "components",
+    "lib",
+    "app",
     "test"
   ],
   "references": [],
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "lib": ["ESNext", "DOM"],
-    "types": ["bun", "vite/client"],
+    "types": ["vite/client"],
     "outDir": "dist",
     "paths": {
       "~/*": ["./*"]

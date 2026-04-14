@@ -16,6 +16,7 @@ import { getAttachmentName } from "~/lib/get-attachment-name";
 import { logger } from "~/lib/logger";
 import { registerScheduleTools } from "~/lib/register-schedule-tools";
 import type { Scheduler } from "~/lib/scheduler";
+import { websiteURL } from "~/lib/website-url";
 import { version } from "~/package.json" with { type: "json" };
 
 const openkittenMetadataSchema = zod.object({
@@ -90,7 +91,7 @@ export class McpServer implements Disposable {
       title: "OpenKitten",
       description:
         "Additional tools and resources for OpenKitten-powered agents",
-      websiteUrl: "https://openkitten.com",
+      websiteUrl: websiteURL,
     });
     server.registerTool(
       "send_file",
