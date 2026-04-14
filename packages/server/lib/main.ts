@@ -1,11 +1,11 @@
 import { sql } from "drizzle-orm";
 import { Hono } from "hono";
-import { database } from "~/lib/database";
+import { pgDatabase } from "~/lib/pg-database";
 
 const hono = new Hono();
 
 hono.get("/v1/health", async (context) => {
-  await database.execute(sql`select 1`);
+  await pgDatabase.execute(sql`select 1`);
   return context.text("OK");
 });
 

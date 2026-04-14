@@ -5,7 +5,7 @@ const { execute } = vi.hoisted(() => ({
   execute: vi.fn(async () => ({ rows: [] })),
 }));
 
-vi.mock("~/lib/database", () => ({ database: { execute } }));
+vi.mock("~/lib/pg-database", () => ({ pgDatabase: { execute } }));
 
 beforeEach(() => {
   execute.mockClear();

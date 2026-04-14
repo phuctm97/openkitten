@@ -9,13 +9,22 @@
     "test": "bun --bun vitest run"
   },
   "dependencies": {
+    "@react-email/components": "^1.0.12",
     "drizzle-orm": "^0.45.2",
-    "hono": "^4.12.9"
+    "hono": "^4.12.12",
+    "nodemailer": "^8.0.5",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   },
   "devDependencies": {
+    "@react-email/preview-server": "^5.2.10",
+    "@types/nodemailer": "^8.0.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
     "@vitest/coverage-istanbul": "^4.1.4",
-    "vite": "^8.0.8",
     "drizzle-kit": "^0.31.10",
+    "react-email": "^5.2.10",
+    "vite": "^8.0.8",
     "vitest": "^4.1.4"
   }
 }
