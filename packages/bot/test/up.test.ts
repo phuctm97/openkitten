@@ -245,7 +245,7 @@ test("proceeds after darwin bootout timeout", async () => {
 
 test("installs on win32", async () => {
   Object.defineProperty(process, "platform", { value: "win32" });
-  process.env["LOCALAPPDATA"] = "C:\\MockLocal";
+  Bun.env["LOCALAPPDATA"] = "C:\\MockLocal";
   const { mkdir } = await import("node:fs/promises");
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))

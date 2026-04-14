@@ -5,10 +5,11 @@
     "vite.config.ts",
     "vitest.config.ts",
     ".react-router/types",
-    "app",
-    "lib",
+    "assets",
     "hooks",
     "components",
+    "app",
+    "lib",
     "test"
   ],
   "references": [],

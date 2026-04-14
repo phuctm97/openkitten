@@ -1,0 +1,20 @@
+{
+  "include": [
+    "package.json",
+    "next.config.ts",
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    "app",
+    "lib"
+  ],
+  "references": [],
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "types": ["bun"],
+    "outDir": "dist",
+    "paths": {
+      "~/*": ["./*"]
+    }
+  }
+}
