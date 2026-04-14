@@ -171,6 +171,28 @@ test("copies skill directory with SKILL.md and scripts", async () => {
   expect(getTokenTs).toContain("openkitten");
 });
 
+test("copies create-commands skill files", async () => {
+  await OpencodeConfig.create(profile);
+  const skillMd = await readFile(
+    join(skillsDir(), "create-commands", "SKILL.md"),
+    "utf-8",
+  );
+  expect(skillMd).toContain("# Custom Commands");
+  expect(skillMd).toContain("name: create-commands");
+
+  const opencodeMd = await readFile(
+    join(skillsDir(), "create-commands", "opencode-commands.md"),
+    "utf-8",
+  );
+  expect(opencodeMd).toContain("# OpenCode Built-in Commands");
+
+  const refreshTs = await readFile(
+    join(skillsDir(), "create-commands", "refresh-commands.ts"),
+    "utf-8",
+  );
+  expect(refreshTs).toContain("setMyCommands");
+});
+
 test("always overwrites skill files on startup", async () => {
   await OpencodeConfig.create(profile);
   const skillPath = join(skillsDir(), "telegram-api", "SKILL.md");

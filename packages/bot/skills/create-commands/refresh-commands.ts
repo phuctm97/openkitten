@@ -60,7 +60,15 @@ const response = await fetch(
   },
 );
 
-const result: { ok: boolean } = await response.json();
+let result: { ok: boolean };
+try {
+  result = await response.json();
+} catch {
+  process.stderr.write(
+    `Error: setMyCommands returned non-JSON response (status ${response.status})\n`,
+  );
+  process.exit(1);
+}
 
 if (!result.ok) {
   process.stderr.write(
