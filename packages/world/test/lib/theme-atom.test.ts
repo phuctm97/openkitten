@@ -2,6 +2,12 @@ import { RESET } from "jotai/utils";
 import { createStore } from "jotai/vanilla";
 import { expect, test, vi } from "vitest";
 
+function createStorageEvent(
+  init: Pick<StorageEvent, "key" | "newValue" | "storageArea">,
+) {
+  return Object.assign(new Event("storage"), init) as StorageEvent;
+}
+
 async function importThemeAtom() {
   vi.resetModules();
 
@@ -46,14 +52,14 @@ test("subscribes to storage changes for the matching key", async () => {
   const unsubscribe = store.sub(themeAtom, listener);
 
   window.dispatchEvent(
-    new StorageEvent("storage", {
+    createStorageEvent({
       key: "another-key",
       newValue: "dark",
       storageArea: localStorage,
     }),
   );
   window.dispatchEvent(
-    new StorageEvent("storage", {
+    createStorageEvent({
       key: "openkitten-theme",
       newValue: "light",
       storageArea: sessionStorage,
@@ -63,7 +69,7 @@ test("subscribes to storage changes for the matching key", async () => {
   expect(listener).not.toHaveBeenCalled();
 
   window.dispatchEvent(
-    new StorageEvent("storage", {
+    createStorageEvent({
       key: "openkitten-theme",
       newValue: "dark",
       storageArea: localStorage,
@@ -74,7 +80,7 @@ test("subscribes to storage changes for the matching key", async () => {
   expect(store.get(themeAtom)).toBe("dark");
 
   window.dispatchEvent(
-    new StorageEvent("storage", {
+    createStorageEvent({
       key: "openkitten-theme",
       newValue: "sunset",
       storageArea: localStorage,
@@ -86,7 +92,7 @@ test("subscribes to storage changes for the matching key", async () => {
 
   unsubscribe();
   window.dispatchEvent(
-    new StorageEvent("storage", {
+    createStorageEvent({
       key: "openkitten-theme",
       newValue: "light",
       storageArea: localStorage,
