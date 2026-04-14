@@ -5,6 +5,7 @@ import { InputFile } from "grammy";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
+import { websiteURL } from "~/lib/website-url";
 
 vi.mock("node:crypto", () => ({
   randomBytes: vi.fn(() => ({
@@ -257,7 +258,7 @@ describe("McpServer", () => {
         version: "0.0.0",
         description:
           "Additional tools and resources for OpenKitten-powered agents",
-        websiteUrl: "https://openkitten.com",
+        websiteUrl: websiteURL,
       },
     ]);
     expect(mockConnect).toHaveBeenCalledOnce();

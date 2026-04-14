@@ -8,7 +8,7 @@ const { execute, handler, websiteOrigin } = vi.hoisted(() => ({
     async (request: Request) =>
       new Response(`auth:${new URL(request.url).pathname}`),
   ),
-  websiteOrigin: "https://www.openkitten.com",
+  websiteOrigin: "http://localhost:41239",
 }));
 
 vi.mock("~/lib/pg-database", () => ({ pgDatabase: { execute } }));
