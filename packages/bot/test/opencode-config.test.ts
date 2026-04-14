@@ -98,6 +98,7 @@ test("renders agent files with self-file access", async () => {
   const agentDirectoryGlob = normalizePathPattern(
     join(configDir(), "agents", "*"),
   );
+  const skillsDirGlob = normalizePathPattern(join(skillsDir(), "**"));
 
   for (const agent of ["assist", "build", "plan"]) {
     const agentPath = join(configDir(), "agents", `${agent}.md`);
@@ -110,10 +111,12 @@ test("renders agent files with self-file access", async () => {
     expect(content).toContain(
       `    ${JSON.stringify(agentDirectoryGlob)}: allow`,
     );
+    expect(content).toContain(`    ${JSON.stringify(skillsDirGlob)}: allow`);
     expect(content).toContain("durable memory");
     expect(content).toContain("# Memory");
     expect(content).toContain("No durable memory recorded yet.");
     expect(content).not.toContain("__OPENKITTEN_AGENT_");
+    expect(content).not.toContain("__OPENKITTEN_SKILLS_");
   }
 });
 
