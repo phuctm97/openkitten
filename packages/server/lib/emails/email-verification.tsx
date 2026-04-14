@@ -10,29 +10,29 @@ import {
   Section,
   Text,
 } from "@react-email/components";
-
-const productTitle = "OpenKitten";
-const websiteURL = "https://openkitten.com";
-const primaryColor = "#ba6836";
-const primaryShadowColor = "#8d4f28";
-const surfaceColor = "#fffdf9";
-const surfaceBorderColor = "#e8dccd";
-const backgroundColor = "#f6f1e8";
-const textColor = "#2d241e";
-const mutedTextColor = "#7a6659";
-const footerColor = "#a28c7d";
+import {
+  backgroundColor,
+  fontFamily,
+  footerColor,
+  mutedTextColor,
+  primaryColor,
+  primaryShadowColor,
+  surfaceBorderColor,
+  surfaceColor,
+  textColor,
+} from "~/lib/emails/theme";
 
 export interface EmailVerificationProps {
   url?: string;
 }
 
 export default function EmailVerification({
-  url = websiteURL,
+  url = "https://www.openkitten.com",
 }: EmailVerificationProps) {
   return (
     <Html>
       <Head />
-      <Preview>Verify your email address on {productTitle}</Preview>
+      <Preview>Verify your email address on OpenKitten</Preview>
       <Body style={main}>
         <Container style={container}>
           <Section style={logoSection}>
@@ -40,14 +40,14 @@ export default function EmailVerification({
               <tr>
                 <td style={logoImageCell}>
                   <Img
-                    src={`${websiteURL}/icon.png`}
+                    src="https://www.openkitten.com/icon.png"
                     width={28}
                     height={28}
-                    alt={productTitle}
+                    alt="OpenKitten"
                   />
                 </td>
                 <td style={logoTextCell}>
-                  <Text style={logoText}>{productTitle}</Text>
+                  <Text style={logoText}>OpenKitten</Text>
                 </td>
               </tr>
             </table>
@@ -56,8 +56,8 @@ export default function EmailVerification({
             <div style={cardContent}>
               <Heading style={heading}>Verify your email</Heading>
               <Text style={subheading}>
-                Welcome to {productTitle}! Please confirm your email address to
-                get started.
+                Welcome to OpenKitten! Please confirm your email address to get
+                started.
               </Text>
               <Text style={centeredParagraph}>
                 Click the button below to verify your email address. This link
@@ -69,13 +69,13 @@ export default function EmailVerification({
                 </Button>
               </Section>
               <Text style={footerText}>
-                If you didn't create a {productTitle} account, you can safely
-                ignore this email.
+                If you didn't create a OpenKitten account, you can safely ignore
+                this email.
               </Text>
             </div>
           </Section>
           <Text style={footer}>
-            © {new Date().getFullYear()} {productTitle}. All rights reserved.
+            © {new Date().getFullYear()} OpenKitten. All rights reserved.
           </Text>
         </Container>
       </Body>
@@ -85,8 +85,7 @@ export default function EmailVerification({
 
 const main = {
   backgroundColor,
-  fontFamily:
-    '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontFamily,
   padding: "32px 16px",
 };
 
@@ -117,7 +116,7 @@ const logoTextCell = {
 };
 
 const logoText = {
-  fontFamily: '"Avenir Next", "Trebuchet MS", "Segoe UI", Arial, sans-serif',
+  fontFamily,
   fontSize: "20px",
   fontWeight: "600" as const,
   letterSpacing: "0.02em",
@@ -140,7 +139,7 @@ const cardContent = {
 };
 
 const heading = {
-  fontFamily: '"Avenir Next", "Trebuchet MS", "Segoe UI", Arial, sans-serif',
+  fontFamily,
   color: textColor,
   fontSize: "28px",
   fontWeight: "700" as const,
