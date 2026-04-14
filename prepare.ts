@@ -9,17 +9,13 @@ const nextConfigFiles = new Bun.Glob("packages/*/next.config.ts");
 const promises: Promise<unknown>[] = [];
 
 for await (const reactRouterConfigFile of reactRouterConfigFiles.scan(".")) {
-  promises.push(
-    Bun.$`bun --bun react-router typegen`
-      .cwd(dirname(reactRouterConfigFile))
-      .quiet(),
-  );
+  const dir = dirname(reactRouterConfigFile);
+  promises.push(Bun.$`bun react-router typegen`.cwd(dir).quiet());
 }
 
 for await (const nextConfigFile of nextConfigFiles.scan(".")) {
-  promises.push(
-    Bun.$`bun --bun next typegen`.cwd(dirname(nextConfigFile)).quiet(),
-  );
+  const dir = dirname(nextConfigFile);
+  promises.push(Bun.$`bun next typegen`.cwd(dir).quiet());
 }
 
 await Promise.all(promises);
