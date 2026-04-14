@@ -28,6 +28,7 @@ import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
 import { OpencodeServer } from "~/lib/opencode-server";
 import { PendingPrompts } from "~/lib/pending-prompts";
+import { PluginAPI } from "~/lib/plugin-api";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import { Profile } from "~/lib/profile";
 import { restart } from "~/lib/restart";
@@ -80,6 +81,7 @@ export const serve = defineCommand({
         opencodeServer.client,
         existingSessions,
       );
+      using _pluginAPI = await PluginAPI.create(profile, bot, database);
       using mcpServer = await McpServer.create(
         bot,
         opencodeServer.client,

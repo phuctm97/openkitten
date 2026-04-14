@@ -14,6 +14,7 @@
     "@grammyjs/auto-retry": "^2.0.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "^1.4.3",
+    "@openkitten/plugin": "workspace:*",
     "boxen": "^8.0.1",
     "bunqueue": "^2.7.2",
     "citty": "^0.2.2",

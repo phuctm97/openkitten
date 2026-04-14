@@ -14,6 +14,8 @@ const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
 
 const defaultSkillsDir = resolve(import.meta.dirname, "../skills");
 
+const pluginPackageDir = resolve(import.meta.dirname, "../../plugin");
+
 const defaultSystemAgents = resolve(import.meta.dirname, "../system-agents.md");
 
 const defaultDefaultAgents = resolve(
@@ -123,11 +125,13 @@ export namespace OpencodeConfig {
     const writes: Promise<unknown>[] = [];
     const configDir = join(profile.dir, ".opencode");
     const agentsDir = join(configDir, "agents");
-    const pluginsDir = join(profile.xdgConfig, "opencode", "plugins");
+    const globalPluginsDir = join(profile.xdgConfig, "opencode", "plugins");
+    const projectPluginsDir = join(configDir, "plugins");
     const skillsDir = join(profile.xdgConfig, "opencode", "skills");
     await Promise.all([
       mkdir(agentsDir, { recursive: true }),
-      mkdir(pluginsDir, { recursive: true }),
+      mkdir(globalPluginsDir, { recursive: true }),
+      mkdir(projectPluginsDir, { recursive: true }),
       mkdir(profile.workspace, { recursive: true }),
       mkdir(skillsDir, { recursive: true }),
     ]);
@@ -174,7 +178,25 @@ export namespace OpencodeConfig {
       ),
     );
     writes.push(
-      Bun.write(join(pluginsDir, opencodePluginFilename), opencodePluginSource),
+      writeFile(
+        join(configDir, "package.json"),
+        JSON.stringify(
+          {
+            dependencies: {
+              "@openkitten/plugin": `file:${pluginPackageDir}`,
+              grammy: "^1.42.0",
+            },
+          },
+          null,
+          2,
+        ),
+      ),
+    );
+    writes.push(
+      Bun.write(
+        join(globalPluginsDir, opencodePluginFilename),
+        opencodePluginSource,
+      ),
     );
     const results = await Promise.allSettled(writes);
     const errors = results

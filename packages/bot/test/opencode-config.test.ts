@@ -37,7 +37,7 @@ afterEach(async () => {
 
 const configDir = () => join(profileDir, ".opencode");
 
-const pluginsDir = () => join(profile.xdgConfig, "opencode", "plugins");
+const globalPluginsDir = () => join(profile.xdgConfig, "opencode", "plugins");
 
 const skillsDir = () => join(profile.xdgConfig, "opencode", "skills");
 
@@ -130,7 +130,10 @@ test("writes opencode config", async () => {
 
 test("writes system OpenCode plugin", async () => {
   await OpencodeConfig.create(profile);
-  const content = await readFile(join(pluginsDir(), "openkitten.js"), "utf-8");
+  const content = await readFile(
+    join(globalPluginsDir(), "openkitten.js"),
+    "utf-8",
+  );
   expect(content).toContain('id: "openkitten"');
   expect(content).toContain("server: async () => ({");
   expect(content).toContain(
@@ -234,13 +237,21 @@ test("overwrites all agent files on repeated create", async () => {
 });
 
 test("overwrites existing system OpenCode plugin", async () => {
-  await mkdir(pluginsDir(), { recursive: true });
-  const pluginPath = join(pluginsDir(), "openkitten.js");
+  await mkdir(globalPluginsDir(), { recursive: true });
+  const pluginPath = join(globalPluginsDir(), "openkitten.js");
   await writeFile(pluginPath, "custom content");
   await OpencodeConfig.create(profile);
   const content = await readFile(pluginPath, "utf-8");
   expect(content).not.toBe("custom content");
   expect(content).toContain("output.args.__OPENKITTEN__ = {");
+});
+
+test("writes .opencode/package.json with plugin and grammy", async () => {
+  await OpencodeConfig.create(profile);
+  const content = await readFile(join(configDir(), "package.json"), "utf-8");
+  const pkg = JSON.parse(content);
+  expect(pkg.dependencies["@openkitten/plugin"]).toMatch(/^file:/);
+  expect(pkg.dependencies["grammy"]).toBeDefined();
 });
 
 test("throws on single non-EEXIST error", async () => {
@@ -256,7 +267,9 @@ test("throws on single non-EEXIST error", async () => {
 
 test("throws Errors on multiple non-EEXIST errors", async () => {
   const agentsPath = join(configDir(), "agents");
+  const projectPlugins = join(configDir(), "plugins");
   await mkdir(agentsPath, { recursive: true });
+  await mkdir(projectPlugins, { recursive: true });
   await chmod(agentsPath, 0o444);
   await chmod(configDir(), 0o555);
   try {

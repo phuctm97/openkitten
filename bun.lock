@@ -19,6 +19,7 @@
         "@grammyjs/auto-retry": "^2.0.2",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@opencode-ai/sdk": "^1.4.3",
+        "@openkitten/plugin": "workspace:*",
         "boxen": "^8.0.1",
         "bunqueue": "^2.7.2",
         "citty": "^0.2.2",
@@ -38,6 +39,20 @@
         "@types/mime-types": "^3.0.1",
         "@vitest/coverage-istanbul": "^4.1.4",
         "drizzle-kit": "^0.31.10",
+        "vite": "^8.0.8",
+        "vitest": "^4.1.4",
+      },
+    },
+    "packages/plugin": {
+      "name": "@openkitten/plugin",
+      "version": "0.0.0",
+      "dependencies": {
+        "@opencode-ai/plugin": "^1.4.3",
+        "grammy": "^1.42.0",
+        "zod": "^4.1.8",
+      },
+      "devDependencies": {
+        "@vitest/coverage-istanbul": "^4.1.4",
         "vite": "^8.0.8",
         "vitest": "^4.1.4",
       },
@@ -349,9 +364,13 @@
 
     "@open-draft/until": ["@open-draft/until@2.1.0", "", {}, "sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg=="],
 
+    "@opencode-ai/plugin": ["@opencode-ai/plugin@1.4.3", "", { "dependencies": { "@opencode-ai/sdk": "1.4.3", "zod": "4.1.8" }, "peerDependencies": { "@opentui/core": ">=0.1.97", "@opentui/solid": ">=0.1.97" }, "optionalPeers": ["@opentui/core", "@opentui/solid"] }, "sha512-Ob/3tVSIeuMRJBr2O23RtrnC5djRe01Lglx+TwGEmjrH9yDBJ2tftegYLnNEjRoMuzITgq9LD8168p4pzv+U/A=="],
+
     "@opencode-ai/sdk": ["@opencode-ai/sdk@1.4.3", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-X0CAVbwoGAjTY2iecpWkx2B+GAa2jSaQKYpJ+xILopeF/OGKZUN15mjqci+L7cEuwLHV5wk3x2TStUOVCa5p0A=="],
 
     "@openkitten/bot": ["@openkitten/bot@workspace:packages/bot"],
+
+    "@openkitten/plugin": ["@openkitten/plugin@workspace:packages/plugin"],
 
     "@openkitten/server": ["@openkitten/server@workspace:packages/server"],
 
@@ -1718,6 +1737,8 @@
     "@esbuild-kit/core-utils/esbuild": ["esbuild@0.18.20", "", { "optionalDependencies": { "@esbuild/android-arm": "0.18.20", "@esbuild/android-arm64": "0.18.20", "@esbuild/android-x64": "0.18.20", "@esbuild/darwin-arm64": "0.18.20", "@esbuild/darwin-x64": "0.18.20", "@esbuild/freebsd-arm64": "0.18.20", "@esbuild/freebsd-x64": "0.18.20", "@esbuild/linux-arm": "0.18.20", "@esbuild/linux-arm64": "0.18.20", "@esbuild/linux-ia32": "0.18.20", "@esbuild/linux-loong64": "0.18.20", "@esbuild/linux-mips64el": "0.18.20", "@esbuild/linux-ppc64": "0.18.20", "@esbuild/linux-riscv64": "0.18.20", "@esbuild/linux-s390x": "0.18.20", "@esbuild/linux-x64": "0.18.20", "@esbuild/netbsd-x64": "0.18.20", "@esbuild/openbsd-x64": "0.18.20", "@esbuild/sunos-x64": "0.18.20", "@esbuild/win32-arm64": "0.18.20", "@esbuild/win32-ia32": "0.18.20", "@esbuild/win32-x64": "0.18.20" }, "bin": { "esbuild": "bin/esbuild" } }, "sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA=="],
 
     "@inquirer/core/wrap-ansi": ["wrap-ansi@6.2.0", "", { "dependencies": { "ansi-styles": "^4.0.0", "string-width": "^4.1.0", "strip-ansi": "^6.0.0" } }, "sha512-r6lPcBGxZXlIcymEu7InxDMhdW0KDxpLgoFLcguasxCaJ/SOIZwINatK9KY/tf+ZrlywOKU0UDj3ATXUBfxJXA=="],
+
+    "@opencode-ai/plugin/zod": ["zod@4.1.8", "", {}, "sha512-5R1P+WwQqmmMIEACyzSvo4JXHY5WiAFHRMg+zBZKgKS+Q1viRa0C1hmUKtHltoIFKtIdki3pRxkmpP74jnNYHQ=="],
 
     "@react-router/dev/es-module-lexer": ["es-module-lexer@1.7.0", "", {}, "sha512-jEQoCwk8hyb2AZziIOLhDqpm5+2ww5uIE6lkO/6jcOCusfk6LhMHpXXfBLXTZ7Ydyt0j4VoUQv6uGNYbdW+kBA=="],
 

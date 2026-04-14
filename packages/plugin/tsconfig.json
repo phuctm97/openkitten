@@ -1,0 +1,9 @@
+{
+  "include": ["package.json", "vitest.config.ts", "lib", "test"],
+  "references": [],
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "types": ["bun"],
+    "outDir": "dist"
+  }
+}
