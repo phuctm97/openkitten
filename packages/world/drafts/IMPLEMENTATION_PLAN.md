@@ -238,13 +238,13 @@ Backend implementation may live outside `packages/world`, but the delivery model
 
 The package should likely grow toward something like:
 
-- `packages/world/README.md`
-- `packages/world/VISION.md`
-- `packages/world/SPEC.md`
-- `packages/world/CLIENT_STRATEGY.md`
-- `packages/world/VISUAL_DIRECTION.md`
-- `packages/world/MVP.md`
-- `packages/world/IMPLEMENTATION_PLAN.md`
+- `packages/world/drafts/README.md`
+- `packages/world/drafts/VISION.md`
+- `packages/world/drafts/SPEC.md`
+- `packages/world/drafts/CLIENT_STRATEGY.md`
+- `packages/world/drafts/VISUAL_DIRECTION.md`
+- `packages/world/drafts/MVP.md`
+- `packages/world/drafts/IMPLEMENTATION_PLAN.md`
 - `packages/world/package.json`
 - `packages/world/react-router.config.ts`
 - `packages/world/vite.config.ts`
