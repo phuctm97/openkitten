@@ -1,5 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentPropsWithoutRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test, vi } from "vitest";
 
@@ -10,9 +11,18 @@ import {
 
 type ThemeChangeHandler = NonNullable<ThemeSwitcherProps["onChange"]>;
 
+type MockMotionDivProps = ComponentPropsWithoutRef<"div"> & {
+  layoutId?: string;
+  transition?: object;
+};
+
 vi.mock("motion/react", () => ({
   motion: {
-    div: "div",
+    div: ({
+      layoutId: _layoutId,
+      transition: _transition,
+      ...props
+    }: MockMotionDivProps) => <div {...props} />,
   },
 }));
 
