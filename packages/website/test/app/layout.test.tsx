@@ -6,6 +6,10 @@ vi.mock("~/components/theme-provider", () => ({
   ThemeProvider: ({ children }: { children: ReactNode }) => children,
 }));
 
+vi.mock("~/components/theme-anchor", () => ({
+  ThemeAnchor: () => <div data-testid="theme-anchor" />,
+}));
+
 import Layout from "~/app/layout";
 
 test("renders the root document shell", () => {
@@ -17,6 +21,7 @@ test("renders the root document shell", () => {
 
   expect(markup).toContain('<html lang="en">');
   expect(markup).toContain("<body>");
+  expect(markup).toContain('data-testid="theme-anchor"');
   expect(markup).toContain("<span>Kitten</span>");
 });
 
