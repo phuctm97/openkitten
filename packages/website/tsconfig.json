@@ -6,8 +6,10 @@
     "next.config.ts",
     "next-env.d.ts",
     ".next/types/**/*.ts",
-    "lib",
+    "assets",
+    "hooks",
     "components",
+    "lib",
     "app",
     "test"
   ],
