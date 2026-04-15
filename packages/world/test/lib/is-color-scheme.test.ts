@@ -8,7 +8,7 @@ test("accepts light and dark color schemes", () => {
 });
 
 test("rejects values outside the color scheme union", () => {
-  expect(isColorScheme("auto")).toBe(false);
+  expect(isColorScheme("system")).toBe(false);
   expect(isColorScheme("sunset")).toBe(false);
   expect(isColorScheme(null)).toBe(false);
 });

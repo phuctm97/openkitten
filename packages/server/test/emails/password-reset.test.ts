@@ -1,7 +1,7 @@
 import { render } from "@react-email/components";
 import { expect, it } from "vitest";
-import PasswordReset from "../../lib/emails/password-reset";
-import { websiteURL } from "../../lib/website-url";
+import PasswordReset from "~/lib/emails/password-reset";
+import { websiteURL } from "~/lib/website-url";
 
 it("renders the password reset template with a custom URL", async () => {
   const resetURL = new URL("/reset?token=xyz", websiteURL).toString();

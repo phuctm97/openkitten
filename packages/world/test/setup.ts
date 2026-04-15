@@ -46,7 +46,7 @@ beforeEach(async () => {
   localStorage.clear();
   const { themeAtom } = await import("~/lib/theme-atom");
   const store = getDefaultStore();
-  store.set(themeAtom, "auto");
+  store.set(themeAtom, "system");
   document.documentElement.classList.remove("light", "dark");
   document.documentElement.style.colorScheme = "";
 });

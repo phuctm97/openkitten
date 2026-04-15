@@ -1,7 +1,47 @@
-import { afterEach, expect, it, vi } from "vitest";
-import { serverURL } from "../lib/server-url";
-import { websiteURL } from "../lib/website-url";
-import { worldURL } from "../lib/world-url";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { serverURL } from "~/lib/server-url";
+import { websiteURL } from "~/lib/website-url";
+import { worldURL } from "~/lib/world-url";
+
+const authMocks = vi.hoisted(() => ({
+  betterAuth: vi.fn((options: object) => ({
+    handler: vi.fn(),
+    options,
+  })),
+  drizzleAdapter: vi.fn((database: object, config: object) => ({
+    database,
+    config,
+  })),
+  isProduction: false,
+  pgDatabase: {
+    query: {
+      user: {
+        findFirst: vi.fn(),
+      },
+    },
+  },
+  redis: {
+    get: vi.fn(async (): Promise<string | null> => "cached-value"),
+    set: vi.fn(async () => "OK"),
+    del: vi.fn(async () => 1),
+  },
+  sendReactEmail: vi.fn(async () => undefined),
+}));
+
+vi.mock("better-auth", () => ({ betterAuth: authMocks.betterAuth }));
+vi.mock("better-auth/adapters/drizzle", () => ({
+  drizzleAdapter: authMocks.drizzleAdapter,
+}));
+vi.mock("bun", () => ({ redis: authMocks.redis }));
+vi.mock("~/lib/is-production", () => ({
+  get isProduction() {
+    return authMocks.isProduction;
+  },
+}));
+vi.mock("~/lib/pg-database", () => ({ pgDatabase: authMocks.pgDatabase }));
+vi.mock("~/lib/send-react-email", () => ({
+  sendReactEmail: authMocks.sendReactEmail,
+}));
 
 const authUser = {
   id: "user-1",
@@ -13,34 +53,27 @@ const authUser = {
   updatedAt: new Date("2026-01-01T00:00:00.000Z"),
 };
 
+beforeEach(() => {
+  authMocks.isProduction = false;
+  authMocks.betterAuth.mockClear();
+  authMocks.drizzleAdapter.mockClear();
+  authMocks.pgDatabase.query.user.findFirst.mockClear();
+  authMocks.redis.get.mockReset();
+  authMocks.redis.get.mockResolvedValue("cached-value");
+  authMocks.redis.set.mockReset();
+  authMocks.redis.set.mockResolvedValue("OK");
+  authMocks.redis.del.mockReset();
+  authMocks.redis.del.mockResolvedValue(1);
+  authMocks.sendReactEmail.mockClear();
+});
+
 afterEach(() => {
   vi.resetModules();
   vi.unstubAllEnvs();
 });
 
 it("uses the database and fallback auth URLs", async () => {
-  const betterAuth = vi.fn((options: object) => ({
-    handler: vi.fn(),
-    options,
-  }));
-  const drizzleAdapter = vi.fn((database: object, config: object) => ({
-    database,
-    config,
-  }));
-  const pgDatabase = { query: { user: { findFirst: vi.fn() } } };
-  const redis = {
-    get: vi.fn(async () => "cached-value"),
-    set: vi.fn(async () => "OK"),
-    del: vi.fn(async () => 1),
-  };
-
-  vi.doMock("better-auth", () => ({ betterAuth }));
-  vi.doMock("better-auth/adapters/drizzle", () => ({ drizzleAdapter }));
-  vi.doMock("bun", () => ({ redis }));
-  vi.doMock("../lib/is-production", () => ({ isProduction: false }));
-  vi.doMock("../lib/pg-database", () => ({ pgDatabase }));
-
-  const { auth } = await import("../lib/auth");
+  const { auth } = await import("~/lib/auth");
 
   expect(auth.options.appName).toBe("OpenKitten");
   expect(auth.options.baseURL).toBe(serverURL);
@@ -50,7 +83,7 @@ it("uses the database and fallback auth URLs", async () => {
     worldURL,
     websiteURL,
   ]);
-  expect(drizzleAdapter).toHaveBeenCalledWith(pgDatabase, {
+  expect(authMocks.drizzleAdapter).toHaveBeenCalledWith(authMocks.pgDatabase, {
     provider: "pg",
     schema: expect.objectContaining({
       house: expect.anything(),
@@ -77,37 +110,23 @@ it("uses the database and fallback auth URLs", async () => {
   await auth.options.secondaryStorage.set("auth:key", "value", 60);
   await auth.options.secondaryStorage.delete("auth:key");
 
-  expect(redis.get).toHaveBeenCalledWith("auth:key");
-  expect(redis.set).toHaveBeenNthCalledWith(1, "auth:key", "value");
-  expect(redis.set).toHaveBeenNthCalledWith(2, "auth:key", "value", "EX", 60);
-  expect(redis.del).toHaveBeenCalledWith("auth:key");
+  expect(authMocks.redis.get).toHaveBeenCalledWith("auth:key");
+  expect(authMocks.redis.set).toHaveBeenNthCalledWith(1, "auth:key", "value");
+  expect(authMocks.redis.set).toHaveBeenNthCalledWith(
+    2,
+    "auth:key",
+    "value",
+    "EX",
+    60,
+  );
+  expect(authMocks.redis.del).toHaveBeenCalledWith("auth:key");
 });
 
 it("uses the runtime database and sends auth emails", async () => {
-  const betterAuth = vi.fn((options: object) => ({
-    handler: vi.fn(),
-    options,
-  }));
-  const drizzleAdapter = vi.fn((database: object, config: object) => ({
-    database,
-    config,
-  }));
-  const pgDatabase = { query: { user: { findFirst: vi.fn() } } };
-  const sendReactEmail = vi.fn(async () => undefined);
-  const redis = {
-    get: vi.fn(async () => null),
-    set: vi.fn(async () => "OK"),
-    del: vi.fn(async () => 1),
-  };
+  authMocks.isProduction = true;
+  authMocks.redis.get.mockResolvedValueOnce(null);
 
-  vi.doMock("better-auth", () => ({ betterAuth }));
-  vi.doMock("better-auth/adapters/drizzle", () => ({ drizzleAdapter }));
-  vi.doMock("bun", () => ({ redis }));
-  vi.doMock("../lib/is-production", () => ({ isProduction: true }));
-  vi.doMock("../lib/pg-database", () => ({ pgDatabase }));
-  vi.doMock("../lib/send-react-email", () => ({ sendReactEmail }));
-
-  const { auth } = await import("../lib/auth");
+  const { auth } = await import("~/lib/auth");
 
   expect(auth.options.baseURL).toBe(serverURL);
   expect(auth.options.trustedOrigins).toStrictEqual([
@@ -119,8 +138,8 @@ it("uses the runtime database and sends auth emails", async () => {
   await expect(auth.options.databaseHooks.user.create.before?.()).resolves.toBe(
     undefined,
   );
-  expect(drizzleAdapter).toHaveBeenCalledWith(
-    pgDatabase,
+  expect(authMocks.drizzleAdapter).toHaveBeenCalledWith(
+    authMocks.pgDatabase,
     expect.objectContaining({ provider: "pg" }),
   );
 
@@ -135,7 +154,7 @@ it("uses the runtime database and sends auth emails", async () => {
     token: "reset-token",
   });
 
-  expect(sendReactEmail).toHaveBeenNthCalledWith(1, {
+  expect(authMocks.sendReactEmail).toHaveBeenNthCalledWith(1, {
     to: "user@example.com",
     subject: "Verify your email - OpenKitten",
     element: expect.objectContaining({
@@ -144,7 +163,7 @@ it("uses the runtime database and sends auth emails", async () => {
       },
     }),
   });
-  expect(sendReactEmail).toHaveBeenNthCalledWith(2, {
+  expect(authMocks.sendReactEmail).toHaveBeenNthCalledWith(2, {
     to: "user@example.com",
     subject: "Reset your password - OpenKitten",
     element: expect.objectContaining({

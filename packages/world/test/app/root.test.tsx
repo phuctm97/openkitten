@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, test, vi } from "vitest";
-import type { Route } from "../../.react-router/types/app/+types/root";
+import type { Route } from "~/.react-router/types/app/+types/root";
 
 const rootMocks = vi.hoisted(() => ({
   isRouteErrorResponse: vi.fn(),

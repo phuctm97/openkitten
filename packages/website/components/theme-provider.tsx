@@ -5,7 +5,11 @@ import type { PropsWithChildren } from "react";
 
 export function ThemeProvider({ children }: PropsWithChildren) {
   return (
-    <NextThemesProvider attribute="class" disableTransitionOnChange>
+    <NextThemesProvider
+      attribute="class"
+      disableTransitionOnChange
+      storageKey="openkitten-theme"
+    >
       {children}
     </NextThemesProvider>
   );
