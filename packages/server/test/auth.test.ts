@@ -21,7 +21,7 @@ const authMocks = vi.hoisted(() => ({
     },
   },
   redis: {
-    get: vi.fn(async () => "cached-value"),
+    get: vi.fn(async (): Promise<string | null> => "cached-value"),
     set: vi.fn(async () => "OK"),
     del: vi.fn(async () => 1),
   },

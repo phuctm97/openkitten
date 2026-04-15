@@ -4,7 +4,10 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },
-  build: { chunkSizeWarningLimit: 2000 },
+  build: {
+    chunkSizeWarningLimit: 2000,
+    rolldownOptions: { checks: { pluginTimings: false } },
+  },
   server: {
     watch: { ignored: ["**/build/**", "**/coverage/**"] },
     port: 41238,
