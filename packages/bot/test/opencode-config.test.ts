@@ -250,7 +250,7 @@ test("writes .opencode/package.json with plugin and grammy", async () => {
   await OpencodeConfig.create(profile);
   const content = await readFile(join(configDir(), "package.json"), "utf-8");
   const pkg = JSON.parse(content);
-  expect(pkg.dependencies["@openkitten/plugin"]).toMatch(/^file:/);
+  expect(pkg.dependencies["@openkitten/bot-plugin"]).toMatch(/^file:/);
   expect(pkg.dependencies["grammy"]).toBeDefined();
 });
 

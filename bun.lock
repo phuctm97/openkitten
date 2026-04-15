@@ -20,7 +20,7 @@
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@opencode-ai/sdk": "^1.4.3",
         "@openkitten/bot-contract": "workspace:*",
-        "@openkitten/plugin": "workspace:*",
+        "@openkitten/bot-plugin": "workspace:*",
         "@orpc/server": "^1.13.0",
         "boxen": "^8.0.1",
         "bunqueue": "^2.7.2",
@@ -37,30 +37,12 @@
         "zod": "^4.3.6",
       },
       "devDependencies": {
-        "@openkitten/bot-client": "workspace:*",
         "@types/content-type": "^1.1.9",
         "@types/mime-types": "^3.0.1",
         "@vitest/coverage-istanbul": "^4.1.4",
         "drizzle-kit": "^0.31.10",
         "vite": "^8.0.8",
         "vitest": "^4.1.4",
-      },
-    },
-    "packages/bot-client": {
-      "name": "@openkitten/bot-client",
-      "version": "0.0.0",
-      "dependencies": {
-        "@openkitten/bot-contract": "workspace:*",
-        "@orpc/client": "^1.13.0",
-        "@orpc/contract": "^1.13.0",
-      },
-      "devDependencies": {
-        "@openkitten/bot-contract": "workspace:*",
-        "@orpc/server": "^1.13.0",
-        "@vitest/coverage-istanbul": "^4.1.4",
-        "vite": "^8.0.8",
-        "vitest": "^4.1.4",
-        "zod": "^4.3.6",
       },
     },
     "packages/bot-contract": {
@@ -78,12 +60,13 @@
         "zod": "^4.3.6",
       },
     },
-    "packages/plugin": {
-      "name": "@openkitten/plugin",
+    "packages/bot-plugin": {
+      "name": "@openkitten/bot-plugin",
       "version": "0.0.0",
       "dependencies": {
-        "@opencode-ai/plugin": "^1.4.3",
-        "@openkitten/bot-client": "workspace:*",
+        "@openkitten/bot-contract": "workspace:*",
+        "@orpc/client": "^1.13.0",
+        "@orpc/contract": "^1.13.0",
         "zod": "^4.1.8",
       },
       "devDependencies": {
@@ -554,17 +537,13 @@
 
     "@open-draft/until": ["@open-draft/until@2.1.0", "", {}, "sha512-U69T3ItWHvLwGg5eJ0n3I62nWuE6ilHlmz7zM0npLBRvPRd7e6NYmg54vvRtP5mZG7kZqZCFVdsTWo7BPtBujg=="],
 
-    "@opencode-ai/plugin": ["@opencode-ai/plugin@1.4.3", "", { "dependencies": { "@opencode-ai/sdk": "1.4.3", "zod": "4.1.8" }, "peerDependencies": { "@opentui/core": ">=0.1.97", "@opentui/solid": ">=0.1.97" }, "optionalPeers": ["@opentui/core", "@opentui/solid"] }, "sha512-Ob/3tVSIeuMRJBr2O23RtrnC5djRe01Lglx+TwGEmjrH9yDBJ2tftegYLnNEjRoMuzITgq9LD8168p4pzv+U/A=="],
-
-    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.4.3", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-X0CAVbwoGAjTY2iecpWkx2B+GAa2jSaQKYpJ+xILopeF/OGKZUN15mjqci+L7cEuwLHV5wk3x2TStUOVCa5p0A=="],
+    "@opencode-ai/sdk": ["@opencode-ai/sdk@1.4.5", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-cB1aE/yzHBjfZSceyHby+prCywKEPneCu8Q3LOj6GjW1/rIEkaqqxfAX5KChl2Yf2Sx1D0zHXHur/KSeVBENPg=="],
 
     "@openkitten/bot": ["@openkitten/bot@workspace:packages/bot"],
 
-    "@openkitten/bot-client": ["@openkitten/bot-client@workspace:packages/bot-client"],
-
     "@openkitten/bot-contract": ["@openkitten/bot-contract@workspace:packages/bot-contract"],
 
-    "@openkitten/plugin": ["@openkitten/plugin@workspace:packages/plugin"],
+    "@openkitten/bot-plugin": ["@openkitten/bot-plugin@workspace:packages/bot-plugin"],
 
     "@openkitten/server": ["@openkitten/server@workspace:packages/server"],
 
@@ -2195,6 +2174,8 @@
     "y18n": ["y18n@5.0.8", "", {}, "sha512-0pfFzegeDWJHJIAmTLRP2DwHjdF5s7jo9tuztdQxAhINCdvS+3nGINqPd00AphqJR/0LhANUS6/+7SCb98YOfA=="],
 
     "yallist": ["yallist@3.1.1", "", {}, "sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g=="],
+
+    "yaml": ["yaml@2.8.3", "", { "bin": { "yaml": "bin.mjs" } }, "sha512-AvbaCLOO2Otw/lW5bmh9d/WEdcDFdQp2Z2ZUH3pX9U2ihyUY0nvLv7J6TrWowklRGPYbB/IuIMfYgxaCPg5Bpg=="],
 
     "yargs": ["yargs@17.7.2", "", { "dependencies": { "cliui": "^8.0.1", "escalade": "^3.1.1", "get-caller-file": "^2.0.5", "require-directory": "^2.1.1", "string-width": "^4.2.3", "y18n": "^5.0.5", "yargs-parser": "^21.1.1" } }, "sha512-7dSzzRQ++CKnNI/krKnYRV7JKKPUXMEh61soaHKg9mrWEhzFWhFnxPxGl+69cD1Ou63C13NUPCnmIcrvqCuM6w=="],
 
