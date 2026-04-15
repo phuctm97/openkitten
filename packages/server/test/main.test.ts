@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from "vitest";
-import server from "../lib/main";
-import { serverPort } from "../lib/server-port";
+import server from "~/lib/main";
+import { serverPort } from "~/lib/server-port";
 
 const { execute, handler, websiteOrigin } = vi.hoisted(() => ({
   execute: vi.fn(async () => ({ rows: [] })),

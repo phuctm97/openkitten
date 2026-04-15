@@ -1,7 +1,7 @@
 import { render } from "@react-email/components";
 import { expect, it } from "vitest";
-import EmailVerification from "../../lib/emails/email-verification";
-import { websiteURL } from "../../lib/website-url";
+import EmailVerification from "~/lib/emails/email-verification";
+import { websiteURL } from "~/lib/website-url";
 
 it("renders the email verification template with a custom URL", async () => {
   const verificationURL = new URL("/verify?token=abc", websiteURL).toString();

@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { serverURL } from "../lib/server-url";
-import { websiteURL } from "../lib/website-url";
-import { worldURL } from "../lib/world-url";
+import { serverURL } from "~/lib/server-url";
+import { websiteURL } from "~/lib/website-url";
+import { worldURL } from "~/lib/world-url";
 
 const authUser = {
   id: "user-1",
@@ -37,10 +37,10 @@ it("uses the database and fallback auth URLs", async () => {
   vi.doMock("better-auth", () => ({ betterAuth }));
   vi.doMock("better-auth/adapters/drizzle", () => ({ drizzleAdapter }));
   vi.doMock("bun", () => ({ redis }));
-  vi.doMock("../lib/is-production", () => ({ isProduction: false }));
-  vi.doMock("../lib/pg-database", () => ({ pgDatabase }));
+  vi.doMock("~/lib/is-production", () => ({ isProduction: false }));
+  vi.doMock("~/lib/pg-database", () => ({ pgDatabase }));
 
-  const { auth } = await import("../lib/auth");
+  const { auth } = await import("~/lib/auth");
 
   expect(auth.options.appName).toBe("OpenKitten");
   expect(auth.options.baseURL).toBe(serverURL);
@@ -103,11 +103,11 @@ it("uses the runtime database and sends auth emails", async () => {
   vi.doMock("better-auth", () => ({ betterAuth }));
   vi.doMock("better-auth/adapters/drizzle", () => ({ drizzleAdapter }));
   vi.doMock("bun", () => ({ redis }));
-  vi.doMock("../lib/is-production", () => ({ isProduction: true }));
-  vi.doMock("../lib/pg-database", () => ({ pgDatabase }));
-  vi.doMock("../lib/send-react-email", () => ({ sendReactEmail }));
+  vi.doMock("~/lib/is-production", () => ({ isProduction: true }));
+  vi.doMock("~/lib/pg-database", () => ({ pgDatabase }));
+  vi.doMock("~/lib/send-react-email", () => ({ sendReactEmail }));
 
-  const { auth } = await import("../lib/auth");
+  const { auth } = await import("~/lib/auth");
 
   expect(auth.options.baseURL).toBe(serverURL);
   expect(auth.options.trustedOrigins).toStrictEqual([

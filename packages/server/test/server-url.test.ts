@@ -1,10 +1,10 @@
 import { expect, it } from "vitest";
-import { serverPort } from "../lib/server-port";
-import { serverURL } from "../lib/server-url";
-import { websitePort } from "../lib/website-port";
-import { websiteURL } from "../lib/website-url";
-import { worldPort } from "../lib/world-port";
-import { worldURL } from "../lib/world-url";
+import { serverPort } from "~/lib/server-port";
+import { serverURL } from "~/lib/server-url";
+import { websitePort } from "~/lib/website-port";
+import { websiteURL } from "~/lib/website-url";
+import { worldPort } from "~/lib/world-port";
+import { worldURL } from "~/lib/world-url";
 
 it("defines the hard-coded local server port", () => {
   expect(serverPort).toBe(41237);
