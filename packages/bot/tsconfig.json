@@ -7,7 +7,10 @@
     "plugins",
     "test"
   ],
-  "references": [{ "path": "../plugin/tsconfig.json" }],
+  "references": [
+    { "path": "../bot-contract/tsconfig.json" },
+    { "path": "../plugin/tsconfig.json" }
+  ],
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "types": ["bun"],

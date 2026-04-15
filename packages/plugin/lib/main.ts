@@ -1,6 +1,5 @@
-export type { OpenkittenAPI } from "./api";
-export { createAPIProxy } from "./api-proxy";
+export { createBotClient } from "@openkitten/bot-client";
+export { readBotAPIConfig } from "./bot-api-config";
 export { definePlugin } from "./define-plugin";
 export { OpenkittenContext } from "./openkitten-context";
-export { Telegram } from "./telegram";
 export { tool } from "./tool";

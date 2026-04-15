@@ -14,7 +14,9 @@
     "@grammyjs/auto-retry": "^2.0.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "^1.4.3",
+    "@openkitten/bot-contract": "workspace:*",
     "@openkitten/plugin": "workspace:*",
+    "@orpc/server": "^1.13.0",
     "boxen": "^8.0.1",
     "bunqueue": "^2.7.2",
     "citty": "^0.2.2",
@@ -30,6 +32,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@openkitten/bot-client": "workspace:*",
     "@types/content-type": "^1.1.9",
     "@types/mime-types": "^3.0.1",
     "@vitest/coverage-istanbul": "^4.1.4",

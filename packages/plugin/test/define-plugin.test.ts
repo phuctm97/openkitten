@@ -5,25 +5,21 @@ import type { Hooks, PluginInput } from "@opencode-ai/plugin";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { definePlugin } from "../lib/define-plugin";
 
-const validToken = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
-
 let tmpDir: string;
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(join(tmpdir(), "define-plugin-"));
-  const configDir = join(tmpDir, "config");
-  await mkdir(join(configDir, "openkitten"), { recursive: true });
+  const stateDir = join(tmpDir, "state");
+  await mkdir(join(stateDir, "openkitten"), { recursive: true });
   await Bun.write(
-    join(configDir, "openkitten", "telegram.json"),
-    JSON.stringify({ botToken: validToken, userId: 42 }),
+    join(stateDir, "openkitten", "bot-api.json"),
+    JSON.stringify({ url: "http://127.0.0.1:12345/rpc", token: "test-token" }),
   );
-  Bun.env["XDG_CONFIG_HOME"] = configDir;
-  Bun.env["XDG_STATE_HOME"] = join(tmpDir, "state");
+  Bun.env["XDG_STATE_HOME"] = stateDir;
 });
 
 afterEach(async () => {
   vi.restoreAllMocks();
-  Bun.env["XDG_CONFIG_HOME"] = undefined;
   Bun.env["XDG_STATE_HOME"] = undefined;
   await rm(tmpDir, { recursive: true });
 });
@@ -50,9 +46,6 @@ test("server calls factory with opencode and openkitten", async () => {
   expect(factory).toHaveBeenCalledOnce();
   const call = factory.mock.calls[0] as never as [definePlugin.Input, unknown];
   expect(call[0].opencode).toBe(fakeOpencode);
-  expect(call[0].openkitten.botToken).toBe(validToken);
-  expect(call[0].openkitten.userId).toBe(42);
-  expect(call[0].openkitten.telegram).toBeDefined();
   expect(call[0].openkitten.api).toBeDefined();
 });
 

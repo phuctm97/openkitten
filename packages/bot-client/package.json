@@ -1,7 +1,7 @@
 {
-  "name": "@openkitten/plugin",
+  "name": "@openkitten/bot-client",
   "version": "0.0.0",
-  "description": "Plugin SDK for building OpenKitten plugins with full Telegram Bot API access and bot runtime state.",
+  "description": "oRPC client for the OpenKitten bot API.",
   "type": "module",
   "main": "lib/main.ts",
   "exports": {
@@ -18,13 +18,16 @@
     "test": "bun --bun vitest run"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.4.3",
-    "@openkitten/bot-client": "workspace:*",
-    "zod": "^4.1.8"
+    "@openkitten/bot-contract": "workspace:*",
+    "@orpc/client": "^1.13.0",
+    "@orpc/contract": "^1.13.0"
   },
   "devDependencies": {
+    "@openkitten/bot-contract": "workspace:*",
+    "@orpc/server": "^1.13.0",
     "@vitest/coverage-istanbul": "^4.1.4",
     "vite": "^8.0.8",
-    "vitest": "^4.1.4"
+    "vitest": "^4.1.4",
+    "zod": "^4.3.6"
   }
 }

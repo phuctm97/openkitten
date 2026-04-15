@@ -1,30 +1,16 @@
-import { Api } from "grammy";
-import type { OpenkittenAPI } from "./api";
-import { createAPIProxy } from "./api-proxy";
-import { Telegram } from "./telegram";
+import { createBotClient } from "@openkitten/bot-client";
+import { readBotAPIConfig } from "./bot-api-config";
 
 export interface OpenkittenContext {
-  readonly botToken: string;
-  readonly userId: number;
-  readonly telegram: Api;
-  readonly api: OpenkittenAPI;
+  readonly api: ReturnType<typeof createBotClient>;
 }
 
 export namespace OpenkittenContext {
-  export const { ConfigNotFoundError } = Telegram;
+  export const { ConfigNotFoundError } = readBotAPIConfig;
 
-  export async function create(
-    xdgConfig?: string,
-    xdgState?: string,
-  ): Promise<OpenkittenContext> {
-    const config = await Telegram.readConfig(xdgConfig);
-    const telegram = new Api(config.botToken);
-    const api = createAPIProxy<OpenkittenAPI>(xdgState);
-    return {
-      botToken: config.botToken,
-      userId: config.userId,
-      telegram,
-      api,
-    };
+  export async function create(xdgState?: string): Promise<OpenkittenContext> {
+    const config = await readBotAPIConfig(xdgState);
+    const api = createBotClient({ url: config.url, token: config.token });
+    return { api };
   }
 }

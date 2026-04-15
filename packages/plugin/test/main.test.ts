@@ -1,9 +1,9 @@
 import { expect, test } from "vitest";
 import {
-  createAPIProxy,
+  createBotClient,
   definePlugin,
   OpenkittenContext,
-  Telegram,
+  readBotAPIConfig,
   tool,
 } from "../lib/main";
 
@@ -15,14 +15,14 @@ test("exports tool", () => {
   expect(typeof tool).toBe("function");
 });
 
-test("exports createAPIProxy", () => {
-  expect(typeof createAPIProxy).toBe("function");
+test("exports createBotClient", () => {
+  expect(typeof createBotClient).toBe("function");
 });
 
 test("exports OpenkittenContext", () => {
   expect(OpenkittenContext).toBeDefined();
 });
 
-test("exports Telegram", () => {
-  expect(Telegram).toBeDefined();
+test("exports readBotAPIConfig", () => {
+  expect(typeof readBotAPIConfig).toBe("function");
 });

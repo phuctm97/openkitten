@@ -3,6 +3,7 @@ import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { AttachmentStorage } from "~/lib/attachment-storage";
+import { BotAPIServer } from "~/lib/bot-api-server";
 import { builtinCommands } from "~/lib/builtin-commands";
 import { CommandSkills } from "~/lib/command-skills";
 import { Database } from "~/lib/database";
@@ -28,7 +29,6 @@ import { OpencodeEventStream } from "~/lib/opencode-event-stream";
 import { opencodeHandleEvent } from "~/lib/opencode-handle-event";
 import { OpencodeServer } from "~/lib/opencode-server";
 import { PendingPrompts } from "~/lib/pending-prompts";
-import { PluginAPI } from "~/lib/plugin-api";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import { Profile } from "~/lib/profile";
 import { restart } from "~/lib/restart";
@@ -81,7 +81,10 @@ export const serve = defineCommand({
         opencodeServer.client,
         existingSessions,
       );
-      using _pluginAPI = await PluginAPI.create(profile, bot, database);
+      using _botAPIServer = await BotAPIServer.create(
+        profile,
+        telegramConfig.botToken,
+      );
       using mcpServer = await McpServer.create(
         bot,
         opencodeServer.client,
