@@ -8,7 +8,12 @@ export default defineConfig({
     setupFiles: ["test/setup.ts"],
     coverage: {
       provider: "istanbul",
-      include: ["lib/**/*.{ts,tsx}", "app/**/*.{ts,tsx}"],
+      include: [
+        "hooks/**/*.{ts,tsx}",
+        "components/**/*.{ts,tsx}",
+        "lib/**/*.{ts,tsx}",
+        "app/**/*.{ts,tsx}",
+      ],
       thresholds: {
         statements: 100,
         branches: 100,
