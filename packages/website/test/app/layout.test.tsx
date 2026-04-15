@@ -19,8 +19,8 @@ test("renders the root document shell", () => {
     </Layout>,
   );
 
-  expect(markup).toContain('<html lang="en">');
-  expect(markup).toContain("<body>");
+  expect(markup).toContain('<html lang="en" class="h-full">');
+  expect(markup).toContain('<body class="m-0 min-h-full antialiased">');
   expect(markup).toContain('data-testid="theme-anchor"');
   expect(markup).toContain("<span>Kitten</span>");
 });
