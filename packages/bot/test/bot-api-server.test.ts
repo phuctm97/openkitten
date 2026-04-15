@@ -1,7 +1,10 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createBotClient } from "@openkitten/bot-client";
+import {
+  createOpenKittenBotClient,
+  readBotAPIConfig,
+} from "@openkitten/bot-plugin";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { BotAPIServer } from "~/lib/bot-api-server";
 import type { Profile } from "~/lib/profile";
@@ -30,27 +33,20 @@ afterEach(async () => {
   await rm(profileDir, { recursive: true });
 });
 
-async function readConfig(): Promise<{ url: string; token: string }> {
-  const configPath = join(profile.xdgState, "openkitten", "bot-api.json");
-  const raw = await readFile(configPath, "utf-8");
-  return JSON.parse(raw);
-}
-
 test("writes bot-api.json with url and token", async () => {
-  const config = await readConfig();
+  const config = await readBotAPIConfig(profile.xdgState);
   expect(config.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/rpc$/);
   expect(config.token).toBeTruthy();
 });
 
 test("getBotToken returns the bot token via oRPC client", async () => {
-  const config = await readConfig();
-  const client = createBotClient({ url: config.url, token: config.token });
+  const client = await createOpenKittenBotClient(profile.xdgState);
   const result = await client.getBotToken();
   expect(result).toBe(BOT_TOKEN);
 });
 
 test("returns 401 without auth", async () => {
-  const config = await readConfig();
+  const config = await readBotAPIConfig(profile.xdgState);
   const res = await fetch(config.url, {
     method: "POST",
     headers: { authorization: "Bearer wrong-token" },
@@ -59,7 +55,7 @@ test("returns 401 without auth", async () => {
 });
 
 test("returns 404 for non-rpc path", async () => {
-  const config = await readConfig();
+  const config = await readBotAPIConfig(profile.xdgState);
   const baseUrl = config.url.replace(/\/rpc$/, "");
   const res = await fetch(baseUrl, {
     method: "POST",

@@ -14,7 +14,7 @@ const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
 
 const defaultSkillsDir = resolve(import.meta.dirname, "../skills");
 
-const pluginPackageDir = resolve(import.meta.dirname, "../../plugin");
+const pluginPackageDir = resolve(import.meta.dirname, "../../bot-plugin");
 
 const defaultSystemAgents = resolve(import.meta.dirname, "../system-agents.md");
 
@@ -183,7 +183,7 @@ export namespace OpencodeConfig {
         JSON.stringify(
           {
             dependencies: {
-              "@openkitten/plugin": `file:${pluginPackageDir}`,
+              "@openkitten/bot-plugin": `file:${pluginPackageDir}`,
               grammy: "^1.42.0",
             },
           },
