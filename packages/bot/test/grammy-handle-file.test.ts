@@ -239,6 +239,8 @@ function mockScope(overrides: {
     attachmentStorage: (overrides.attachmentStorage ??
       mockAttachmentStorage()) as never,
     typingIndicators: {} as never,
+    groupMessageBuffer: undefined as never,
+    ownerId: 123 as never,
   };
 }
 

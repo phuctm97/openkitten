@@ -17,6 +17,7 @@ const hintOptions = { symbol: styleText("cyan", "ℹ") };
 const schema = zod.object({
   botToken: zod.string().regex(botTokenPattern, botTokenError),
   userId: zod.int().positive(),
+  groupChat: zod.boolean().default(false),
 });
 
 interface TelegramConfigCreateOptions {
@@ -89,6 +90,34 @@ async function promptUserId(): Promise<number> {
   return Number(raw);
 }
 
+async function promptGroupChat(): Promise<boolean> {
+  const value = require(
+    await clack.select({
+      message: "Enable group chat support?",
+      initialValue: false as const,
+      options: [
+        {
+          value: false as const,
+          label: "No",
+          hint: "Bot responds only to you in private chats",
+        },
+        {
+          value: true as const,
+          label: "Yes",
+          hint: "Bot responds to anyone in groups; only you can use admin commands",
+        },
+      ],
+    }),
+  );
+  if (value) {
+    clack.log.message(
+      "Add the bot as an admin in your groups so it can see all messages for conversation context.\nThe bot will respond when mentioned (@botname) or replied to.",
+      hintOptions,
+    );
+  }
+  return value;
+}
+
 export interface TelegramConfig extends zod.output<typeof schema> {}
 
 export namespace TelegramConfig {
@@ -145,6 +174,7 @@ export namespace TelegramConfig {
 
     let botToken: string | undefined;
     let userId: number | undefined;
+    let groupChat: boolean | undefined;
 
     // Load existing config
     const file = Bun.file(path);
@@ -173,7 +203,9 @@ export namespace TelegramConfig {
           }
         }
         userId = config.userId;
+        groupChat = config.groupChat;
         clack.log.step(`Authorized user ID: ${userId}`);
+        clack.log.step(`Group chat: ${groupChat ? "enabled" : "disabled"}`);
       } else {
         clack.log.error("Invalid config: needs update");
       }
@@ -181,11 +213,12 @@ export namespace TelegramConfig {
     }
 
     // Prompt for missing values
-    const needsPrompt = !botToken || !userId;
+    const needsPrompt = !botToken || !userId || groupChat === undefined;
     if (needsPrompt)
       clack.intro(`Config ${styleText("dim", formatPath(path))}`);
     if (!botToken) botToken = await promptBotToken();
     if (!userId) userId = await promptUserId();
+    if (groupChat === undefined) groupChat = await promptGroupChat();
     if (needsPrompt) clack.outro("Updated config");
 
     if (!options.skipActions) {
@@ -198,6 +231,7 @@ export namespace TelegramConfig {
           options: [
             { value: "bot-token", label: "Change bot token" },
             { value: "user-id", label: "Change user ID" },
+            { value: "group-chat", label: "Toggle group chat" },
             { value: "continue", label: "Continue" },
           ],
         });
@@ -211,12 +245,16 @@ export namespace TelegramConfig {
           clack.intro("Change user ID");
           userId = await promptUserId();
           clack.outro("Done");
+        } else if (action === "group-chat") {
+          clack.intro("Toggle group chat");
+          groupChat = await promptGroupChat();
+          clack.outro("Done");
         }
       } while (action !== "continue");
     }
 
     // Save config
-    const config = schema.parse({ botToken, userId });
+    const config = schema.parse({ botToken, userId, groupChat });
     await Bun.write(path, JSON.stringify(config), { mode: 0o600 });
     return config;
   }

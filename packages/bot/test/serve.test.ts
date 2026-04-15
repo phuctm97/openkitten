@@ -1,6 +1,5 @@
 import { runCommand } from "citty";
 import { beforeEach, expect, test, vi } from "vitest";
-import { CommandSkills } from "~/lib/command-skills";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { GrammyEventLoop } from "~/lib/grammy-event-loop";
@@ -119,7 +118,6 @@ function mockCreateDatabase() {
     [Symbol.dispose]() {},
   };
   vi.spyOn(Database, "create").mockReturnValue(database as never);
-  vi.spyOn(CommandSkills, "list").mockResolvedValue([]);
   return database;
 }
 

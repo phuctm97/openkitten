@@ -15,15 +15,16 @@ vi.mock("~/lib/opencode-config", () => ({
 
 vi.mock("~/lib/grammy-set-commands");
 
-vi.mock("~/lib/command-skills", () => ({
-  CommandSkills: {
-    list: vi.fn(async () => []),
-    toTelegramCommands: vi.fn(() => []),
-  },
-}));
-
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),
+  readFile: vi.fn(async () =>
+    JSON.stringify({
+      command: {
+        beta: { description: "Beta" },
+        alpha: { description: "Alpha" },
+      },
+    }),
+  ),
 }));
 
 vi.mock("node:os", () => ({

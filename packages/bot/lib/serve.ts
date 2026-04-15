@@ -1,3 +1,4 @@
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
@@ -5,13 +6,12 @@ import { Bot } from "grammy";
 import { AttachmentStorage } from "~/lib/attachment-storage";
 import { BotAPIServer } from "~/lib/bot-api-server";
 import { builtinCommands } from "~/lib/builtin-commands";
-import { CommandSkills } from "~/lib/command-skills";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { FloatingPromises } from "~/lib/floating-promises";
 import { GrammyEventLoop } from "~/lib/grammy-event-loop";
 import { GrammyEventStream } from "~/lib/grammy-event-stream";
-import { grammyFilterUser } from "~/lib/grammy-filter-user";
+import { grammyFilterChat } from "~/lib/grammy-filter-chat";
 import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
 import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
 import { grammyHandleCallback } from "~/lib/grammy-handle-callback";
@@ -21,6 +21,7 @@ import { grammyHandleMediaGroupFlush } from "~/lib/grammy-handle-media-group-flu
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
+import { GroupMessageBuffer } from "~/lib/group-message-buffer";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
 import { MediaGroupBuffer } from "~/lib/media-group-buffer";
@@ -60,14 +61,32 @@ export const serve = defineCommand({
       });
       const bot = new Bot(telegramConfig.botToken);
       bot.api.config.use(autoRetry());
-      bot.use(grammyFilterUser(telegramConfig.userId));
+      bot.use(
+        grammyFilterChat({
+          userId: telegramConfig.userId,
+          groupChat: telegramConfig.groupChat,
+        }),
+      );
       using database = Database.create(profile);
-      const commandSkillsDir = join(profile.xdgConfig, "opencode", "skills");
-      const commandSkills = await CommandSkills.list(commandSkillsDir);
-      await grammySetCommands(telegramConfig.botToken, [
-        ...builtinCommands,
-        ...CommandSkills.toTelegramCommands(commandSkills),
-      ]);
+      const commandsDir = join(profile.dir, ".opencode", "commands");
+      const entries = await readdir(commandsDir).catch(() => []);
+      const customCommands: { command: string; description: string }[] = [];
+      for (const entry of entries) {
+        if (!entry.endsWith(".md")) continue;
+        const content = await readFile(join(commandsDir, entry), "utf-8");
+        const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
+        const descMatch = match?.[1]?.match(/description:\s*(.+)/);
+        customCommands.push({
+          command: entry.slice(0, -3),
+          description: descMatch?.[1]?.trim() ?? "",
+        });
+      }
+      customCommands.sort((a, b) => a.command.localeCompare(b.command));
+      await grammySetCommands(
+        telegramConfig.botToken,
+        [...builtinCommands, ...customCommands],
+        telegramConfig.groupChat,
+      );
       using shutdown = Shutdown.create();
       await using opencodeServer = await OpencodeServer.create(opencodeConfig);
       const existingSessions = await ExistingSessions.create(
@@ -90,6 +109,11 @@ export const serve = defineCommand({
         opencodeServer.client,
         existingSessions,
         scheduler,
+        {
+          commandsDir,
+          botToken: telegramConfig.botToken,
+          groupChat: telegramConfig.groupChat,
+        },
       );
       using workingSessions = WorkingSessions.create(existingSessions);
       await using pendingPrompts = PendingPrompts.create(
@@ -98,11 +122,15 @@ export const serve = defineCommand({
         opencodeServer.client,
         existingSessions,
       );
+      using groupMessageBuffer = telegramConfig.groupChat
+        ? GroupMessageBuffer.create()
+        : undefined;
       using processingMessages = await ProcessingMessages.create(
         bot,
         database,
         opencodeServer.client,
         existingSessions,
+        groupMessageBuffer,
       );
       await using floatingPromises = FloatingPromises.create();
       using mediaGroupBuffer = MediaGroupBuffer.create(
@@ -148,6 +176,8 @@ export const serve = defineCommand({
         mediaGroupBuffer,
         attachmentStorage,
         typingIndicators,
+        groupMessageBuffer,
+        ownerId: telegramConfig.userId,
       };
       await using opencodeEventStream = OpencodeEventStream.create(
         opencodeServer.client,

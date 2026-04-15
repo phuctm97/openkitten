@@ -1,9 +1,9 @@
-import { mkdir, mkdtemp } from "node:fs/promises";
+import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { password, select, spinner, text } from "@clack/prompts";
 import { GrammyError } from "grammy";
-import { beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { logger } from "~/lib/logger";
 import type { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
@@ -60,13 +60,19 @@ vi.mock("grammy", async (importOriginal) => {
 let profile: Profile;
 let configPath: string;
 
+let tmpDir: string;
+
 beforeEach(async () => {
   vi.clearAllMocks();
   isTTYMock.isTTY = true;
-  const dir = await mkdtemp(join(tmpdir(), "openkitten-auth-test-"));
-  profile = { xdgConfig: dir } as Profile;
-  configPath = join(dir, "openkitten", "telegram.json");
-  await mkdir(join(dir, "openkitten"), { recursive: true });
+  tmpDir = await mkdtemp(join(tmpdir(), "openkitten-auth-test-"));
+  profile = { xdgConfig: tmpDir } as Profile;
+  configPath = join(tmpDir, "openkitten", "telegram.json");
+  await mkdir(join(tmpDir, "openkitten"), { recursive: true });
+});
+
+afterEach(async () => {
+  await rm(tmpDir, { recursive: true, force: true });
 });
 
 function mockGetMe(
@@ -457,9 +463,145 @@ test("still prompts for missing values when skipActions is true", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("456");
+  vi.mocked(select).mockResolvedValueOnce(false);
   const config = await TelegramConfig.create(profile, { skipActions: true });
   expect(password).toHaveBeenCalled();
   expect(text).toHaveBeenCalled();
-  expect(select).not.toHaveBeenCalled();
   expect(config.userId).toBe(456);
+  expect(config.groupChat).toBe(false);
+});
+
+test("loads groupChat from saved config", async () => {
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123, groupChat: true }),
+  );
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  vi.mocked(select).mockResolvedValueOnce("continue");
+  const config = await TelegramConfig.create(profile);
+  expect(config.groupChat).toBe(true);
+});
+
+test("defaults groupChat to false for existing config without it", async () => {
+  isTTYMock.isTTY = false;
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  const config = await TelegramConfig.create(profile);
+  expect(config.groupChat).toBe(false);
+});
+
+test("changes groupChat via action loop", async () => {
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+  );
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  vi.mocked(select)
+    .mockResolvedValueOnce("group-chat")
+    .mockResolvedValueOnce(true)
+    .mockResolvedValueOnce("continue");
+  const config = await TelegramConfig.create(profile);
+  expect(config.groupChat).toBe(true);
+});
+
+test("prompts groupChat with hint when true selected", async () => {
+  vi.mocked(password).mockResolvedValueOnce(validToken);
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  vi.mocked(text).mockResolvedValueOnce("123");
+  vi.mocked(select)
+    .mockResolvedValueOnce(true)
+    .mockResolvedValueOnce("continue");
+  await TelegramConfig.create(profile);
+  const { log } = await import("@clack/prompts");
+  expect(vi.mocked(log.message)).toHaveBeenCalledWith(
+    expect.stringContaining("admin"),
+    expect.anything(),
+  );
+});
+
+test("loads config with groupChat true in non-TTY", async () => {
+  isTTYMock.isTTY = false;
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123, groupChat: true }),
+  );
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  const config = await TelegramConfig.create(profile);
+  expect(config.groupChat).toBe(true);
+});
+
+test("loads config with groupChat false in non-TTY", async () => {
+  isTTYMock.isTTY = false;
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+  );
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  const config = await TelegramConfig.create(profile);
+  expect(config.groupChat).toBe(false);
+});
+
+test("config without groupChat defaults to false in non-TTY", async () => {
+  isTTYMock.isTTY = false;
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  const config = await TelegramConfig.create(profile);
+  expect(config.groupChat).toBe(false);
+});
+
+test("promptGroupChat returns true when select returns true", async () => {
+  vi.mocked(password).mockResolvedValueOnce(validToken);
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  vi.mocked(text).mockResolvedValueOnce("123");
+  vi.mocked(select)
+    .mockResolvedValueOnce(true)
+    .mockResolvedValueOnce("continue");
+  const config = await TelegramConfig.create(profile);
+  expect(config.groupChat).toBe(true);
+});
+
+test("promptGroupChat returns false when select returns false", async () => {
+  vi.mocked(password).mockResolvedValueOnce(validToken);
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  vi.mocked(text).mockResolvedValueOnce("123");
+  vi.mocked(select)
+    .mockResolvedValueOnce(false)
+    .mockResolvedValueOnce("continue");
+  const config = await TelegramConfig.create(profile);
+  expect(config.groupChat).toBe(false);
+});
+
+test("shows hint message when groupChat is enabled", async () => {
+  const { log } = await import("@clack/prompts");
+  vi.mocked(password).mockResolvedValueOnce(validToken);
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  vi.mocked(text).mockResolvedValueOnce("123");
+  vi.mocked(select)
+    .mockResolvedValueOnce(true)
+    .mockResolvedValueOnce("continue");
+  await TelegramConfig.create(profile);
+  expect(log.message).toHaveBeenCalledWith(
+    expect.stringContaining("Add the bot as an admin"),
+    expect.anything(),
+  );
+});
+
+test("toggles group chat via action loop", async () => {
+  await Bun.write(
+    configPath,
+    JSON.stringify({ botToken: validToken, userId: 123 }),
+  );
+  mockGetMe(true, { first_name: "Bot", username: "bot" });
+  vi.mocked(select)
+    .mockResolvedValueOnce("group-chat")
+    .mockResolvedValueOnce(true)
+    .mockResolvedValueOnce("continue");
+  const config = await TelegramConfig.create(profile);
+  expect(config.groupChat).toBe(true);
 });

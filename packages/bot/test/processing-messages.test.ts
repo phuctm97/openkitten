@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
+import { GroupMessageBuffer } from "~/lib/group-message-buffer";
 import { ProcessingMessages } from "~/lib/processing-messages";
 import * as schema from "~/lib/schema";
 
@@ -1580,4 +1581,32 @@ test("update after initialized deduplicates via database", async () => {
     },
   } as never);
   expect(mockSessionMessage).not.toHaveBeenCalled();
+});
+
+test("delivers completed message and buffers in group mode", async () => {
+  const database = Database.create();
+  database
+    .insert(schema.session)
+    .values({ id: "sess-1", chatId: 123, threadId: 0 })
+    .run();
+  const bot = {} as never;
+  const client = createMockOpencodeClient();
+  const es = createMockExistingSessions([]);
+  using buffer = GroupMessageBuffer.create();
+  const pm = await ProcessingMessages.create(bot, database, client, es, buffer);
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m-group",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+    },
+  } as never);
+  const recent = buffer.recent({ chatId: 123, threadId: undefined });
+  expect(recent).toHaveLength(1);
+  expect(recent[0]?.isBot).toBe(true);
+  expect(recent[0]?.text).toBe("hello world");
 });

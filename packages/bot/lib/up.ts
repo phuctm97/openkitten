@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { styleText } from "node:util";
@@ -6,7 +6,6 @@ import * as clack from "@clack/prompts";
 import boxen from "boxen";
 import { defineCommand } from "citty";
 import { builtinCommands } from "~/lib/builtin-commands";
-import { CommandSkills } from "~/lib/command-skills";
 import { getUserId } from "~/lib/get-user-id";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
 import { OpencodeConfig } from "~/lib/opencode-config";
@@ -208,11 +207,27 @@ export const up = defineCommand({
       skipActions: args.yes,
     });
     await OpencodeConfig.create(profile, { skipActions: args.yes });
-    const commandSkillsDir = join(profile.xdgConfig, "opencode", "skills");
-    const commandSkills = await CommandSkills.list(commandSkillsDir);
+    let customCommands: { command: string; description: string }[] = [];
+    try {
+      const raw = await readFile(
+        join(profile.dir, ".opencode", "opencode.json"),
+        "utf-8",
+      );
+      const config = JSON.parse(raw) as {
+        command?: Record<string, { description?: string }>;
+      };
+      customCommands = Object.entries(config.command ?? {})
+        .map(([name, entry]) => ({
+          command: name,
+          description: entry.description ?? "",
+        }))
+        .sort((a, b) => a.command.localeCompare(b.command));
+    } catch {
+      // No config or no commands
+    }
     await grammySetCommands(telegramConfig.botToken, [
       ...builtinCommands,
-      ...CommandSkills.toTelegramCommands(commandSkills),
+      ...customCommands,
     ]);
     process.stderr.write(
       `${boxen(styleText("bold", "OpenKitten"), { padding: 1 })}\n`,

@@ -5,6 +5,7 @@ import { grammyHandleAgent } from "~/lib/grammy-handle-agent";
 import { grammySendAgentChanged } from "~/lib/grammy-send-agent-changed";
 import { grammySendAgentList } from "~/lib/grammy-send-agent-list";
 import { grammySendAgentNotFound } from "~/lib/grammy-send-agent-not-found";
+import * as ownerOnly from "~/lib/grammy-send-owner-only";
 import type { Scope } from "~/lib/scope";
 import { setSessionAgent } from "~/lib/set-session-agent";
 
@@ -24,7 +25,8 @@ function mockCtx(chatId: number, match: string, threadId?: number) {
   const react = vi.fn(async () => true);
   return {
     ctx: {
-      chat: { id: chatId },
+      chat: { id: chatId, type: "private" },
+      from: { id: 123 },
       msg: { message_id: 99, message_thread_id: threadId },
       match,
       update: { update_id: 1 },
@@ -95,6 +97,8 @@ function mockScope(overrides: {
     mediaGroupBuffer: {} as never,
     attachmentStorage: {} as never,
     typingIndicators: {} as never,
+    groupMessageBuffer: undefined as never,
+    ownerId: 123 as never,
   };
 }
 
@@ -242,4 +246,26 @@ test("passes threadId when present", async () => {
   expect(grammySendAgentChanged).toHaveBeenCalledWith(
     expect.objectContaining({ threadId: 7 }),
   );
+});
+
+test("rejects non-owner in group chat", async () => {
+  const sendSpy = vi
+    .spyOn(ownerOnly, "grammySendOwnerOnly")
+    .mockResolvedValue();
+  const existingSessions = mockExistingSessions();
+  const opencodeClient = mockOpencodeClient();
+  const scope = mockScope({ existingSessions, opencodeClient });
+  const ctx = {
+    chat: { id: 42, type: "group" },
+    from: { id: 999 },
+    msg: { message_id: 99, message_thread_id: undefined },
+    match: "",
+    update: { update_id: 1 },
+    react: vi.fn(),
+  } as never;
+
+  await grammyHandleAgent(scope, ctx, signal);
+
+  expect(sendSpy).toHaveBeenCalledOnce();
+  expect(opencodeClient.app.agents).not.toHaveBeenCalled();
 });

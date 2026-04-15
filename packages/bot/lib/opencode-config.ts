@@ -14,46 +14,17 @@ const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
 
 const defaultSkillsDir = resolve(import.meta.dirname, "../skills");
 
-const pluginPackageDir = resolve(import.meta.dirname, "../../bot-plugin");
+const systemAgents = resolve(import.meta.dirname, "../system-agents.md");
 
-const defaultSystemAgents = resolve(import.meta.dirname, "../system-agents.md");
-
-const defaultDefaultAgents = resolve(
-  import.meta.dirname,
-  "../default-agents.md",
-);
+const defaultPrompt = resolve(import.meta.dirname, "../default-prompt.md");
 
 const agentFilePathPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH__";
 const agentFilePathYamlPlaceholder = "__OPENKITTEN_AGENT_FILE_PATH_YAML__";
-const agentDirectoryGlobYamlPlaceholder =
-  "__OPENKITTEN_AGENT_DIRECTORY_GLOB_YAML__";
-const skillsDirGlobYamlPlaceholder = "__OPENKITTEN_SKILLS_DIR_GLOB_YAML__";
 
 const defaultConfigJson = {
   $schema: "https://opencode.ai/config.json",
   default_agent: "assist",
 };
-
-const opencodeToolPrefix = "openkitten_";
-
-const opencodePluginFilename = "openkitten.js";
-
-const opencodePluginSource = `export default {
-  id: "openkitten",
-  server: async () => ({
-    "tool.execute.before": async (input, output) => {
-      if (!input.tool.startsWith(${JSON.stringify(opencodeToolPrefix)})) return;
-      if (!output.args || typeof output.args !== "object" || Array.isArray(output.args)) {
-        throw new Error(\`Cannot attach __OPENKITTEN__ metadata to \${input.tool}: tool args must be a mutable object.\`);
-      }
-      output.args.__OPENKITTEN__ = {
-        sessionID: input.sessionID,
-        callID: input.callID,
-      };
-    },
-  }),
-};
-`;
 
 interface OpencodeConfigCreateOptions {
   readonly skipActions?: boolean | undefined;
@@ -63,39 +34,22 @@ function normalizePathPattern(path: string): string {
   return path.replaceAll("\\", "/");
 }
 
-function renderAgentTemplate(
-  template: string,
-  agentPath: string,
-  skillsDir: string,
-): string {
+function renderAgentTemplate(template: string, agentPath: string): string {
   const normalizedAgentPath = normalizePathPattern(agentPath);
-  const normalizedAgentDirectoryGlob = normalizePathPattern(
-    join(dirname(agentPath), "*"),
-  );
-  const normalizedSkillsDirGlob = normalizePathPattern(join(skillsDir, "**"));
   return template
     .replaceAll(agentFilePathPlaceholder, normalizedAgentPath)
     .replaceAll(
       agentFilePathYamlPlaceholder,
       JSON.stringify(normalizedAgentPath),
-    )
-    .replaceAll(
-      agentDirectoryGlobYamlPlaceholder,
-      JSON.stringify(normalizedAgentDirectoryGlob),
-    )
-    .replaceAll(
-      skillsDirGlobYamlPlaceholder,
-      JSON.stringify(normalizedSkillsDirGlob),
     );
 }
 
 async function writeDefaultAgentFile(
   source: string,
   destination: string,
-  skillsDir: string,
 ): Promise<void> {
   const template = await readFile(source, "utf-8");
-  const rendered = renderAgentTemplate(template, destination, skillsDir);
+  const rendered = renderAgentTemplate(template, destination);
   await writeFile(destination, rendered);
 }
 
@@ -125,34 +79,33 @@ export namespace OpencodeConfig {
     const writes: Promise<unknown>[] = [];
     const configDir = join(profile.dir, ".opencode");
     const agentsDir = join(configDir, "agents");
-    const globalPluginsDir = join(profile.xdgConfig, "opencode", "plugins");
+    const commandsDir = join(configDir, "commands");
     const projectPluginsDir = join(configDir, "plugins");
-    const skillsDir = join(profile.xdgConfig, "opencode", "skills");
     await Promise.all([
       mkdir(agentsDir, { recursive: true }),
-      mkdir(globalPluginsDir, { recursive: true }),
+      mkdir(commandsDir, { recursive: true }),
       mkdir(projectPluginsDir, { recursive: true }),
       mkdir(profile.workspace, { recursive: true }),
-      mkdir(skillsDir, { recursive: true }),
+      mkdir(profile.xdgConfigSkill, { recursive: true }),
     ]);
     const mdGlob = new Bun.Glob("*.md");
     const agentFiles: string[] = [];
     for await (const file of mdGlob.scan(defaultAgentsDir)) {
       agentFiles.push(file);
     }
+    for (const file of agentFiles) {
+      const source = join(defaultAgentsDir, file);
+      const destination = join(agentsDir, file);
+      writes.push(writeDefaultAgentFile(source, destination));
+    }
     const skillGlob = new Bun.Glob("*/**");
     const skillFiles: string[] = [];
     for await (const file of skillGlob.scan(defaultSkillsDir)) {
       skillFiles.push(file);
     }
-    for (const file of agentFiles) {
-      const source = join(defaultAgentsDir, file);
-      const destination = join(agentsDir, file);
-      writes.push(writeDefaultAgentFile(source, destination, skillsDir));
-    }
     for (const file of skillFiles) {
       const source = join(defaultSkillsDir, file);
-      const destination = join(skillsDir, file);
+      const destination = join(profile.xdgConfigSkill, file);
       writes.push(
         mkdir(dirname(destination), { recursive: true }).then(async () => {
           const content = await readFile(source, "utf-8");
@@ -161,13 +114,13 @@ export namespace OpencodeConfig {
       );
     }
     writes.push(
-      readFile(defaultDefaultAgents, "utf-8").then((content) =>
+      readFile(defaultPrompt, "utf-8").then((content) =>
         writeFile(join(configDir, "AGENTS.md"), content, { flag: "wx" }),
       ),
     );
     writes.push(
-      readFile(defaultSystemAgents, "utf-8").then((content) =>
-        writeFile(join(profile.xdgConfig, "opencode", "AGENTS.md"), content),
+      readFile(systemAgents, "utf-8").then((content) =>
+        writeFile(join(profile.xdgConfigOpencode, "AGENTS.md"), content),
       ),
     );
     writes.push(
@@ -179,23 +132,18 @@ export namespace OpencodeConfig {
     );
     writes.push(
       writeFile(
-        join(configDir, "package.json"),
+        join(profile.xdgConfigOpencode, "opencode.json"),
         JSON.stringify(
           {
-            dependencies: {
-              "@openkitten/bot-plugin": `file:${pluginPackageDir}`,
-              grammy: "^1.42.0",
+            permission: {
+              external_directory: {
+                [`${normalizePathPattern(commandsDir)}/*`]: "allow",
+              },
             },
           },
           null,
           2,
         ),
-      ),
-    );
-    writes.push(
-      Bun.write(
-        join(globalPluginsDir, opencodePluginFilename),
-        opencodePluginSource,
       ),
     );
     const results = await Promise.allSettled(writes);

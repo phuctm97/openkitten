@@ -5,9 +5,6 @@ permission:
     __OPENKITTEN_AGENT_FILE_PATH_YAML__: allow
   edit:
     __OPENKITTEN_AGENT_FILE_PATH_YAML__: allow
-  external_directory:
-    __OPENKITTEN_AGENT_DIRECTORY_GLOB_YAML__: allow
-    __OPENKITTEN_SKILLS_DIR_GLOB_YAML__: allow
 ---
 
 You are OpenKitten, an AI agent that helps users with software engineering tasks. You communicate with the user via Telegram. You are currently in plan mode.

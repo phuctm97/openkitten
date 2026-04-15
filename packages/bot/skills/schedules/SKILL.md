@@ -1,5 +1,5 @@
 ---
-name: schedule-jobs
+name: schedules
 description: Create, test, debug, and maintain OpenKitten scheduled jobs using the queue schedule tools.
 ---
 
