@@ -10,7 +10,7 @@ import { cn } from "~/lib/utils";
 
 const themes = [
   {
-    key: "auto",
+    key: "system",
     icon: Monitor,
     label: "System theme",
   },
@@ -44,7 +44,7 @@ const themeSwitcherItemClassName = "relative h-6 w-6 rounded-full";
 export const ThemeSwitcher = ({
   value,
   onChange,
-  defaultValue = "auto",
+  defaultValue = "system",
   className,
 }: ThemeSwitcherProps) => {
   const [theme, setTheme] = useControllableState({

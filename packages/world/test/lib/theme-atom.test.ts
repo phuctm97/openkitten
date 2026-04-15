@@ -20,7 +20,7 @@ test("returns the initial theme during SSR", async () => {
   vi.stubEnv("SSR", true);
   localStorage.setItem("openkitten-theme", "dark");
 
-  expect(createStore().get(await importThemeAtom())).toBe("auto");
+  expect(createStore().get(await importThemeAtom())).toBe("system");
 });
 
 test("reads valid themes from localStorage and rejects invalid ones", async () => {
@@ -30,7 +30,7 @@ test("reads valid themes from localStorage and rejects invalid ones", async () =
 
   localStorage.setItem("openkitten-theme", "sunset");
 
-  expect(createStore().get(await importThemeAtom())).toBe("auto");
+  expect(createStore().get(await importThemeAtom())).toBe("system");
 });
 
 test("writes and removes theme values in localStorage", async () => {
@@ -42,7 +42,7 @@ test("writes and removes theme values in localStorage", async () => {
 
   store.set(themeAtom, RESET);
   expect(localStorage.getItem("openkitten-theme")).toBeNull();
-  expect(store.get(themeAtom)).toBe("auto");
+  expect(store.get(themeAtom)).toBe("system");
 });
 
 test("subscribes to storage changes for the matching key", async () => {
@@ -88,7 +88,7 @@ test("subscribes to storage changes for the matching key", async () => {
   );
 
   expect(listener).toHaveBeenCalledTimes(2);
-  expect(store.get(themeAtom)).toBe("auto");
+  expect(store.get(themeAtom)).toBe("system");
 
   unsubscribe();
   window.dispatchEvent(

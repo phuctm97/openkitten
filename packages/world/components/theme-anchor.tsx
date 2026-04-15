@@ -6,6 +6,7 @@ export function ThemeAnchor() {
 
   return (
     <ThemeSwitcher
+      defaultValue="system"
       value={theme}
       onChange={setTheme}
       className="fixed right-4 top-4 z-10"

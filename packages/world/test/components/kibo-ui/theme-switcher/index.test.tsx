@@ -48,7 +48,7 @@ test("calls onChange in controlled mode", async () => {
   const user = userEvent.setup();
   const handleChange = vi.fn<ThemeChangeHandler>();
 
-  render(<ThemeSwitcher value="auto" onChange={handleChange} />);
+  render(<ThemeSwitcher value="system" onChange={handleChange} />);
 
   await user.click(screen.getByRole("button", { name: "Dark theme" }));
 

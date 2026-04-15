@@ -15,18 +15,21 @@ vi.mock("next-themes", () => ({
     defaultTheme,
     disableTransitionOnChange,
     enableSystem,
+    storageKey,
   }: {
     attribute?: string;
     children: ReactNode;
     defaultTheme?: string;
     disableTransitionOnChange?: boolean;
     enableSystem?: boolean;
+    storageKey?: string;
   }) => {
     nextThemesProviderSpy({
       attribute,
       defaultTheme,
       disableTransitionOnChange,
       enableSystem,
+      storageKey,
     });
 
     return <div data-testid="next-themes-provider">{children}</div>;
@@ -48,5 +51,6 @@ test("configures next-themes for class-based system theming", () => {
     disableTransitionOnChange: true,
     defaultTheme: undefined,
     enableSystem: undefined,
+    storageKey: "openkitten-theme",
   });
 });

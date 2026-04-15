@@ -5,7 +5,7 @@ import type { Theme } from "~/lib/theme";
 
 export const themeAtom = atomWithStorage<Theme>(
   "openkitten-theme",
-  "auto",
+  "system",
   {
     getItem: (key, initialValue) => {
       if (import.meta.env.SSR) return initialValue;
