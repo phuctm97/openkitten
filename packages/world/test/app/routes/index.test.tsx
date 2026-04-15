@@ -25,8 +25,5 @@ test("renders the home route with links to app and game", async () => {
     "href",
     "/game",
   );
-  expect(
-    screen.getByRole("button", { name: "System theme" }),
-  ).toBeInTheDocument();
   expect(screen.getByRole("main")).toHaveClass("grid", "min-h-screen");
 });

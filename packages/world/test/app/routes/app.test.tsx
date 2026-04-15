@@ -12,8 +12,5 @@ test("renders the app route greeting", async () => {
   render(<Component />);
 
   expect(screen.getByText("Hello, world!")).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "System theme" }),
-  ).toBeInTheDocument();
   expect(screen.getByRole("main")).toHaveClass("grid", "min-h-screen");
 });

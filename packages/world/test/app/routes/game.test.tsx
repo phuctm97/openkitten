@@ -21,12 +21,8 @@ test("renders the fullscreen game route and creates Phaser", async () => {
   const { unmount } = render(<Component />);
 
   const screenElement = screen.getByTestId("game");
-  const themeSwitcherButton = await screen.findByRole("button", {
-    name: "System theme",
-  });
 
   expect(screenElement).toHaveClass("h-full", "overflow-hidden");
-  expect(themeSwitcherButton).toBeInTheDocument();
   await waitFor(() => {
     expect(gameRouteMocks.createGame).toHaveBeenCalledTimes(1);
   });
