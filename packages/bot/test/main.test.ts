@@ -5,7 +5,7 @@ vi.mock("citty", () => ({
   runMain: vi.fn(),
 }));
 
-test("runs cli", { timeout: 10_000 }, async () => {
+test("runs cli", async () => {
   const { runMain } = await import("citty");
   const { cli } = await import("~/lib/cli");
   await import("~/lib/main");
