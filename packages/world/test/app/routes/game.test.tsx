@@ -16,9 +16,7 @@ afterEach(() => {
   vi.resetModules();
 });
 
-test("renders the fullscreen game route and creates Phaser", {
-  timeout: 30_000,
-}, async () => {
+test("renders the fullscreen game route and creates Phaser", async () => {
   const { default: Component } = await import("~/app/routes/game");
   const { unmount } = render(<Component />);
 
