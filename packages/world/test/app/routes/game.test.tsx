@@ -17,7 +17,7 @@ afterEach(() => {
 });
 
 test("renders the fullscreen game route and creates Phaser", {
-  timeout: 30_000,
+  timeout: 10_000,
 }, async () => {
   const { default: Component } = await import("~/app/routes/game");
   const { unmount } = render(<Component />);
