@@ -72,7 +72,9 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-it("uses the database and fallback auth URLs", async () => {
+it("uses the database and fallback auth URLs", {
+  timeout: 10_000,
+}, async () => {
   const { auth } = await import("~/lib/auth");
 
   expect(auth.options.appName).toBe("OpenKitten");

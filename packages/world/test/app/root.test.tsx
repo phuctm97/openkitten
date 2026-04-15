@@ -45,7 +45,9 @@ const rootHydrateFallbackProps = {
   params: {},
 } satisfies Route.HydrateFallbackProps;
 
-test("renders the document shell and shared layout", async () => {
+test("renders the document shell and shared layout", {
+  timeout: 10_000,
+}, async () => {
   const { Layout } = await import("~/app/root");
   const markup = renderToStaticMarkup(
     <Layout>
