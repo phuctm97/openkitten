@@ -1,0 +1,30 @@
+{
+  "name": "@openkitten/plugin",
+  "version": "0.0.0",
+  "description": "Plugin SDK for building OpenKitten plugins with full Telegram Bot API access and bot runtime state.",
+  "type": "module",
+  "main": "lib/main.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/main.ts",
+      "types": "./lib/main.ts"
+    }
+  },
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "scripts": {
+    "test": "bun --bun vitest run"
+  },
+  "dependencies": {
+    "@opencode-ai/plugin": "^1.4.3",
+    "@openkitten/bot-client": "workspace:*",
+    "zod": "^4.1.8"
+  },
+  "devDependencies": {
+    "@vitest/coverage-istanbul": "^4.1.4",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4"
+  }
+}

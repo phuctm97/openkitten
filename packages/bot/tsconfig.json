@@ -4,9 +4,13 @@
     "drizzle.config.ts",
     "vitest.config.ts",
     "lib",
+    "plugins",
     "test"
   ],
-  "references": [],
+  "references": [
+    { "path": "../bot-contract/tsconfig.json" },
+    { "path": "../plugin/tsconfig.json" }
+  ],
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "types": ["bun"],

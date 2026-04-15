@@ -1,0 +1,31 @@
+{
+  "name": "@openkitten/bot-contract",
+  "version": "0.0.0",
+  "description": "oRPC contract for the OpenKitten bot API.",
+  "type": "module",
+  "main": "lib/index.ts",
+  "exports": {
+    ".": {
+      "import": "./lib/index.ts",
+      "types": "./lib/index.ts"
+    }
+  },
+  "files": [
+    "lib",
+    "dist"
+  ],
+  "scripts": {
+    "test": "bun --bun vitest run"
+  },
+  "dependencies": {
+    "@orpc/contract": "^1.13.0"
+  },
+  "peerDependencies": {
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@vitest/coverage-istanbul": "^4.1.4",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4"
+  }
+}

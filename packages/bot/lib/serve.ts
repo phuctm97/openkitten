@@ -3,6 +3,7 @@ import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
 import { Bot } from "grammy";
 import { AttachmentStorage } from "~/lib/attachment-storage";
+import { BotAPIServer } from "~/lib/bot-api-server";
 import { builtinCommands } from "~/lib/builtin-commands";
 import { CommandSkills } from "~/lib/command-skills";
 import { Database } from "~/lib/database";
@@ -79,6 +80,10 @@ export const serve = defineCommand({
         database,
         opencodeServer.client,
         existingSessions,
+      );
+      using _botAPIServer = await BotAPIServer.create(
+        profile,
+        telegramConfig.botToken,
       );
       using mcpServer = await McpServer.create(
         bot,
