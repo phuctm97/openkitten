@@ -16,7 +16,6 @@
     "noPropertyAccessFromIndexSignature": true,
     "noEmit": false,
     "composite": true,
-    "exactOptionalPropertyTypes": true,
     "allowImportingTsExtensions": false,
     "emitDeclarationOnly": true,
     "types": ["bun"],
