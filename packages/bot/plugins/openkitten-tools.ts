@@ -2,8 +2,7 @@
  * Example plugin for OpenKitten using @openkitten/plugin.
  *
  * This file demonstrates how to write a plugin that accesses
- * the bot's API to retrieve the bot token, then uses it to
- * call the Telegram Bot API directly.
+ * the bot's API, OpenCode client, and plugin options.
  *
  * To install:
  *
@@ -18,15 +17,31 @@
 
 import { definePlugin, tool } from "@openkitten/plugin";
 
-export default definePlugin("openkitten-tools", async ({ openkitten }) => ({
-  tool: {
-    openkitten_bot_token: tool({
-      description: "Get the Telegram bot token for direct API access.",
-      args: {},
-      async execute() {
-        const token = await openkitten.api.getBotToken();
-        return token;
-      },
-    }),
-  },
-}));
+export default definePlugin(
+  "openkitten-tools",
+  async ({ openkitten, opencode, options }) => ({
+    tool: {
+      openkitten_bot_token: tool({
+        description: "Get the Telegram bot token for direct API access.",
+        args: {},
+        async execute() {
+          const token = await openkitten.api.getBotToken();
+          return token;
+        },
+      }),
+      openkitten_project_info: tool({
+        description:
+          "Get the current OpenCode project info and working directory.",
+        args: {},
+        async execute() {
+          return JSON.stringify({
+            directory: opencode.directory,
+            worktree: opencode.worktree,
+            serverUrl: opencode.serverUrl.href,
+            hasOptions: options !== undefined,
+          });
+        },
+      }),
+    },
+  }),
+);

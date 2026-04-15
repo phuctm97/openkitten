@@ -39,23 +39,24 @@ test("returns a PluginModule with correct id", () => {
   expect(typeof plugin.server).toBe("function");
 });
 
-test("server calls factory with opencode and openkitten", async () => {
+test("server calls factory with opencode, openkitten, and options", async () => {
   const factory = vi.fn(async () => ({}) as Hooks);
   const plugin = definePlugin("test", factory);
   await plugin.server(fakeOpencode);
   expect(factory).toHaveBeenCalledOnce();
-  const call = factory.mock.calls[0] as never as [definePlugin.Input, unknown];
+  const call = factory.mock.calls[0] as never as [definePlugin.Input];
   expect(call[0].opencode).toBe(fakeOpencode);
   expect(call[0].openkitten.api).toBeDefined();
+  expect(call[0].options).toBeUndefined();
 });
 
-test("server passes options to factory", async () => {
+test("server passes options inside input", async () => {
   const factory = vi.fn(async () => ({}) as Hooks);
   const plugin = definePlugin("test", factory);
   const options = { debug: true };
   await plugin.server(fakeOpencode, options);
-  const call = factory.mock.calls[0] as never as [unknown, unknown];
-  expect(call[1]).toBe(options);
+  const call = factory.mock.calls[0] as never as [definePlugin.Input];
+  expect(call[0].options).toBe(options);
 });
 
 test("returns hooks from factory", async () => {
