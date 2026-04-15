@@ -61,6 +61,7 @@ test("renders the document shell and shared layout", {
   expect(markup).toContain("meta-placeholder");
   expect(markup).toContain("openkitten-theme");
   expect(markup).toContain("document.documentElement.style.colorScheme");
+  expect(markup).toContain("right-4 top-4 z-10");
   expect(markup).toContain("Scroll Restoration Placeholder");
 });
 
@@ -73,9 +74,6 @@ test("renders the hydrate fallback", async () => {
 
   expect(screen.getByRole("status")).toBeInTheDocument();
   expect(screen.getByText("Loading OpenKitten")).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "System theme" }),
-  ).toBeInTheDocument();
   expect(container.firstChild).toHaveClass("grid", "min-h-screen");
 });
 
@@ -94,9 +92,6 @@ test("renders a 404 error boundary state", async () => {
   expect(screen.getByRole("alert")).toBeInTheDocument();
   expect(screen.getByText("404")).toBeInTheDocument();
   expect(screen.getByText("Not Found")).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "System theme" }),
-  ).toBeInTheDocument();
   expect(
     screen.getByText(
       "The page you are looking for does not exist or may have moved.",

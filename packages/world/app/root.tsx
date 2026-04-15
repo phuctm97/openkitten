@@ -27,6 +27,7 @@ export function Layout({ children }: PropsWithChildren) {
       </head>
       <body className="m-0 min-h-full antialiased">
         <ThemeConnector />
+        <ThemeAnchor />
         {children}
         <ScrollRestoration />
         <Scripts />
@@ -38,7 +39,6 @@ export function Layout({ children }: PropsWithChildren) {
 export function HydrateFallback(_: Route.HydrateFallbackProps) {
   return (
     <section className="grid min-h-screen place-items-center bg-background px-6 py-10">
-      <ThemeAnchor />
       <div
         role="status"
         aria-live="polite"
@@ -82,7 +82,6 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
 
   return (
     <section className="relative grid min-h-screen overflow-hidden bg-background px-6 py-10">
-      <ThemeAnchor />
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
