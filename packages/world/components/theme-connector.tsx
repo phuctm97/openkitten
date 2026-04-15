@@ -29,7 +29,7 @@ export function ThemeConnector() {
 
   useEffect(() => {
     const restoreTransitions = disableTransitions();
-    let cleanup = () => {};
+    let cleanup: () => void;
 
     try {
       document.documentElement.classList.remove("light", "dark");
