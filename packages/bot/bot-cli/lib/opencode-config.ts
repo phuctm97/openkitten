@@ -80,10 +80,14 @@ export namespace OpencodeConfig {
     const configDir = join(profile.dir, ".opencode");
     const agentsDir = join(configDir, "agents");
     const commandsDir = join(configDir, "commands");
+    const skillsDir = join(configDir, "skills");
+    const agentSkillsDir = join(configDir, ".agents", "skills");
     const projectPluginsDir = join(configDir, "plugins");
     await Promise.all([
       mkdir(agentsDir, { recursive: true }),
       mkdir(commandsDir, { recursive: true }),
+      mkdir(skillsDir, { recursive: true }),
+      mkdir(agentSkillsDir, { recursive: true }),
       mkdir(projectPluginsDir, { recursive: true }),
       mkdir(profile.workspace, { recursive: true }),
       mkdir(profile.xdgConfigSkill, { recursive: true }),
@@ -137,7 +141,7 @@ export namespace OpencodeConfig {
           {
             permission: {
               external_directory: {
-                [`${normalizePathPattern(commandsDir)}/*`]: "allow",
+                [`${normalizePathPattern(configDir)}/*`]: "allow",
               },
             },
           },

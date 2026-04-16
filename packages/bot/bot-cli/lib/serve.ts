@@ -35,6 +35,7 @@ import { Profile } from "~/lib/profile";
 import { restart } from "~/lib/restart";
 import { Scheduler } from "~/lib/scheduler";
 import type { Scope } from "~/lib/scope";
+import { sendRestartNotifications } from "~/lib/send-restart-notifications";
 import { Shutdown } from "~/lib/shutdown";
 import { TelegramConfig } from "~/lib/telegram-config";
 import { TypingIndicators } from "~/lib/typing-indicators";
@@ -104,8 +105,11 @@ export const serve = defineCommand({
         profile,
         telegramConfig.botToken,
       );
+      await sendRestartNotifications(bot, database);
       using mcpServer = await McpServer.create(
         bot,
+        database,
+        shutdown,
         opencodeServer.client,
         existingSessions,
         scheduler,

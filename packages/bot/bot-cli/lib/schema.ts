@@ -70,6 +70,16 @@ export const schedule = sqliteTable(
   (table) => [index("schedule_session_id_idx").on(table.sessionId)],
 );
 
+export const restartNotification = sqliteTable("restart_notification", {
+  id: integer().primaryKey({ autoIncrement: true }),
+  chatId: integer("chat_id").notNull(),
+  threadId: integer("thread_id").notNull().default(0),
+  message: text().notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
 export const sessionRelations = relations(session, ({ many }) => ({
   messages: many(message),
   schedules: many(schedule),

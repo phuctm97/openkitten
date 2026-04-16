@@ -88,6 +88,12 @@ describe("McpServer", () => {
     }),
   );
   const existingSessions = { get: existingSessionsGet } as never;
+  const mockInsert = vi.fn(() => ({
+    values: vi.fn(() => ({ run: vi.fn() })),
+  }));
+  const mockDatabase = { insert: mockInsert } as never;
+  const mockTrigger = vi.fn();
+  const mockShutdown = { trigger: mockTrigger } as never;
   const mockScheduler = {} as never;
   const tempDirs: string[] = [];
 
@@ -98,6 +104,8 @@ describe("McpServer", () => {
     mockHandleRequest.mockClear();
     mockMcpAdd.mockClear();
     mockReloadOpencodeConfig.mockClear();
+    mockInsert.mockClear();
+    mockTrigger.mockClear();
     existingSessionsGet.mockClear();
     botApi.sendAnimation.mockClear();
     botApi.sendAudio.mockClear();
@@ -131,6 +139,8 @@ describe("McpServer", () => {
   test("logs starting and ready", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -142,6 +152,8 @@ describe("McpServer", () => {
   test("starts Bun.serve on localhost with random port", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -154,6 +166,8 @@ describe("McpServer", () => {
   test("registers with OpenCode server", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -177,7 +191,14 @@ describe("McpServer", () => {
       mcp: { add: vi.fn(async () => Promise.reject(error)) },
     } as never;
     await expect(
-      McpServer.create(bot, failingClient, existingSessions, mockScheduler),
+      McpServer.create(
+        bot,
+        mockDatabase,
+        mockShutdown,
+        failingClient,
+        existingSessions,
+        mockScheduler,
+      ),
     ).rejects.toThrow(error);
     expect(mockStop).toHaveBeenCalledOnce();
   });
@@ -185,6 +206,8 @@ describe("McpServer", () => {
   test("exited resolves on disposal", async () => {
     const server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -197,6 +220,8 @@ describe("McpServer", () => {
     {
       using _server = await McpServer.create(
         bot,
+        mockDatabase,
+        mockShutdown,
         mockClient,
         existingSessions,
         mockScheduler,
@@ -209,6 +234,8 @@ describe("McpServer", () => {
   test("returns 404 for non-MCP paths", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -220,6 +247,8 @@ describe("McpServer", () => {
   test("returns 401 for missing auth", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -233,6 +262,8 @@ describe("McpServer", () => {
   test("returns 401 for wrong auth", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -249,6 +280,8 @@ describe("McpServer", () => {
   test("creates SDK server and transport for MCP requests", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -278,6 +311,8 @@ describe("McpServer", () => {
   test("registers the send_file tool for MCP requests", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -306,6 +341,8 @@ describe("McpServer", () => {
     };
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       scheduler as never,
@@ -337,6 +374,8 @@ describe("McpServer", () => {
 
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -383,6 +422,8 @@ describe("McpServer", () => {
 
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -428,6 +469,8 @@ describe("McpServer", () => {
 
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -465,6 +508,8 @@ describe("McpServer", () => {
   test("send_file rejects missing local files", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -497,6 +542,8 @@ describe("McpServer", () => {
 
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -522,6 +569,8 @@ describe("McpServer", () => {
   test("send_file rejects calls without OpenKitten metadata", async () => {
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,
@@ -541,6 +590,106 @@ describe("McpServer", () => {
     );
   });
 
+  test("reload_extensions sends notification, stores restart message, and triggers shutdown", async () => {
+    const mockFindMany = vi.fn(() => ({
+      sync: () => [{ chatId: 123, threadId: 456 }],
+    }));
+    const db = {
+      insert: mockInsert,
+      query: { session: { findMany: mockFindMany } },
+    } as never;
+    using _server = await McpServer.create(
+      bot,
+      db,
+      mockShutdown,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find(
+      (entry) => entry.name === "reload_extensions",
+    );
+    if (!tool) throw new Error("reload_extensions tool was not registered");
+
+    const mockValues = vi.fn(() => ({ run: vi.fn() }));
+    mockInsert.mockReturnValue({ values: mockValues } as never);
+
+    const result = await tool.handler({
+      message: 'The "notes" skill is now active.',
+    });
+
+    expect(botApi.sendMessage).toHaveBeenCalledWith(
+      123,
+      "⏳ Restarting to apply changes…",
+      { message_thread_id: 456 },
+    );
+    expect(mockInsert).toHaveBeenCalled();
+    expect(mockValues).toHaveBeenCalledWith({
+      chatId: 123,
+      threadId: 456,
+      message: '✅ The "notes" skill is now active.',
+    });
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Restarting…" }],
+    });
+    await vi.waitFor(() => {
+      expect(mockTrigger).toHaveBeenCalled();
+    });
+  });
+
+  test("reload_extensions skips unreachable chats and still triggers shutdown", async () => {
+    const mockFindMany = vi.fn(() => ({
+      sync: () => [
+        { chatId: 1, threadId: 0 },
+        { chatId: 2, threadId: 0 },
+      ],
+    }));
+    const db = {
+      insert: mockInsert,
+      query: { session: { findMany: mockFindMany } },
+    } as never;
+    using _server = await McpServer.create(
+      bot,
+      db,
+      mockShutdown,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find(
+      (entry) => entry.name === "reload_extensions",
+    );
+    if (!tool) throw new Error("reload_extensions tool was not registered");
+
+    botApi.sendMessage
+      .mockRejectedValueOnce(new Error("chat not found"))
+      .mockResolvedValueOnce({});
+    const mockValues = vi.fn(() => ({ run: vi.fn() }));
+    mockInsert.mockReturnValue({ values: mockValues } as never);
+
+    await tool.handler({ message: "Done." });
+
+    expect(botApi.sendMessage).toHaveBeenCalledTimes(2);
+    expect(mockInsert).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(mockTrigger).toHaveBeenCalled();
+    });
+  });
+
   test("reload_commands tool reloads config and returns confirmation", async () => {
     const reloadConfigOptions = {
       commandsDir: "/tmp/commands",
@@ -550,6 +699,8 @@ describe("McpServer", () => {
 
     using _server = await McpServer.create(
       bot,
+      mockDatabase,
+      mockShutdown,
       mockClient,
       existingSessions,
       mockScheduler,

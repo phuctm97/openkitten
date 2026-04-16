@@ -11,8 +11,8 @@
         "typescript": "^6.0.2",
       },
     },
-    "packages/bot": {
-      "name": "@openkitten/bot",
+    "packages/bot/bot-cli": {
+      "name": "@openkitten/bot-cli",
       "version": "0.0.0",
       "dependencies": {
         "@clack/prompts": "^1.2.0",
@@ -45,7 +45,7 @@
         "vitest": "^4.1.4",
       },
     },
-    "packages/bot-contract": {
+    "packages/bot/bot-contract": {
       "name": "@openkitten/bot-contract",
       "version": "0.0.0",
       "dependencies": {
@@ -60,7 +60,7 @@
         "zod": "^4.3.6",
       },
     },
-    "packages/bot-plugin": {
+    "packages/bot/bot-plugin": {
       "name": "@openkitten/bot-plugin",
       "version": "0.0.0",
       "dependencies": {
@@ -548,11 +548,11 @@
 
     "@opencode-ai/sdk": ["@opencode-ai/sdk@1.4.6", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-sQaVfEfQW3m3DeCVlurSTUjgIYdIk+gIfOys51MVFYzJHw+FyjjuAt7EKKA+LeZU5AiWGlpkIRa1rJo5KWMXCw=="],
 
-    "@openkitten/bot": ["@openkitten/bot@workspace:packages/bot"],
+    "@openkitten/bot-cli": ["@openkitten/bot-cli@workspace:packages/bot/bot-cli"],
 
-    "@openkitten/bot-contract": ["@openkitten/bot-contract@workspace:packages/bot-contract"],
+    "@openkitten/bot-contract": ["@openkitten/bot-contract@workspace:packages/bot/bot-contract"],
 
-    "@openkitten/bot-plugin": ["@openkitten/bot-plugin@workspace:packages/bot-plugin"],
+    "@openkitten/bot-plugin": ["@openkitten/bot-plugin@workspace:packages/bot/bot-plugin"],
 
     "@openkitten/server": ["@openkitten/server@workspace:packages/server"],
 

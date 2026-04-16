@@ -78,6 +78,10 @@ vi.mock("~/lib/scheduler", () => ({
 
 vi.mock("~/lib/grammy-set-commands");
 
+vi.mock("~/lib/send-restart-notifications", () => ({
+  sendRestartNotifications: vi.fn(async () => {}),
+}));
+
 vi.mock("node:fs/promises", async () => {
   const actual =
     await vi.importActual<typeof import("node:fs/promises")>(
