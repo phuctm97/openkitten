@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@react-email/components": "^1.0.12",
-    "better-auth": "^1.6.4",
+    "better-auth": "^1.6.5",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.14",
     "nodemailer": "^8.0.5",

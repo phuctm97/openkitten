@@ -76,7 +76,7 @@ export namespace OpencodeConfig {
     profile: Profile,
     options: OpencodeConfigCreateOptions = {},
   ): Promise<OpencodeConfig> {
-    const writes: Promise<unknown>[] = [];
+    const writes: Array<() => Promise<unknown>> = [];
     const configDir = join(profile.dir, ".opencode");
     const agentsDir = join(configDir, "agents");
     const commandsDir = join(configDir, "commands");
@@ -100,7 +100,7 @@ export namespace OpencodeConfig {
     for (const file of agentFiles) {
       const source = join(defaultAgentsDir, file);
       const destination = join(agentsDir, file);
-      writes.push(writeDefaultAgentFile(source, destination));
+      writes.push(() => writeDefaultAgentFile(source, destination));
     }
     const skillGlob = new Bun.Glob("*/**");
     const skillFiles: string[] = [];
@@ -110,31 +110,31 @@ export namespace OpencodeConfig {
     for (const file of skillFiles) {
       const source = join(defaultSkillsDir, file);
       const destination = join(profile.xdgConfigSkill, file);
-      writes.push(
+      writes.push(() =>
         mkdir(dirname(destination), { recursive: true }).then(async () => {
           const content = await readFile(source, "utf-8");
           await writeFile(destination, content);
         }),
       );
     }
-    writes.push(
+    writes.push(() =>
       readFile(defaultPrompt, "utf-8").then((content) =>
         writeFile(join(configDir, "AGENTS.md"), content, { flag: "wx" }),
       ),
     );
-    writes.push(
+    writes.push(() =>
       readFile(systemAgents, "utf-8").then((content) =>
         writeFile(join(profile.xdgConfigOpencode, "AGENTS.md"), content),
       ),
     );
-    writes.push(
+    writes.push(() =>
       writeFile(
         join(configDir, "opencode.json"),
         JSON.stringify(defaultConfigJson, null, 2),
         { flag: "wx" },
       ),
     );
-    writes.push(
+    writes.push(() =>
       writeFile(
         join(profile.xdgConfigOpencode, "opencode.json"),
         JSON.stringify(
@@ -150,7 +150,20 @@ export namespace OpencodeConfig {
         ),
       ),
     );
-    const results = await Promise.allSettled(writes);
+    const results: PromiseSettledResult<unknown>[] = [];
+    for (const write of writes) {
+      try {
+        results.push({
+          status: "fulfilled",
+          value: await write(),
+        });
+      } catch (reason) {
+        results.push({
+          status: "rejected",
+          reason,
+        });
+      }
+    }
     const errors = results
       .filter(
         (r): r is PromiseRejectedResult =>

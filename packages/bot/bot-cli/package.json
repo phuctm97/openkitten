@@ -18,7 +18,7 @@
     "@openkitten/bot-plugin": "workspace:*",
     "@orpc/server": "^1.13.14",
     "boxen": "^8.0.1",
-    "bunqueue": "^2.7.4",
+    "bunqueue": "^2.7.5",
     "citty": "^0.2.2",
     "content-type": "^1.0.5",
     "drizzle-orm": "^0.45.2",

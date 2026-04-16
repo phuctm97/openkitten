@@ -7,7 +7,7 @@
   "tailwind": {
     "prefix": "",
     "config": "",
-    "css": "app/layout.css",
+    "css": "app/styles.css",
     "baseColor": "stone",
     "cssVariables": true
   },
