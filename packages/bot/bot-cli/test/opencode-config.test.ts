@@ -205,9 +205,13 @@ test("throws on single non-EEXIST error", async () => {
 test("throws Errors on multiple non-EEXIST errors", async () => {
   const agentsPath = join(configDir(), "agents");
   const commandsPath = join(configDir(), "commands");
+  const skillsPath = join(configDir(), "skills");
+  const agentSkillsPath = join(configDir(), ".agents", "skills");
   const projectPlugins = join(configDir(), "plugins");
   await mkdir(agentsPath, { recursive: true });
   await mkdir(commandsPath, { recursive: true });
+  await mkdir(skillsPath, { recursive: true });
+  await mkdir(agentSkillsPath, { recursive: true });
   await mkdir(projectPlugins, { recursive: true });
   await chmod(agentsPath, 0o444);
   await chmod(configDir(), 0o555);

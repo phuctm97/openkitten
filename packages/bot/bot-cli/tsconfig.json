@@ -10,7 +10,7 @@
     { "path": "../bot-contract/tsconfig.json" },
     { "path": "../bot-plugin/tsconfig.json" }
   ],
-  "extends": "../../tsconfig.json",
+  "extends": "../../../tsconfig.json",
   "compilerOptions": {
     "types": ["bun"],
     "outDir": "dist",

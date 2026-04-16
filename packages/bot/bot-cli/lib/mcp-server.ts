@@ -10,6 +10,7 @@ import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import { type Bot, InputFile } from "grammy";
 import zod from "zod";
 import { attachmentKindSchema } from "~/lib/attachment-kind-schema";
+import type { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getAttachmentName } from "~/lib/get-attachment-name";
@@ -17,6 +18,8 @@ import { logger } from "~/lib/logger";
 import { registerScheduleTools } from "~/lib/register-schedule-tools";
 import { reloadOpencodeConfig } from "~/lib/reload-opencode-config";
 import type { Scheduler } from "~/lib/scheduler";
+import * as schema from "~/lib/schema";
+import type { Shutdown } from "~/lib/shutdown";
 import { websiteURL } from "~/lib/website-url";
 import { version } from "~/package.json" with { type: "json" };
 
@@ -51,6 +54,8 @@ type SendFileResult = CallToolResult & {
 
 export class McpServer implements Disposable {
   readonly #bot: Bot;
+  readonly #database: Database;
+  readonly #shutdown: Shutdown;
   readonly #existingSessions: ExistingSessions;
   readonly #scheduler: Scheduler;
   readonly #reloadConfigOptions:
@@ -63,11 +68,15 @@ export class McpServer implements Disposable {
 
   private constructor(
     bot: Bot,
+    database: Database,
+    shutdown: Shutdown,
     existingSessions: ExistingSessions,
     scheduler: Scheduler,
     reloadConfigOptions: Parameters<typeof reloadOpencodeConfig>[0] | undefined,
   ) {
     this.#bot = bot;
+    this.#database = database;
+    this.#shutdown = shutdown;
     this.#existingSessions = existingSessions;
     this.#scheduler = scheduler;
     this.#reloadConfigOptions = reloadConfigOptions;
@@ -126,6 +135,23 @@ export class McpServer implements Disposable {
         },
       );
     }
+    server.registerTool(
+      "reload_extensions",
+      {
+        description:
+          "Restart to apply newly created or installed skills and commands. The current response will be interrupted. A notification is sent to the user before and after the restart.",
+        inputSchema: zod.looseObject({
+          message: zod
+            .string()
+            .trim()
+            .min(1)
+            .describe(
+              "Short message to send to the user after the restart completes, e.g. 'The \"notes\" skill is now active.'",
+            ),
+        }),
+      },
+      async (args) => this.#reloadExtensions(args),
+    );
     registerScheduleTools(server, {
       scheduler: this.#scheduler,
       getMetadata: (args) => this.#getMetadata(args),
@@ -204,6 +230,42 @@ export class McpServer implements Disposable {
     };
   }
 
+  async #reloadExtensions(
+    args: { message: string } & Record<string, unknown>,
+  ): Promise<CallToolResult> {
+    const sessions = this.#database.query.session
+      .findMany({
+        columns: { chatId: true, threadId: true },
+      })
+      .sync();
+    for (const row of sessions) {
+      const sendOptions = {
+        ...(row.threadId && { message_thread_id: row.threadId }),
+      };
+      try {
+        await this.#bot.api.sendMessage(
+          row.chatId,
+          "⏳ Restarting to apply changes…",
+          sendOptions,
+        );
+      } catch {
+        continue;
+      }
+      this.#database
+        .insert(schema.restartNotification)
+        .values({
+          chatId: row.chatId,
+          threadId: row.threadId,
+          message: `✅ ${args.message}`,
+        })
+        .run();
+    }
+    setTimeout(() => this.#shutdown.trigger(), 500);
+    return {
+      content: [{ type: "text", text: "Restarting…" }],
+    };
+  }
+
   #getMetadata(args: unknown): OpenkittenMetadata {
     const result = openkittenArgsSchema.safeParse(args);
     if (!result.success) {
@@ -228,6 +290,8 @@ export class McpServer implements Disposable {
 
   static async create(
     bot: Bot,
+    database: Database,
+    shutdown: Shutdown,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
     scheduler: Scheduler,
@@ -238,6 +302,8 @@ export class McpServer implements Disposable {
     logger.debug("MCP server is starting…");
     const server = new McpServer(
       bot,
+      database,
+      shutdown,
       existingSessions,
       scheduler,
       reloadConfigOptions,

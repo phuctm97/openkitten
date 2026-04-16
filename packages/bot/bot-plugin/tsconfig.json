@@ -1,7 +1,7 @@
 {
   "include": ["package.json", "vitest.config.ts", "lib", "test"],
-  "references": [],
-  "extends": "../../tsconfig.json",
+  "references": [{ "path": "../bot-contract/tsconfig.json" }],
+  "extends": "../../../tsconfig.json",
   "compilerOptions": {
     "types": ["bun"],
     "outDir": "dist",

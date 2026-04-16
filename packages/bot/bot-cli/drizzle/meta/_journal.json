@@ -50,6 +50,13 @@
       "when": 1775801520676,
       "tag": "0006_worthless_hulk",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1776323209759,
+      "tag": "0007_black_barracuda",
+      "breakpoints": true
     }
   ]
 }
