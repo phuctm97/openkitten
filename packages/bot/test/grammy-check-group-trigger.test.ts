@@ -294,3 +294,102 @@ test("/command without @botname is context", () => {
   );
   expect(result).toEqual({ type: "context" });
 });
+
+test("reply to bot with caption message (no text) extracts caption as text", () => {
+  const ctx = {
+    message: {
+      caption: "look at this",
+      caption_entities: [],
+      entities: undefined,
+      reply_to_message: { from: { id: botId }, text: "Bot response" },
+    },
+  } as never;
+  const result = grammyCheckGroupTrigger(ctx, botUsername, botId);
+  expect(result.type).toBe("reply");
+  if (result.type === "reply") {
+    expect(result.text).toBe("look at this");
+  }
+});
+
+test("mention with reply to non-bot message includes quoted text", () => {
+  const result = grammyCheckGroupTrigger(
+    textCtx(
+      "@test_bot explain this",
+      [{ type: "mention", offset: 0, length: 9 }],
+      { from: { id: 999 }, text: "Some user message" },
+    ),
+    botUsername,
+    botId,
+  );
+  expect(result).toEqual({
+    type: "mention",
+    text: "explain this",
+    quotedText: "Some user message",
+  });
+});
+
+test("/command@botname with reply includes quoted text", () => {
+  const result = grammyCheckGroupTrigger(
+    textCtx(
+      "/weather@test_bot Tokyo",
+      [{ type: "bot_command", offset: 0, length: 21 }],
+      { from: { id: 999 }, text: "Check the weather" },
+    ),
+    botUsername,
+    botId,
+  );
+  expect(result).toEqual({
+    type: "mention",
+    text: "/weather Tokyo",
+    quotedText: "Check the weather",
+  });
+});
+
+test("reply to bot with text only mention returns Hey", () => {
+  const result = grammyCheckGroupTrigger(
+    textCtx("@test_bot", [], { from: { id: botId }, text: "Original" }),
+    botUsername,
+    botId,
+  );
+  expect(result.type).toBe("reply");
+  if (result.type === "reply") {
+    expect(result.text).toBe("Hey");
+  }
+});
+
+test("reply to bot with caption only mention returns Hey", () => {
+  const ctx = {
+    message: {
+      caption: "@test_bot",
+      caption_entities: [],
+      entities: undefined,
+      reply_to_message: { from: { id: botId }, text: "Original" },
+    },
+  } as never;
+  const result = grammyCheckGroupTrigger(ctx, botUsername, botId);
+  expect(result.type).toBe("reply");
+  if (result.type === "reply") {
+    expect(result.text).toBe("Hey");
+  }
+});
+
+test("extractQuotedText returns empty string when reply has no text or caption", () => {
+  const result = grammyCheckGroupTrigger(
+    textCtx("hello", [], { from: { id: botId } }),
+    botUsername,
+    botId,
+  );
+  expect(result.type).toBe("reply");
+  if (result.type === "reply") {
+    expect(result.quotedText).toBe("");
+  }
+});
+
+test("/command@botname with only mention text returns Hey", () => {
+  const result = grammyCheckGroupTrigger(
+    textCtx("@test_bot", [{ type: "bot_command", offset: 0, length: 9 }]),
+    botUsername,
+    botId,
+  );
+  expect(result).toEqual({ type: "mention", text: "Hey" });
+});

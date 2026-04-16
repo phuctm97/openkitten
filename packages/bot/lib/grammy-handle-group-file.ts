@@ -16,7 +16,7 @@ function senderName(ctx: Context): string {
 
 function describeFile(ctx: Context, name: string): string {
   const msg = ctx.message;
-  if (!msg) return `${name} sent a file`;
+  invariant(msg, "Expected file context to have a message");
   if ("photo" in msg && msg.photo) return `${name} sent a photo`;
   if ("video" in msg && msg.video) return `${name} sent a video`;
   if ("audio" in msg && msg.audio) return `${name} sent an audio file`;
@@ -34,7 +34,7 @@ function extractFileInfo(
   ctx: Context,
 ): { fileId: string; fileMime: string } | undefined {
   const msg = ctx.message;
-  if (!msg) return undefined;
+  invariant(msg, "Expected file context to have a message");
   if ("photo" in msg && msg.photo) {
     const largest = msg.photo[msg.photo.length - 1];
     if (largest) return { fileId: largest.file_id, fileMime: "image/jpeg" };

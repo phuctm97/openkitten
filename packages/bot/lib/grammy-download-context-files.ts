@@ -1,5 +1,6 @@
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
 import type { Bot } from "grammy";
+import invariant from "tiny-invariant";
 import type { AttachmentStorage } from "~/lib/attachment-storage";
 import type { GroupMessage } from "~/lib/group-message-buffer";
 import { logger } from "~/lib/logger";
@@ -30,7 +31,8 @@ export async function grammyDownloadContextFiles(
 
   const parts: (FilePart | TextPart)[] = [];
   for (const msg of contextWithFiles) {
-    if (!msg.fileId || !msg.fileMime) continue;
+    invariant(msg.fileId, "Expected filtered message to have fileId");
+    invariant(msg.fileMime, "Expected filtered message to have fileMime");
     try {
       const file = await bot.api.getFile(msg.fileId);
       if (!file.file_path) continue;
@@ -42,7 +44,10 @@ export async function grammyDownloadContextFiles(
       );
       if (!response.ok) continue;
       const mime = msg.fileMime;
-      const filename = `context-${msg.messageId}.${file.file_path.split(".").pop() ?? "bin"}`;
+      const pathParts = file.file_path.split(".");
+      const ext =
+        pathParts.length > 1 ? pathParts[pathParts.length - 1] : "bin";
+      const filename = `context-${msg.messageId}.${ext}`;
       const bytes = await response.arrayBuffer();
 
       if (await modelSupportsFile(opencodeClient, mime)) {

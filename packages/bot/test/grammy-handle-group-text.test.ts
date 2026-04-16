@@ -394,6 +394,28 @@ test("falls back to User when no name info", async () => {
   expect(recent[0]?.fromName).toBe("User");
 });
 
+test("uses from.id 0 when from is undefined", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      text: "hello",
+      message_id: 100,
+      entities: undefined,
+      reply_to_message: undefined,
+    },
+    from: undefined,
+  } as never;
+
+  await grammyHandleGroupText(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fromId).toBe(0);
+});
+
 test("passes threadId through the flow", async () => {
   const existingSessions = mockExistingSessions();
   const opencodeClient = mockOpencodeClient();

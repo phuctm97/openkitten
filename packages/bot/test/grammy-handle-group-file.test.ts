@@ -664,6 +664,308 @@ test("describes document with filename", async () => {
   expect(recent[0]?.text).toContain("report.pdf");
 });
 
+test("describes sticker without emoji correctly", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      sticker: { file_id: "st1" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.text).toBe("Alice sent a sticker");
+});
+
+test("describes document without filename", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  await grammyHandleGroupFile(
+    scope,
+    mockCtx({
+      document: {
+        file_id: "d1",
+        mime_type: "application/pdf",
+      } as never,
+    }),
+    signal,
+  );
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.text).toContain("a document");
+});
+
+test("extracts file info for video", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      video: { file_id: "v1", mime_type: "video/mp4" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileId).toBe("v1");
+  expect(recent[0]?.fileMime).toBe("video/mp4");
+});
+
+test("extracts file info for audio", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      audio: { file_id: "a1", mime_type: "audio/mpeg" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileId).toBe("a1");
+  expect(recent[0]?.fileMime).toBe("audio/mpeg");
+});
+
+test("extracts file info for voice", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      voice: { file_id: "vo1", mime_type: "audio/ogg" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileId).toBe("vo1");
+  expect(recent[0]?.fileMime).toBe("audio/ogg");
+});
+
+test("extracts file info for animation", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      animation: { file_id: "an1", mime_type: "video/mp4" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileId).toBe("an1");
+  expect(recent[0]?.fileMime).toBe("video/mp4");
+});
+
+test("extracts file info for video_note", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      video_note: { file_id: "vn1" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileId).toBe("vn1");
+  expect(recent[0]?.fileMime).toBe("video/mp4");
+});
+
+test("extracts file info for sticker", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      sticker: { file_id: "stk1" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileId).toBe("stk1");
+  expect(recent[0]?.fileMime).toBe("image/webp");
+});
+
+test("extracts file info for document without mime_type", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  await grammyHandleGroupFile(
+    scope,
+    mockCtx({
+      document: { file_id: "d1" } as never,
+    }),
+    signal,
+  );
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileMime).toBe("application/octet-stream");
+});
+
+test("extracts file info for video without mime_type", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      video: { file_id: "v1" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileMime).toBe("video/mp4");
+});
+
+test("extracts file info for audio without mime_type", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      audio: { file_id: "a1" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileMime).toBe("audio/mpeg");
+});
+
+test("extracts file info for voice without mime_type", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      voice: { file_id: "vo1" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileMime).toBe("audio/ogg");
+});
+
+test("extracts file info for animation without mime_type", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      animation: { file_id: "an1" },
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fileMime).toBe("video/mp4");
+});
+
+test("handles empty photo array gracefully", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      photo: [],
+    },
+    from: { id: 1, first_name: "Alice" },
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.text).toContain("photo");
+  expect(recent[0]?.fileId).toBeUndefined();
+});
+
+test("uses from.id 0 when from is undefined", async () => {
+  const groupMessageBuffer = GroupMessageBuffer.create();
+  const scope = mockScope({ groupMessageBuffer });
+
+  const ctx = {
+    chat: { id: 42 },
+    msg: { message_thread_id: undefined },
+    message: {
+      message_id: 100,
+      document: { file_id: "d1", mime_type: "application/pdf" },
+    },
+    from: undefined,
+  } as never;
+
+  await grammyHandleGroupFile(scope, ctx, signal);
+
+  const recent = groupMessageBuffer.recent({ chatId: 42, threadId: undefined });
+  expect(recent[0]?.fromId).toBe(0);
+});
+
 test("describes unknown file type as 'sent a file'", async () => {
   const groupMessageBuffer = GroupMessageBuffer.create();
   const scope = mockScope({ groupMessageBuffer });

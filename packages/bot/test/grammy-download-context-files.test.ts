@@ -131,6 +131,36 @@ test("skips file when getFile throws", async () => {
   expect(result).toEqual([]);
 });
 
+test("uses bin extension when file path has no dots", async () => {
+  vi.mocked(modelSupportsFile).mockResolvedValue(true);
+  globalThis.fetch = vi.fn(
+    async () => new Response(new Uint8Array([1, 2, 3]), { status: 200 }),
+  ) as never;
+
+  const noExtBot = {
+    api: {
+      getFile: vi.fn(async () => ({
+        file_id: "resolved-id",
+        file_path: "photos/noext",
+      })),
+    },
+    token: "bot-token-123",
+  } as never;
+
+  const result = await grammyDownloadContextFiles(
+    noExtBot,
+    {} as never,
+    attachmentStorage,
+    [msg({ fileId: "f-noext", fileMime: "image/jpeg" })],
+  );
+
+  expect(result).toHaveLength(1);
+  expect(result[0]).toMatchObject({
+    type: "file",
+    filename: "context-42.bin",
+  });
+});
+
 test("skips file when file_path is undefined", async () => {
   const noPathBot = {
     api: {

@@ -1583,6 +1583,45 @@ test("update after initialized deduplicates via database", async () => {
   expect(mockSessionMessage).not.toHaveBeenCalled();
 });
 
+test("delivers completed message without text parts in group mode does not buffer", async () => {
+  const database = Database.create();
+  database
+    .insert(schema.session)
+    .values({ id: "sess-1", chatId: 123, threadId: 0 })
+    .run();
+  const bot = {} as never;
+  const client = createMockOpencodeClient();
+  mockSessionMessage = vi.fn(async () => ({
+    data: {
+      info: {},
+      parts: [
+        {
+          type: "tool",
+          callID: "call-1",
+          tool: "bash",
+          state: { status: "completed", input: {}, raw: "echo" },
+        },
+      ] as never,
+    },
+  }));
+  const es = createMockExistingSessions([]);
+  using buffer = GroupMessageBuffer.create();
+  const pm = await ProcessingMessages.create(bot, database, client, es, buffer);
+  await pm.update({
+    type: "message.updated",
+    properties: {
+      info: {
+        id: "m-no-text",
+        sessionID: "sess-1",
+        role: "assistant",
+        time: { created: 1, completed: 2 },
+      },
+    },
+  } as never);
+  const recent = buffer.recent({ chatId: 123, threadId: undefined });
+  expect(recent).toHaveLength(0);
+});
+
 test("delivers completed message and buffers in group mode", async () => {
   const database = Database.create();
   database

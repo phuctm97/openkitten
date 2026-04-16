@@ -352,3 +352,39 @@ test("runTask forwards stdout and stderr", async () => {
   expect(taskLogMessage).toHaveBeenCalledWith("out line");
   expect(taskLogMessage).toHaveBeenCalledWith("err line");
 });
+
+test("handles config with no command key", async () => {
+  const { readFile } = await import("node:fs/promises");
+  vi.mocked(readFile).mockResolvedValue(JSON.stringify({}));
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: [] });
+  const { grammySetCommands } = await import("~/lib/grammy-set-commands");
+  expect(vi.mocked(grammySetCommands)).toHaveBeenCalledWith(
+    "test-token",
+    expect.not.arrayContaining([expect.objectContaining({ command: "alpha" })]),
+  );
+});
+
+test("handles command entry with no description", async () => {
+  const { readFile } = await import("node:fs/promises");
+  vi.mocked(readFile).mockResolvedValue(
+    JSON.stringify({ command: { test: {} } }),
+  );
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: [] });
+  const { grammySetCommands } = await import("~/lib/grammy-set-commands");
+  expect(vi.mocked(grammySetCommands)).toHaveBeenCalledWith(
+    "test-token",
+    expect.arrayContaining([{ command: "test", description: "" }]),
+  );
+});

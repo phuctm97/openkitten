@@ -1,3 +1,4 @@
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { styleText } from "node:util";
 import * as clack from "@clack/prompts";
@@ -141,13 +142,15 @@ export namespace TelegramConfig {
 
     // Non-TTY: find, parse, validate, or throw
     if (!isTTY) {
-      const file = Bun.file(path);
-      if (!(await file.exists())) {
+      let raw: string;
+      try {
+        raw = await readFile(path, "utf-8");
+      } catch {
         throw new TelegramConfig.NotFoundError(path);
       }
       let json: unknown;
       try {
-        json = await file.json();
+        json = JSON.parse(raw);
       } catch (e) {
         logger.error("Failed to load Telegram config", e);
         throw new TelegramConfig.NotFoundError(path);
@@ -177,12 +180,17 @@ export namespace TelegramConfig {
     let groupChat: boolean | undefined;
 
     // Load existing config
-    const file = Bun.file(path);
-    if (await file.exists()) {
+    let existingRaw: string | undefined;
+    try {
+      existingRaw = await readFile(path, "utf-8");
+    } catch {
+      // Config file doesn't exist yet
+    }
+    if (existingRaw !== undefined) {
       clack.intro(`Config ${styleText("dim", formatPath(path))}`);
       let config: TelegramConfig | undefined;
       try {
-        const result = schema.safeParse(await file.json());
+        const result = schema.safeParse(JSON.parse(existingRaw));
         if (result.success) config = result.data;
       } catch {
         // Invalid or unreadable config
@@ -255,7 +263,7 @@ export namespace TelegramConfig {
 
     // Save config
     const config = schema.parse({ botToken, userId, groupChat });
-    await Bun.write(path, JSON.stringify(config), { mode: 0o600 });
+    await writeFile(path, JSON.stringify(config), { mode: 0o600 });
     return config;
   }
 }

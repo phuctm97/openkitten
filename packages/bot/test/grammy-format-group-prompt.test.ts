@@ -111,6 +111,20 @@ test("bot messages in context use bot name", () => {
   expect(result).not.toContain("SomeBot");
 });
 
+test("formats mention trigger with quoted text from reply", () => {
+  const result = grammyFormatGroupPrompt({
+    senderName: "Charlie",
+    text: "What about this?",
+    trigger: "mention",
+    quotedText: "Some earlier message",
+    recentContext: [],
+    botName: "Bot",
+  });
+  expect(result).toBe(
+    '[Charlie said to Bot, replying to: "Some earlier message"]\n\nWhat about this?',
+  );
+});
+
 test("reply trigger without quoted text falls back to mention format", () => {
   const result = grammyFormatGroupPrompt({
     senderName: "Charlie",
