@@ -44,14 +44,10 @@ test("renders the three theme options after mount", () => {
   render(<ThemeSwitcher />);
 
   expect(
-    screen.getByRole("button", { name: "System theme" }),
-  ).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "Light theme" }),
-  ).toBeInTheDocument();
-  expect(
-    screen.getByRole("button", { name: "Dark theme" }),
-  ).toBeInTheDocument();
+    screen
+      .getAllByRole("button")
+      .map((button) => button.getAttribute("aria-label")),
+  ).toEqual(["Light theme", "Dark theme", "System theme"]);
 });
 
 test("calls onChange in controlled mode", async () => {

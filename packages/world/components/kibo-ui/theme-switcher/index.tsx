@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Airplay, Moon, Sun } from "lucide-react";
 import { motion } from "motion/react";
 import { useControllableState } from "radix-ui/internal";
 import { useCallback, useEffect, useState } from "react";
@@ -10,11 +10,6 @@ import { cn } from "~/lib/utils";
 
 const themes = [
   {
-    key: "system",
-    icon: Monitor,
-    label: "System theme",
-  },
-  {
     key: "light",
     icon: Sun,
     label: "Light theme",
@@ -23,6 +18,11 @@ const themes = [
     key: "dark",
     icon: Moon,
     label: "Dark theme",
+  },
+  {
+    key: "system",
+    icon: Airplay,
+    label: "System theme",
   },
 ] satisfies ReadonlyArray<{
   key: Theme;
@@ -101,6 +101,7 @@ export const ThemeSwitcher = ({
                 "relative z-10 m-auto h-4 w-4",
                 isActive ? "text-foreground" : "text-muted-foreground",
               )}
+              fill="currentColor"
             />
           </button>
         );
