@@ -18,7 +18,7 @@
     "test": "bun --bun vitest run"
   },
   "dependencies": {
-    "@orpc/contract": "^1.13.0"
+    "@orpc/contract": "^1.13.14"
   },
   "peerDependencies": {
     "zod": "^4.3.6"
