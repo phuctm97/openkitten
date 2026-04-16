@@ -10,7 +10,7 @@ afterEach(() => {
 it("uses PG_URL when it is set", async () => {
   vi.stubEnv("PG_URL", connectionString);
 
-  const module = await import("../lib/pg-url");
+  const module = await import("~/lib/pg-url");
 
   expect(module.pgURL).toBe(connectionString);
 });
@@ -18,7 +18,7 @@ it("uses PG_URL when it is set", async () => {
 it("falls back to the default local postgres URL", async () => {
   vi.stubEnv("PG_URL", "");
 
-  const module = await import("../lib/pg-url");
+  const module = await import("~/lib/pg-url");
 
   expect(module.pgURL).toBe(
     "postgres://postgres:postgres@localhost:5432/postgres",

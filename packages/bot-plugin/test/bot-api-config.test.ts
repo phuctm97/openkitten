@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test } from "vitest";
-import { readBotAPIConfig } from "../lib/bot-api-config";
+import { readBotAPIConfig } from "~/lib/bot-api-config";
 
 let tmpDir: string;
 

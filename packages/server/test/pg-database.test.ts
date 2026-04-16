@@ -45,7 +45,7 @@ it("creates the database from PG_URL and runs migrations", async () => {
   vi.doMock("drizzle-orm/bun-sql", () => ({ drizzle }));
   vi.doMock("drizzle-orm/bun-sql/migrator", () => ({ migrate }));
 
-  const module = await import("../lib/pg-database");
+  const module = await import("~/lib/pg-database");
   const drizzleCall = drizzle.mock.calls[0];
 
   expect(drizzleCall).toBeDefined();
@@ -88,7 +88,7 @@ it("falls back to the default local postgres URL", async () => {
   vi.doMock("drizzle-orm/bun-sql", () => ({ drizzle }));
   vi.doMock("drizzle-orm/bun-sql/migrator", () => ({ migrate }));
 
-  const module = await import("../lib/pg-database");
+  const module = await import("~/lib/pg-database");
   const drizzleCall = drizzle.mock.calls[0];
 
   expect(drizzleCall).toBeDefined();
@@ -121,7 +121,7 @@ it("skips migrations while the better-auth CLI is running", async () => {
   vi.doMock("drizzle-orm/bun-sql", () => ({ drizzle }));
   vi.doMock("drizzle-orm/bun-sql/migrator", () => ({ migrate }));
 
-  const module = await import("../lib/pg-database");
+  const module = await import("~/lib/pg-database");
 
   expect(module.pgDatabase).toBe(pgDatabase);
   expect(drizzle).toHaveBeenCalledTimes(1);

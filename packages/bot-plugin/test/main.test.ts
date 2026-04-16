@@ -3,7 +3,7 @@ import {
   createOpenKittenBotClient,
   getTelegramBotToken,
   readBotAPIConfig,
-} from "../lib/main";
+} from "~/lib/main";
 
 test("exports readBotAPIConfig", () => {
   expect(typeof readBotAPIConfig).toBe("function");

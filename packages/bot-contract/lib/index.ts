@@ -2,7 +2,7 @@ import type {
   InferContractRouterInputs,
   InferContractRouterOutputs,
 } from "@orpc/contract";
-import * as contract from "./router";
+import * as contract from "~/lib/router";
 
 export { contract };
 

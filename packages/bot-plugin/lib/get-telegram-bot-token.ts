@@ -1,4 +1,4 @@
-import { createOpenKittenBotClient } from "./create-bot-client";
+import { createOpenKittenBotClient } from "~/lib/create-bot-client";
 
 let client: Awaited<ReturnType<typeof createOpenKittenBotClient>> | undefined;
 

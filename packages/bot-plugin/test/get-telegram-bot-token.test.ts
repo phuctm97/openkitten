@@ -28,7 +28,7 @@ afterEach(async () => {
 
 test("returns bot token from the API", async () => {
   mockGetBotToken.mockResolvedValue("bot-token-123");
-  const { getTelegramBotToken } = await import("../lib/get-telegram-bot-token");
+  const { getTelegramBotToken } = await import("~/lib/get-telegram-bot-token");
   const token = await getTelegramBotToken("/state");
   expect(token).toBe("bot-token-123");
   expect(mockGetBotToken).toHaveBeenCalledOnce();
@@ -36,7 +36,7 @@ test("returns bot token from the API", async () => {
 
 test("reuses client on subsequent calls", async () => {
   mockGetBotToken.mockResolvedValue("reused-token");
-  const { getTelegramBotToken } = await import("../lib/get-telegram-bot-token");
+  const { getTelegramBotToken } = await import("~/lib/get-telegram-bot-token");
   await getTelegramBotToken("/state");
   await getTelegramBotToken("/state");
   expect(mockCreateClient).toHaveBeenCalledOnce();
@@ -45,7 +45,7 @@ test("reuses client on subsequent calls", async () => {
 
 test("passes xdgState to createOpenKittenBotClient", async () => {
   mockGetBotToken.mockResolvedValue("token");
-  const { getTelegramBotToken } = await import("../lib/get-telegram-bot-token");
+  const { getTelegramBotToken } = await import("~/lib/get-telegram-bot-token");
   await getTelegramBotToken("/custom/state");
   expect(mockCreateClient).toHaveBeenCalledWith("/custom/state");
 });

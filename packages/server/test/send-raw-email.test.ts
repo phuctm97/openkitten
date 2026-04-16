@@ -18,7 +18,7 @@ it("sends raw email with SMTP environment settings", async () => {
   vi.stubEnv("SMTP_PASS", "super-secret");
   vi.stubEnv("SMTP_FROM", "Kitten Mail");
 
-  const { sendRawEmail } = await import("../lib/send-raw-email");
+  const { sendRawEmail } = await import("~/lib/send-raw-email");
   const result = await sendRawEmail({
     subject: "Verify your email - OpenKitten",
     text: "Hello from OpenKitten",
@@ -51,7 +51,7 @@ it("falls back to the default OpenKitten SMTP settings", async () => {
     default: { createTransport },
   }));
 
-  const { sendRawEmail } = await import("../lib/send-raw-email");
+  const { sendRawEmail } = await import("~/lib/send-raw-email");
   const result = await sendRawEmail({
     subject: "Reset your password - OpenKitten",
     text: "Reset it",

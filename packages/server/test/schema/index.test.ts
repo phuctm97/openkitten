@@ -15,7 +15,7 @@ import {
   user,
   userRelations,
   verification,
-} from "../../lib/schema";
+} from "~/lib/schema";
 
 it("defines the expected postgres table", () => {
   const columns = getTableColumns(house);
