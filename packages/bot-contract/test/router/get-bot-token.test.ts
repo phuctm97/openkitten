@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { getBotToken } from "../lib/router/get-bot-token";
+import { getBotToken } from "../../lib/router/get-bot-token";
 
 test("getBotToken is defined", () => {
   expect(getBotToken).toBeDefined();
