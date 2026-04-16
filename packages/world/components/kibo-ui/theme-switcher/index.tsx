@@ -101,6 +101,7 @@ export const ThemeSwitcher = ({
                 "relative z-10 m-auto h-4 w-4",
                 isActive ? "text-foreground" : "text-muted-foreground",
               )}
+              fill="currentColor"
             />
           </button>
         );
