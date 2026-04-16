@@ -4,6 +4,9 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "types": ["bun"],
-    "outDir": "dist"
+    "outDir": "dist",
+    "paths": {
+      "~/*": ["./*"]
+    }
   }
 }

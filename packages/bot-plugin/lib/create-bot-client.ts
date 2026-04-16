@@ -2,7 +2,7 @@ import type { contract } from "@openkitten/bot-contract";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { ContractRouterClient } from "@orpc/contract";
-import { readBotAPIConfig } from "./bot-api-config";
+import { readBotAPIConfig } from "~/lib/bot-api-config";
 
 type BotClient = ContractRouterClient<typeof contract>;
 

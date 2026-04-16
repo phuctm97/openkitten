@@ -7,12 +7,12 @@ import {
   Scripts,
   ScrollRestoration,
 } from "react-router";
+import type { Route } from "~/.react-router/types/app/+types/root";
 import { ThemeAnchor } from "~/components/theme-anchor";
 import { ThemeConnector } from "~/components/theme-connector";
 import { ThemeInitializer } from "~/components/theme-initializer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
-import type { Route } from "./+types/root";
 
 export function Layout({ children }: PropsWithChildren) {
   return (

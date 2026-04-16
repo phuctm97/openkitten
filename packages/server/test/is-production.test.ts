@@ -14,7 +14,7 @@ afterEach(() => {
 it("true when NODE_ENV is production", async () => {
   Bun.env["NODE_ENV"] = "production";
 
-  const { isProduction } = await import("../lib/is-production");
+  const { isProduction } = await import("~/lib/is-production");
 
   expect(isProduction).toBe(true);
 });
@@ -22,7 +22,7 @@ it("true when NODE_ENV is production", async () => {
 it("false when NODE_ENV is not production", async () => {
   Bun.env["NODE_ENV"] = "development";
 
-  const { isProduction } = await import("../lib/is-production");
+  const { isProduction } = await import("~/lib/is-production");
 
   expect(isProduction).toBe(false);
 });
@@ -30,7 +30,7 @@ it("false when NODE_ENV is not production", async () => {
 it("false when NODE_ENV is unset", async () => {
   delete Bun.env["NODE_ENV"];
 
-  const { isProduction } = await import("../lib/is-production");
+  const { isProduction } = await import("~/lib/is-production");
 
   expect(isProduction).toBe(false);
 });

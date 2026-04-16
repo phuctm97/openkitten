@@ -12,7 +12,7 @@ beforeEach(() => {
 });
 
 it("renders a React email before sending it", async () => {
-  const { sendReactEmail } = await import("../lib/send-react-email");
+  const { sendReactEmail } = await import("~/lib/send-react-email");
 
   await sendReactEmail({
     subject: "Verify your email - OpenKitten",

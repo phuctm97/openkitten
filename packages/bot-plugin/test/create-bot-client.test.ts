@@ -57,7 +57,7 @@ test("throws ConfigNotFoundError when config missing", async () => {
   const { createOpenKittenBotClient } = await import(
     "../lib/create-bot-client"
   );
-  const { readBotAPIConfig } = await import("../lib/bot-api-config");
+  const { readBotAPIConfig } = await import("~/lib/bot-api-config");
   await expect(
     createOpenKittenBotClient(join(tmpDir, "missing")),
   ).rejects.toBeInstanceOf(readBotAPIConfig.ConfigNotFoundError);
