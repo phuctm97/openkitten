@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 
@@ -7,17 +5,11 @@ export type ErrorStateProps = Readonly<{
   badge: string;
   message: string;
   details: string;
-  reload: ReactNode;
 }>;
 
-export function ErrorState({
-  badge,
-  message,
-  details,
-  reload,
-}: ErrorStateProps) {
+export function ErrorState({ badge, message, details }: ErrorStateProps) {
   return (
-    <section className="relative grid min-h-screen overflow-hidden bg-background px-6 py-10">
+    <section className="relative grid flex-1 overflow-hidden bg-background px-6 py-10">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
@@ -37,7 +29,9 @@ export function ErrorState({
           {details}
         </p>
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          {reload}
+          <form className="contents">
+            <Button type="submit">Reload Page</Button>
+          </form>
           <Button variant="outline" asChild>
             <a href="/">Go Home</a>
           </Button>

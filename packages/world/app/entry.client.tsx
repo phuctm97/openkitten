@@ -1,8 +1,8 @@
+import "./entry.client.css";
+
 import { StrictMode, startTransition } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { HydratedRouter } from "react-router/dom";
-
-import "./entry.client.css";
 
 startTransition(() => {
   hydrateRoot(

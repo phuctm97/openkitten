@@ -1,16 +1,10 @@
 "use client";
 
-import { ThemeProvider as NextThemesProvider } from "next-themes";
+import { ThemeProvider as NextThemes } from "next-themes";
 import type { PropsWithChildren } from "react";
 
+import { baseThemeProps } from "~/lib/base-theme-props";
+
 export function ThemeProvider({ children }: PropsWithChildren) {
-  return (
-    <NextThemesProvider
-      attribute="class"
-      disableTransitionOnChange
-      storageKey="openkitten-theme"
-    >
-      {children}
-    </NextThemesProvider>
-  );
+  return <NextThemes {...baseThemeProps}>{children}</NextThemes>;
 }
