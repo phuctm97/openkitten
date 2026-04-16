@@ -28,6 +28,8 @@ beforeEach(async () => {
     xdgConfig: join(profileDir, "config"),
     xdgState: join(profileDir, "state"),
     xdgCache: join(profileDir, "cache"),
+    xdgConfigOpencode: join(profileDir, "config", "opencode"),
+    xdgConfigSkill: join(profileDir, "config", "opencode", "skills"),
   } as Profile;
 });
 
@@ -37,11 +39,7 @@ afterEach(async () => {
 
 const configDir = () => join(profileDir, ".opencode");
 
-const globalPluginsDir = () => join(profile.xdgConfig, "opencode", "plugins");
-
 const skillsDir = () => join(profile.xdgConfig, "opencode", "skills");
-
-const toolPrefix = "openkitten_";
 
 const normalizePathPattern = (path: string) => path.replaceAll("\\", "/");
 
@@ -68,14 +66,14 @@ test("copies system-agents to XDG_CONFIG_HOME/opencode", async () => {
   expect(content).not.toContain("# Professional objectivity");
 });
 
-test("copies default-agents to OPENCODE_CONFIG_DIR", async () => {
+test("copies default-prompt to OPENCODE_CONFIG_DIR", async () => {
   await OpencodeConfig.create(profile);
   const content = await readFile(join(configDir(), "AGENTS.md"), "utf-8");
   expect(content).toContain("# Professional objectivity");
   expect(content).not.toContain("# Communication");
 });
 
-test("does not overwrite existing default-agents", async () => {
+test("does not overwrite existing default-prompt", async () => {
   await OpencodeConfig.create(profile);
   const path = join(configDir(), "AGENTS.md");
   await writeFile(path, "custom");
@@ -95,10 +93,6 @@ test("always overwrites system-agents on startup", async () => {
 
 test("renders agent files with self-file access", async () => {
   await OpencodeConfig.create(profile);
-  const agentDirectoryGlob = normalizePathPattern(
-    join(configDir(), "agents", "*"),
-  );
-  const skillsDirGlob = normalizePathPattern(join(skillsDir(), "**"));
 
   for (const agent of ["assist", "build", "plan"]) {
     const agentPath = join(configDir(), "agents", `${agent}.md`);
@@ -108,10 +102,6 @@ test("renders agent files with self-file access", async () => {
     expect(content).toContain(
       `    ${JSON.stringify(normalizedAgentPath)}: allow`,
     );
-    expect(content).toContain(
-      `    ${JSON.stringify(agentDirectoryGlob)}: allow`,
-    );
-    expect(content).toContain(`    ${JSON.stringify(skillsDirGlob)}: allow`);
     expect(content).toContain("durable memory");
     expect(content).toContain("# Memory");
     expect(content).toContain("No durable memory recorded yet.");
@@ -126,29 +116,6 @@ test("writes opencode config", async () => {
     await readFile(join(configDir(), "opencode.json"), "utf-8"),
   );
   expect(config.default_agent).toBe("assist");
-});
-
-test("writes system OpenCode plugin", async () => {
-  await OpencodeConfig.create(profile);
-  const content = await readFile(
-    join(globalPluginsDir(), "openkitten.js"),
-    "utf-8",
-  );
-  expect(content).toContain('id: "openkitten"');
-  expect(content).toContain("server: async () => ({");
-  expect(content).toContain(
-    '"tool.execute.before": async (input, output) => {',
-  );
-  expect(content).toContain(
-    `if (!input.tool.startsWith(${JSON.stringify(toolPrefix)})) return;`,
-  );
-  expect(content).toContain(
-    `throw new Error(\`Cannot attach __OPENKITTEN__ metadata to \${input.tool}: tool args must be a mutable object.\`);`,
-  );
-  expect(content).toContain("output.args.__OPENKITTEN__ = {");
-  expect(content).toContain("sessionID: input.sessionID,");
-  expect(content).toContain("callID: input.callID,");
-  expect(content).toContain("};");
 });
 
 test("copies skill directory with SKILL.md and scripts", async () => {
@@ -174,26 +141,14 @@ test("copies skill directory with SKILL.md and scripts", async () => {
   expect(getTokenTs).toContain("openkitten");
 });
 
-test("copies create-commands skill files", async () => {
+test("copies custom-commands skill files", async () => {
   await OpencodeConfig.create(profile);
   const skillMd = await readFile(
-    join(skillsDir(), "create-commands", "SKILL.md"),
+    join(skillsDir(), "custom-commands", "SKILL.md"),
     "utf-8",
   );
   expect(skillMd).toContain("# Custom Commands");
-  expect(skillMd).toContain("name: create-commands");
-
-  const opencodeMd = await readFile(
-    join(skillsDir(), "create-commands", "opencode-commands.md"),
-    "utf-8",
-  );
-  expect(opencodeMd).toContain("# OpenCode Built-in Commands");
-
-  const refreshTs = await readFile(
-    join(skillsDir(), "create-commands", "refresh-commands.ts"),
-    "utf-8",
-  );
-  expect(refreshTs).toContain("setMyCommands");
+  expect(skillMd).toContain("name: custom-commands");
 });
 
 test("always overwrites skill files on startup", async () => {
@@ -236,24 +191,6 @@ test("overwrites all agent files on repeated create", async () => {
   expect(planContent).toContain("plan mode");
 });
 
-test("overwrites existing system OpenCode plugin", async () => {
-  await mkdir(globalPluginsDir(), { recursive: true });
-  const pluginPath = join(globalPluginsDir(), "openkitten.js");
-  await writeFile(pluginPath, "custom content");
-  await OpencodeConfig.create(profile);
-  const content = await readFile(pluginPath, "utf-8");
-  expect(content).not.toBe("custom content");
-  expect(content).toContain("output.args.__OPENKITTEN__ = {");
-});
-
-test("writes .opencode/package.json with plugin and grammy", async () => {
-  await OpencodeConfig.create(profile);
-  const content = await readFile(join(configDir(), "package.json"), "utf-8");
-  const pkg = JSON.parse(content);
-  expect(pkg.dependencies["@openkitten/bot-plugin"]).toMatch(/^file:/);
-  expect(pkg.dependencies["grammy"]).toBeDefined();
-});
-
 test("throws on single non-EEXIST error", async () => {
   await OpencodeConfig.create(profile);
   await rm(join(configDir(), "opencode.json"));
@@ -267,8 +204,10 @@ test("throws on single non-EEXIST error", async () => {
 
 test("throws Errors on multiple non-EEXIST errors", async () => {
   const agentsPath = join(configDir(), "agents");
+  const commandsPath = join(configDir(), "commands");
   const projectPlugins = join(configDir(), "plugins");
   await mkdir(agentsPath, { recursive: true });
+  await mkdir(commandsPath, { recursive: true });
   await mkdir(projectPlugins, { recursive: true });
   await chmod(agentsPath, 0o444);
   await chmod(configDir(), 0o555);

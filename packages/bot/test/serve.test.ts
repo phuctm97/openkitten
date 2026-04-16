@@ -1,10 +1,12 @@
+import { readdir, readFile } from "node:fs/promises";
 import { runCommand } from "citty";
 import { beforeEach, expect, test, vi } from "vitest";
-import { CommandSkills } from "~/lib/command-skills";
 import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { GrammyEventLoop } from "~/lib/grammy-event-loop";
 import { GrammyEventStream } from "~/lib/grammy-event-stream";
+import { grammySetCommands } from "~/lib/grammy-set-commands";
+import { GroupMessageBuffer } from "~/lib/group-message-buffer";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
 import { MediaGroupBuffer } from "~/lib/media-group-buffer";
@@ -74,6 +76,8 @@ vi.mock("~/lib/scheduler", () => ({
   },
 }));
 
+vi.mock("~/lib/grammy-set-commands");
+
 vi.mock("node:fs/promises", async () => {
   const actual =
     await vi.importActual<typeof import("node:fs/promises")>(
@@ -84,6 +88,8 @@ vi.mock("node:fs/promises", async () => {
     mkdir: vi.fn(),
     copyFile: vi.fn(),
     writeFile: vi.fn(),
+    readdir: vi.fn(async () => []),
+    readFile: vi.fn(async () => ""),
   };
 });
 
@@ -95,6 +101,13 @@ beforeEach(() => {
   mockBotApiConfigUse.mockClear();
   mockGrammyHandleMediaGroupFlush.mockClear();
   mockAutoRetry.mockReturnValue(mockAutoRetryTransformer);
+  vi.mocked(readdir)
+    .mockReset()
+    .mockResolvedValue([] as never);
+  vi.mocked(readFile)
+    .mockReset()
+    .mockResolvedValue("" as never);
+  vi.mocked(grammySetCommands).mockReset().mockResolvedValue(undefined);
 });
 
 function mockTelegramConfig() {
@@ -119,7 +132,6 @@ function mockCreateDatabase() {
     [Symbol.dispose]() {},
   };
   vi.spyOn(Database, "create").mockReturnValue(database as never);
-  vi.spyOn(CommandSkills, "list").mockResolvedValue([]);
   return database;
 }
 
@@ -836,6 +848,108 @@ test("media group flush callback triggers shutdown on error", async () => {
   // shutdown.trigger() without args causes restart — stop the loop with a signal
   await vi.waitFor(() =>
     expect(MediaGroupBuffer.create).toHaveBeenCalledTimes(2),
+  );
+  shutdown.triggerLatest();
+  await run;
+});
+
+test("loads custom commands from .md files in commands dir", async () => {
+  const { shutdown } = mockAll();
+  vi.mocked(readdir).mockResolvedValue([
+    "beta.md",
+    "alpha.md",
+    "skip.txt",
+  ] as never);
+  vi.mocked(readFile).mockImplementation(async (path: unknown) => {
+    const p = String(path);
+    if (p.endsWith("alpha.md"))
+      return "---\ndescription: Alpha cmd\n---\nContent";
+    if (p.endsWith("beta.md"))
+      return "---\ndescription: Beta cmd\n---\nContent";
+    return "";
+  });
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(grammySetCommands).toHaveBeenCalled());
+  const call = vi.mocked(grammySetCommands).mock.calls[0];
+  if (!call) throw new Error("Expected grammySetCommands to be called");
+  const commands = call[1];
+  const custom = commands.filter(
+    (c: { command: string }) => c.command === "alpha" || c.command === "beta",
+  );
+  expect(custom).toEqual([
+    { command: "alpha", description: "Alpha cmd" },
+    { command: "beta", description: "Beta cmd" },
+  ]);
+  shutdown.triggerLatest();
+  await run;
+});
+
+test("handles .md files without frontmatter description", async () => {
+  const { shutdown } = mockAll();
+  vi.mocked(readdir).mockResolvedValue(["nodesc.md"] as never);
+  vi.mocked(readFile).mockResolvedValue("No frontmatter here");
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(grammySetCommands).toHaveBeenCalled());
+  const call = vi.mocked(grammySetCommands).mock.calls[0];
+  if (!call) throw new Error("Expected grammySetCommands to be called");
+  const commands = call[1];
+  const custom = commands.filter(
+    (c: { command: string }) => c.command === "nodesc",
+  );
+  expect(custom).toEqual([{ command: "nodesc", description: "" }]);
+  shutdown.triggerLatest();
+  await run;
+});
+
+test("handles readdir failure gracefully with empty commands", async () => {
+  const { shutdown } = mockAll();
+  vi.mocked(readdir).mockRejectedValue(new Error("ENOENT"));
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() => expect(grammySetCommands).toHaveBeenCalled());
+  const call = vi.mocked(grammySetCommands).mock.calls[0];
+  if (!call) throw new Error("Expected grammySetCommands to be called");
+  const commands = call[1];
+  const custom = commands.filter(
+    (c: { command: string }) =>
+      c.command !== "start" &&
+      c.command !== "abort" &&
+      c.command !== "compact" &&
+      c.command !== "agent",
+  );
+  expect(custom).toEqual([]);
+  shutdown.triggerLatest();
+  await run;
+});
+
+test("creates GroupMessageBuffer when groupChat is enabled", async () => {
+  vi.spyOn(TelegramConfig, "create").mockResolvedValue({
+    botToken: "test-token",
+    userId: 123,
+    groupChat: true,
+  } as never);
+  mockOpencodeConfig();
+  mockCreateDatabase();
+  mockOpencodeServer();
+  mockMcpServer();
+  mockExistingSessions();
+  mockWorkingSessions();
+  mockTypingIndicators();
+  mockPendingPrompts();
+  mockProcessingMessages();
+  mockOpencodeEventStream();
+  mockGrammyEventLoop();
+  mockGrammyEventStream();
+  const shutdown = mockShutdown();
+
+  const run = runCommand(serve, { rawArgs: [] });
+  await vi.waitFor(() =>
+    expect(ProcessingMessages.create).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.any(GroupMessageBuffer),
+    ),
   );
   shutdown.triggerLatest();
   await run;

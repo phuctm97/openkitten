@@ -15,6 +15,7 @@ import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getAttachmentName } from "~/lib/get-attachment-name";
 import { logger } from "~/lib/logger";
 import { registerScheduleTools } from "~/lib/register-schedule-tools";
+import { reloadOpencodeConfig } from "~/lib/reload-opencode-config";
 import type { Scheduler } from "~/lib/scheduler";
 import { websiteURL } from "~/lib/website-url";
 import { version } from "~/package.json" with { type: "json" };
@@ -52,6 +53,9 @@ export class McpServer implements Disposable {
   readonly #bot: Bot;
   readonly #existingSessions: ExistingSessions;
   readonly #scheduler: Scheduler;
+  readonly #reloadConfigOptions:
+    | Parameters<typeof reloadOpencodeConfig>[0]
+    | undefined;
   readonly #token: string;
   readonly #server: Bun.Server<undefined>;
   readonly #exited: Promise<void>;
@@ -61,10 +65,12 @@ export class McpServer implements Disposable {
     bot: Bot,
     existingSessions: ExistingSessions,
     scheduler: Scheduler,
+    reloadConfigOptions: Parameters<typeof reloadOpencodeConfig>[0] | undefined,
   ) {
     this.#bot = bot;
     this.#existingSessions = existingSessions;
     this.#scheduler = scheduler;
+    this.#reloadConfigOptions = reloadConfigOptions;
     this.#token = randomBytes(32).toString("base64url");
     this.#server = Bun.serve({
       hostname: "127.0.0.1",
@@ -103,6 +109,23 @@ export class McpServer implements Disposable {
       },
       async (args) => this.#sendFile(args),
     );
+    if (this.#reloadConfigOptions) {
+      const options = this.#reloadConfigOptions;
+      server.registerTool(
+        "reload_commands",
+        {
+          description:
+            "Reload custom commands after creating, updating, or deleting .md files in the commands directory to apply changes immediately.",
+          inputSchema: zod.looseObject({}),
+        },
+        async () => {
+          await reloadOpencodeConfig(options);
+          return {
+            content: [{ type: "text" as const, text: "Commands reloaded." }],
+          };
+        },
+      );
+    }
     registerScheduleTools(server, {
       scheduler: this.#scheduler,
       getMetadata: (args) => this.#getMetadata(args),
@@ -208,9 +231,17 @@ export class McpServer implements Disposable {
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
     scheduler: Scheduler,
+    reloadConfigOptions?:
+      | Parameters<typeof reloadOpencodeConfig>[0]
+      | undefined,
   ): Promise<McpServer> {
     logger.debug("MCP server is starting…");
-    const server = new McpServer(bot, existingSessions, scheduler);
+    const server = new McpServer(
+      bot,
+      existingSessions,
+      scheduler,
+      reloadConfigOptions,
+    );
     try {
       await opencodeClient.mcp.add(
         {

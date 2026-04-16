@@ -15,15 +15,16 @@ vi.mock("~/lib/opencode-config", () => ({
 
 vi.mock("~/lib/grammy-set-commands");
 
-vi.mock("~/lib/command-skills", () => ({
-  CommandSkills: {
-    list: vi.fn(async () => []),
-    toTelegramCommands: vi.fn(() => []),
-  },
-}));
-
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),
+  readFile: vi.fn(async () =>
+    JSON.stringify({
+      command: {
+        beta: { description: "Beta" },
+        alpha: { description: "Alpha" },
+      },
+    }),
+  ),
 }));
 
 vi.mock("node:os", () => ({
@@ -350,4 +351,40 @@ test("runTask forwards stdout and stderr", async () => {
   await runCommand(up, { rawArgs: [] });
   expect(taskLogMessage).toHaveBeenCalledWith("out line");
   expect(taskLogMessage).toHaveBeenCalledWith("err line");
+});
+
+test("handles config with no command key", async () => {
+  const { readFile } = await import("node:fs/promises");
+  vi.mocked(readFile).mockResolvedValue(JSON.stringify({}));
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: [] });
+  const { grammySetCommands } = await import("~/lib/grammy-set-commands");
+  expect(vi.mocked(grammySetCommands)).toHaveBeenCalledWith(
+    "test-token",
+    expect.not.arrayContaining([expect.objectContaining({ command: "alpha" })]),
+  );
+});
+
+test("handles command entry with no description", async () => {
+  const { readFile } = await import("node:fs/promises");
+  vi.mocked(readFile).mockResolvedValue(
+    JSON.stringify({ command: { test: {} } }),
+  );
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: [] });
+  const { grammySetCommands } = await import("~/lib/grammy-set-commands");
+  expect(vi.mocked(grammySetCommands)).toHaveBeenCalledWith(
+    "test-token",
+    expect.arrayContaining([{ command: "test", description: "" }]),
+  );
 });

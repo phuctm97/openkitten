@@ -1,16 +1,29 @@
 import type { CommandContext, Context } from "grammy";
 import { getSessionAgent } from "~/lib/get-session-agent";
+import { grammyCheckOwner } from "~/lib/grammy-check-owner";
 import { grammySendAgentChanged } from "~/lib/grammy-send-agent-changed";
 import { grammySendAgentList } from "~/lib/grammy-send-agent-list";
 import { grammySendAgentNotFound } from "~/lib/grammy-send-agent-not-found";
+import { grammySendOwnerOnly } from "~/lib/grammy-send-owner-only";
 import type { Scope } from "~/lib/scope";
 import { setSessionAgent } from "~/lib/set-session-agent";
 
 export async function grammyHandleAgent(
-  { bot, database, opencodeClient, existingSessions }: Scope,
+  scope: Scope,
   ctx: CommandContext<Context>,
   _signal: AbortSignal,
 ): Promise<void> {
+  if (ctx.chat.type !== "private" && !grammyCheckOwner(ctx, scope.ownerId)) {
+    await grammySendOwnerOnly({
+      bot: scope.bot,
+      chatId: ctx.chat.id,
+      threadId: ctx.msg.message_thread_id || undefined,
+      replyToMessageId: ctx.msg.message_id,
+    });
+    return;
+  }
+
+  const { bot, database, opencodeClient, existingSessions } = scope;
   const sessionId = await existingSessions.find(
     {
       chatId: ctx.chat.id,

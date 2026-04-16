@@ -81,3 +81,17 @@ test("xdg cache path is inside system dir", async () => {
   const profile = await Profile.create();
   expect(profile.xdgCache).toBe(join(profile.system, "cache"));
 });
+
+test("xdg config opencode path is inside xdg config dir", async () => {
+  delete Bun.env["OPENKITTEN_PROFILE"];
+  const profile = await Profile.create();
+  expect(profile.xdgConfigOpencode).toBe(join(profile.xdgConfig, "opencode"));
+});
+
+test("xdg config skill path is inside xdg config opencode dir", async () => {
+  delete Bun.env["OPENKITTEN_PROFILE"];
+  const profile = await Profile.create();
+  expect(profile.xdgConfigSkill).toBe(
+    join(profile.xdgConfigOpencode, "skills"),
+  );
+});

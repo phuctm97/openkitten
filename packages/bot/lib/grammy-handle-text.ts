@@ -1,5 +1,7 @@
 import type { Context, Filter } from "grammy";
 import { getSessionAgent } from "~/lib/get-session-agent";
+import { grammyExtractReplyContext } from "~/lib/grammy-extract-reply-context";
+import { grammyHandleGroupText } from "~/lib/grammy-handle-group-text";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
@@ -10,8 +12,15 @@ type TextContext = Filter<Context, "message:text">;
 export async function grammyHandleText(
   scope: Scope,
   ctx: TextContext,
-  _signal: AbortSignal,
+  signal: AbortSignal,
 ): Promise<void> {
+  if (
+    scope.groupMessageBuffer &&
+    (ctx.chat.type === "group" || ctx.chat.type === "supergroup")
+  ) {
+    return grammyHandleGroupText(scope, ctx, signal);
+  }
+
   const {
     bot,
     database,
@@ -20,6 +29,8 @@ export async function grammyHandleText(
     workingSessions,
     pendingPrompts,
   } = scope;
+
+  const replyContext = grammyExtractReplyContext(ctx);
 
   const sessionId = await existingSessions.find(
     {
@@ -47,7 +58,14 @@ export async function grammyHandleText(
         {
           sessionID: sessionId,
           ...(agent && { agent }),
-          parts: [{ type: "text", text: ctx.message.text }],
+          parts: [
+            {
+              type: "text",
+              text: replyContext
+                ? `${replyContext}\n\n${ctx.message.text}`
+                : ctx.message.text,
+            },
+          ],
         },
         { throwOnError: true },
       );

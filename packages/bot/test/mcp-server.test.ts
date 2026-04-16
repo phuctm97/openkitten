@@ -13,6 +13,13 @@ vi.mock("node:crypto", () => ({
   })),
 }));
 
+const { mockReloadOpencodeConfig } = vi.hoisted(() => ({
+  mockReloadOpencodeConfig: vi.fn(async () => {}),
+}));
+vi.mock("~/lib/reload-opencode-config", () => ({
+  reloadOpencodeConfig: mockReloadOpencodeConfig,
+}));
+
 const {
   mockStop,
   mockTimeout,
@@ -90,6 +97,7 @@ describe("McpServer", () => {
     mockConnect.mockClear();
     mockHandleRequest.mockClear();
     mockMcpAdd.mockClear();
+    mockReloadOpencodeConfig.mockClear();
     existingSessionsGet.mockClear();
     botApi.sendAnimation.mockClear();
     botApi.sendAudio.mockClear();
@@ -531,5 +539,40 @@ describe("McpServer", () => {
     await expect(tool.handler({ path: "/tmp/file.txt" })).rejects.toThrow(
       "No valid OpenKitten metadata found in MCP input",
     );
+  });
+
+  test("reload_commands tool reloads config and returns confirmation", async () => {
+    const reloadConfigOptions = {
+      commandsDir: "/tmp/commands",
+      botToken: "test-token",
+      groupChat: false,
+    };
+
+    using _server = await McpServer.create(
+      bot,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+      reloadConfigOptions,
+    );
+
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find(
+      (entry) => entry.name === "reload_commands",
+    );
+    if (!tool) throw new Error("reload_commands tool was not registered");
+
+    const result = await tool.handler({});
+
+    expect(mockReloadOpencodeConfig).toHaveBeenCalledWith(reloadConfigOptions);
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Commands reloaded." }],
+    });
   });
 });

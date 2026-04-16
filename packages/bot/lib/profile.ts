@@ -51,6 +51,14 @@ export class Profile {
     return join(this.system, "cache");
   }
 
+  get xdgConfigOpencode(): string {
+    return join(this.xdgConfig, "opencode");
+  }
+
+  get xdgConfigSkill(): string {
+    return join(this.xdgConfigOpencode, "skills");
+  }
+
   static async create(): Promise<Profile> {
     const profile = new Profile(Bun.env["OPENKITTEN_PROFILE"] || "default");
     await profile.#prepare();

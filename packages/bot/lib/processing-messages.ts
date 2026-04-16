@@ -6,6 +6,7 @@ import type { Database } from "~/lib/database";
 import { Errors } from "~/lib/errors";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammySendAssistantMessage } from "~/lib/grammy-send-assistant-message";
+import type { GroupMessageBuffer } from "~/lib/group-message-buffer";
 import * as schema from "~/lib/schema";
 
 interface StreamingMessage {
@@ -18,6 +19,7 @@ export class ProcessingMessages {
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
+  readonly #groupMessageBuffer: GroupMessageBuffer | undefined;
   readonly #streamingMessages = new Map<string, StreamingMessage>();
   readonly #unhook: () => void;
 
@@ -26,11 +28,13 @@ export class ProcessingMessages {
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
+    groupMessageBuffer: GroupMessageBuffer | undefined,
   ) {
     this.#bot = bot;
     this.#database = database;
     this.#opencodeClient = opencodeClient;
     this.#existingSessions = existingSessions;
+    this.#groupMessageBuffer = groupMessageBuffer;
     this.#unhook = existingSessions.hook("beforeRemove", ({ sessionId }) => {
       this.#streamingMessages.delete(sessionId);
     });
@@ -75,6 +79,21 @@ export class ProcessingMessages {
       chatId,
       threadId,
     });
+    if (this.#groupMessageBuffer) {
+      const textParts = parts
+        .filter((p): p is Extract<Part, { type: "text" }> => p.type === "text")
+        .map((p) => p.text);
+      if (textParts.length > 0) {
+        this.#groupMessageBuffer.add(location, {
+          fromName: "Bot",
+          fromId: 0,
+          text: textParts.join("\n").slice(0, 500),
+          messageId: 0,
+          timestamp: Date.now(),
+          isBot: true,
+        });
+      }
+    }
   }
 
   #getLatestMessage(
@@ -311,12 +330,14 @@ export class ProcessingMessages {
     database: Database,
     opencodeClient: OpencodeClient,
     existingSessions: ExistingSessions,
+    groupMessageBuffer?: GroupMessageBuffer | undefined,
   ): Promise<ProcessingMessages> {
     const processingMessages = new ProcessingMessages(
       bot,
       database,
       opencodeClient,
       existingSessions,
+      groupMessageBuffer,
     );
     await processingMessages.#initialize();
     return processingMessages;
