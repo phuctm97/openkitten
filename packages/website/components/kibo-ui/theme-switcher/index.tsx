@@ -1,7 +1,7 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Airplay, Moon, Sun } from "lucide-react";
 import { motion } from "motion/react";
 import { useControllableState } from "radix-ui/internal";
 import { useCallback, useEffect, useState } from "react";
@@ -23,7 +23,7 @@ const themes = [
   },
   {
     key: "system",
-    icon: Monitor,
+    icon: Airplay,
     label: "System theme",
   },
 ] satisfies ReadonlyArray<{
