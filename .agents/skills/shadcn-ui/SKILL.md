@@ -51,6 +51,36 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
      - use project-native types such as `Theme` from `~/lib/theme`
      - adjust for strict TypeScript settings such as `exactOptionalPropertyTypes`
 
+## Applying Presets
+
+When the user gives a shadcn preset ID or asks to re-apply a preset, treat that as a repo-wide design-system refresh for both app packages unless they scope it more narrowly.
+
+Assume preset-driven diffs are usually intentional. The preset may differ from the last one applied, or the shadcn CLI itself may have changed what it generates since the previous run.
+
+1. Run the preset in both targets.
+   - `bun --cwd packages/world --bun shadcn apply --preset <preset> -y`
+   - `bun --cwd packages/website --bun shadcn apply --preset <preset> -y`
+
+2. Reformat the regenerated files immediately.
+   - Run `bun --bun biome check --write` on the touched files before reviewing diffs.
+
+3. Re-apply repo conventions after `apply`.
+   - Prefer `@fontsource-variable/*` over `next/font/*`.
+   - If `apply` injects `next/font/google` into `packages/website/app/layout.tsx`, remove it and keep the repo's simpler layout shell.
+   - If the preset introduces a new font, wire it through `@fontsource-variable/*` imports in CSS instead of `next/font/*`, and add the matching package to the app package's `devDependencies`.
+   - In `packages/world/app/entry.client.css` and `packages/website/app/styles.css`, keep `--font-sans` and `--font-heading` as literal font values. Do not leave `--font-sans: var(--font-sans)` or `--font-heading: var(--font-sans)`.
+   - Keep font imports and `--font-*` declarations ordered as `sans`, `heading`, `mono`.
+   - Keep generated component files formatted with Biome and aligned with repo lint rules.
+
+4. Keep preset and CLI changes unless they conflict with repo conventions.
+   - Only revert or edit changes that violate repo conventions.
+   - Keep design-system changes introduced by the preset, such as fonts, colors, radius, icon library, component structure, or other upstream generator updates.
+   - If the user includes a note about expected changes, use it as extra confirmation, not as the only basis for keeping preset-driven diffs.
+
+5. Summarize the result clearly after cleanup.
+   - Call out which changes were fixed to match repo conventions.
+   - Separately call out which changes were kept as intentional results of applying the preset or newer CLI output.
+
 ## Final Validation
 
 As the final step after integrating components in either target package, run:

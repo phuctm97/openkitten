@@ -28,6 +28,7 @@
   "devDependencies": {
     "@fontsource-variable/azeret-mono": "^5.2.11",
     "@fontsource-variable/manrope": "^5.2.8",
+    "@fontsource-variable/merriweather": "^5.2.6",
     "@react-router/dev": "^7.14.1",
     "@tailwindcss/vite": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",

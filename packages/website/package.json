@@ -25,6 +25,7 @@
   "devDependencies": {
     "@fontsource-variable/azeret-mono": "^5.2.11",
     "@fontsource-variable/manrope": "^5.2.8",
+    "@fontsource-variable/merriweather": "^5.2.6",
     "@tailwindcss/postcss": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
