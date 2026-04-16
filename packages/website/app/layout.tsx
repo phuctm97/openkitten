@@ -1,18 +1,14 @@
-import type { PropsWithChildren } from "react";
+import "./styles.css";
 
-import { ThemeAnchor } from "~/components/theme-anchor";
-import { ThemeProvider } from "~/components/theme-provider";
+import { RootProvider } from "fumadocs-ui/provider/next";
 
-import "./layout.css";
+import { baseThemeProps } from "~/lib/base-theme-props";
 
-export default function Layout({ children }: PropsWithChildren) {
+export default function Layout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className="h-full" suppressHydrationWarning>
-      <body className="m-0 min-h-full antialiased">
-        <ThemeProvider>
-          <ThemeAnchor />
-          {children}
-        </ThemeProvider>
+      <body className="m-0 flex min-h-full flex-col antialiased">
+        <RootProvider theme={baseThemeProps}>{children}</RootProvider>
       </body>
     </html>
   );

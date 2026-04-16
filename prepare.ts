@@ -6,6 +6,7 @@ const reactRouterConfigFiles = new Bun.Glob(
   "packages/*/react-router.config.ts",
 );
 const nextConfigFiles = new Bun.Glob("packages/*/next.config.ts");
+const fumadocsConfigFiles = new Bun.Glob("packages/*/source.config.ts");
 const promises: Promise<unknown>[] = [];
 
 for await (const reactRouterConfigFile of reactRouterConfigFiles.scan(".")) {
@@ -16,6 +17,11 @@ for await (const reactRouterConfigFile of reactRouterConfigFiles.scan(".")) {
 for await (const nextConfigFile of nextConfigFiles.scan(".")) {
   const dir = dirname(nextConfigFile);
   promises.push(Bun.$`bun next typegen`.cwd(dir).quiet());
+}
+
+for await (const fumadocsConfigFile of fumadocsConfigFiles.scan(".")) {
+  const dir = dirname(fumadocsConfigFile);
+  promises.push(Bun.$`bun fumadocs-mdx`.cwd(dir).quiet());
 }
 
 await Promise.all(promises);

@@ -17,4 +17,5 @@ next-env.d.ts
 .vercel
 .playwright-cli
 .playwright-mcp
+.source
 .vendor

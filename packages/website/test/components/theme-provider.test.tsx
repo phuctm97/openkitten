@@ -14,6 +14,7 @@ vi.mock("next-themes", () => ({
     children,
     defaultTheme,
     disableTransitionOnChange,
+    enableColorScheme,
     enableSystem,
     storageKey,
   }: {
@@ -21,6 +22,7 @@ vi.mock("next-themes", () => ({
     children: ReactNode;
     defaultTheme?: string;
     disableTransitionOnChange?: boolean;
+    enableColorScheme?: boolean;
     enableSystem?: boolean;
     storageKey?: string;
   }) => {
@@ -28,6 +30,7 @@ vi.mock("next-themes", () => ({
       attribute,
       defaultTheme,
       disableTransitionOnChange,
+      enableColorScheme,
       enableSystem,
       storageKey,
     });
@@ -49,8 +52,9 @@ test("configures next-themes for class-based system theming", () => {
   expect(nextThemesProviderSpy).toHaveBeenCalledWith({
     attribute: "class",
     disableTransitionOnChange: true,
-    defaultTheme: undefined,
-    enableSystem: undefined,
+    defaultTheme: "system",
+    enableColorScheme: true,
+    enableSystem: true,
     storageKey: "openkitten-theme",
   });
 });
