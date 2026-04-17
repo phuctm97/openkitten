@@ -5,6 +5,10 @@ import type { Route } from "~/.react-router/types/app/+types/root";
 
 const rootMocks = vi.hoisted(() => ({
   isRouteErrorResponse: vi.fn(),
+  useLocation: vi.fn(),
+  useNavigate: vi.fn(),
+  useNavigation: vi.fn(),
+  useRevalidator: vi.fn(),
 }));
 
 vi.mock("react-router", async () => {
@@ -18,6 +22,10 @@ vi.mock("react-router", async () => {
     Scripts: () => react.createElement("script", { type: "application/json" }),
     ScrollRestoration: () =>
       react.createElement("div", null, "Scroll Restoration Placeholder"),
+    useLocation: () => rootMocks.useLocation(),
+    useNavigate: () => rootMocks.useNavigate(),
+    useNavigation: () => rootMocks.useNavigation(),
+    useRevalidator: () => rootMocks.useRevalidator(),
   };
 });
 
@@ -45,9 +53,48 @@ const rootHydrateFallbackProps = {
   params: {},
 } satisfies Route.HydrateFallbackProps;
 
+function createLocation(pathname: string) {
+  return {
+    hash: "",
+    key: pathname,
+    pathname,
+    search: "",
+    state: null,
+  };
+}
+
+function createNavigation() {
+  return {
+    formAction: undefined,
+    formData: undefined,
+    formEncType: undefined,
+    formMethod: undefined,
+    json: undefined,
+    location: undefined,
+    state: "idle" as const,
+    text: undefined,
+  };
+}
+
+function createRevalidator() {
+  return {
+    revalidate: vi.fn(async () => {}),
+    state: "idle" as const,
+  };
+}
+
+function setRouterHookMocks() {
+  rootMocks.useLocation.mockReturnValue(createLocation("/"));
+  rootMocks.useNavigate.mockReturnValue(vi.fn());
+  rootMocks.useNavigation.mockReturnValue(createNavigation());
+  rootMocks.useRevalidator.mockReturnValue(createRevalidator());
+}
+
 test("renders the document shell and shared layout", {
   timeout: 10_000,
 }, async () => {
+  setRouterHookMocks();
+
   const { Layout } = await import("~/app/root");
   const markup = renderToStaticMarkup(
     <Layout>
@@ -63,6 +110,21 @@ test("renders the document shell and shared layout", {
   expect(markup).toContain("document.documentElement.style.colorScheme");
   expect(markup).toContain("right-4 top-4 z-10");
   expect(markup).toContain("Scroll Restoration Placeholder");
+});
+
+test("waits for jotai hydration before resolving client middleware", async () => {
+  vi.resetModules();
+  setRouterHookMocks();
+
+  const { clientMiddleware } = await import("~/app/root");
+  const { hydrationAtom } = await import("~/lib/hydration-atom");
+  const { getDefaultStore } = await import("jotai");
+  const store = getDefaultStore();
+  const middlewarePromise = clientMiddleware[0]?.({} as never, vi.fn());
+
+  store.set(hydrationAtom);
+
+  await expect(middlewarePromise).resolves.toBeUndefined();
 });
 
 test("renders the hydrate fallback", async () => {
