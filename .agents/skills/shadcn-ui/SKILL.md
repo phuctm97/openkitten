@@ -1,11 +1,11 @@
 ---
 name: shadcn-ui
-description: Use when adding or updating shadcn/ui or compatible registry components in packages/world or packages/website. Covers the preferred generation workflow, generated-file exceptions, bundled Radix preference, and required validation.
+description: Use when adding or updating shadcn/ui or compatible registry components in packages/world or packages/website, including preset apply flows and repo-specific integration.
 ---
 
 # shadcn/ui
 
-## Workflow
+## Adding or Updating Components
 
 1. Generate from the target package with the installed CLI.
    - Supported targets:
@@ -38,9 +38,7 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
    - Respect the package's `components.json` settings instead of normalizing across apps
    - `packages/world/components.json` has `rsc: false`, so remove generated `use client` directives there
    - `packages/website/components.json` has `rsc: true`, so keep client directives when the generator adds them
-   - If generated code assumes `next-themes`, adapt it per target instead of adding that dependency blindly
-   - In `packages/world`, do not introduce `next-themes`; wire theme-related UI into the existing world theme system using `~/hooks/use-theme`, `~/lib/theme`, `~/components/theme-connector`, and `~/components/theme-initializer` as appropriate
-   - For `packages/world`, preserve the existing `openkitten-theme` localStorage key and `light` / `dark` / `system` theme model when adapting generated theme code
+   - If `add` changes theme providers, toggles, or helpers in `packages/world`, remove any `next-themes` assumptions and reconnect them to the world app's existing theme primitives.
    - Add or update tests so coverage stays at 100%
 
 6. Prefer bundled Radix over individual `@radix-ui/*` packages.
