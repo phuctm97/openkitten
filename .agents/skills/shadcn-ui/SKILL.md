@@ -1,6 +1,6 @@
 ---
 name: shadcn-ui
-description: Use when adding or updating shadcn/ui or compatible registry components in packages/world or packages/website, including preset apply flows and repo-specific integration.
+description: Use when adding or updating shadcn/ui or compatible registry components in packages/world or packages/website, including preset apply flows and repo-specific integration patterns.
 ---
 
 # shadcn/ui
