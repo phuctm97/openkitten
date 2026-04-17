@@ -412,7 +412,7 @@ test("preloads and lays out the fullscreen house artwork, two nearby cats, and a
     0,
     1,
     1,
-    0x120d0b,
+    0x09090b,
     0.22,
   );
   expect(roomShell.setOrigin).toHaveBeenCalledWith(0.5);
@@ -444,8 +444,8 @@ test("preloads and lays out the fullscreen house artwork, two nearby cats, and a
     755.1999999999999,
     503.46666666666664,
   );
-  expect(ambientShadow.setFillStyle).toHaveBeenCalledWith(0x120d0b, 0.22);
-  expect(camera.setBackgroundColor).toHaveBeenCalledWith("#0c0a09");
+  expect(ambientShadow.setFillStyle).toHaveBeenCalledWith(0x09090b, 0.22);
+  expect(camera.setBackgroundColor).toHaveBeenCalledWith("#09090b");
   expect(camera.setSize).toHaveBeenCalledWith(1280, 720);
   expect(camera.setZoom).toHaveBeenCalledWith(1);
   expect(camera.setViewport).toHaveBeenCalledWith(0, 0, 1280, 720);
@@ -462,10 +462,10 @@ test("preloads and lays out the fullscreen house artwork, two nearby cats, and a
   expect(cameraBoundsCall[3]).toBeCloseTo(1006.9333333333);
   expect(cameraScrollCall[0]).toBeCloseTo(115.2);
   expect(cameraScrollCall[1]).toBeCloseTo(143.4666666667);
-  expect(canvas.style.backgroundColor).toBe("#0c0a09");
+  expect(canvas.style.backgroundColor).toBe("#09090b");
   expect(canvas.style.cursor).toBe("grab");
   expect(canvas.style.touchAction).toBe("none");
-  expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
+  expect(renderer.config.backgroundColor).toBe("converted:#09090b");
   expect(colorSchemeObserver.observe).toHaveBeenCalledWith(
     document.documentElement,
     {
@@ -531,10 +531,10 @@ test("builds the initial scene from the computed color scheme when inline style 
     throw new Error("Expected the House scene to create its render targets.");
   }
 
-  expect(ambientShadow.setFillStyle).toHaveBeenCalledWith(0x120d0b, 0.22);
-  expect(camera.setBackgroundColor).toHaveBeenCalledWith("#0c0a09");
-  expect(canvas.style.backgroundColor).toBe("#0c0a09");
-  expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
+  expect(ambientShadow.setFillStyle).toHaveBeenCalledWith(0x09090b, 0.22);
+  expect(camera.setBackgroundColor).toHaveBeenCalledWith("#09090b");
+  expect(canvas.style.backgroundColor).toBe("#09090b");
+  expect(renderer.config.backgroundColor).toBe("converted:#09090b");
 });
 
 test("caps zoom on very small viewports so the world stops shrinking past the minimum scale", async () => {
@@ -701,10 +701,10 @@ test("responds to palette changes, resize events, and shutdown cleanup", async (
   document.documentElement.style.colorScheme = "dark";
   colorSchemeObserver.notify();
 
-  expect(ambientShadow.setFillStyle).toHaveBeenLastCalledWith(0x120d0b, 0.22);
-  expect(camera.setBackgroundColor).toHaveBeenLastCalledWith("#0c0a09");
-  expect(canvas.style.backgroundColor).toBe("#0c0a09");
-  expect(renderer.config.backgroundColor).toBe("converted:#0c0a09");
+  expect(ambientShadow.setFillStyle).toHaveBeenLastCalledWith(0x09090b, 0.22);
+  expect(camera.setBackgroundColor).toHaveBeenLastCalledWith("#09090b");
+  expect(canvas.style.backgroundColor).toBe("#09090b");
+  expect(renderer.config.backgroundColor).toBe("converted:#09090b");
 
   pointerDownHandler.call(scene, { id: 7, x: 300, y: 260 });
   expect(canvas.style.cursor).toBe("grabbing");

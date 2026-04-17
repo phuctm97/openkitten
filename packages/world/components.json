@@ -8,7 +8,7 @@
     "prefix": "",
     "config": "",
     "css": "app/entry.client.css",
-    "baseColor": "stone",
+    "baseColor": "neutral",
     "cssVariables": true
   },
   "iconLibrary": "lucide",
