@@ -1,7 +1,7 @@
-import { atom, type WritableAtom } from "jotai";
+import { atom, type Write } from "jotai";
 
 export function atomWithWriteOnly<Args extends unknown[], Result>(
-  write: WritableAtom<null, Args, Result>["write"],
+  write: Write<(...args: Args) => Result, Args, Result>,
 ) {
-  return atom(null, write);
+  return atom((_, { setSelf }) => setSelf, write);
 }

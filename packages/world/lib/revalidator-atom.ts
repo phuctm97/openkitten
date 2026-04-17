@@ -1,7 +1,4 @@
-import type { useRevalidator } from "react-router";
-
 import { atomWithPending } from "~/lib/atom-with-pending";
-
-type Revalidator = ReturnType<typeof useRevalidator>;
+import type { Revalidator } from "~/lib/revalidator";
 
 export const revalidatorAtom = atomWithPending<Revalidator>();

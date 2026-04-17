@@ -1,6 +1,7 @@
 {
   "include": [
     "package.json",
+    "3rd-env.d.ts",
     "node-env.d.ts",
     "vite.config.ts",
     "vitest.config.ts",

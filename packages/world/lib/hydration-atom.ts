@@ -1,6 +1,7 @@
+import { randomId } from "@mantine/hooks";
 import { atom } from "jotai";
 
-const hydrationEventType = "openkitten:hydration";
+const hydrationEvent = randomId();
 
 const hydrationPromise = new Promise<void>((resolve) => {
   if (import.meta.env.SSR) {
@@ -8,7 +9,7 @@ const hydrationPromise = new Promise<void>((resolve) => {
   }
 
   addEventListener(
-    hydrationEventType,
+    hydrationEvent,
     () => {
       resolve();
     },
@@ -21,5 +22,5 @@ export const hydrationAtom = atom(hydrationPromise, () => {
     return;
   }
 
-  dispatchEvent(new CustomEvent(hydrationEventType));
+  dispatchEvent(new CustomEvent(hydrationEvent));
 });

@@ -20,7 +20,6 @@ import { hydrationAtom } from "~/lib/hydration-atom";
 export const clientMiddleware: Route.ClientMiddlewareFunction[] = [
   async () => {
     const store = getDefaultStore();
-
     await store.get(hydrationAtom);
   },
 ];

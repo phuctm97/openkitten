@@ -1,9 +1,4 @@
-import type { NavigateOptions, To } from "react-router";
-
 import { atomWithPending } from "~/lib/atom-with-pending";
-
-interface Navigator {
-  navigate: (to: To, options?: NavigateOptions) => void | Promise<void>;
-}
+import type { Navigator } from "~/lib/nativator";
 
 export const navigatorAtom = atomWithPending<Navigator>();
