@@ -12,6 +12,7 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
      - `packages/world` for the React Router app
      - `packages/website` for the Next.js app
    - Use `bun --cwd <target> --bun shadcn add ...`
+   - Immediately after each `shadcn add`, run `bun --bun biome check --write <generated-files>` before reviewing or hand-editing the generated output
    - Examples:
      - `bun --cwd packages/world --bun shadcn add button badge separator -o -y`
      - `bun --cwd packages/website --bun shadcn add button badge separator -o -y`
@@ -33,10 +34,13 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
 
 5. Make only minimal repo-specific follow-up changes.
    - Add missing dependencies to the target package's `package.json`
-   - Run Biome formatting/fixes
+   - If follow-up edits touch generated files again, rerun `bun --bun biome check --write` on the touched files
    - Respect the package's `components.json` settings instead of normalizing across apps
    - `packages/world/components.json` has `rsc: false`, so remove generated `use client` directives there
    - `packages/website/components.json` has `rsc: true`, so keep client directives when the generator adds them
+   - If generated code assumes `next-themes`, adapt it per target instead of adding that dependency blindly
+   - In `packages/world`, do not introduce `next-themes`; wire theme-related UI into the existing world theme system using `~/hooks/use-theme`, `~/lib/theme`, `~/components/theme-connector`, and `~/components/theme-initializer` as appropriate
+   - For `packages/world`, preserve the existing `openkitten-theme` localStorage key and `light` / `dark` / `system` theme model when adapting generated theme code
    - Add or update tests so coverage stays at 100%
 
 6. Prefer bundled Radix over individual `@radix-ui/*` packages.
@@ -49,6 +53,7 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
    - Keep generated code as close to upstream as possible
    - Examples of acceptable adaptations:
      - use project-native types such as `Theme` from `~/lib/theme`
+     - replace `next-themes`-based theme helpers with the world app's `useTheme` hook and theme connector/initializer flow
      - adjust for strict TypeScript settings such as `exactOptionalPropertyTypes`
 
 ## Applying Presets
@@ -62,12 +67,13 @@ Assume preset-driven diffs are usually intentional. The preset may differ from t
    - `bun --cwd packages/website --bun shadcn apply --preset <preset> -y`
 
 2. Reformat the regenerated files immediately.
-   - Run `bun --bun biome check --write` on the touched files before reviewing diffs.
+   - Immediately after each `shadcn apply`, run `bun --bun biome check --write` on the touched files before reviewing diffs.
 
 3. Re-apply repo conventions after `apply`.
    - Prefer `@fontsource-variable/*` over `next/font/*`.
    - If `apply` injects `next/font/google` into `packages/website/app/layout.tsx`, remove it and keep the repo's simpler layout shell.
    - If the preset introduces a new font, wire it through `@fontsource-variable/*` imports in CSS instead of `next/font/*`, and add the matching package to the app package's `devDependencies`.
+   - If `apply` changes theme providers, toggles, or helpers in `packages/world`, remove any `next-themes` assumptions and reconnect them to the world app's existing theme primitives.
    - In `packages/world/app/entry.client.css` and `packages/website/app/styles.css`, keep `--font-sans` and `--font-heading` as literal font values. Do not leave `--font-sans: var(--font-sans)` or `--font-heading: var(--font-sans)`.
    - Keep font imports and `--font-*` declarations ordered as `sans`, `heading`, `mono`.
    - Keep generated component files formatted with Biome and aligned with repo lint rules.
