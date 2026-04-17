@@ -1,4 +1,4 @@
-import { render } from "@react-email/components";
+import { render } from "react-email";
 import { expect, it } from "vitest";
 import EmailVerification from "~/lib/emails/email-verification";
 import { websiteURL } from "~/lib/website-url";
