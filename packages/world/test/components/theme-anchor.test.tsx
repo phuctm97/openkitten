@@ -40,7 +40,7 @@ test("renders a same-size skeleton during server rendering before mount", () => 
 
   expect(markup).toContain('aria-hidden="true"');
   expect(markup).toContain(
-    'class="isolate flex h-8 rounded-full bg-background p-1 ring-1 ring-border fixed right-4 top-4 z-10"',
+    'class="isolate fixed right-4 top-4 z-10 flex h-8 rounded-full bg-background p-1 shadow-sm shadow-primary/5 ring-1 ring-border"',
   );
   expect(markup.match(/data-slot="skeleton"/g)).toHaveLength(3);
   expect(

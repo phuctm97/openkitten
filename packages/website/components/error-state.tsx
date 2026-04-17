@@ -20,7 +20,7 @@ export function ErrorState({ badge, message, details }: ErrorStateProps) {
       </div>
       <div
         role="alert"
-        className="relative m-auto w-full max-w-[44rem] rounded-[2rem] border border-border/70 bg-card/95 p-8 shadow-xl shadow-primary/5 backdrop-blur-sm"
+        className="relative m-auto w-full max-w-[44rem] rounded-[2rem] bg-card p-8 shadow-sm shadow-primary/5 ring-1 ring-border/50"
       >
         <Badge variant="outline">{badge}</Badge>
         <h2 className="mb-3 mt-5 font-heading text-[clamp(1.8rem,3vw,2.7rem)] leading-[1.1]">
