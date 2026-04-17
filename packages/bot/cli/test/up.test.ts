@@ -265,16 +265,24 @@ test("installs on win32", async () => {
   expect(shellMock.mock.lastCall?.[2]).toContain(`cd /D \\"${botDir}\\"`);
 });
 
-test("skips update when not on main branch", async () => {
+test("skips pull but installs when not on main branch", async () => {
   shellMock.mockReturnValueOnce(chainable(shellResult(0, "feature\n")));
   await runCommand(up, { rawArgs: [] });
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.log.warn)).toHaveBeenCalledWith(
     expect.stringContaining("Non-main branch"),
   );
+  expect(vi.mocked(Bun.spawn)).toHaveBeenCalledWith(
+    ["bun", "install"],
+    expect.anything(),
+  );
+  expect(vi.mocked(Bun.spawn)).not.toHaveBeenCalledWith(
+    ["git", "pull"],
+    expect.anything(),
+  );
 });
 
-test("skips update when worktree is dirty", async () => {
+test("skips pull but installs when worktree is dirty", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, " M file.ts\n")));
@@ -282,6 +290,14 @@ test("skips update when worktree is dirty", async () => {
   const clack = await import("@clack/prompts");
   expect(vi.mocked(clack.log.warn)).toHaveBeenCalledWith(
     expect.stringContaining("Dirty worktree"),
+  );
+  expect(vi.mocked(Bun.spawn)).toHaveBeenCalledWith(
+    ["bun", "install"],
+    expect.anything(),
+  );
+  expect(vi.mocked(Bun.spawn)).not.toHaveBeenCalledWith(
+    ["git", "pull"],
+    expect.anything(),
   );
 });
 

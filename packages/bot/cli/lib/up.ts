@@ -48,18 +48,16 @@ async function updateSource(): Promise<void> {
   const branch = (
     await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(repoDir).text()
   ).trim();
-  if (branch !== "main") {
-    clack.log.warn(`Skipped update\n${styleText("dim", "Non-main branch")}`);
-    return;
-  }
   const status = (
     await Bun.$`git status --porcelain`.cwd(repoDir).text()
   ).trim();
-  if (status !== "") {
-    clack.log.warn(`Skipped update\n${styleText("dim", "Dirty worktree")}`);
-    return;
+  if (branch !== "main") {
+    clack.log.warn(`Skipped pull\n${styleText("dim", "Non-main branch")}`);
+  } else if (status !== "") {
+    clack.log.warn(`Skipped pull\n${styleText("dim", "Dirty worktree")}`);
+  } else {
+    await runTask("Pulling changes", "Pulled changes", ["git", "pull"]);
   }
-  await runTask("Pulling changes", "Pulled changes", ["git", "pull"]);
   await runTask("Installing dependencies", "Installed dependencies", [
     "bun",
     "install",
