@@ -5,7 +5,7 @@ This package contains both the canonical product documents and the web client fo
 OpenKitten World is the async multi-agent platform that sits alongside:
 
 - the root and `www` website, which remain SEO and marketing surfaces
-- `@openkitten/bot-cli`, which remains the Telegram bot and sync chat surface
+- `@openkitten/cli`, which remains the Telegram bot and sync chat surface
 
 ## Status
 

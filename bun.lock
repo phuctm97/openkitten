@@ -11,16 +11,16 @@
         "typescript": "^6.0.3",
       },
     },
-    "packages/bot/bot-cli": {
-      "name": "@openkitten/bot-cli",
+    "packages/bot/cli": {
+      "name": "@openkitten/cli",
       "version": "0.0.0",
       "dependencies": {
         "@clack/prompts": "^1.2.0",
         "@grammyjs/auto-retry": "^2.0.2",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@opencode-ai/sdk": "^1.4.7",
-        "@openkitten/bot-contract": "workspace:*",
-        "@openkitten/bot-plugin": "workspace:*",
+        "@openkitten/contract": "workspace:*",
+        "@openkitten/plugin": "workspace:*",
         "@orpc/server": "^1.13.14",
         "boxen": "^8.0.1",
         "bunqueue": "^2.7.5",
@@ -45,8 +45,8 @@
         "vitest": "^4.1.4",
       },
     },
-    "packages/bot/bot-contract": {
-      "name": "@openkitten/bot-contract",
+    "packages/bot/contract": {
+      "name": "@openkitten/contract",
       "version": "0.0.0",
       "dependencies": {
         "@orpc/contract": "^1.13.14",
@@ -60,11 +60,11 @@
         "zod": "^4.3.6",
       },
     },
-    "packages/bot/bot-plugin": {
-      "name": "@openkitten/bot-plugin",
+    "packages/bot/plugin": {
+      "name": "@openkitten/plugin",
       "version": "0.0.0",
       "dependencies": {
-        "@openkitten/bot-contract": "workspace:*",
+        "@openkitten/contract": "workspace:*",
         "@orpc/client": "^1.13.14",
         "@orpc/contract": "^1.13.14",
         "zod": "^4.3.6",
@@ -548,11 +548,11 @@
 
     "@opencode-ai/sdk": ["@opencode-ai/sdk@1.4.7", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-onEtaooQyoDP5gTShQeQSf0Sd8V7949G9pPNyIyRXnVtFqyDIhUDLGtL/a/+EIW9x5s+Y6lDy/3oVoGMvQ0rQQ=="],
 
-    "@openkitten/bot-cli": ["@openkitten/bot-cli@workspace:packages/bot/bot-cli"],
+    "@openkitten/cli": ["@openkitten/cli@workspace:packages/bot/cli"],
 
-    "@openkitten/bot-contract": ["@openkitten/bot-contract@workspace:packages/bot/bot-contract"],
+    "@openkitten/contract": ["@openkitten/contract@workspace:packages/bot/contract"],
 
-    "@openkitten/bot-plugin": ["@openkitten/bot-plugin@workspace:packages/bot/bot-plugin"],
+    "@openkitten/plugin": ["@openkitten/plugin@workspace:packages/bot/plugin"],
 
     "@openkitten/server": ["@openkitten/server@workspace:packages/server"],
 
