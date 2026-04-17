@@ -7,8 +7,8 @@
     "test"
   ],
   "references": [
-    { "path": "../bot-contract/tsconfig.json" },
-    { "path": "../bot-plugin/tsconfig.json" }
+    { "path": "../contract/tsconfig.json" },
+    { "path": "../plugin/tsconfig.json" }
   ],
   "extends": "../../../tsconfig.json",
   "compilerOptions": {

@@ -35,7 +35,7 @@ NanoClaw took the right approach by going minimal at ~500 lines of code, but it'
 ```bash
 # Clone OpenKitten
 git clone https://github.com/phuctm97/openkitten.git
-cd openkitten/packages/bot/bot-cli
+cd openkitten/packages/bot/cli
 
 # Install dependencies
 bun install
