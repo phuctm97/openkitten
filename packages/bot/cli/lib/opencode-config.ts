@@ -50,7 +50,7 @@ async function writeDefaultAgentFile(
 ): Promise<void> {
   const template = await readFile(source, "utf-8");
   const rendered = renderAgentTemplate(template, destination);
-  await writeFile(destination, rendered);
+  await writeFile(destination, rendered, { flag: "wx" });
 }
 
 function cancel(): never {

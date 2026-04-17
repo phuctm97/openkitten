@@ -22,7 +22,6 @@ async function callReload(commandsDir: string) {
   await reloadOpencodeConfig({
     commandsDir,
     botToken: "test-token",
-    groupChat: false,
   });
 }
 
@@ -33,17 +32,15 @@ async function getFirstCall() {
   const call = mock.mock.lastCall as [
     string,
     readonly { command: string; description: string }[],
-    boolean,
   ];
-  return { token: call[0], commands: call[1], groupChat: call[2] };
+  return { token: call[0], commands: call[1] };
 }
 
 test("registers only builtins when commands dir is empty", async () => {
   await callReload(tempDir);
-  const { token, commands, groupChat } = await getFirstCall();
+  const { token, commands } = await getFirstCall();
   expect(token).toBe("test-token");
   expect(commands).toEqual([...builtinCommands]);
-  expect(groupChat).toBe(false);
 });
 
 test("parses descriptions from frontmatter in .md files", async () => {

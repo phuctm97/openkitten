@@ -694,7 +694,6 @@ describe("McpServer", () => {
     const reloadConfigOptions = {
       commandsDir: "/tmp/commands",
       botToken: "test-token",
-      groupChat: false,
     };
 
     using _server = await McpServer.create(

@@ -2,7 +2,6 @@ import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
-import * as ownerOnly from "~/lib/grammy-send-owner-only";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
@@ -104,8 +103,6 @@ function mockScope(overrides: {
     mediaGroupBuffer: {} as never,
     attachmentStorage: {} as never,
     typingIndicators: {} as never,
-    groupMessageBuffer: undefined as never,
-    ownerId: 123 as never,
   };
 }
 
@@ -348,30 +345,4 @@ test("rethrows non-LockedError from lock", async () => {
   const ctx = mockCtx(42, "");
 
   await expect(grammyHandleStart(scope, ctx, signal)).rejects.toBe(error);
-});
-
-test("rejects non-owner in group chat", async () => {
-  const sendSpy = vi
-    .spyOn(ownerOnly, "grammySendOwnerOnly")
-    .mockResolvedValue();
-  const existingSessions = mockExistingSessions(undefined);
-  const opencodeClient = mockOpencodeClient(0);
-  const workingSessions = mockWorkingSessions();
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    workingSessions,
-  });
-  const ctx = {
-    chat: { id: 42, type: "group" },
-    from: { id: 999 },
-    msg: { message_id: 99, message_thread_id: undefined },
-    match: "",
-    update: { update_id: 1 },
-  } as never;
-
-  await grammyHandleStart(scope, ctx, signal);
-
-  expect(sendSpy).toHaveBeenCalledOnce();
-  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
 });

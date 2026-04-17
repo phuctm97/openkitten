@@ -1,7 +1,6 @@
 import { beforeEach, expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
-import * as groupTextModule from "~/lib/grammy-handle-group-text";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import { PendingPrompts } from "~/lib/pending-prompts";
@@ -106,8 +105,6 @@ function mockScope(overrides: {
     mediaGroupBuffer: {} as never,
     attachmentStorage: {} as never,
     typingIndicators: {} as never,
-    groupMessageBuffer: undefined as never,
-    ownerId: 123 as never,
   };
 }
 
@@ -309,28 +306,6 @@ test("forwards slash commands as regular text to opencode", async () => {
   );
 });
 
-test("delegates to group handler in group mode", async () => {
-  const groupSpy = vi
-    .spyOn(groupTextModule, "grammyHandleGroupText")
-    .mockResolvedValue();
-  const scope = mockScope({});
-  // Enable group mode by setting groupMessageBuffer
-  const groupScope = {
-    ...scope,
-    groupMessageBuffer: {} as never,
-  };
-  const ctx = {
-    chat: { id: 42, type: "supergroup" },
-    msg: { message_thread_id: undefined },
-    message: { text: "hello", message_id: 100 },
-    update: { update_id: 1 },
-  } as never;
-
-  await grammyHandleText(groupScope, ctx, signal);
-
-  expect(groupSpy).toHaveBeenCalledOnce();
-});
-
 test("prepends reply context when replying to a message", async () => {
   const opencodeClient = mockOpencodeClient();
   const pendingPrompts = mockPendingPrompts();
@@ -365,22 +340,4 @@ test("prepends reply context when replying to a message", async () => {
     }),
     { throwOnError: true },
   );
-});
-
-test("does not delegate in group chat when groupMessageBuffer is undefined", async () => {
-  const opencodeClient = mockOpencodeClient();
-  const pendingPrompts = mockPendingPrompts();
-  pendingPrompts.answer.mockRejectedValue(new PendingPrompts.NotFoundError());
-  opencodeClient.session.promptAsync.mockResolvedValue({});
-  const scope = mockScope({ opencodeClient, pendingPrompts });
-  const ctx = {
-    chat: { id: 42, type: "supergroup" },
-    msg: { message_thread_id: undefined },
-    message: { text: "hello", message_id: 100 },
-    update: { update_id: 1 },
-  } as never;
-
-  await grammyHandleText(scope, ctx, signal);
-
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalled();
 });

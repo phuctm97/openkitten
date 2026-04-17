@@ -70,8 +70,6 @@ function mockScope(overrides: {
     mediaGroupBuffer: {} as never,
     attachmentStorage: {} as never,
     typingIndicators: {} as never,
-    groupMessageBuffer: undefined as never,
-    ownerId: 123 as never,
   };
 }
 

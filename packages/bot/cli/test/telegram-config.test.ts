@@ -97,7 +97,7 @@ test("loads valid config without TTY output", async () => {
   isTTYMock.isTTY = false;
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   const config = await TelegramConfig.create(profile);
@@ -108,7 +108,7 @@ test("loads valid config without TTY output", async () => {
 test("loads valid config from file", async () => {
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(select).mockResolvedValueOnce("continue");
@@ -121,9 +121,7 @@ test("prompts when config file does not exist", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("456");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   const config = await TelegramConfig.create(profile);
   expect(config.botToken).toBe(validToken);
   expect(config.userId).toBe(456);
@@ -132,7 +130,7 @@ test("prompts when config file does not exist", async () => {
 test("skips action loop when skipActions is true", async () => {
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   const config = await TelegramConfig.create(profile, { skipActions: true });
@@ -145,9 +143,7 @@ test("saves config after prompting", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("456");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(select).mockResolvedValueOnce("continue");
@@ -159,14 +155,12 @@ test("saves config after prompting", async () => {
 test("prompts when config file has invalid data", async () => {
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: "bad-format", userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: "bad-format", userId: 123 }),
   );
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("789");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   const config = await TelegramConfig.create(profile);
   expect(config.botToken).toBe(validToken);
   expect(config.userId).toBe(789);
@@ -177,9 +171,7 @@ test("prompts when config file has malformed JSON", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   const config = await TelegramConfig.create(profile);
   expect(config.botToken).toBe(validToken);
   expect(config.userId).toBe(123);
@@ -189,9 +181,7 @@ test("prompts with password type for bot token", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
   expect(password).toHaveBeenCalledWith(
     expect.objectContaining({ message: "Enter your bot token" }),
@@ -202,9 +192,7 @@ test("prompts with text type for user ID", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
   expect(text).toHaveBeenCalledWith(
     expect.objectContaining({ message: "Enter your user ID" }),
@@ -238,7 +226,7 @@ test("throws when saved bot token is invalid in non-TTY", async () => {
   isTTYMock.isTTY = false;
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   mockGetMe(false);
   await expect(TelegramConfig.create(profile)).rejects.toThrow(
@@ -251,7 +239,7 @@ test("throws when config is unparseable in non-TTY", async () => {
   isTTYMock.isTTY = false;
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: "bad-format", userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: "bad-format", userId: 123 }),
   );
   await expect(TelegramConfig.create(profile)).rejects.toThrow(
     TelegramConfig.NotFoundError,
@@ -273,7 +261,7 @@ test("rethrows non-GrammyError during saved config verification", async () => {
   vi.mocked(spinner).mockReturnValueOnce(s);
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   getMeMock.mockRejectedValueOnce(new Error("network failure"));
   await expect(TelegramConfig.create(profile)).rejects.toThrow(
@@ -286,7 +274,7 @@ test("rethrows non-GrammyError during saved config verification in non-TTY", asy
   isTTYMock.isTTY = false;
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   getMeMock.mockRejectedValueOnce(new Error("network failure"));
   await expect(TelegramConfig.create(profile)).rejects.toThrow(
@@ -297,7 +285,7 @@ test("rethrows non-GrammyError during saved config verification in non-TTY", asy
 test("re-prompts only bot token when saved token is invalid", async () => {
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   mockGetMe(false);
   vi.mocked(password).mockResolvedValueOnce(validToken);
@@ -319,9 +307,7 @@ test("bot token validate rejects empty value", async () => {
   });
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
 });
 
@@ -334,9 +320,7 @@ test("bot token validate rejects invalid format", async () => {
   });
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
 });
 
@@ -347,9 +331,7 @@ test("bot token validate accepts valid format", async () => {
   });
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
 });
 
@@ -360,9 +342,7 @@ test("user ID validate rejects non-integer", async () => {
     expect(validate?.("abc")).toBe("User ID must be a positive integer");
     return Promise.resolve("123");
   });
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
 });
 
@@ -373,9 +353,7 @@ test("user ID validate rejects zero", async () => {
     expect(validate?.("0")).toBe("User ID must be a positive integer");
     return Promise.resolve("123");
   });
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
 });
 
@@ -386,9 +364,7 @@ test("user ID validate rejects negative number", async () => {
     expect(validate?.("-1")).toBe("User ID must be a positive integer");
     return Promise.resolve("123");
   });
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
 });
 
@@ -399,9 +375,7 @@ test("user ID validate accepts positive integer", async () => {
     expect(validate?.("42")).toBeUndefined();
     return Promise.resolve("123");
   });
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
 });
 
@@ -412,9 +386,7 @@ test("re-prompts bot token when API rejects it", async () => {
   mockGetMe(false);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   const config = await TelegramConfig.create(profile);
   expect(password).toHaveBeenCalledTimes(2);
   expect(config.botToken).toBe(validToken);
@@ -426,9 +398,7 @@ test("shows spinner during bot token verification", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "TestBot", username: "test_bot" });
   vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
+  vi.mocked(select).mockResolvedValueOnce("continue");
   await TelegramConfig.create(profile);
   expect(stopFn).toHaveBeenCalledWith(
     "Verified bot token: TestBot (@test_bot)",
@@ -449,7 +419,7 @@ test("rethrows non-GrammyError from getMe", async () => {
 test("changes bot token via action loop", async () => {
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(select)
@@ -465,7 +435,7 @@ test("changes bot token via action loop", async () => {
 test("changes user ID via action loop", async () => {
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(select)
@@ -480,7 +450,7 @@ test("changes user ID via action loop", async () => {
 test("throws when action select is cancelled", async () => {
   await writeFile(
     configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
+    JSON.stringify({ botToken: validToken, userId: 123 }),
   );
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(select).mockResolvedValueOnce(cancelSymbol as never);
@@ -493,145 +463,8 @@ test("still prompts for missing values when skipActions is true", async () => {
   vi.mocked(password).mockResolvedValueOnce(validToken);
   mockGetMe(true, { first_name: "Bot", username: "bot" });
   vi.mocked(text).mockResolvedValueOnce("456");
-  vi.mocked(select).mockResolvedValueOnce(false);
   const config = await TelegramConfig.create(profile, { skipActions: true });
   expect(password).toHaveBeenCalled();
   expect(text).toHaveBeenCalled();
   expect(config.userId).toBe(456);
-  expect(config.groupChat).toBe(false);
-});
-
-test("loads groupChat from saved config", async () => {
-  await writeFile(
-    configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: true }),
-  );
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  vi.mocked(select).mockResolvedValueOnce("continue");
-  const config = await TelegramConfig.create(profile);
-  expect(config.groupChat).toBe(true);
-});
-
-test("defaults groupChat to false for existing config without it", async () => {
-  isTTYMock.isTTY = false;
-  await writeFile(
-    configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
-  );
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  const config = await TelegramConfig.create(profile);
-  expect(config.groupChat).toBe(false);
-});
-
-test("changes groupChat via action loop", async () => {
-  await writeFile(
-    configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
-  );
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  vi.mocked(select)
-    .mockResolvedValueOnce("group-chat")
-    .mockResolvedValueOnce(true)
-    .mockResolvedValueOnce("continue");
-  const config = await TelegramConfig.create(profile);
-  expect(config.groupChat).toBe(true);
-});
-
-test("prompts groupChat with hint when true selected", async () => {
-  vi.mocked(password).mockResolvedValueOnce(validToken);
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(true)
-    .mockResolvedValueOnce("continue");
-  await TelegramConfig.create(profile);
-  const { log } = await import("@clack/prompts");
-  expect(vi.mocked(log.message)).toHaveBeenCalledWith(
-    expect.stringContaining("admin"),
-    expect.anything(),
-  );
-});
-
-test("loads config with groupChat true in non-TTY", async () => {
-  isTTYMock.isTTY = false;
-  await writeFile(
-    configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: true }),
-  );
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  const config = await TelegramConfig.create(profile);
-  expect(config.groupChat).toBe(true);
-});
-
-test("loads config with groupChat false in non-TTY", async () => {
-  isTTYMock.isTTY = false;
-  await writeFile(
-    configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
-  );
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  const config = await TelegramConfig.create(profile);
-  expect(config.groupChat).toBe(false);
-});
-
-test("config without groupChat defaults to false in non-TTY", async () => {
-  isTTYMock.isTTY = false;
-  await writeFile(
-    configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
-  );
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  const config = await TelegramConfig.create(profile);
-  expect(config.groupChat).toBe(false);
-});
-
-test("promptGroupChat returns true when select returns true", async () => {
-  vi.mocked(password).mockResolvedValueOnce(validToken);
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(true)
-    .mockResolvedValueOnce("continue");
-  const config = await TelegramConfig.create(profile);
-  expect(config.groupChat).toBe(true);
-});
-
-test("promptGroupChat returns false when select returns false", async () => {
-  vi.mocked(password).mockResolvedValueOnce(validToken);
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(false)
-    .mockResolvedValueOnce("continue");
-  const config = await TelegramConfig.create(profile);
-  expect(config.groupChat).toBe(false);
-});
-
-test("shows hint message when groupChat is enabled", async () => {
-  const { log } = await import("@clack/prompts");
-  vi.mocked(password).mockResolvedValueOnce(validToken);
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  vi.mocked(text).mockResolvedValueOnce("123");
-  vi.mocked(select)
-    .mockResolvedValueOnce(true)
-    .mockResolvedValueOnce("continue");
-  await TelegramConfig.create(profile);
-  expect(log.message).toHaveBeenCalledWith(
-    expect.stringContaining("Add the bot as an admin"),
-    expect.anything(),
-  );
-});
-
-test("toggles group chat via action loop", async () => {
-  await writeFile(
-    configPath,
-    JSON.stringify({ botToken: validToken, userId: 123, groupChat: false }),
-  );
-  mockGetMe(true, { first_name: "Bot", username: "bot" });
-  vi.mocked(select)
-    .mockResolvedValueOnce("group-chat")
-    .mockResolvedValueOnce(true)
-    .mockResolvedValueOnce("continue");
-  const config = await TelegramConfig.create(profile);
-  expect(config.groupChat).toBe(true);
 });

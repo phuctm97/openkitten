@@ -1,7 +1,6 @@
 import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleCompact } from "~/lib/grammy-handle-compact";
-import * as ownerOnly from "~/lib/grammy-send-owner-only";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import type { Scope } from "~/lib/scope";
 import { WorkingSessions } from "~/lib/working-sessions";
@@ -81,8 +80,6 @@ function mockScope(overrides: {
     mediaGroupBuffer: {} as never,
     attachmentStorage: {} as never,
     typingIndicators: {} as never,
-    groupMessageBuffer: undefined as never,
-    ownerId: 123 as never,
   };
 }
 
@@ -182,30 +179,4 @@ test("passes threadId when present", async () => {
     { chatId: 42, threadId: 7 },
     { createIfNotFound: true },
   );
-});
-
-test("rejects non-owner in group chat", async () => {
-  const sendSpy = vi
-    .spyOn(ownerOnly, "grammySendOwnerOnly")
-    .mockResolvedValue();
-  const existingSessions = mockExistingSessions();
-  const opencodeClient = mockOpencodeClient();
-  const workingSessions = mockWorkingSessions();
-  const scope = mockScope({
-    existingSessions,
-    opencodeClient,
-    workingSessions,
-  });
-  const ctx = {
-    chat: { id: 42, type: "supergroup" },
-    from: { id: 999 },
-    msg: { message_id: 99, message_thread_id: undefined },
-    update: { update_id: 1 },
-    react: vi.fn(),
-  } as never;
-
-  await grammyHandleCompact(scope, ctx, signal);
-
-  expect(sendSpy).toHaveBeenCalledOnce();
-  expect(opencodeClient.session.summarize).not.toHaveBeenCalled();
 });

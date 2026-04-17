@@ -4,7 +4,6 @@ import type { AttachmentStorage } from "~/lib/attachment-storage";
 import type { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import type { FloatingPromises } from "~/lib/floating-promises";
-import type { GroupMessageBuffer } from "~/lib/group-message-buffer";
 import type { MediaGroupBuffer } from "~/lib/media-group-buffer";
 import type { PendingPrompts } from "~/lib/pending-prompts";
 import type { ProcessingMessages } from "~/lib/processing-messages";
@@ -25,6 +24,4 @@ export interface Scope {
   readonly mediaGroupBuffer: MediaGroupBuffer;
   readonly attachmentStorage: AttachmentStorage;
   readonly typingIndicators: TypingIndicators;
-  readonly groupMessageBuffer: GroupMessageBuffer | undefined;
-  readonly ownerId: number;
 }
