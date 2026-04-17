@@ -86,12 +86,13 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
       >
-        <div className="absolute left-0 top-12 size-72 rounded-full bg-destructive/10 blur-3xl" />
-        <div className="absolute bottom-0 right-0 size-80 rounded-full bg-primary/10 blur-3xl" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,var(--border)_1px,transparent_1px),linear-gradient(to_bottom,var(--border)_1px,transparent_1px)] bg-[size:3.5rem_3.5rem] opacity-40 [mask-image:radial-gradient(circle_at_center,black,transparent_78%)]" />
+        <div className="absolute left-[-8rem] top-[-6rem] size-80 rounded-full bg-primary/8 blur-3xl" />
+        <div className="absolute bottom-[-8rem] right-[-6rem] size-96 rounded-full bg-accent/60 blur-3xl" />
       </div>
       <div
         role="alert"
-        className="relative m-auto w-full max-w-[44rem] rounded-[2rem] border border-border/70 bg-card/95 p-8 shadow-xl shadow-destructive/5 backdrop-blur-sm"
+        className="relative m-auto w-full max-w-[44rem] rounded-[2rem] border border-border/70 bg-card/95 p-8 shadow-xl shadow-primary/5 backdrop-blur-sm"
       >
         <Badge variant="outline">{badge}</Badge>
         <h2 className="mb-3 mt-5 font-heading text-[clamp(1.8rem,3vw,2.7rem)] leading-[1.1]">
