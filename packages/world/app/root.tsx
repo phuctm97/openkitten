@@ -1,3 +1,4 @@
+import { QueryClientProvider } from "@tanstack/react-query";
 import { getDefaultStore } from "jotai";
 import type { PropsWithChildren } from "react";
 import {
@@ -15,7 +16,9 @@ import { ThemeConnector } from "~/components/theme-connector";
 import { ThemeInitializer } from "~/components/theme-initializer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Devtools } from "~/lib/devtools";
 import { hydrationAtom } from "~/lib/hydration-atom";
+import { queryClient } from "~/lib/query-client";
 
 export const clientMiddleware: Route.ClientMiddlewareFunction[] = [
   async () => {
@@ -36,10 +39,13 @@ export function Layout({ children }: PropsWithChildren) {
         <Links />
       </head>
       <body className="m-0 min-h-full antialiased">
-        <JotaiConnector />
-        <ThemeConnector />
-        <ThemeAnchor />
-        {children}
+        <QueryClientProvider client={queryClient}>
+          <JotaiConnector />
+          <ThemeConnector />
+          <ThemeAnchor />
+          {children}
+          {import.meta.env.DEV && <Devtools />}
+        </QueryClientProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
