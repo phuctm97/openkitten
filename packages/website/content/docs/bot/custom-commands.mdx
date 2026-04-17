@@ -1,0 +1,101 @@
+---
+title: Custom Commands
+description: Author your own /slash commands as markdown files.
+---
+
+Custom slash commands are the fastest way to add repeatable Telegram shortcuts — a prompt template, a description, and an optional agent/model override, written as a single markdown file.
+
+The easiest way to create one is to **just ask the bot**. The built-in [`custom-commands`](/docs/bot/skills#custom-commands) skill will author the markdown file and live-reload it for you.
+
+## Ask the bot to add a command
+
+From any chat:
+
+```
+Add a /weather command that takes a location and returns the current forecast.
+```
+
+The `custom-commands` skill runs this flow:
+
+1. Writes `~/.openkitten/profiles/<profile>/.opencode/commands/weather.md` with the right frontmatter and prompt body.
+2. Calls the **`reload_commands`** MCP tool.
+3. The bot re-scans the commands directory, pushes the updated list to BotFather with `setMyCommands`, and applies the new command to the in-memory OpenCode config.
+
+Your Telegram command menu updates **immediately — no restart required**. Say *"remove /weather"* or *"list my commands"* and the same skill handles those too.
+
+## Where commands live
+
+Each file under your profile's commands directory becomes one command. The filename (without `.md`) is the command name.
+
+```
+~/.openkitten/profiles/<profile>/.opencode/commands/
+  weather.md        → /weather
+  translate.md      → /translate
+  standup.md        → /standup
+```
+
+During startup the directory is scanned and every command — plus the four built-ins (`/start`, `/abort`, `/compact`, `/agent`) — is pushed to BotFather via `setMyCommands` so they appear in Telegram's command menu.
+
+## File format
+
+```markdown
+---
+description: Translate text to English
+---
+Translate the following text to English: $ARGUMENTS
+```
+
+### Frontmatter fields
+
+| Field         | Required | Purpose                                                                    |
+| ------------- | -------- | -------------------------------------------------------------------------- |
+| `description` | yes      | Shown in Telegram's command menu. Max 256 characters.                      |
+| `agent`       | no       | Run this command under a specific agent instead of the session's current.  |
+| `model`       | no       | Override the default model for this command only.                          |
+
+### Body placeholders
+
+The body is the prompt template the agent receives when the command is invoked.
+
+- `$ARGUMENTS` — everything the user typed after the command name.
+- `$1`, `$2`, `$3`, … — positional arguments.
+
+### Example
+
+Create `~/.openkitten/profiles/<profile>/.opencode/commands/weather.md`:
+
+```markdown
+---
+description: Check the weather for a location
+---
+Check the current weather for: $ARGUMENTS
+
+Provide temperature, conditions, and a brief forecast.
+```
+
+In Telegram:
+
+```
+/weather Da Nang
+```
+
+## Live reload
+
+`reload_commands` is what makes the "ask the bot to add a command" flow feel instant. It:
+
+1. Re-reads every `.md` in the commands directory.
+2. Pushes the combined list to BotFather via `setMyCommands`.
+3. Applies the new command to the in-memory OpenCode config.
+
+If you author a file by hand on disk, either ask the bot to "reload commands" (the skill calls the tool) or restart the service.
+
+> Unlike **skills** — which require a full `reload_extensions` cycle — commands live-reload without restarting the OpenCode server.
+
+## Name rules
+
+- Filename must match `^[a-z][a-z0-9_]{0,30}\.md$` — lowercase, digits, and underscores only; max 31 characters.
+- Must **not** clash with the four reserved Telegram commands above.
+
+## OpenCode built-ins
+
+A number of OpenCode slash commands (`/compact`, `/models`, `/new`, `/sessions`, `/share`, …) are usable directly — you do **not** need to create custom commands to wrap them. See [Commands → Built-in OpenCode commands](/docs/bot/commands#built-in-opencode-commands).

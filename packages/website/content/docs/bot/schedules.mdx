@@ -1,0 +1,125 @@
+---
+title: Schedules
+description: Cron-driven session and background tasks.
+---
+
+OpenKitten has a built-in scheduler backed by [Bunqueue](https://github.com/pomber/bunqueue) that can run two kinds of recurring jobs: **session** tasks that respond in chat, and **background** tasks that run silently and only notify you when something noteworthy happens.
+
+Schedules are created, inspected, and triggered through MCP tools — usually by asking the bot in natural language while the **`schedules`** skill is active.
+
+## Session vs background
+
+<Cards>
+  <Card title="session" description="Executes inside the current Telegram chat. User sees the response directly and can reply naturally. Best for reminders, summaries, and workflows that expect a reply." />
+  <Card title="background" description="Runs in an isolated ephemeral session. Can run up to ~15 minutes. Only sends a Telegram message when something noteworthy is found. Results are recorded in run history, not injected back into chat." />
+</Cards>
+
+Pick **session** when:
+
+- the reply should be visible in the main chat,
+- continuity with the ongoing conversation matters,
+- the user is expected to reply.
+
+Pick **background** when:
+
+- the job should be silent most of the time,
+- only an alert on a specific condition matters,
+- the job involves long-running external tool calls (Gmail, Sheets, third-party APIs).
+
+## Prompt wording rules
+
+For **session** schedules, wording like `Reply with …` / `Respond with …` keeps the agent from routing through direct Telegram tool calls. Avoid `Send a message to …`.
+
+For **background** schedules, state explicitly whether the task should notify only when needed or stay silent when there's nothing to report. The built-in wrapper appends:
+
+> You MUST end with a final text response after using any tools. If there is nothing meaningful to report, respond with exactly: `[NO_REPORT]`.
+
+When the agent answers with `[NO_REPORT]`, the run is marked `completed_silent` and no Telegram message is sent.
+
+## Cron
+
+- **Cron is always UTC.**
+- Use 5-field expressions: `minute hour dom month dow`.
+- Shortcuts are supported: `@hourly`, `@daily`, `@weekly`, `@monthly`.
+- Always call `queue_server_time` before computing an expression so you know the current clock on the host.
+- For test schedules, set the fire time **2-3 minutes in the future** — closer times are ambiguous because of creation delay.
+
+## Core tools
+
+All schedule/queue tools are exposed on the OpenKitten MCP server:
+
+### Schedule lifecycle
+
+- `queue_schedule_create` — create a new schedule (`kind`, `cron`, `description`, `prompt`, optional `once`).
+- `queue_schedule_list` — list all schedules with IDs, cron, next-run, and last-run status.
+- `queue_schedule_update` — change `description`, `prompt`, or `cron` on an existing schedule.
+- `queue_schedule_delete` — remove a schedule permanently.
+- `queue_schedule_trigger` — fire a schedule now without waiting for the next cron tick.
+- `queue_schedule_runs` — last 20 executions for a schedule (status, notifiedUser, output preview, error).
+- `queue_server_time` — current ISO/UTC/unix time and local timezone.
+
+### Raw queue tools (Bunqueue)
+
+- `queue_add_job` — enqueue a one-off job with full `JobOptions` (priority, delay, attempts, backoff, timeout, …).
+- `queue_status` — paused state + full job counts.
+- `queue_pause` / `queue_resume` — pause or resume the whole queue.
+- `queue_list_jobs` — paginated job list filtered by state.
+- `queue_get_job` / `queue_remove_job` / `queue_cancel_job` / `queue_retry_job` / `queue_promote_job` — per-job operations.
+- `queue_list_crons` — inspect registered cron schedulers.
+- `queue_clean` — remove old jobs by state and age.
+
+### Dead-letter queue
+
+- `queue_dlq_list` — failed jobs with attempt history; filter by reason (`max_attempts_exceeded`, `timeout`, `stalled`, `ttl_expired`, `worker_lost`, `explicit_fail`, `unknown`).
+- `queue_dlq_retry` — retry one DLQ entry or all.
+- `queue_dlq_purge` — permanently clear the DLQ.
+
+## Run statuses
+
+When you call `queue_schedule_runs`, each entry carries a status:
+
+| Status                | Meaning                                                           |
+| --------------------- | ----------------------------------------------------------------- |
+| `running`             | The job is still processing (polling up to ~15 min).              |
+| `completed_notified`  | Finished and a Telegram message was sent to the user.             |
+| `completed_silent`    | Finished; background agent returned `[NO_REPORT]` or equivalent.  |
+| `failed`              | Threw, timed out, or was canceled.                                |
+
+## Minimal prompt templates
+
+**Session**
+
+```
+Reply with exactly: <text>.
+```
+
+**Background**
+
+```
+Run a minimal background test. If successful, say exactly: <text>.
+```
+
+**Background with monitoring semantics**
+
+```
+Check <something>. If anything has changed since the last run, report it. Otherwise respond with [NO_REPORT].
+```
+
+## Debug checklist
+
+If a schedule seems off, ask the bot to walk this in order:
+
+1. `queue_server_time` — confirm the host clock.
+2. `queue_schedule_list` — confirm the schedule exists and has a `nextRunAt`.
+3. `queue_schedule_runs` — inspect recent runs.
+4. `queue_status` — check the queue isn't paused / backlogged.
+5. `queue_list_jobs` — list waiting/active/delayed jobs.
+6. `queue_get_job` — look at a specific job's state and payload.
+
+Always keep causes separated: prompt/agent issue vs. cron registration vs. queue dispatch vs. delivery.
+
+## Hygiene
+
+- Clean up temporary test schedules after verification.
+- Remove any "wait helper" jobs you created for timing tests.
+- Report manual-trigger problems separately from auto-fire problems.

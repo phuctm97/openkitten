@@ -1,5 +1,16 @@
 {
   "title": "OpenKitten Bot",
   "description": "Telegram-first AI assistant",
-  "root": true
+  "root": true,
+  "pages": [
+    "index",
+    "installation",
+    "commands",
+    "configuration",
+    "agents",
+    "skills",
+    "custom-commands",
+    "schedules",
+    "mcp-tools"
+  ]
 }

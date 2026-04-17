@@ -1,0 +1,67 @@
+---
+title: Agents
+description: Built-in agents, switching with /agent, and adding your own.
+---
+
+OpenKitten ships three opinionated OpenCode agents tuned for Telegram. Each conversation remembers its active agent in the local database and restores it across restarts.
+
+## Built-in agents
+
+Agent files live in `~/.openkitten/profiles/<profile>/.opencode/agents/`. They are written once (`wx`) on first boot so your edits are preserved forever after.
+
+### `assist` (default)
+
+General-purpose Telegram assistant — answers questions, researches, writes, edits files, and runs commands.
+
+> Answers questions, researches topics, writes and edits files, runs commands, and helps with any task.
+
+`default_agent` in the bootstrapped `opencode.json` is set to `assist`. The agent's own markdown file is editable only by itself (via the `edit` permission scoped to its own path), which lets it maintain a durable **Memory** section over time.
+
+### `build`
+
+Optimized for software engineering: bug fixes, new features, refactors, explanations. It is instructed to use the `TodoWrite` tool for planning and to run project-specific test/build/lint commands after changes.
+
+### `plan`
+
+Read-only research and planning mode. Explicitly forbidden from making edits (except its own agent file). Used when you want a well-researched plan before any implementation.
+
+## Switch agents
+
+In Telegram:
+
+```
+/agent               → list agents and show the current one
+/agent build         → switch this session to 'build'
+/agent plan          → switch this session to 'plan'
+```
+
+`/agent` only shows agents where `mode !== "subagent"` and `hidden !== true`, so subagents used internally by other agents are not selectable.
+
+If the requested name doesn't exist, the bot replies with a "not found" message and leaves the session on its previous agent.
+
+## Subagents
+
+OpenCode supports subagents (hidden helpers spawned by other agents, e.g. for focused code search). OpenKitten does not expose them through `/agent` — they appear only as tool calls inside a parent agent's output.
+
+## Memory-as-a-file pattern
+
+All three built-in agents declare their **own** markdown file as `read: allow` and `edit: allow`:
+
+```yaml
+permission:
+  read:
+    __OPENKITTEN_AGENT_FILE_PATH_YAML__: allow
+  edit:
+    __OPENKITTEN_AGENT_FILE_PATH_YAML__: allow
+```
+
+During config bootstrapping OpenKitten substitutes those placeholders with the absolute path of the agent file itself. The agent is then instructed to treat its file as durable memory and append short bullets under `# Memory` when it learns stable, reusable information.
+
+This means: edits to your agent's memory survive restarts, are visible on disk, and can be inspected or version-controlled by you.
+
+## Add a custom agent
+
+1. Drop a new markdown file into `.opencode/agents/<name>.md` with OpenCode's agent frontmatter (`description`, optional `mode`, `permission`, `model`, etc. — see the [OpenCode agent docs](https://opencode.ai/docs/config/#agents)).
+2. Either restart the bot, or call the `reload_extensions` MCP tool from chat. Custom agents authored this way show up in `/agent` immediately.
+
+> Agent names must be unique across `.opencode/agents/` and any agents declared inline in `opencode.json`.

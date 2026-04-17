@@ -1,0 +1,94 @@
+---
+title: Commands
+description: Telegram slash commands and the OpenKitten CLI.
+---
+
+OpenKitten exposes two surfaces: **Telegram slash commands** you chat with, and the **CLI** you use on the host to install, run, and uninstall the service.
+
+## Telegram slash commands
+
+Four commands are built in and always registered with BotFather via `setMyCommands` on every start:
+
+| Command    | Description                          |
+| ---------- | ------------------------------------ |
+| `/start`   | Start a new conversation.            |
+| `/abort`   | Stop the current generation.         |
+| `/compact` | Summarize conversation history.      |
+| `/agent`   | Switch or list AI agents.            |
+
+### `/start [message]`
+
+Opens a fresh session for the current chat or forum topic. If a session already exists but is idle and empty, `/start` reuses it; otherwise it creates a new one and replaces the previous. The argument, if any, becomes the first user message — `/start` with no argument sends a default `"Hey"`.
+
+### `/abort`
+
+Asks the OpenCode server to cancel the in-flight generation for the session. The bot reacts with 👍 once the cancel is sent. Safe to call even when nothing is running.
+
+### `/compact`
+
+Triggers OpenCode's session summarization so the conversation history stays within the model's context. Locks the session during the compaction and reacts with 👍 on success. If the session is already busy, the bot replies with a "session pending" notice instead of queueing a second compaction.
+
+### `/agent [name]`
+
+Without an argument, lists the available agents and marks the active one for the current session.
+
+With a name, switches the session to that agent — the choice is persisted in the local database and sticks across restarts until changed. Subagents and hidden agents are excluded from the list.
+
+### Custom slash commands
+
+Any markdown file under `~/.openkitten/profiles/<profile>/.opencode/commands/<name>.md` becomes `/name` in Telegram. See [Custom commands](/docs/bot/custom-commands).
+
+## CLI commands
+
+The CLI is invoked from `packages/bot/cli`:
+
+```bash
+bun . <command> [--yes]
+```
+
+### `serve`
+
+Starts the OpenKitten server in the foreground: boots OpenCode, connects the grammY bot, registers commands with BotFather, starts the scheduler, and blocks until one of the subsystems exits.
+
+```bash
+bun . serve
+bun . serve --yes   # skip optional "Actions" menus
+```
+
+### `up`
+
+Updates source and installs/updates the OpenKitten system service for the current profile.
+
+```bash
+bun . up
+bun . up --yes
+```
+
+Steps, in order:
+
+1. Pull `main` (skipped on non-`main` branches or dirty worktrees).
+2. `bun install`.
+3. Validate Telegram config; prompt for missing values.
+4. Validate OpenCode config; bootstrap agents, skills, and `opencode.json` if missing.
+5. Push the merged list of built-in + custom slash commands to BotFather.
+6. Write the platform-specific service unit and (re)start it.
+
+### `down`
+
+Stops and removes the service. Profile data is preserved.
+
+```bash
+bun . down
+```
+
+## Built-in OpenCode commands
+
+Because OpenKitten embeds OpenCode, a number of OpenCode's own slash commands are also usable directly from chat — you don't need to re-declare them as custom commands:
+
+```
+/compact  /connect  /details  /editor  /exit   /export  /help
+/init     /models   /new      /redo    /sessions  /share
+/themes   /thinking /undo     /unshare
+```
+
+> `/compact` is also registered as a Telegram command by OpenKitten itself — both paths work.

@@ -1,0 +1,63 @@
+---
+title: Installation
+description: Clone, install, and run OpenKitten as a native system service.
+---
+
+OpenKitten runs on [Bun](https://bun.com) and installs itself as a user-level service on macOS, Linux, and Windows. You only need a bot token and your Telegram user ID before you start.
+
+## Prerequisites
+
+- **Bun** runtime — see [Bun installation](https://bun.com/docs/installation).
+- A **Telegram bot** created with [@BotFather](https://t.me/BotFather) — keep the token handy.
+- Your **Telegram user ID** from [@userinfobot](https://t.me/userinfobot) — this is the only account allowed to talk to the bot.
+
+## Clone and install
+
+```bash
+git clone https://github.com/phuctm97/openkitten.git
+cd openkitten/packages/bot/cli
+bun install
+```
+
+## Install as a service
+
+```bash
+bun . up
+```
+
+`up` pulls the latest `main`, installs dependencies, prompts for Telegram and OpenCode configuration if missing, and then registers OpenKitten as a native service:
+
+- **macOS** — a `LaunchAgent` plist at `~/Library/LaunchAgents/com.openkitten.profiles.<profile>.plist`, with logs in `~/Library/Logs/OpenKitten/`.
+- **Linux** — a user `systemd` unit at `~/.config/systemd/user/openkitten-<profile>-profile.service`.
+- **Windows** — a scheduled task at `\OpenKitten\Profiles\<profile>` running at logon, logs in `%LOCALAPPDATA%\OpenKitten\Profiles\<profile>\Logs`.
+
+Re-running `bun . up` pulls, re-installs dependencies, and restarts the service. If the working tree is dirty or on a non-`main` branch the pull is skipped so your changes are never discarded.
+
+> The macOS service may appear as **"Jarred Sumner"** in Activity Monitor. That's the signer of the Bun runtime itself, not anything OpenKitten does.
+
+## Foreground mode
+
+Useful for one-off runs or debugging:
+
+```bash
+bun . serve
+```
+
+`serve` is the same binary the installed service runs — it just stays in the foreground and logs to stderr.
+
+## Skip optional menus
+
+Both `up` and `serve` accept `-y` / `--yes` to skip the post-config "Actions" menu (change bot token, change user ID, add/remove provider credentials, change model). The bot still prompts for required values the first time.
+
+```bash
+bun . up --yes
+bun . serve -y
+```
+
+## Uninstall
+
+```bash
+bun . down
+```
+
+`down` confirms, disables the service, removes the unit/plist/task, and clears service logs. Your profile directory at `~/.openkitten/profiles/<profile>` is **not** deleted, so re-running `bun . up` will pick up the same bot, agents, skills, and database.

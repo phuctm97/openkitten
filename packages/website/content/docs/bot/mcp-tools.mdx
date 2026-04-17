@@ -1,0 +1,93 @@
+---
+title: MCP Tools
+description: Tools the OpenKitten MCP server exposes to OpenCode.
+---
+
+OpenKitten embeds a local MCP server inside the `serve` process and registers it with OpenCode as a remote server named `openkitten`. Every OpenCode agent — built-in or custom — gets these tools automatically.
+
+The server runs on `127.0.0.1` on a random port, protected by a random 32-byte bearer token that's regenerated every start. Nothing outside the host process can reach it.
+
+## Why MCP
+
+MCP lets the scheduler, reload machinery, and Telegram send-file path live in the same process that owns the grammY bot and SQLite database — while still being callable as regular tools from any OpenCode agent. Agents don't care that the implementation is local; they just see a tool surface.
+
+## Bot-side tools
+
+### `send_file`
+
+Send a local file **that the agent created or generated** to the user via Telegram.
+
+```
+send_file(path: string)
+```
+
+- Detects the kind (`sticker`, `animation`, `photo`, `video`, `audio`, `document`) from extension and MIME type.
+- Dispatches to the right Bot API method (`sendPhoto`, `sendDocument`, `sendVideo`, …).
+- Preserves the current forum topic (`message_thread_id`) so the file lands in the same thread as the conversation.
+
+> Never use `send_file` to re-send something the user already uploaded — that file is already visible in the chat.
+
+### `reload_commands`
+
+Reload custom `/slash` command markdown files from `$OPENCODE_CONFIG_DIR/commands/` without restarting.
+
+```
+reload_commands()
+```
+
+Rescans the directory, pushes the merged list of built-in + custom commands to BotFather, and applies the update in-memory. Used by the [`custom-commands`](/docs/bot/custom-commands) skill.
+
+### `reload_extensions`
+
+Restart the OpenKitten process to apply newly created or installed **skills** and any other configuration that requires a fresh OpenCode server.
+
+```
+reload_extensions(message: string)
+```
+
+- Sends `⏳ Restarting to apply changes…` to every active session.
+- Records a `restartNotification` row per session with the caller-supplied `message`.
+- Triggers the shutdown handler; the system service restarts the process.
+- On the next boot, the recorded `✅ <message>` is sent back to each session.
+
+The current agent response is interrupted by design — the restart is the whole point of the tool call.
+
+## Scheduler tools
+
+Seven high-level tools covering schedule CRUD and observation:
+
+- `queue_schedule_create` — cron, kind (`session` | `background`), description, prompt, optional `once`.
+- `queue_schedule_list` — every schedule with `nextRunAt` and last-run status.
+- `queue_schedule_update` — patch `description` / `prompt` / `cron`.
+- `queue_schedule_delete` — permanent removal.
+- `queue_schedule_trigger` — immediate run, returns the scheduleId, jobId, and enqueuedAt.
+- `queue_schedule_runs` — last 20 executions (status, notifiedUser, output, error).
+- `queue_server_time` — current ISO/UTC/unix time + timezone + offset.
+
+## Raw queue tools
+
+Lower-level Bunqueue wrappers for building custom workflows or debugging:
+
+- `queue_add_job` — enqueue a one-off job with full `JobOptions` (priority, delay, attempts, backoff, timeout, jobId, removeOnComplete, removeOnFail, lifo, stallTimeout, durable).
+- `queue_status` — paused state and job counts.
+- `queue_pause` / `queue_resume` — global pause/resume.
+- `queue_list_jobs` — paginated listing filtered by state (`waiting`, `active`, `completed`, `failed`, `delayed`, `prioritized`).
+- `queue_get_job` / `queue_remove_job` / `queue_cancel_job` / `queue_retry_job` / `queue_promote_job` — per-job operations.
+- `queue_list_crons` — active cron schedulers.
+- `queue_clean` — bulk remove old jobs with a grace period and limit.
+
+## Dead-letter queue
+
+- `queue_dlq_list` — failed jobs with attempts, retry counts, and TTLs; filter by `reason`, `olderThan`, `newerThan`, `retriable`, `expired`, pagination.
+- `queue_dlq_retry` — retry one entry or all.
+- `queue_dlq_purge` — clear the DLQ.
+
+## Metadata injection
+
+Every MCP call from OpenCode carries an `__OPENKITTEN__` object with the calling `sessionID` and `callID`. OpenKitten uses this to:
+
+- Route `send_file` to the right Telegram chat and forum topic.
+- Attach schedules to the session that created them.
+- Verify the request actually came from the OpenKitten-configured OpenCode instance.
+
+You never author this metadata yourself — OpenCode injects it automatically. It's documented only so you understand why some tools know which chat you're in.

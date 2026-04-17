@@ -1,0 +1,111 @@
+---
+title: Configuration
+description: Profiles, Telegram config, OpenCode config, and environment variables.
+---
+
+OpenKitten keeps all state inside a **profile directory**. A single machine can host multiple independent bots by using different profiles — each gets its own database, OpenCode config, service unit, and workspace.
+
+## Profile layout
+
+All paths are under `~/.openkitten/profiles/<profile>/`:
+
+```
+workspace/                       # cwd for OpenCode; tools read/write here
+system/
+  data/                          # XDG_DATA_HOME   → per-profile OpenCode data
+  config/                        # XDG_CONFIG_HOME → per-profile OpenCode config
+    openkitten/
+      telegram.json              # mode 0600 — bot token + authorized user ID
+    opencode/
+      AGENTS.md                  # system-level prompt appended to every agent
+      opencode.json              # permissions scoped to the project config dir
+      skills/                    # built-in skills (custom-commands, schedules, …)
+  state/                         # XDG_STATE_HOME
+  cache/                         # XDG_CACHE_HOME
+.opencode/                       # project-level OpenCode config
+  AGENTS.md                      # default project prompt
+  opencode.json                  # default_agent, model, providers, MCP servers…
+  agents/                        # assist.md, build.md, plan.md (editable)
+  commands/                      # custom /slash command markdown files
+  skills/                        # user-added skills
+  plugins/                       # user-added OpenCode plugins
+  .agents/skills/                # skills installed via `npx skills`
+```
+
+> `~/.openkitten/profiles/<profile>/system/` is passed to OpenCode as the XDG home, and `.opencode/` is the project config. Edit either — OpenKitten only writes the first time (`flag: "wx"`), so your edits survive `bun . up`.
+
+## Switch profile
+
+Set `OPENKITTEN_PROFILE` in the environment. Anything non-empty is valid; default is `default`.
+
+```bash
+OPENKITTEN_PROFILE=work bun . serve
+OPENKITTEN_PROFILE=personal bun . up
+```
+
+The service installer writes the profile name into the unit/plist/task, so each profile gets its own system service.
+
+## Telegram config
+
+`system/config/openkitten/telegram.json`:
+
+```json
+{
+  "botToken": "123456789:AAabcdef...",
+  "userId": 42000000
+}
+```
+
+- **botToken** — validated against the `^\d+:[A-Za-z0-9_-]{35}$` pattern and verified live via `getMe` before use.
+- **userId** — the **only** chat that the bot answers. Every incoming update is filtered by this ID; unauthorized users are silently ignored.
+
+On first `serve` / `up` in a TTY, OpenKitten interactively prompts for both values and writes the file with mode `0600`. In a non-TTY (a service), missing or invalid config throws rather than prompting.
+
+To rotate the token or change the authorized user later: run `bun . up` (or `bun . serve` in a TTY) and pick **Change bot token** / **Change user ID** from the Actions menu, or delete `telegram.json` and restart.
+
+## OpenCode config
+
+OpenCode is bootstrapped on first run. The editable entry points are:
+
+- **`.opencode/opencode.json`** — model, `default_agent`, provider/auth, plugins, MCP servers, permissions, etc. See the [OpenCode config reference](https://opencode.ai/docs/config).
+- **`.opencode/agents/*.md`** — per-agent markdown prompts and permissions (see [Agents](/docs/bot/agents)).
+- **`.opencode/commands/*.md`** — custom `/slash` commands (see [Custom commands](/docs/bot/custom-commands)).
+- **`.opencode/skills/*/SKILL.md`** — custom skills (see [Skills](/docs/bot/skills)).
+- **`.opencode/AGENTS.md`** — project-level prompt prepended to every agent.
+- **`system/config/opencode/AGENTS.md`** — system-level prompt. Managed by OpenKitten; it's rewritten on every start to enforce the Telegram-Markdown communication rules.
+
+### Provider credentials
+
+From a TTY-enabled `serve` or `up`, use the Actions menu:
+
+- **Add credential** — runs `opencode providers login` (ChatGPT, Claude, OpenAI, Anthropic, OpenRouter, …).
+- **Remove credential** — runs `opencode providers logout`.
+- **Change model** — autocomplete over `opencode models`, writes the choice to `opencode.json.model`.
+
+### Server hardening
+
+OpenKitten hardens the embedded OpenCode server:
+
+- Random Basic-Auth credentials (`username=openkitten`, 32-byte base64url password) regenerated every start.
+- mDNS disabled, CORS restricted to `https://opencode.local`.
+- Sharing disabled, auto-update disabled, experimental models enabled, Exa search enabled.
+
+None of that is user-tunable by design.
+
+## Environment variables
+
+| Variable                | Default      | Purpose                                                                         |
+| ----------------------- | ------------ | ------------------------------------------------------------------------------- |
+| `OPENKITTEN_PROFILE`    | `default`    | Profile name — selects `~/.openkitten/profiles/<name>`.                         |
+| `OPENKITTEN_LOG_LEVEL`  | `silly`      | `silly`, `trace`, `debug`, `info`, `warn`, `error`, `fatal`. Invalid = error.   |
+| `NODE_ENV`              | unset        | `production` suppresses log source positions and switches stderr logs to JSON.  |
+
+The service installer sets `NODE_ENV=production` and `OPENKITTEN_PROFILE=<profile>` in every unit/plist/task automatically.
+
+### Example
+
+```bash
+OPENKITTEN_LOG_LEVEL=info bun . serve
+```
+
+Outside a TTY (under a service manager) logs are always JSON; inside a TTY they're pretty-printed.
