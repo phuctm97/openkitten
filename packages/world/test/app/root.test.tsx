@@ -1,7 +1,16 @@
 import { render, screen } from "@testing-library/react";
+import type { ComponentType, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, test, vi } from "vitest";
 import type { Route } from "~/.react-router/types/app/+types/root";
+
+const reactQueryMocks = vi.hoisted(() => ({
+  queryClientProvider: vi.fn(),
+}));
+
+const localModuleMocks = vi.hoisted(() => ({
+  devtools: vi.fn((): ComponentType => () => null),
+}));
 
 const rootMocks = vi.hoisted(() => ({
   isRouteErrorResponse: vi.fn(),
@@ -26,6 +35,32 @@ vi.mock("react-router", async () => {
     useNavigate: () => rootMocks.useNavigate(),
     useNavigation: () => rootMocks.useNavigation(),
     useRevalidator: () => rootMocks.useRevalidator(),
+  };
+});
+
+vi.mock("~/lib/devtools", () => ({
+  get Devtools() {
+    return localModuleMocks.devtools();
+  },
+}));
+
+vi.mock("@tanstack/react-query", async () => {
+  const react = await vi.importActual<typeof import("react")>("react");
+  const reactQuery = await vi.importActual<
+    typeof import("@tanstack/react-query")
+  >("@tanstack/react-query");
+
+  return {
+    ...reactQuery,
+    QueryClientProvider: (props: { children: ReactNode; client: unknown }) => {
+      reactQueryMocks.queryClientProvider(props);
+
+      return react.createElement(
+        "div",
+        { "data-testid": "query-client-provider" },
+        props.children,
+      );
+    },
   };
 });
 
@@ -83,6 +118,12 @@ function createRevalidator() {
   };
 }
 
+function createDevtools() {
+  return function Devtools() {
+    return <div>Devtools</div>;
+  };
+}
+
 function setRouterHookMocks() {
   rootMocks.useLocation.mockReturnValue(createLocation("/"));
   rootMocks.useNavigate.mockReturnValue(vi.fn());
@@ -94,8 +135,11 @@ test("renders the document shell and shared layout", {
   timeout: 10_000,
 }, async () => {
   setRouterHookMocks();
+  vi.stubEnv("DEV", true);
+  localModuleMocks.devtools.mockReturnValue(createDevtools());
 
   const { Layout } = await import("~/app/root");
+  const { queryClient } = await import("~/lib/query-client");
   const markup = renderToStaticMarkup(
     <Layout>
       <span>Child Content</span>
@@ -109,7 +153,27 @@ test("renders the document shell and shared layout", {
   expect(markup).toContain("openkitten-theme");
   expect(markup).toContain("document.documentElement.style.colorScheme");
   expect(markup).toContain("right-4 top-4 z-10");
+  expect(markup).toContain("query-client-provider");
+  expect(markup).toContain("Devtools");
   expect(markup).toContain("Scroll Restoration Placeholder");
+  expect(reactQueryMocks.queryClientProvider).toHaveBeenCalledWith(
+    expect.objectContaining({ client: queryClient }),
+  );
+});
+
+test("does not render devtools outside development", async () => {
+  setRouterHookMocks();
+  vi.stubEnv("DEV", false);
+  localModuleMocks.devtools.mockReturnValue(createDevtools());
+
+  const { Layout } = await import("~/app/root");
+  const markup = renderToStaticMarkup(
+    <Layout>
+      <span>Child Content</span>
+    </Layout>,
+  );
+
+  expect(markup).not.toContain("Devtools");
 });
 
 test("waits for jotai hydration before resolving client middleware", async () => {

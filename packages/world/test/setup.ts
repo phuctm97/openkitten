@@ -1,6 +1,5 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
-import { getDefaultStore } from "jotai";
 import { afterEach, beforeEach, vi } from "vitest";
 
 import { defaultColorScheme } from "~/lib/default-color-scheme";
@@ -44,8 +43,9 @@ beforeEach(async () => {
   stubStorageGlobals();
   stubMatchMedia(defaultColorScheme);
   localStorage.clear();
-  const { themeAtom } = await import("~/lib/theme-atom");
+  const { getDefaultStore } = await import("jotai");
   const store = getDefaultStore();
+  const { themeAtom } = await import("~/lib/theme-atom");
   store.set(themeAtom, "system");
   document.documentElement.classList.remove("light", "dark");
   document.documentElement.style.colorScheme = "";
