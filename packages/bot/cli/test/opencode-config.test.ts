@@ -169,26 +169,28 @@ test("does not overwrite existing opencode config", async () => {
   expect(config.default_agent).toBe("build");
 });
 
-test("always overwrites agent files on startup", async () => {
+test("preserves user edits to agent files on restart", async () => {
   await OpencodeConfig.create(profile);
   const buildPath = join(configDir(), "agents", "build.md");
   await writeFile(buildPath, "custom content");
   await OpencodeConfig.create(profile);
   const content = await readFile(buildPath, "utf-8");
-  expect(content).not.toBe("custom content");
-  expect(content).toContain("durable memory");
+  expect(content).toBe("custom content");
 });
 
-test("overwrites all agent files on repeated create", async () => {
+test("preserves edits across multiple agent files", async () => {
   await OpencodeConfig.create(profile);
   const buildPath = join(configDir(), "agents", "build.md");
-  await writeFile(buildPath, "custom content");
-  await OpencodeConfig.create(profile);
-  const buildContent = await readFile(buildPath, "utf-8");
-  expect(buildContent).not.toBe("custom content");
   const planPath = join(configDir(), "agents", "plan.md");
-  const planContent = await readFile(planPath, "utf-8");
-  expect(planContent).toContain("plan mode");
+  await writeFile(buildPath, "build custom content");
+  await writeFile(planPath, "plan custom content");
+  await OpencodeConfig.create(profile);
+  await expect(readFile(buildPath, "utf-8")).resolves.toBe(
+    "build custom content",
+  );
+  await expect(readFile(planPath, "utf-8")).resolves.toBe(
+    "plan custom content",
+  );
 });
 
 test("throws on single non-EEXIST error", async () => {

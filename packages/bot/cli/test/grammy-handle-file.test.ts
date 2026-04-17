@@ -2,7 +2,6 @@ import { beforeEach, expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { grammyHandleFile } from "~/lib/grammy-handle-file";
-import { grammyHandleGroupFile } from "~/lib/grammy-handle-group-file";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
@@ -10,7 +9,6 @@ import { WorkingSessions } from "~/lib/working-sessions";
 
 vi.mock("~/lib/get-session-agent");
 vi.mock("~/lib/grammy-send-session-pending");
-vi.mock("~/lib/grammy-handle-group-file");
 
 const signal = new AbortController().signal;
 
@@ -241,8 +239,6 @@ function mockScope(overrides: {
     attachmentStorage: (overrides.attachmentStorage ??
       mockAttachmentStorage()) as never,
     typingIndicators: {} as never,
-    groupMessageBuffer: undefined as never,
-    ownerId: 123 as never,
   };
 }
 
@@ -1765,62 +1761,4 @@ test("extractTelegramMime: returns undefined for unknown message type", async ()
   await grammyHandleFile(scope, ctx as never, signal);
 
   expect(attachmentStorage.write).toHaveBeenCalled();
-});
-
-test("delegates to grammyHandleGroupFile in group chat with groupMessageBuffer", async () => {
-  vi.mocked(grammyHandleGroupFile).mockResolvedValue(undefined);
-  const groupMessageBuffer = { add: vi.fn(), recent: vi.fn(() => []) };
-  const scope = {
-    ...mockScope({}),
-    groupMessageBuffer,
-  } as never;
-
-  const ctx = {
-    chat: { id: 42, type: "group" },
-    msg: { message_thread_id: undefined },
-    message: {
-      message_id: 100,
-      document: { file_id: "f1", mime_type: "application/pdf" },
-    },
-    from: { id: 1, first_name: "Alice" },
-    api: { token: "test-token" },
-    getFile: vi.fn(async () => ({
-      file_id: "f1",
-      file_path: "files/doc.pdf",
-    })),
-    update: { update_id: 1 },
-  };
-
-  await grammyHandleFile(scope, ctx as never, signal);
-
-  expect(grammyHandleGroupFile).toHaveBeenCalledWith(scope, ctx, signal);
-});
-
-test("delegates to grammyHandleGroupFile in supergroup chat", async () => {
-  vi.mocked(grammyHandleGroupFile).mockResolvedValue(undefined);
-  const groupMessageBuffer = { add: vi.fn(), recent: vi.fn(() => []) };
-  const scope = {
-    ...mockScope({}),
-    groupMessageBuffer,
-  } as never;
-
-  const ctx = {
-    chat: { id: 42, type: "supergroup" },
-    msg: { message_thread_id: undefined },
-    message: {
-      message_id: 100,
-      document: { file_id: "f1", mime_type: "application/pdf" },
-    },
-    from: { id: 1, first_name: "Alice" },
-    api: { token: "test-token" },
-    getFile: vi.fn(async () => ({
-      file_id: "f1",
-      file_path: "files/doc.pdf",
-    })),
-    update: { update_id: 1 },
-  };
-
-  await grammyHandleFile(scope, ctx as never, signal);
-
-  expect(grammyHandleGroupFile).toHaveBeenCalledWith(scope, ctx, signal);
 });

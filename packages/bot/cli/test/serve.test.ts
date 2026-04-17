@@ -6,7 +6,6 @@ import { ExistingSessions } from "~/lib/existing-sessions";
 import { GrammyEventLoop } from "~/lib/grammy-event-loop";
 import { GrammyEventStream } from "~/lib/grammy-event-stream";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
-import { GroupMessageBuffer } from "~/lib/group-message-buffer";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
 import { MediaGroupBuffer } from "~/lib/media-group-buffer";
@@ -921,40 +920,6 @@ test("handles readdir failure gracefully with empty commands", async () => {
       c.command !== "agent",
   );
   expect(custom).toEqual([]);
-  shutdown.triggerLatest();
-  await run;
-});
-
-test("creates GroupMessageBuffer when groupChat is enabled", async () => {
-  vi.spyOn(TelegramConfig, "create").mockResolvedValue({
-    botToken: "test-token",
-    userId: 123,
-    groupChat: true,
-  } as never);
-  mockOpencodeConfig();
-  mockCreateDatabase();
-  mockOpencodeServer();
-  mockMcpServer();
-  mockExistingSessions();
-  mockWorkingSessions();
-  mockTypingIndicators();
-  mockPendingPrompts();
-  mockProcessingMessages();
-  mockOpencodeEventStream();
-  mockGrammyEventLoop();
-  mockGrammyEventStream();
-  const shutdown = mockShutdown();
-
-  const run = runCommand(serve, { rawArgs: [] });
-  await vi.waitFor(() =>
-    expect(ProcessingMessages.create).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.anything(),
-      expect.any(GroupMessageBuffer),
-    ),
-  );
   shutdown.triggerLatest();
   await run;
 });

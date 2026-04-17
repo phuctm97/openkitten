@@ -2,7 +2,6 @@ import type { Context } from "grammy";
 import invariant from "tiny-invariant";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { fileParts } from "~/lib/grammy-file-parts";
-import { grammyHandleGroupFile } from "~/lib/grammy-handle-group-file";
 import { grammySendSessionPending } from "~/lib/grammy-send-session-pending";
 import { PendingPrompts } from "~/lib/pending-prompts";
 import type { Scope } from "~/lib/scope";
@@ -11,17 +10,10 @@ import { WorkingSessions } from "~/lib/working-sessions";
 export async function grammyHandleFile(
   scope: Scope,
   ctx: Context,
-  signal: AbortSignal,
+  _signal: AbortSignal,
 ): Promise<void> {
   invariant(ctx.chat, "Expected file message to have a chat");
   invariant(ctx.message, "Expected file message to have a message");
-
-  if (
-    scope.groupMessageBuffer &&
-    (ctx.chat.type === "group" || ctx.chat.type === "supergroup")
-  ) {
-    return grammyHandleGroupFile(scope, ctx, signal);
-  }
 
   const {
     bot,

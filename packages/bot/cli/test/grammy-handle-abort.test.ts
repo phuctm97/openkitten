@@ -1,7 +1,6 @@
 import { expect, test, vi } from "vitest";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { grammyHandleAbort } from "~/lib/grammy-handle-abort";
-import * as ownerOnly from "~/lib/grammy-send-owner-only";
 import type { Scope } from "~/lib/scope";
 
 const signal = new AbortController().signal;
@@ -66,8 +65,6 @@ function mockScope(overrides: {
     mediaGroupBuffer: {} as never,
     attachmentStorage: {} as never,
     typingIndicators: {} as never,
-    groupMessageBuffer: undefined as never,
-    ownerId: 123 as never,
   };
 }
 
@@ -102,25 +99,4 @@ test("passes threadId when present", async () => {
     { chatId: 42, threadId: 7 },
     { createIfNotFound: true },
   );
-});
-
-test("rejects non-owner in group chat", async () => {
-  const sendSpy = vi
-    .spyOn(ownerOnly, "grammySendOwnerOnly")
-    .mockResolvedValue();
-  const existingSessions = mockExistingSessions();
-  const opencodeClient = mockOpencodeClient();
-  const scope = mockScope({ existingSessions, opencodeClient });
-  const ctx = {
-    chat: { id: 42, type: "supergroup" },
-    from: { id: 999 },
-    msg: { message_thread_id: undefined, message_id: 5 },
-    update: { update_id: 1 },
-    react: vi.fn(),
-  } as never;
-
-  await grammyHandleAbort(scope, ctx, signal);
-
-  expect(sendSpy).toHaveBeenCalledOnce();
-  expect(opencodeClient.session.abort).not.toHaveBeenCalled();
 });
