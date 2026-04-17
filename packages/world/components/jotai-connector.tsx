@@ -50,10 +50,9 @@ export function JotaiConnector() {
   useLayoutEffect(() => {
     setNavigationData(navigationData);
     setNavigationCount((count) => count + 1);
-  }, [navigationData, setNavigationCount, setNavigationData]);
+  }, [navigationData, setNavigationData, setNavigationCount]);
 
   const setHydration = useSetAtom(hydrationAtom);
-
   useTimeout(setHydration, 500, { autoInvoke: true });
 
   return null;
