@@ -1,5 +1,5 @@
 {
-  "name": "@openkitten/bot-plugin",
+  "name": "@openkitten/plugin",
   "version": "0.0.0",
   "description": "Simplified helpers for accessing the OpenKitten bot from OpenCode plugins.",
   "type": "module",
@@ -18,7 +18,7 @@
     "test": "bun --bun vitest run"
   },
   "dependencies": {
-    "@openkitten/bot-contract": "workspace:*",
+    "@openkitten/contract": "workspace:*",
     "@orpc/client": "^1.13.14",
     "@orpc/contract": "^1.13.14",
     "zod": "^4.3.6"

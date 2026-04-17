@@ -4,7 +4,7 @@ import { join } from "node:path";
 import {
   createOpenKittenBotClient,
   readBotAPIConfig,
-} from "@openkitten/bot-plugin";
+} from "@openkitten/plugin";
 import { afterEach, beforeEach, expect, test } from "vitest";
 import { BotAPIServer } from "~/lib/bot-api-server";
 import type { Profile } from "~/lib/profile";

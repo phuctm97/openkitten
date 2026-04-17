@@ -1,4 +1,4 @@
-import type { contract } from "@openkitten/bot-contract";
+import type { contract } from "@openkitten/contract";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import type { ContractRouterClient } from "@orpc/contract";

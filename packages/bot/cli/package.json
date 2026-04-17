@@ -1,5 +1,5 @@
 {
-  "name": "@openkitten/bot-cli",
+  "name": "@openkitten/cli",
   "version": "0.0.0",
   "description": "Telegram-first AI agent with 75+ AI providers, extensible plugins, multiple (sub)agents, composable skills, and controlled permissions.",
   "private": true,
@@ -14,8 +14,8 @@
     "@grammyjs/auto-retry": "^2.0.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "^1.4.7",
-    "@openkitten/bot-contract": "workspace:*",
-    "@openkitten/bot-plugin": "workspace:*",
+    "@openkitten/contract": "workspace:*",
+    "@openkitten/plugin": "workspace:*",
     "@orpc/server": "^1.13.14",
     "boxen": "^8.0.1",
     "bunqueue": "^2.7.5",

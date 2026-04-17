@@ -1,5 +1,5 @@
 {
-  "name": "@openkitten/bot-contract",
+  "name": "@openkitten/contract",
   "version": "0.0.0",
   "description": "oRPC contract for the OpenKitten bot API.",
   "type": "module",
