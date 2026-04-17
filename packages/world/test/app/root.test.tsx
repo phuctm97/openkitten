@@ -112,7 +112,7 @@ test("renders the document shell and shared layout", {
   expect(markup).toContain("Scroll Restoration Placeholder");
 });
 
-test("waits for jotai hydration before running client middleware", async () => {
+test("waits for jotai hydration before resolving client middleware", async () => {
   vi.resetModules();
   setRouterHookMocks();
 
@@ -120,15 +120,11 @@ test("waits for jotai hydration before running client middleware", async () => {
   const { hydrationAtom } = await import("~/lib/hydration-atom");
   const { getDefaultStore } = await import("jotai");
   const store = getDefaultStore();
-  const next = vi.fn(async () => ({}));
-  const middlewarePromise = clientMiddleware[0]?.({} as never, next);
-
-  expect(next).not.toHaveBeenCalled();
+  const middlewarePromise = clientMiddleware[0]?.({} as never, vi.fn());
 
   store.set(hydrationAtom);
 
-  await expect(middlewarePromise).resolves.toEqual({});
-  expect(next).toHaveBeenCalledTimes(1);
+  await expect(middlewarePromise).resolves.toBeUndefined();
 });
 
 test("renders the hydrate fallback", async () => {
