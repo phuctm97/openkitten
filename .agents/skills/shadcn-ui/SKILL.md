@@ -51,7 +51,7 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
    - Keep generated code as close to upstream as possible
    - Examples of acceptable adaptations:
      - use project-native types such as `Theme` from `~/lib/theme`
-     - replace `next-themes`-based theme helpers with the world app's `useTheme` hook and theme connector/initializer flow
+     - replace `next-themes`-based theme helpers with the world app's existing theme primitives
      - adjust for strict TypeScript settings such as `exactOptionalPropertyTypes`
 
 ## Applying Presets
