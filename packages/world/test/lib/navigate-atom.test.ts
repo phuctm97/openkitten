@@ -28,7 +28,7 @@ test("skips navigation when the navigation count has changed", async () => {
   store.set(navigatorAtom, { navigate });
   store.set(navigationCountAtom, 2);
 
-  await store.set(navigateAtom, "/game", { navigationCount: 1 });
+  await store.set(navigateAtom, "/game", { count: 1 });
 
   expect(navigate).not.toHaveBeenCalled();
 });

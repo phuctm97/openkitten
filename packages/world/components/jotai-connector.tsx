@@ -1,3 +1,4 @@
+import { useTimeout } from "@mantine/hooks";
 import { useSetAtom } from "jotai";
 import { useHydrateAtoms } from "jotai/utils";
 import { useLayoutEffect } from "react";
@@ -33,7 +34,6 @@ export function JotaiConnector() {
   const setLocation = useSetAtom(locationAtom);
   const setNavigationData = useSetAtom(navigationDataAtom);
   const setNavigationCount = useSetAtom(navigationCountAtom);
-  const setHydration = useSetAtom(hydrationAtom);
 
   useLayoutEffect(() => {
     setNavigator({ navigate });
@@ -52,9 +52,9 @@ export function JotaiConnector() {
     setNavigationCount((count) => count + 1);
   }, [navigationData, setNavigationCount, setNavigationData]);
 
-  useLayoutEffect(() => {
-    setHydration();
-  }, [setHydration]);
+  const setHydration = useSetAtom(hydrationAtom);
+
+  useTimeout(setHydration, 1, { autoInvoke: true });
 
   return null;
 }

@@ -15,7 +15,7 @@ interface WaitOptions {
 }
 
 interface NavigationOptions extends NavigateOptions {
-  navigationCount?: number;
+  count?: number;
   wait?: boolean | number | WaitOptions;
 }
 
@@ -46,12 +46,9 @@ function getWaitOptions(wait: NavigationOptions["wait"]) {
 
 export const navigateAtom = atomWithWriteOnly(
   async (get, _, to: To, options: NavigationOptions = {}) => {
-    const { navigationCount, wait, ...navigateOptions } = options;
+    const { count, wait, ...navigateOptions } = options;
 
-    if (
-      typeof navigationCount === "number" &&
-      navigationCount !== get(navigationCountAtom)
-    ) {
+    if (typeof count === "number" && count !== get(navigationCountAtom)) {
       return;
     }
 
