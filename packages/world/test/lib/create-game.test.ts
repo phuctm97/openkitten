@@ -30,7 +30,7 @@ test("creates a fullscreen Phaser game bound to the provided parent", async () =
   expect(phaserMocks.game).toHaveBeenCalledTimes(1);
   expect(phaserMocks.game).toHaveBeenCalledWith({
     parent,
-    backgroundColor: "#0c0a09",
+    backgroundColor: "#09090b",
     scale: { mode: "RESIZE" },
     scene: [HouseScene],
   });
@@ -49,7 +49,7 @@ test("uses the computed document color scheme for the initial background color",
 
   expect(phaserMocks.game).toHaveBeenCalledWith({
     parent,
-    backgroundColor: "#0c0a09",
+    backgroundColor: "#09090b",
     scale: { mode: "RESIZE" },
     scene: [HouseScene],
   });
