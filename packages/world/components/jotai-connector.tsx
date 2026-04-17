@@ -54,7 +54,7 @@ export function JotaiConnector() {
 
   const setHydration = useSetAtom(hydrationAtom);
 
-  useTimeout(setHydration, 1, { autoInvoke: true });
+  useTimeout(setHydration, 500, { autoInvoke: true });
 
   return null;
 }

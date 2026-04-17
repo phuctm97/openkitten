@@ -75,6 +75,7 @@ function createRevalidator(state: "idle" | "loading" = "idle") {
 
 afterEach(() => {
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 test("hydrates and keeps the router atoms in sync", async () => {
