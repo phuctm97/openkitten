@@ -4,17 +4,21 @@ import type { ComponentPropsWithoutRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { expect, test, vi } from "vitest";
 
-import {
-  ThemeSwitcher,
-  type ThemeSwitcherProps,
-} from "~/components/kibo-ui/theme-switcher";
+import { ThemeAnchor } from "~/components/theme-anchor";
 
-type ThemeChangeHandler = NonNullable<ThemeSwitcherProps["onChange"]>;
+const { setThemeSpy, useThemeSpy } = vi.hoisted(() => ({
+  setThemeSpy: vi.fn(),
+  useThemeSpy: vi.fn(),
+}));
 
 type MockMotionDivProps = ComponentPropsWithoutRef<"div"> & {
   layoutId?: string;
   transition?: object;
 };
+
+vi.mock("~/hooks/use-theme", () => ({
+  useTheme: () => useThemeSpy(),
+}));
 
 vi.mock("motion/react", () => ({
   motion: {
@@ -27,11 +31,16 @@ vi.mock("motion/react", () => ({
 }));
 
 test("renders a same-size skeleton during server rendering before mount", () => {
-  const markup = renderToStaticMarkup(<ThemeSwitcher />);
+  useThemeSpy.mockReturnValue({
+    setTheme: setThemeSpy,
+    theme: "system",
+  });
+
+  const markup = renderToStaticMarkup(<ThemeAnchor />);
 
   expect(markup).toContain('aria-hidden="true"');
   expect(markup).toContain(
-    'class="relative isolate flex h-8 rounded-full bg-background p-1 ring-1 ring-border"',
+    'class="isolate flex h-8 rounded-full bg-background p-1 ring-1 ring-border fixed right-4 top-4 z-10"',
   );
   expect(markup.match(/data-slot="skeleton"/g)).toHaveLength(3);
   expect(
@@ -41,7 +50,12 @@ test("renders a same-size skeleton during server rendering before mount", () => 
 });
 
 test("renders the three theme options after mount", () => {
-  render(<ThemeSwitcher />);
+  useThemeSpy.mockReturnValue({
+    setTheme: setThemeSpy,
+    theme: "system",
+  });
+
+  render(<ThemeAnchor />);
 
   expect(
     screen
@@ -50,33 +64,32 @@ test("renders the three theme options after mount", () => {
   ).toEqual(["Light theme", "Dark theme", "System theme"]);
 });
 
-test("calls onChange in controlled mode", async () => {
+test("calls the world theme setter with the clicked theme", async () => {
   const user = userEvent.setup();
-  const handleChange = vi.fn<ThemeChangeHandler>();
 
-  render(<ThemeSwitcher onChange={handleChange} value="system" />);
+  useThemeSpy.mockReturnValue({
+    setTheme: setThemeSpy,
+    theme: "system",
+  });
+
+  render(<ThemeAnchor />);
 
   await user.click(screen.getByRole("button", { name: "Dark theme" }));
 
-  expect(handleChange).toHaveBeenCalledWith("dark");
+  expect(setThemeSpy).toHaveBeenCalledWith("dark");
 });
 
-test("updates the active theme in uncontrolled mode", async () => {
-  const user = userEvent.setup();
+test("renders the active theme returned by the world theme hook", () => {
+  useThemeSpy.mockReturnValue({
+    setTheme: setThemeSpy,
+    theme: "light",
+  });
 
-  render(<ThemeSwitcher defaultValue="light" />);
+  render(<ThemeAnchor />);
 
   expect(
     screen
       .getByRole("button", { name: "Light theme" })
-      .querySelector(".text-foreground"),
-  ).not.toBeNull();
-
-  await user.click(screen.getByRole("button", { name: "Dark theme" }));
-
-  expect(
-    screen
-      .getByRole("button", { name: "Dark theme" })
       .querySelector(".text-foreground"),
   ).not.toBeNull();
 });

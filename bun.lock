@@ -104,6 +104,7 @@
       "name": "@openkitten/website",
       "version": "0.0.0",
       "dependencies": {
+        "@mantine/hooks": "^9.0.2",
         "class-variance-authority": "^0.7.1",
         "clsx": "^2.1.1",
         "fumadocs-core": "^16.7.16",
