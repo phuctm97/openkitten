@@ -1,3 +1,4 @@
+import { getDefaultStore } from "jotai";
 import type { PropsWithChildren } from "react";
 import {
   isRouteErrorResponse,
@@ -8,11 +9,23 @@ import {
   ScrollRestoration,
 } from "react-router";
 import type { Route } from "~/.react-router/types/app/+types/root";
+import { JotaiConnector } from "~/components/jotai-connector";
 import { ThemeAnchor } from "~/components/theme-anchor";
 import { ThemeConnector } from "~/components/theme-connector";
 import { ThemeInitializer } from "~/components/theme-initializer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { hydrationAtom } from "~/lib/hydration-atom";
+
+export const clientMiddleware: Route.ClientMiddlewareFunction[] = [
+  async (_, next) => {
+    const store = getDefaultStore();
+
+    await store.get(hydrationAtom);
+
+    return next();
+  },
+];
 
 export function Layout({ children }: PropsWithChildren) {
   return (
@@ -26,6 +39,7 @@ export function Layout({ children }: PropsWithChildren) {
         <Links />
       </head>
       <body className="m-0 min-h-full antialiased">
+        <JotaiConnector />
         <ThemeConnector />
         <ThemeAnchor />
         {children}
