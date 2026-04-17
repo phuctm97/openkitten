@@ -1,9 +1,6 @@
 import { styleText } from "node:util";
 import boxen from "boxen";
 import { defineCommand } from "citty";
-import { down } from "~/lib/down";
-import { serve } from "~/lib/serve";
-import { up } from "~/lib/up";
 import { description, version } from "~/package.json" with { type: "json" };
 
 export const cli = defineCommand({
@@ -18,8 +15,8 @@ export const cli = defineCommand({
     );
   },
   subCommands: {
-    serve,
-    up,
-    down,
+    serve: () => import("~/lib/serve").then((m) => m.serve),
+    up: () => import("~/lib/up").then((m) => m.up),
+    down: () => import("~/lib/down").then((m) => m.down),
   },
 });
