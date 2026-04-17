@@ -1,5 +1,5 @@
-import { render, toPlainText } from "@react-email/components";
 import type { ReactNode } from "react";
+import { render, toPlainText } from "react-email";
 import { type SendRawEmailOptions, sendRawEmail } from "~/lib/send-raw-email";
 
 export type SendReactEmailOptions = Omit<
