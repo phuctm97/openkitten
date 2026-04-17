@@ -1,0 +1,115 @@
+---
+title: Skills
+description: Built-in skills and authoring new capabilities for the bot.
+---
+
+A **skill** is a markdown file that teaches an agent *when* and *how* to perform a specialized task. Skills are discovered by description and only loaded into the agent's context when the current request matches.
+
+OpenKitten ships four built-in skills and integrates with the [skills.sh](https://skills.sh) ecosystem via `npx skills`. The **`skill-creator`** skill lets the agent author or install new skills from inside Telegram and auto-reload the bot to activate them — you never have to touch the filesystem.
+
+## Ask the bot to learn something new
+
+From any chat, just describe the capability you want:
+
+```
+Teach yourself how to read invoices from my Gmail inbox.
+```
+
+The `skill-creator` skill will:
+
+1. Decide whether to scaffold a brand-new skill (`npx skills init`) or install an existing one from the ecosystem (`npx skills add <source> -a opencode --copy -y`).
+2. Write or copy the `SKILL.md` (and helper files) into `$OPENCODE_CONFIG_DIR/skills/` or `$OPENCODE_CONFIG_DIR/.agents/skills/`.
+3. Call the **`reload_extensions`** MCP tool. The bot sends a `⏳ Restarting to apply changes…` message, cycles its OpenCode server, and sends back a `✅ The "<name>" skill is now active.` when ready.
+
+All of this happens without leaving Telegram. Because skills are just markdown files inside your profile, you can also inspect or version-control them yourself.
+
+## Built-in skills
+
+Installed at `~/.openkitten/profiles/<profile>/system/config/opencode/skills/`:
+
+<Cards>
+  <Card title="custom-commands" description="Create, delete, and list custom Telegram /slash commands. Calls reload_commands on save." />
+  <Card title="schedules" description="Author, test, and debug scheduled tasks against the OpenKitten queue (session or background)." />
+  <Card title="skill-creator" description="Create new skills, install from skills.sh, list, update, and remove." />
+  <Card title="telegram-api" description="Administer the bot itself — change name/description/avatar, delete messages, call any Bot API method." />
+</Cards>
+
+### `custom-commands`
+
+Activated when the user asks to add, remove, or list Telegram slash commands. It writes `.md` files directly to `$OPENCODE_CONFIG_DIR/commands/` and calls the `reload_commands` MCP tool so changes take effect immediately — no restart required. See [Custom commands](/docs/bot/custom-commands).
+
+### `schedules`
+
+Covers the full lifecycle of scheduled tasks: picking `session` vs `background`, computing UTC cron expressions, creating/updating/deleting, manual triggers, run-history inspection, and debugging. All operations go through the `queue_schedule_*` and `queue_*` MCP tools. See [Schedules](/docs/bot/schedules).
+
+### `skill-creator`
+
+Knows how to:
+
+- Search the ecosystem: `npx skills find <query>`.
+- Install from GitHub or URL: `npx skills add <source> -a opencode --copy -y`.
+- List installed skills: `npx skills list`.
+- Update all skills: `npx skills update -a opencode -y`.
+- Remove skills (and manually delete copied files the CLI leaves behind).
+- Create a brand-new skill: `npx skills init <name>`.
+
+All operations are scoped to `$OPENCODE_CONFIG_DIR` so they never leak into the parent filesystem.
+
+### `telegram-api`
+
+Activated for bot administration tasks like changing the bot's display name, description, avatar, deleting messages, or calling any method on the Bot API. Ships with two helper scripts (`get-token.sh`, `get-token.ts`) that read the bot token without echoing it, and points at `https://core.telegram.org/bots/api` for method reference.
+
+## Install skills from skills.sh
+
+Ask the bot *"find me a skill for X"* or *"install the agent-skills from vercel-labs"* and the `skill-creator` skill will run the right `npx skills` command for you, then call `reload_extensions`. The equivalent shell commands:
+
+```bash
+# Install a whole repo of skills
+cd $OPENCODE_CONFIG_DIR && npx skills add vercel-labs/agent-skills -a opencode --copy -y
+
+# Or a specific skill from a repo
+cd $OPENCODE_CONFIG_DIR && npx skills add vercel-labs/agent-skills -s <name> -a opencode --copy -y
+```
+
+The `-a opencode` flag is important — without it, the CLI installs to every agent framework on the machine (Claude Code, Cursor, Copilot, …).
+
+Installed skills land at `$OPENCODE_CONFIG_DIR/.agents/skills/<skill>/`.
+
+## Author a custom skill manually
+
+Most of the time the bot can author the skill for you — that's what `skill-creator` is for. If you'd rather write one directly, create `<config>/skills/<skill-name>/SKILL.md`:
+
+```markdown
+---
+name: <skill-name>
+description: Clear trigger condition — when should this skill activate?
+---
+
+# <Skill Name>
+
+Step-by-step procedures, required file paths, tool names, constraints, and examples.
+```
+
+Frontmatter:
+
+- `name` (required) — must match the directory name.
+- `description` (required) — drives automatic activation. Write it as tasks/topics the skill handles. Vague descriptions won't match user intent.
+
+Helper files in the same directory (`helper.sh`, `template.md`, …) can be referenced from `SKILL.md` with relative paths.
+
+## Activate new skills
+
+New skills **aren't** available until OpenCode restarts. The `skill-creator` skill calls the **`reload_extensions`** MCP tool for you automatically after creating or installing a skill — the bot sends a short "restarting" message, cycles the OpenCode server, and posts a confirmation. If you author a skill by hand, call `reload_extensions` yourself (or restart the bot). See [MCP tools](/docs/bot/mcp-tools#reload_extensions).
+
+> Custom `/slash` **commands** live-reload without a restart via [`reload_commands`](/docs/bot/mcp-tools#reload_commands). Only new **skills** need the full `reload_extensions` cycle.
+
+## Reserved skill names
+
+Do not overwrite:
+
+- `custom-commands`
+- `schedules`
+- `skill-creator`
+- `telegram-api`
+
+These are rewritten on every start from the bundled templates.

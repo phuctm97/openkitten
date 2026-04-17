@@ -1,6 +1,54 @@
 ---
 title: Introduction
-description: Welcome to OpenKitten Bot.
+description: Telegram-first AI agent powered by OpenCode.
 ---
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere, nibh at pellentesque luctus, ligula justo pharetra lacus, vitae aliquet orci lorem non massa.
+OpenKitten Bot is a self-hosted AI assistant that lives inside your Telegram account. You chat with it like any other contact — it streams replies, handles files, runs tools, and remembers each conversation per chat or forum topic.
+
+Under the hood it wires [grammY](https://grammy.dev) (Telegram) to [OpenCode](https://opencode.ai) (agent runtime), so you inherit OpenCode's full ecosystem of providers, agents, commands, skills, and MCP servers — all driven from a phone-friendly chat UI.
+
+## What you get
+
+<Cards>
+  <Card title="75+ AI providers" description="ChatGPT, Claude, Anthropic, OpenAI, OpenRouter, and anything else OpenCode supports." />
+  <Card title="Multiple agents" description="Ship with 'assist', 'build', and 'plan' agents. Switch per-session with /agent." />
+  <Card title="Self-extending skills" description="Tell the bot to learn something — the skill-creator skill authors a new SKILL.md and reloads it live." />
+  <Card title="Self-authored /commands" description="Ask for a new /slash shortcut — the custom-commands skill writes the markdown and reloads BotFather on the fly." />
+  <Card title="Scheduled tasks" description="Cron jobs that respond in-chat (session) or monitor silently (background)." />
+  <Card title="Files & media" description="Photos, documents, video, audio, voice, animations, stickers — inbound and outbound." />
+</Cards>
+
+## The bot extends itself
+
+Two built-in skills turn chat into a live authoring surface:
+
+- **`custom-commands`** — say *"add a `/weather` command that takes a city and replies with the forecast"*. The skill writes `~/.openkitten/profiles/<profile>/.opencode/commands/weather.md` for you, then calls the `reload_commands` MCP tool. Telegram's command menu updates immediately; **no restart required**.
+- **`skill-creator`** — say *"teach yourself how to work with our expense tracker"*. The skill scaffolds a new `SKILL.md` (or installs one from [skills.sh](https://skills.sh) via `npx skills add …`), then calls `reload_extensions`. OpenKitten sends a ⏳ notification, restarts its OpenCode server to pick up the new skill, and sends back a ✅ confirmation when the skill is active.
+
+Both flows are driven entirely from inside Telegram — no shell, no editor, no SSH.
+
+## How it runs
+
+`bun . serve` boots a single process that owns four cooperating pieces:
+
+1. A grammY bot connected to the Telegram long-polling API.
+2. An embedded OpenCode server running your configured providers and agents.
+3. A local MCP server that exposes OpenKitten-specific tools (file sending, schedules, reloads) back into OpenCode.
+4. A SQLite database and a Bunqueue-backed scheduler for conversation state and cron jobs.
+
+Each Telegram chat — or each forum topic in a group — maps to exactly one OpenCode session. Typing indicators, message-edit streaming, and per-chat lock/pending semantics are all handled transparently.
+
+## Private by default
+
+Only the configured Telegram `userId` can talk to the bot. Every inbound update is filtered before it reaches any handler. The bot token and user ID are stored with file mode `0600` under your profile directory, never committed to the repo.
+
+## Where to go next
+
+- [Installation](/docs/bot/installation) — install as a system service on macOS, Linux, or Windows.
+- [Commands](/docs/bot/commands) — the built-in `/start`, `/abort`, `/compact`, `/agent` set plus CLI commands.
+- [Configuration](/docs/bot/configuration) — profiles, Telegram, OpenCode, environment variables.
+- [Agents](/docs/bot/agents) — what `assist`, `build`, and `plan` do, and how to add your own.
+- [Skills](/docs/bot/skills) — built-in skills and authoring new ones.
+- [Custom commands](/docs/bot/custom-commands) — your own `/slash` commands as markdown files.
+- [Schedules](/docs/bot/schedules) — session vs. background cron jobs.
+- [MCP tools](/docs/bot/mcp-tools) — the tools the agent can call on the OpenKitten MCP server.
