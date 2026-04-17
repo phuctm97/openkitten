@@ -10,39 +10,30 @@ import {
 
 import { hydrationAtom } from "~/lib/hydration-atom";
 import { locationAtom } from "~/lib/location-atom";
-import { navigationAtom } from "~/lib/navigation-atom";
 import { navigationCountAtom } from "~/lib/navigation-count-atom";
+import { navigationDataAtom } from "~/lib/navigation-data-atom";
 import { navigatorAtom } from "~/lib/navigator-atom";
 import { revalidatorAtom } from "~/lib/revalidator-atom";
 
 export function JotaiConnector() {
-  const location = useLocation();
   const navigate = useNavigate();
-  const navigation = useNavigation();
   const revalidator = useRevalidator();
+  const location = useLocation();
+  const navigationData = useNavigation();
 
   useHydrateAtoms([
-    [locationAtom, location],
-    [navigationAtom, navigation],
     [navigatorAtom, { navigate }],
     [revalidatorAtom, revalidator],
+    [locationAtom, location],
+    [navigationDataAtom, navigationData],
   ]);
 
-  const setLocation = useSetAtom(locationAtom);
-  const setNavigation = useSetAtom(navigationAtom);
-  const setNavigationCount = useSetAtom(navigationCountAtom);
   const setNavigator = useSetAtom(navigatorAtom);
   const setRevalidator = useSetAtom(revalidatorAtom);
+  const setLocation = useSetAtom(locationAtom);
+  const setNavigationData = useSetAtom(navigationDataAtom);
+  const setNavigationCount = useSetAtom(navigationCountAtom);
   const setHydration = useSetAtom(hydrationAtom);
-
-  useLayoutEffect(() => {
-    setNavigation(navigation);
-    setNavigationCount((count) => count + 1);
-  }, [navigation, setNavigation, setNavigationCount]);
-
-  useLayoutEffect(() => {
-    setLocation(location);
-  }, [location, setLocation]);
 
   useLayoutEffect(() => {
     setNavigator({ navigate });
@@ -51,6 +42,15 @@ export function JotaiConnector() {
   useLayoutEffect(() => {
     setRevalidator(revalidator);
   }, [revalidator, setRevalidator]);
+
+  useLayoutEffect(() => {
+    setLocation(location);
+  }, [location, setLocation]);
+
+  useLayoutEffect(() => {
+    setNavigationData(navigationData);
+    setNavigationCount((count) => count + 1);
+  }, [navigationData, setNavigationCount, setNavigationData]);
 
   useLayoutEffect(() => {
     setHydration();

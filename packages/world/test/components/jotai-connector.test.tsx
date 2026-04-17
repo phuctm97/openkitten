@@ -5,8 +5,8 @@ import { afterEach, expect, test, vi } from "vitest";
 import { JotaiConnector } from "~/components/jotai-connector";
 import { hydrationAtom } from "~/lib/hydration-atom";
 import { locationAtom } from "~/lib/location-atom";
-import { navigationAtom } from "~/lib/navigation-atom";
 import { navigationCountAtom } from "~/lib/navigation-count-atom";
+import { navigationDataAtom } from "~/lib/navigation-data-atom";
 import { navigatorAtom } from "~/lib/navigator-atom";
 import { revalidatorAtom } from "~/lib/revalidator-atom";
 
@@ -97,7 +97,7 @@ test("hydrates and keeps the router atoms in sync", async () => {
 
   await expect(store.get(hydrationAtom)).resolves.toBeUndefined();
   expect(store.get(locationAtom)).toEqual(firstLocation);
-  expect(store.get(navigationAtom)).toEqual(firstNavigation);
+  expect(store.get(navigationDataAtom)).toEqual(firstNavigation);
   expect(store.get(navigationCountAtom)).toBe(1);
   expect(store.get(navigatorAtom)).toEqual({ navigate: firstNavigate });
   expect(store.get(revalidatorAtom)).toEqual(firstRevalidator);
@@ -120,7 +120,7 @@ test("hydrates and keeps the router atoms in sync", async () => {
 
   await waitFor(() => {
     expect(store.get(locationAtom)).toEqual(secondLocation);
-    expect(store.get(navigationAtom)).toEqual(secondNavigation);
+    expect(store.get(navigationDataAtom)).toEqual(secondNavigation);
     expect(store.get(navigatorAtom)).toEqual({ navigate: secondNavigate });
     expect(store.get(revalidatorAtom)).toEqual(secondRevalidator);
   });
