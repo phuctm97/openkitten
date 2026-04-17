@@ -31,7 +31,7 @@ const themes = [
 }>;
 
 const containerClassName =
-  "isolate flex h-8 rounded-full bg-background p-1 ring-1 ring-border fixed right-4 top-4 z-10";
+  "isolate fixed right-4 top-4 z-10 flex h-8 rounded-full bg-background p-1 shadow-sm shadow-primary/5 ring-1 ring-border";
 const itemClassName = "relative h-6 w-6 rounded-full";
 
 export function ThemeAnchor() {
