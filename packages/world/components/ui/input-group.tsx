@@ -18,6 +18,12 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
   );
 }
 
+function focusInputGroupControl(container: HTMLDivElement) {
+  container.parentElement
+    ?.querySelector<HTMLInputElement | HTMLTextAreaElement>("input, textarea")
+    ?.focus();
+}
+
 const inputGroupAddonVariants = cva(
   "flex h-auto cursor-text items-center justify-center gap-2 py-1.5 text-sm font-medium text-muted-foreground select-none group-data-[disabled=true]/input-group:opacity-50 [&>kbd]:rounded-[calc(var(--radius)-5px)] [&>svg:not([class*='size-'])]:size-4",
   {
@@ -38,12 +44,6 @@ const inputGroupAddonVariants = cva(
     },
   },
 );
-
-function focusInputGroupControl(container: HTMLDivElement) {
-  container.parentElement
-    ?.querySelector<HTMLInputElement | HTMLTextAreaElement>("input, textarea")
-    ?.focus();
-}
 
 function InputGroupAddon({
   className,

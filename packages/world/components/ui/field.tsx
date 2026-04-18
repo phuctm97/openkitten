@@ -186,22 +186,30 @@ function FieldError({
       return null;
     }
 
-    const uniqueMessages = [
-      ...new Set(
-        errors.flatMap((error) =>
-          error?.message === undefined ? [] : [error.message],
-        ),
-      ),
-    ];
+    const uniqueErrors = errors.reduce<Array<{ message?: string }>>(
+      (result, error) => {
+        if (!error?.message) {
+          return result;
+        }
 
-    if (uniqueMessages.length === 1) {
-      return uniqueMessages[0];
+        if (result.some((item) => item.message === error.message)) {
+          return result;
+        }
+
+        result.push(error);
+        return result;
+      },
+      [],
+    );
+
+    if (uniqueErrors.length === 1) {
+      return uniqueErrors[0]?.message;
     }
 
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
-        {uniqueMessages.map((message) => (
-          <li key={message}>{message}</li>
+        {uniqueErrors.map((error) => (
+          <li key={error.message}>{error.message}</li>
         ))}
       </ul>
     );
