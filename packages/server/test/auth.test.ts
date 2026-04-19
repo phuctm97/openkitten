@@ -79,7 +79,10 @@ it("uses the database and fallback auth URLs", {
 
   expect(auth.options.appName).toBe("OpenKitten");
   expect(auth.options.baseURL).toBe(serverURL);
-  expect(auth.options.basePath).toBe("/v1/auth");
+  expect(auth.options.basePath).toBe("/auth");
+  expect(auth.options.advanced).toStrictEqual({
+    cookiePrefix: "openkitten_auth",
+  });
   expect(auth.options.trustedOrigins).toStrictEqual([
     serverURL,
     worldURL,
@@ -147,12 +150,12 @@ it("uses the runtime database and sends auth emails", async () => {
 
   await auth.options.emailVerification.sendVerificationEmail?.({
     user: authUser,
-    url: `${serverURL}/v1/auth/verify`,
+    url: `${serverURL}/auth/verify`,
     token: "verify-token",
   });
   await auth.options.emailAndPassword.sendResetPassword?.({
     user: authUser,
-    url: `${serverURL}/v1/auth/reset-password`,
+    url: `${serverURL}/auth/reset-password`,
     token: "reset-token",
   });
 
@@ -161,7 +164,7 @@ it("uses the runtime database and sends auth emails", async () => {
     subject: "Verify your email - OpenKitten",
     element: expect.objectContaining({
       props: {
-        url: `${serverURL}/v1/auth/verify`,
+        url: `${serverURL}/auth/verify`,
       },
     }),
   });
@@ -170,7 +173,7 @@ it("uses the runtime database and sends auth emails", async () => {
     subject: "Reset your password - OpenKitten",
     element: expect.objectContaining({
       props: {
-        url: `${serverURL}/v1/auth/reset-password`,
+        url: `${serverURL}/auth/reset-password`,
       },
     }),
   });

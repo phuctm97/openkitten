@@ -25,6 +25,6 @@ it("creates a Better Auth React client for the local auth endpoint", async () =>
   expect(authClientMocks.createAuthClient).toHaveBeenCalledTimes(1);
   expect(authClientMocks.createAuthClient).toHaveBeenCalledWith({
     baseURL: "http://localhost:41237",
-    basePath: "/v1/auth",
+    basePath: "/auth",
   });
 });
