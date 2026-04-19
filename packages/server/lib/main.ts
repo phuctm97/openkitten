@@ -18,7 +18,7 @@ hono.use(
   }),
 );
 
-hono.get("/v1/health", async (context) => {
+hono.get("/health", async (context) => {
   await pgDatabase.execute(sql`select 1`);
   return context.text("OK");
 });

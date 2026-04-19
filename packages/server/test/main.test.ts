@@ -15,7 +15,7 @@ vi.mock("~/lib/pg-database", () => ({ pgDatabase: { execute } }));
 vi.mock("~/lib/auth", () => ({
   auth: {
     options: {
-      basePath: "/v1/auth",
+      basePath: "/auth",
       trustedOrigins: [websiteOrigin, "http://localhost:41237"],
     },
     handler,
@@ -35,9 +35,7 @@ it("exports a Bun-compatible server definition", () => {
 });
 
 it("checks the database on the health route", async () => {
-  const response = await server.fetch(
-    new Request("http://localhost/v1/health"),
-  );
+  const response = await server.fetch(new Request("http://localhost/health"));
 
   expect(response.status).toBe(200);
   expect(execute).toHaveBeenCalledTimes(1);
@@ -46,7 +44,7 @@ it("checks the database on the health route", async () => {
 
 it("routes auth requests to better-auth", async () => {
   const response = await server.fetch(
-    new Request("http://localhost/v1/auth/sign-in/email", {
+    new Request("http://localhost/auth/sign-in/email", {
       method: "POST",
       headers: { Origin: websiteOrigin },
     }),
@@ -57,5 +55,5 @@ it("routes auth requests to better-auth", async () => {
     websiteOrigin,
   );
   expect(response.headers.get("access-control-allow-credentials")).toBe("true");
-  await expect(response.text()).resolves.toBe("auth:/v1/auth/sign-in/email");
+  await expect(response.text()).resolves.toBe("auth:/auth/sign-in/email");
 });

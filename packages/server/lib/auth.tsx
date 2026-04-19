@@ -14,10 +14,21 @@ import { worldURL } from "~/lib/world-url";
 export const auth = betterAuth({
   appName: "OpenKitten",
   baseURL: serverURL,
-  basePath: "/v1/auth",
-  advanced: { cookiePrefix: "v1_auth" },
+  basePath: "/auth",
   trustedOrigins: [serverURL, worldURL, websiteURL],
+  advanced: { cookiePrefix: "openkitten_auth" },
   database: drizzleAdapter(pgDatabase, { provider: "pg", schema }),
+  secondaryStorage: {
+    get: (key) => redis.get(key),
+    set: async (key, value, ttl) => {
+      await (typeof ttl === "number"
+        ? redis.set(key, value, "EX", ttl)
+        : redis.set(key, value));
+    },
+    delete: async (key) => {
+      await redis.del(key);
+    },
+  },
   databaseHooks: {
     user: {
       create: {
@@ -28,17 +39,6 @@ export const auth = betterAuth({
           return undefined;
         },
       },
-    },
-  },
-  secondaryStorage: {
-    get: (key) => redis.get(key),
-    set: async (key, value, ttl) => {
-      await (typeof ttl === "number"
-        ? redis.set(key, value, "EX", ttl)
-        : redis.set(key, value));
-    },
-    delete: async (key) => {
-      await redis.del(key);
     },
   },
   rateLimit: { storage: "secondary-storage" },
