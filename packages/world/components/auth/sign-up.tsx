@@ -24,6 +24,8 @@ import {
   InputGroupInput,
 } from "~/components/ui/input-group";
 import { Spinner } from "~/components/ui/spinner";
+import { formatError } from "~/lib/format-error";
+import { toastError } from "~/lib/toast-error";
 import { cn } from "~/lib/utils";
 import { Label } from "../ui/label";
 import { MagicLinkButton } from "./magic-link-button";
@@ -103,7 +105,7 @@ export function SignUp({
     onError: (error) => {
       setPassword("");
       setConfirmPassword("");
-      toast.error(error.error?.message || error.message);
+      toastError(error);
     },
     onSuccess: () => {
       if (emailAndPassword?.requireEmailVerification) {
@@ -267,11 +269,11 @@ export function SignUp({
                     </InputGroup>
 
                     <FieldError>
-                      {usernameError?.error?.message ||
-                        usernameError?.message ||
-                        (usernameData?.available === false
+                      {usernameError
+                        ? formatError(usernameError)
+                        : usernameData?.available === false
                           ? localization.auth.usernameTaken
-                          : null)}
+                          : null}
                     </FieldError>
                   </Field>
                 )}
