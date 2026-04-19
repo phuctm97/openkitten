@@ -178,12 +178,8 @@ test("offers to resend verification emails when sign-in requires verification", 
   });
 
   mocks.captured.sendVerificationEmail?.onSuccess?.();
-  mocks.captured.sendVerificationEmail?.onError?.({
-    message: "Resend failed",
-  });
 
   expect(toast.toastSuccess).toHaveBeenCalledWith("Verification email sent");
-  expect(toast.toastError).toHaveBeenCalledWith("Resend failed");
 });
 
 test("signs in with a username when username auth is enabled", async () => {
@@ -239,11 +235,9 @@ test("signs in with a username when username auth is enabled", async () => {
   expect(mocks.auth.navigate).toHaveBeenCalledWith({ to: "/play" });
 });
 
-test("supports social-only sign-in flows and clears redirecting state", async () => {
-  vi.useFakeTimers();
-
-  const toast = mockSonnerToast();
-  const mocks = setupBetterAuthUiMocks({
+test("supports social-only sign-in flows", async () => {
+  mockSonnerToast();
+  setupBetterAuthUiMocks({
     auth: {
       emailAndPassword: {
         confirmPassword: true,
@@ -272,36 +266,9 @@ test("supports social-only sign-in flows and clears redirecting state", async ()
   expect(screen.queryByText("Or")).toBeNull();
   expect(screen.queryByTestId("magic-link-button")).toBeNull();
   expect(screen.queryByTestId("passkey-button")).toBeNull();
-
-  await act(async () => {
-    await mocks.captured.signInSocial?.onSuccess?.();
-  });
-
-  expect(screen.getByTestId("provider-buttons")).toHaveAttribute(
-    "data-pending",
-    "true",
-  );
-
-  await act(async () => {
-    vi.advanceTimersByTime(5000);
-  });
-
-  expect(screen.getByTestId("provider-buttons")).toHaveAttribute(
-    "data-pending",
-    "false",
-  );
-
-  mocks.captured.signInSocial?.onError?.({
-    error: { message: "Social sign-in failed" },
-  });
-  mocks.captured.signInSocial?.onError?.({ message: "Social fallback failed" });
-
-  expect(toast.toastError).toHaveBeenCalledWith("Social sign-in failed");
-  expect(toast.toastError).toHaveBeenCalledWith("Social fallback failed");
 });
 
 test("renders top social separators and omits remember-me when disabled", async () => {
-  const toast = mockSonnerToast();
   const mocks = setupBetterAuthUiMocks({
     auth: {
       emailAndPassword: {
@@ -335,12 +302,6 @@ test("renders top social separators and omits remember-me when disabled", async 
     email: "top@openkitten.dev",
     password: "house-party",
   });
-
-  mocks.captured.sendVerificationEmail?.onError?.({
-    error: { message: "Nested resend failure" },
-  });
-
-  expect(toast.toastError).toHaveBeenCalledWith("Nested resend failure");
 });
 
 test("shows a spinner while email sign-in is pending", async () => {

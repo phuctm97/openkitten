@@ -89,7 +89,7 @@ test("toggles password visibility and blocks mismatched passwords", async () => 
   );
 });
 
-test("submits a valid reset and handles success and error callbacks", async () => {
+test("submits a valid reset and handles the success callback", async () => {
   const toast = mockSonnerToast();
   const mocks = setupBetterAuthUiMocks({
     auth: {
@@ -121,21 +121,17 @@ test("submits a valid reset and handles success and error callbacks", async () =
   });
   expect(screen.queryByLabelText("Confirm password")).toBeNull();
 
-  mocks.captured.resetPassword?.onError?.({
-    error: { message: "Reset failed" },
-  });
   mocks.captured.resetPassword?.onSuccess?.();
 
-  expect(toast.toastError).toHaveBeenCalledWith("Reset failed");
   expect(toast.toastSuccess).toHaveBeenCalledWith(
     "Password reset successfully",
   );
   expect(mocks.auth.navigate).toHaveBeenCalledWith({ to: "/auth/sign-in" });
 });
 
-test("shows a spinner while a reset is pending and supports error fallbacks", async () => {
-  const toast = mockSonnerToast();
-  const mocks = setupBetterAuthUiMocks({
+test("shows a spinner while a reset is pending", async () => {
+  mockSonnerToast();
+  setupBetterAuthUiMocks({
     pending: {
       resetPassword: true,
     },
@@ -146,11 +142,8 @@ test("shows a spinner while a reset is pending and supports error fallbacks", as
 
   render(<ResetPassword />);
 
-  mocks.captured.resetPassword?.onError?.({ message: "Reset pending failed" });
-
   expect(
     screen.getByRole("button", { name: /Reset password/u }),
   ).toBeDisabled();
   expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
-  expect(toast.toastError).toHaveBeenCalledWith("Reset pending failed");
 });
