@@ -1,8 +1,8 @@
 import { useAuth, useSignOut } from "@better-auth-ui/react";
 import { useEffect, useRef } from "react";
-import { toast } from "sonner";
 
 import { Spinner } from "~/components/ui/spinner";
+import { toastError } from "~/lib/toast-error";
 import { cn } from "~/lib/utils";
 
 export type SignOutProps = {
@@ -20,7 +20,7 @@ export function SignOut({ className }: SignOutProps) {
 
   const { mutate: signOut } = useSignOut({
     onError: (error) => {
-      toast.error(error.error?.message || error.message);
+      toastError(error);
 
       navigate({
         to: `${basePaths.auth}/${viewPaths.auth.signIn}`,

@@ -378,6 +378,43 @@ test("shows username loading and unavailable states", async () => {
   expect(unavailableMocks.resetUsernameAvailability).toHaveBeenCalled();
 });
 
+test("shows username availability API errors", async () => {
+  mockReactPacer();
+  mockSonnerToast();
+  const mocks = setupBetterAuthUiMocks({
+    auth: {
+      socialProviders: [],
+      username: {
+        displayUsername: false,
+        enabled: true,
+        isUsernameAvailable: true,
+        maxUsernameLength: 20,
+        minUsernameLength: 3,
+      },
+    },
+    username: {
+      error: {
+        error: {
+          message: "Username lookup failed",
+        },
+      },
+    },
+  });
+  mockNestedAuthComponents();
+  const { SignUp } = await import("~/components/auth/sign-up");
+
+  render(<SignUp />);
+
+  fireEvent.change(screen.getByLabelText("Username"), {
+    target: { value: "broken-name" },
+  });
+
+  expect(mocks.checkUsernameAvailability).toHaveBeenCalledWith({
+    username: "broken-name",
+  });
+  expect(screen.getByText("Username lookup failed")).toBeInTheDocument();
+});
+
 test("supports social-only sign-up flows", async () => {
   mockReactPacer();
   mockSonnerToast();

@@ -20,6 +20,8 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
+import { formatError } from "~/lib/format-error";
+import { toastError } from "~/lib/toast-error";
 import { cn } from "~/lib/utils";
 import { MagicLinkButton } from "./magic-link-button";
 import { PasskeyButton } from "./passkey-button";
@@ -75,7 +77,7 @@ export function SignIn({
         setPassword("");
 
         if (error.error?.code === "EMAIL_NOT_VERIFIED") {
-          toast.error(error.error?.message || error.message, {
+          toast.error(formatError(error), {
             action: {
               label: localization.auth.resend,
               onClick: () =>
@@ -86,7 +88,7 @@ export function SignIn({
             },
           });
         } else {
-          toast.error(error.error?.message || error.message);
+          toastError(error);
         }
       },
       onSuccess: () => navigate({ to: redirectTo }),
@@ -97,7 +99,7 @@ export function SignIn({
     useSignInUsername({
       onError: (error) => {
         setPassword("");
-        toast.error(error.error?.message || error.message);
+        toastError(error);
       },
       onSuccess: () => navigate({ to: redirectTo }),
     });

@@ -39,7 +39,14 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
    - `packages/world/components.json` has `rsc: false`, so remove generated `use client` directives there
    - `packages/website/components.json` has `rsc: true`, so keep client directives when the generator adds them
    - If `add` changes theme providers, toggles, or helpers in `packages/world`, remove any `next-themes` assumptions and reconnect them to existing theme primitives.
-   - Add or update tests so coverage stays at 100%
+   - When refreshing `@better-auth-ui/*` components in `packages/world`, keep these intentional follow-up changes:
+     - `packages/world` prefers app-level global error handling in `packages/world/lib/query-client.ts`
+     - inspect any generated auth provider, error toaster, or similar global auth wrapper/effect that installs query or mutation error handlers
+     - if the generated code is only duplicating the existing app-level query/mutation error setup, remove or simplify it in favor of `packages/world/lib/query-client.ts`
+     - if upstream changes that code in a meaningfully different way, do not blindly remove it; compare the behavior, preserve the intentional difference when appropriate, and report the difference clearly
+     - keep shared error formatting/toasting in `packages/world/lib/format-error.ts` and `packages/world/lib/toast-error.ts`
+     - when generated auth components need to surface unknown error objects, prefer `formatError(...)` for inline text and `toastError(...)` for toast-only paths instead of re-implementing error-shape handling locally
+    - Add or update tests so coverage stays at 100%
 
 6. Prefer bundled Radix over individual `@radix-ui/*` packages.
    - This repo uses the bundled `radix-ui` package
