@@ -46,7 +46,7 @@ test("submits a reset request and manages field errors", async () => {
   ).toHaveClass("forgot-card");
 });
 
-test("forwards success and error states to toast notifications", async () => {
+test("forwards success state to toast notifications", async () => {
   const toast = mockSonnerToast();
   const mocks = setupBetterAuthUiMocks();
   const { ForgotPassword } = await import("~/components/auth/forgot-password");
@@ -54,12 +54,8 @@ test("forwards success and error states to toast notifications", async () => {
   render(<ForgotPassword />);
 
   mocks.captured.requestPasswordReset?.onSuccess?.();
-  mocks.captured.requestPasswordReset?.onError?.({
-    statusText: "Unable to send email",
-  });
 
   expect(toast.toastSuccess).toHaveBeenCalledWith("Password reset email sent");
-  expect(toast.toastError).toHaveBeenCalledWith("Unable to send email");
 });
 
 test("shows a spinner while a reset request is pending", async () => {

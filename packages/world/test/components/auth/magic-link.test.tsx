@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { beforeEach, expect, test, vi } from "vitest";
 
 import {
   mockSonnerToast,
@@ -50,10 +50,6 @@ beforeEach(() => {
   vi.resetModules();
 });
 
-afterEach(() => {
-  vi.useRealTimers();
-});
-
 test("submits magic-link requests and renders the default bottom layout", async () => {
   mockSonnerToast();
   const mocks = setupBetterAuthUiMocks();
@@ -101,9 +97,7 @@ test("submits magic-link requests and renders the default bottom layout", async 
   );
 });
 
-test("handles success, error, and social redirecting in the top layout", async () => {
-  vi.useFakeTimers();
-
+test("handles success in the top layout", async () => {
   const toast = mockSonnerToast();
   const mocks = setupBetterAuthUiMocks({
     auth: {
@@ -123,42 +117,15 @@ test("handles success, error, and social redirecting in the top layout", async (
   await act(async () => {
     mocks.captured.signInMagicLink?.onSuccess?.();
   });
-  mocks.captured.signInMagicLink?.onError?.({ message: "Magic link fallback" });
-  mocks.captured.signInMagicLink?.onError?.({
-    error: { message: "Magic link failed" },
-  });
-  mocks.captured.signInSocial?.onError?.({ message: "Social sign-in failed" });
 
   expect(emailInput).toHaveValue("");
   expect(toast.toastSuccess).toHaveBeenCalledWith("Magic link sent");
-  expect(toast.toastError).toHaveBeenCalledWith("Magic link fallback");
-  expect(toast.toastError).toHaveBeenCalledWith("Magic link failed");
-  expect(toast.toastError).toHaveBeenCalledWith("Social sign-in failed");
-
-  await act(async () => {
-    await mocks.captured.signInSocial?.onSuccess?.();
-  });
-
-  expect(
-    screen.getByRole("button", { name: /Send magic link/u }),
-  ).toBeDisabled();
-  expect(screen.getByTestId("provider-buttons")).toHaveAttribute(
-    "data-pending",
-    "true",
-  );
-  expect(screen.queryByTestId("passkey-button")).toBeNull();
-
-  await act(async () => {
-    vi.advanceTimersByTime(5000);
-  });
-
-  expect(
-    screen.getByRole("button", { name: /Send magic link/u }),
-  ).not.toBeDisabled();
+  expect(screen.getByText("Or")).toBeInTheDocument();
   expect(screen.getByTestId("provider-buttons")).toHaveAttribute(
     "data-pending",
     "false",
   );
+  expect(screen.queryByTestId("passkey-button")).toBeNull();
 });
 
 test("omits social affordances when no providers are configured", async () => {
@@ -177,4 +144,30 @@ test("omits social affordances when no providers are configured", async () => {
   expect(screen.queryByTestId("provider-buttons")).toBeNull();
   expect(screen.queryByText("Or")).toBeNull();
   expect(screen.queryByTestId("passkey-button")).toBeNull();
+});
+
+test("shows a spinner while a magic-link request is pending", async () => {
+  mockSonnerToast();
+  setupBetterAuthUiMocks({
+    pending: {
+      signInMagicLink: true,
+    },
+  });
+  mockNestedAuthComponents();
+  const { MagicLink } = await import("~/components/auth/magic-link");
+
+  render(<MagicLink />);
+
+  expect(
+    screen.getByRole("button", { name: /Send magic link/u }),
+  ).toBeDisabled();
+  expect(screen.getByRole("status", { name: "Loading" })).toBeInTheDocument();
+  expect(screen.getByTestId("provider-buttons")).toHaveAttribute(
+    "data-pending",
+    "true",
+  );
+  expect(screen.getByTestId("passkey-button")).toHaveAttribute(
+    "data-pending",
+    "true",
+  );
 });

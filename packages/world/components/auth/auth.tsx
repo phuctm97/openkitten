@@ -50,48 +50,42 @@ export function Auth({
     Object.entries(viewPaths.auth).map(([k, v]) => [v, k]),
   ) as Record<string, AuthView>;
 
-  function renderAuthView(currentView: AuthView | undefined) {
-    switch (currentView) {
-      case "signIn":
-        return (
-          <SignIn
-            className={className}
-            socialLayout={socialLayout}
-            socialPosition={socialPosition}
-          />
-        );
-      case "signUp":
-        return (
-          <SignUp
-            className={className}
-            socialLayout={socialLayout}
-            socialPosition={socialPosition}
-          />
-        );
-      case "magicLink":
-        return (
-          <MagicLink
-            className={className}
-            socialLayout={socialLayout}
-            socialPosition={socialPosition}
-          />
-        );
-      case "forgotPassword":
-        return <ForgotPassword className={className} />;
-      case "resetPassword":
-        return <ResetPassword className={className} />;
-      case "signOut":
-        return <SignOut className={className} />;
-      default:
-        throw new Error(
-          `[Better Auth UI] Valid views are: ${Object.keys(viewPaths.auth).join(", ")}`,
-        );
-    }
-  }
+  const currentView = view ?? authPathViews[String(path)];
 
-  if (view) {
-    return renderAuthView(view);
+  switch (currentView) {
+    case "signIn":
+      return (
+        <SignIn
+          className={className}
+          socialLayout={socialLayout}
+          socialPosition={socialPosition}
+        />
+      );
+    case "signUp":
+      return (
+        <SignUp
+          className={className}
+          socialLayout={socialLayout}
+          socialPosition={socialPosition}
+        />
+      );
+    case "magicLink":
+      return (
+        <MagicLink
+          className={className}
+          socialLayout={socialLayout}
+          socialPosition={socialPosition}
+        />
+      );
+    case "forgotPassword":
+      return <ForgotPassword className={className} />;
+    case "resetPassword":
+      return <ResetPassword className={className} />;
+    case "signOut":
+      return <SignOut className={className} />;
+    default:
+      throw new Error(
+        `[Better Auth UI] Valid views are: ${Object.keys(viewPaths.auth).join(", ")}`,
+      );
   }
-
-  return renderAuthView(authPathViews[String(path)]);
 }

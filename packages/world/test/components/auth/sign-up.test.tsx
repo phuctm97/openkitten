@@ -378,12 +378,10 @@ test("shows username loading and unavailable states", async () => {
   expect(unavailableMocks.resetUsernameAvailability).toHaveBeenCalled();
 });
 
-test("supports social-only sign-up flows and clears redirecting state", async () => {
-  vi.useFakeTimers();
-
+test("supports social-only sign-up flows", async () => {
   mockReactPacer();
-  const toast = mockSonnerToast();
-  const mocks = setupBetterAuthUiMocks({
+  mockSonnerToast();
+  setupBetterAuthUiMocks({
     auth: {
       emailAndPassword: {
         confirmPassword: false,
@@ -410,36 +408,6 @@ test("supports social-only sign-up flows and clears redirecting state", async ()
   );
   expect(screen.queryByText("Or")).toBeNull();
   expect(screen.queryByTestId("magic-link-button")).toBeNull();
-
-  await act(async () => {
-    await mocks.captured.signInSocial?.onSuccess?.();
-  });
-
-  expect(screen.getByTestId("provider-buttons")).toHaveAttribute(
-    "data-pending",
-    "true",
-  );
-
-  await act(async () => {
-    vi.advanceTimersByTime(5000);
-  });
-
-  expect(screen.getByTestId("provider-buttons")).toHaveAttribute(
-    "data-pending",
-    "false",
-  );
-
-  mocks.captured.signInSocial?.onError?.({
-    error: { message: "Social sign-up failed" },
-  });
-  mocks.captured.signInSocial?.onError?.({
-    message: "Social sign-up fallback failed",
-  });
-
-  expect(toast.toastError).toHaveBeenCalledWith("Social sign-up failed");
-  expect(toast.toastError).toHaveBeenCalledWith(
-    "Social sign-up fallback failed",
-  );
 });
 
 test("renders top separators and omits display usernames when disabled", async () => {

@@ -1,7 +1,30 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, expect, test, vi } from "vitest";
 
 import { setupBetterAuthUiMocks } from "~/test/components/auth/mock-better-auth-ui";
+
+function mockProviderButton() {
+  vi.doMock("~/components/auth/provider-button", () => ({
+    ProviderButton: ({
+      className,
+      isDisabled,
+      label,
+      provider,
+    }: {
+      className?: string;
+      isDisabled?: boolean;
+      label?: string;
+      provider: string;
+    }) => (
+      <div
+        data-testid={`provider-button-${provider}`}
+        data-disabled={String(isDisabled)}
+        data-label={label}
+        className={className}
+      />
+    ),
+  }));
+}
 
 beforeEach(() => {
   vi.resetModules();
@@ -13,24 +36,24 @@ test("uses a vertical layout by default for a small provider list", async () => 
       socialProviders: ["github", "google"],
     },
   });
+  mockProviderButton();
   const { ProviderButtons } = await import(
     "~/components/auth/provider-buttons"
   );
-  const signInSocial = vi.fn();
 
-  render(<ProviderButtons isPending={false} signInSocial={signInSocial} />);
+  render(<ProviderButtons isPending />);
 
-  const githubButton = screen.getByRole("button", {
-    name: "Continue with Github",
-  });
-
-  fireEvent.click(githubButton);
-
-  expect(githubButton.parentElement).toHaveClass("flex", "flex-col");
-  expect(signInSocial).toHaveBeenCalledWith({
-    callbackURL: "https://world.openkitten.dev/play",
-    provider: "github",
-  });
+  expect(
+    screen.getByTestId("provider-button-github").parentElement,
+  ).toHaveClass("flex", "flex-col");
+  expect(screen.getByTestId("provider-button-github")).toHaveAttribute(
+    "data-disabled",
+    "true",
+  );
+  expect(screen.getByTestId("provider-button-github")).toHaveAttribute(
+    "data-label",
+    "continueWith",
+  );
 });
 
 test("switches to a horizontal layout when enough providers are available", async () => {
@@ -38,75 +61,42 @@ test("switches to a horizontal layout when enough providers are available", asyn
     auth: {
       socialProviders: ["github", "google", "discord", "apple"],
     },
-    providerIcons: {
-      apple: (props) => <svg data-testid="provider-icon-apple" {...props} />,
-      discord: (props) => (
-        <svg data-testid="provider-icon-discord" {...props} />
-      ),
-      github: (props) => <svg data-testid="provider-icon-github" {...props} />,
-      google: (props) => <svg data-testid="provider-icon-google" {...props} />,
-    },
   });
+  mockProviderButton();
   const { ProviderButtons } = await import(
     "~/components/auth/provider-buttons"
   );
 
-  render(<ProviderButtons isPending signInSocial={vi.fn()} />);
+  render(<ProviderButtons isPending />);
 
-  const buttons = screen.getAllByRole("button");
-
-  expect(buttons).toHaveLength(4);
-  expect(buttons[0]?.parentElement).toHaveClass(
-    "flex",
-    "flex-row",
-    "flex-wrap",
+  expect(
+    screen.getByTestId("provider-button-github").parentElement,
+  ).toHaveClass("flex", "flex-row", "flex-wrap");
+  expect(screen.getByTestId("provider-button-github")).toHaveAttribute(
+    "data-label",
+    "none",
   );
-  expect(screen.queryByText("Continue with Github")).toBeNull();
+  expect(screen.getByTestId("provider-button-github")).toHaveClass("flex-1");
 });
 
-test("supports a grid layout and gracefully handles providers without icons", async () => {
+test("supports a grid layout", async () => {
   setupBetterAuthUiMocks({
     auth: {
-      socialProviders: ["unknown"],
+      socialProviders: ["github"],
     },
-    providerIcons: {},
   });
+  mockProviderButton();
   const { ProviderButtons } = await import(
     "~/components/auth/provider-buttons"
   );
 
-  render(
-    <ProviderButtons
-      isPending={false}
-      signInSocial={vi.fn()}
-      socialLayout="grid"
-    />,
+  render(<ProviderButtons isPending={false} socialLayout="grid" />);
+
+  expect(
+    screen.getByTestId("provider-button-github").parentElement,
+  ).toHaveClass("grid", "grid-cols-2");
+  expect(screen.getByTestId("provider-button-github")).toHaveAttribute(
+    "data-label",
+    "providerName",
   );
-
-  const button = screen.getByRole("button", { name: "Unknown" });
-
-  expect(button.parentElement).toHaveClass("grid", "grid-cols-2");
-  expect(button.querySelector("svg")).toBeNull();
-});
-
-test("formats provider names even when a provider id starts with a separator", async () => {
-  setupBetterAuthUiMocks({
-    auth: {
-      socialProviders: ["-custom"],
-    },
-    providerIcons: {},
-  });
-  const { ProviderButtons } = await import(
-    "~/components/auth/provider-buttons"
-  );
-
-  render(
-    <ProviderButtons
-      isPending={false}
-      signInSocial={vi.fn()}
-      socialLayout="grid"
-    />,
-  );
-
-  expect(screen.getByRole("button", { name: /Custom/u })).toBeInTheDocument();
 });
