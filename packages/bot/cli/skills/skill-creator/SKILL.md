@@ -7,9 +7,9 @@ description: Create, install, update, delete, and list custom skills that give a
 
 Skills are markdown files that give agents specialized capabilities. Each skill is a directory containing a `SKILL.md` file and optional helper files (scripts, templates, etc.).
 
-The skills directory path is: `$OPENCODE_CONFIG_DIR/skills/`
+The skills directory path is: `$OPENKITTEN_OPENCODE_DIR/skills/`
 
-IMPORTANT: All skill operations MUST happen inside `$OPENCODE_CONFIG_DIR/`. Do NOT read, write, list, or navigate any path outside `$OPENCODE_CONFIG_DIR/`. Never access parent directories of `$OPENCODE_CONFIG_DIR/`. Use `$OPENCODE_CONFIG_DIR` as-is without resolving or expanding it.
+IMPORTANT: All skill operations MUST happen inside `$OPENKITTEN_OPENCODE_DIR/`. Do NOT read, write, list, or navigate any path outside `$OPENKITTEN_OPENCODE_DIR/`. Never access parent directories of `$OPENKITTEN_OPENCODE_DIR/`. Use `$OPENKITTEN_OPENCODE_DIR` as-is without resolving or expanding it.
 
 ## Skills CLI
 
@@ -32,42 +32,42 @@ Examples:
 IMPORTANT: Always use `-a opencode` to install ONLY for the OpenCode agent. Without it, the CLI installs to all detected agents (Claude Code, Cursor, Copilot, etc.).
 
 ```bash
-cd $OPENCODE_CONFIG_DIR && npx skills add <source> -a opencode --copy -y
+cd $OPENKITTEN_OPENCODE_DIR && npx skills add <source> -a opencode --copy -y
 ```
 
 The `-a opencode` flag targets only the OpenCode agent. The `--copy` flag copies files directly instead of symlinking. The `-y` flag skips confirmation prompts.
 
-This installs skills to `$OPENCODE_CONFIG_DIR/.agents/skills/<skill-name>/`.
+This installs skills to `$OPENKITTEN_OPENCODE_DIR/.agents/skills/<skill-name>/`.
 
 Sources can be:
-- GitHub repo: `cd $OPENCODE_CONFIG_DIR && npx skills add vercel-labs/agent-skills -a opencode --copy -y`
-- GitHub repo with specific skill: `cd $OPENCODE_CONFIG_DIR && npx skills add vercel-labs/agent-skills -s <skill-name> -a opencode --copy -y`
-- URL: `cd $OPENCODE_CONFIG_DIR && npx skills add https://example.com/skill/SKILL.md -a opencode --copy -y`
+- GitHub repo: `cd $OPENKITTEN_OPENCODE_DIR && npx skills add vercel-labs/agent-skills -a opencode --copy -y`
+- GitHub repo with specific skill: `cd $OPENKITTEN_OPENCODE_DIR && npx skills add vercel-labs/agent-skills -s <skill-name> -a opencode --copy -y`
+- URL: `cd $OPENKITTEN_OPENCODE_DIR && npx skills add https://example.com/skill/SKILL.md -a opencode --copy -y`
 
 To list available skills in a repo before installing:
 
 ```bash
-cd $OPENCODE_CONFIG_DIR && npx skills add <source> --list
+cd $OPENKITTEN_OPENCODE_DIR && npx skills add <source> --list
 ```
 
 ### Create a New Custom Skill
 
 ```bash
-cd $OPENCODE_CONFIG_DIR/skills && npx skills init <skill-name>
+cd $OPENKITTEN_OPENCODE_DIR/skills && npx skills init <skill-name>
 ```
 
-This creates `$OPENCODE_CONFIG_DIR/skills/<skill-name>/SKILL.md` with a template. Edit it to define the skill.
+This creates `$OPENKITTEN_OPENCODE_DIR/skills/<skill-name>/SKILL.md` with a template. Edit it to define the skill.
 
 ### List Installed Skills
 
 ```bash
-cd $OPENCODE_CONFIG_DIR && npx skills list
+cd $OPENKITTEN_OPENCODE_DIR && npx skills list
 ```
 
 ### Update Skills
 
 ```bash
-cd $OPENCODE_CONFIG_DIR && npx skills update -a opencode -y
+cd $OPENKITTEN_OPENCODE_DIR && npx skills update -a opencode -y
 ```
 
 ### Remove a Skill
@@ -75,13 +75,13 @@ cd $OPENCODE_CONFIG_DIR && npx skills update -a opencode -y
 The Skills CLI does NOT delete copied files on disk. After removing from the registry, manually delete the skill directory.
 
 ```bash
-cd $OPENCODE_CONFIG_DIR && npx skills remove -s <skill-name> -a opencode -y && rm -rf $OPENCODE_CONFIG_DIR/.agents/skills/<skill-name>
+cd $OPENKITTEN_OPENCODE_DIR && npx skills remove -s <skill-name> -a opencode -y && rm -rf $OPENKITTEN_OPENCODE_DIR/.agents/skills/<skill-name>
 ```
 
 For custom skills created with `npx skills init`:
 
 ```bash
-rm -rf $OPENCODE_CONFIG_DIR/skills/<skill-name>
+rm -rf $OPENKITTEN_OPENCODE_DIR/skills/<skill-name>
 ```
 
 ## SKILL.md Format
@@ -119,7 +119,7 @@ The `description` is how the system decides whether to activate the skill. Write
 A skill directory can contain additional files that the skill instructions reference:
 
 ```
-$OPENCODE_CONFIG_DIR/skills/my-skill/
+$OPENKITTEN_OPENCODE_DIR/skills/my-skill/
   SKILL.md          # Required — skill definition
   helper.sh         # Optional — shell script
   helper.ts         # Optional — TypeScript helper
@@ -132,7 +132,7 @@ Reference helper files in SKILL.md using relative paths (e.g., `./helper.sh`).
 
 If you prefer not to use the CLI, create skills directly:
 
-1. Create a directory: `$OPENCODE_CONFIG_DIR/skills/<skill-name>/`
+1. Create a directory: `$OPENKITTEN_OPENCODE_DIR/skills/<skill-name>/`
 2. Write a `SKILL.md` file inside it with the format above
 
 ## Activating New Skills
