@@ -6,10 +6,7 @@
     "lib",
     "test"
   ],
-  "references": [
-    { "path": "../contract/tsconfig.json" },
-    { "path": "../plugin/tsconfig.json" }
-  ],
+  "references": [{ "path": "../api/tsconfig.json" }],
   "extends": "../../../tsconfig.json",
   "compilerOptions": {
     "types": ["bun"],
