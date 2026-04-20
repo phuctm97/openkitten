@@ -1,4 +1,3 @@
-import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { autoRetry } from "@grammyjs/auto-retry";
 import { defineCommand } from "citty";
@@ -21,6 +20,7 @@ import { grammyHandleMediaGroupFlush } from "~/lib/grammy-handle-media-group-flu
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
+import { listCommandFiles } from "~/lib/list-command-files";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
 import { MediaGroupBuffer } from "~/lib/media-group-buffer";
@@ -64,19 +64,7 @@ export const serve = defineCommand({
       bot.use(grammyFilterChat({ userId: telegramConfig.userId }));
       using database = Database.create(profile);
       const commandsDir = join(profile.dir, ".opencode", "commands");
-      const entries = await readdir(commandsDir).catch(() => []);
-      const customCommands: { command: string; description: string }[] = [];
-      for (const entry of entries) {
-        if (!entry.endsWith(".md")) continue;
-        const content = await readFile(join(commandsDir, entry), "utf-8");
-        const match = content.match(/^---\s*\n([\s\S]*?)\n---/);
-        const descMatch = match?.[1]?.match(/description:\s*(.+)/);
-        customCommands.push({
-          command: entry.slice(0, -3),
-          description: descMatch?.[1]?.trim() ?? "",
-        });
-      }
-      customCommands.sort((a, b) => a.command.localeCompare(b.command));
+      const customCommands = await listCommandFiles(commandsDir);
       await grammySetCommands(telegramConfig.botToken, [
         ...builtinCommands,
         ...customCommands,

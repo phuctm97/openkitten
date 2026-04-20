@@ -20,6 +20,7 @@ import { reloadOpencodeConfig } from "~/lib/reload-opencode-config";
 import type { Scheduler } from "~/lib/scheduler";
 import * as schema from "~/lib/schema";
 import type { Shutdown } from "~/lib/shutdown";
+import { upgradeOpenkitten } from "~/lib/upgrade-openkitten";
 import { websiteURL } from "~/lib/website-url";
 import { version } from "~/package.json" with { type: "json" };
 
@@ -152,6 +153,15 @@ export class McpServer implements Disposable {
       },
       async (args) => this.#reloadExtensions(args),
     );
+    server.registerTool(
+      "upgrade_openkitten",
+      {
+        description:
+          "Pull the latest OpenKitten code from main, run `bun install`, and restart the bot. Refuses on non-main branches or dirty worktrees. The current response will be interrupted. Each active chat receives a '⏳ Upgrading OpenKitten…' message before the restart and a '✅ Upgraded to <sha>' message after the new process boots.",
+        inputSchema: zod.looseObject({}),
+      },
+      async () => this.#upgradeOpenkitten(),
+    );
     registerScheduleTools(server, {
       scheduler: this.#scheduler,
       getMetadata: (args) => this.#getMetadata(args),
@@ -263,6 +273,29 @@ export class McpServer implements Disposable {
     setTimeout(() => this.#shutdown.trigger(), 500);
     return {
       content: [{ type: "text", text: "Restarting…" }],
+    };
+  }
+
+  async #upgradeOpenkitten(): Promise<CallToolResult> {
+    const result = await upgradeOpenkitten({
+      bot: this.#bot,
+      database: this.#database,
+    });
+    if (result.kind === "up-to-date") {
+      return {
+        content: [
+          { type: "text", text: `Already up to date (${result.sha}).` },
+        ],
+      };
+    }
+    setTimeout(() => this.#shutdown.trigger("upgrade"), 500);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Upgrading from ${result.previousSha} to ${result.nextSha}. Restarting…`,
+        },
+      ],
     };
   }
 

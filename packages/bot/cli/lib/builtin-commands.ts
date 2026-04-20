@@ -6,4 +6,5 @@ export const builtinCommands: readonly {
   { command: "abort", description: "Stop the current generation" },
   { command: "compact", description: "Summarize conversation history" },
   { command: "agent", description: "Switch or list AI agents" },
+  { command: "upgrade", description: "Update OpenKitten and restart" },
 ];

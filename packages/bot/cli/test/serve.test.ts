@@ -917,7 +917,8 @@ test("handles readdir failure gracefully with empty commands", async () => {
       c.command !== "start" &&
       c.command !== "abort" &&
       c.command !== "compact" &&
-      c.command !== "agent",
+      c.command !== "agent" &&
+      c.command !== "upgrade",
   );
   expect(custom).toEqual([]);
   shutdown.triggerLatest();

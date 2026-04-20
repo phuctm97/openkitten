@@ -1,4 +1,4 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { styleText } from "node:util";
@@ -8,6 +8,7 @@ import { defineCommand } from "citty";
 import { builtinCommands } from "~/lib/builtin-commands";
 import { getUserId } from "~/lib/get-user-id";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
+import { listCommandFiles } from "~/lib/list-command-files";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
@@ -205,24 +206,9 @@ export const up = defineCommand({
       skipActions: args.yes,
     });
     await OpencodeConfig.create(profile, { skipActions: args.yes });
-    let customCommands: { command: string; description: string }[] = [];
-    try {
-      const raw = await readFile(
-        join(profile.dir, ".opencode", "opencode.json"),
-        "utf-8",
-      );
-      const config = JSON.parse(raw) as {
-        command?: Record<string, { description?: string }>;
-      };
-      customCommands = Object.entries(config.command ?? {})
-        .map(([name, entry]) => ({
-          command: name,
-          description: entry.description ?? "",
-        }))
-        .sort((a, b) => a.command.localeCompare(b.command));
-    } catch {
-      // No config or no commands
-    }
+    const customCommands = await listCommandFiles(
+      join(profile.dir, ".opencode", "commands"),
+    );
     await grammySetCommands(telegramConfig.botToken, [
       ...builtinCommands,
       ...customCommands,
