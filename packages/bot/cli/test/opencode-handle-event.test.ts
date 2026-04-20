@@ -9,7 +9,7 @@ import type { Scope } from "~/lib/scope";
 vi.mock("~/lib/grammy-send-error");
 vi.mock("~/lib/grammy-send-session-compacted");
 
-function mockScope() {
+function mockScope(options: { aborted?: boolean } = {}) {
   const bot = {} as never;
   const existingSessions = {
     get: vi.fn(
@@ -25,6 +25,9 @@ function mockScope() {
   const workingSessions = { update: vi.fn() };
   const pendingPrompts = { update: vi.fn() };
   const processingMessages = { update: vi.fn() };
+  const shutdown = {
+    signal: { aborted: options.aborted ?? false },
+  };
   return {
     scope: {
       bot,
@@ -32,12 +35,14 @@ function mockScope() {
       workingSessions,
       pendingPrompts,
       processingMessages,
+      shutdown,
     } as unknown as Scope,
     bot,
     existingSessions,
     workingSessions,
     pendingPrompts,
     processingMessages,
+    shutdown,
   };
 }
 
@@ -224,6 +229,22 @@ test("ignores session.error without sessionID", async () => {
       } as never,
       "global",
     ),
+    new AbortController().signal,
+  );
+  expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();
+});
+
+test("suppresses session.error while shutdown is in progress", async () => {
+  const { scope } = mockScope({ aborted: true });
+  await opencodeHandleEvent(
+    scope,
+    wrap({
+      type: "session.error" as const,
+      properties: {
+        sessionID: "s1",
+        error: { type: "unknown_error" as const, message: "boom" },
+      },
+    } as never),
     new AbortController().signal,
   );
   expect(grammySendErrorModule.grammySendError).not.toHaveBeenCalled();

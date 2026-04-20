@@ -11,6 +11,7 @@ export async function opencodeHandleEvent(
     workingSessions,
     pendingPrompts,
     processingMessages,
+    shutdown,
   }: Scope,
   event: GlobalEvent,
   _signal: AbortSignal,
@@ -35,6 +36,12 @@ export async function opencodeHandleEvent(
       break;
     case "session.error": {
       const { sessionID, error } = event.payload.properties;
+      if (shutdown.signal.aborted) {
+        logger.info("Suppressing OpenCode session error during shutdown", {
+          sessionID,
+        });
+        break;
+      }
       logger.error("OpenCode session encountered an error", error, {
         sessionID,
       });
