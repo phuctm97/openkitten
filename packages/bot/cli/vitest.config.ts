@@ -8,7 +8,7 @@ export default defineConfig({
     coverage: {
       provider: "istanbul",
       include: ["lib/**/*.{ts,tsx}"],
-      exclude: ["**/node_modules/**", "**/bot/plugin/**"],
+      exclude: ["**/node_modules/**"],
       thresholds: {
         statements: 100,
         branches: 100,

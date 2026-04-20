@@ -11,6 +11,20 @@
         "typescript": "^6.0.3",
       },
     },
+    "packages/bot/api": {
+      "name": "@openkitten/api",
+      "version": "0.0.0",
+      "dependencies": {
+        "@orpc/client": "^1.13.14",
+        "@orpc/contract": "^1.13.14",
+        "zod": "^4.3.6",
+      },
+      "devDependencies": {
+        "@vitest/coverage-istanbul": "^4.1.4",
+        "vite": "^8.0.8",
+        "vitest": "^4.1.4",
+      },
+    },
     "packages/bot/cli": {
       "name": "@openkitten/cli",
       "version": "0.0.0",
@@ -19,8 +33,7 @@
         "@grammyjs/auto-retry": "^2.0.2",
         "@modelcontextprotocol/sdk": "^1.29.0",
         "@opencode-ai/sdk": "^1.14.17",
-        "@openkitten/contract": "workspace:*",
-        "@openkitten/plugin": "workspace:*",
+        "@openkitten/api": "workspace:*",
         "@orpc/server": "^1.13.14",
         "boxen": "^8.0.1",
         "bunqueue": "^2.7.6",
@@ -41,36 +54,6 @@
         "@types/mime-types": "^3.0.1",
         "@vitest/coverage-istanbul": "^4.1.4",
         "drizzle-kit": "^0.31.10",
-        "vite": "^8.0.8",
-        "vitest": "^4.1.4",
-      },
-    },
-    "packages/bot/contract": {
-      "name": "@openkitten/contract",
-      "version": "0.0.0",
-      "dependencies": {
-        "@orpc/contract": "^1.13.14",
-      },
-      "devDependencies": {
-        "@vitest/coverage-istanbul": "^4.1.4",
-        "vite": "^8.0.8",
-        "vitest": "^4.1.4",
-      },
-      "peerDependencies": {
-        "zod": "^4.3.6",
-      },
-    },
-    "packages/bot/plugin": {
-      "name": "@openkitten/plugin",
-      "version": "0.0.0",
-      "dependencies": {
-        "@openkitten/contract": "workspace:*",
-        "@orpc/client": "^1.13.14",
-        "@orpc/contract": "^1.13.14",
-        "zod": "^4.3.6",
-      },
-      "devDependencies": {
-        "@vitest/coverage-istanbul": "^4.1.4",
         "vite": "^8.0.8",
         "vitest": "^4.1.4",
       },
@@ -566,11 +549,9 @@
 
     "@opencode-ai/sdk": ["@opencode-ai/sdk@1.14.17", "", { "dependencies": { "cross-spawn": "7.0.6" } }, "sha512-Q42C4VsczrPc+8hB76OO18KZ3A3l4cRHy31Vn8if7W/02qHAA1JoQXbbZD9/9fBqHHyYXC6h9dd4H4TaBi53Zw=="],
 
+    "@openkitten/api": ["@openkitten/api@workspace:packages/bot/api"],
+
     "@openkitten/cli": ["@openkitten/cli@workspace:packages/bot/cli"],
-
-    "@openkitten/contract": ["@openkitten/contract@workspace:packages/bot/contract"],
-
-    "@openkitten/plugin": ["@openkitten/plugin@workspace:packages/bot/plugin"],
 
     "@openkitten/server": ["@openkitten/server@workspace:packages/server"],
 

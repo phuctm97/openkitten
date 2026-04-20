@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { mkdir, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { contract } from "@openkitten/contract";
+import { contract } from "@openkitten/api";
 import { implement } from "@orpc/server";
 import { RPCHandler } from "@orpc/server/fetch";
 import { logger } from "~/lib/logger";
