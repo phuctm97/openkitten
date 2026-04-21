@@ -454,13 +454,13 @@ test("restarts on unexpected opencode server exit", async () => {
   );
   expect(Profile.create).toHaveBeenCalledTimes(2);
   expect(TelegramConfig.create).toHaveBeenNthCalledWith(1, expect.anything(), {
-    skipActions: true,
+    skipActions: false,
   });
   expect(TelegramConfig.create).toHaveBeenNthCalledWith(2, expect.anything(), {
     skipActions: true,
   });
   expect(OpencodeConfig.create).toHaveBeenNthCalledWith(1, expect.anything(), {
-    skipActions: true,
+    skipActions: false,
   });
   expect(OpencodeConfig.create).toHaveBeenNthCalledWith(2, expect.anything(), {
     skipActions: true,
@@ -692,6 +692,23 @@ test("updates working sessions on session.status event", async () => {
   onEvent(event as never, new AbortController().signal);
 
   await vi.waitFor(() => expect(update).toHaveBeenCalledWith(event.payload));
+
+  shutdown.triggerLatest();
+  await run;
+});
+
+test("passes yes option when yes flag is set", async () => {
+  const { shutdown } = mockAll();
+  const run = runCommand(serve, { rawArgs: ["--yes"] });
+
+  await vi.waitFor(() =>
+    expect(TelegramConfig.create).toHaveBeenCalledWith(expect.anything(), {
+      skipActions: true,
+    }),
+  );
+  expect(OpencodeConfig.create).toHaveBeenCalledWith(expect.anything(), {
+    skipActions: true,
+  });
 
   shutdown.triggerLatest();
   await run;

@@ -40,7 +40,10 @@ function respawn(): void {
     logger.info("Relying on service manager to respawn");
     return;
   }
-  const cmd = [process.execPath, ...process.argv.slice(1)];
+  // --yes tells the detached child to skip the interactive config-actions
+  // menu. No human is at the terminal during an upgrade, and the child's
+  // stdin is /dev/null — any prompt would deadlock the new process.
+  const cmd = [process.execPath, ...process.argv.slice(1), "--yes"];
   logger.info("Spawning detached respawner", { cmd });
   const child = Bun.spawn(cmd, {
     cwd: process.cwd(),
