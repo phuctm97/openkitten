@@ -6,7 +6,9 @@
     "packages/bot/*"
   ],
   "scripts": {
-    "prepare": "bun prepare.ts"
+    "prepare": "bun prepare.ts",
+    "up": "bun up.ts",
+    "down": "bun down.ts"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.12",

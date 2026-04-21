@@ -1,10 +1,10 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { redis } from "bun";
 import EmailVerification from "~/lib/emails/email-verification";
 import PasswordReset from "~/lib/emails/password-reset";
 import { isProduction } from "~/lib/is-production";
 import { pgDatabase } from "~/lib/pg-database";
+import { redis } from "~/lib/redis";
 import * as schema from "~/lib/schema";
 import { sendReactEmail } from "~/lib/send-react-email";
 import { serverURL } from "~/lib/server-url";

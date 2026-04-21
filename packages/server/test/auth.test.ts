@@ -32,13 +32,13 @@ vi.mock("better-auth", () => ({ betterAuth: authMocks.betterAuth }));
 vi.mock("better-auth/adapters/drizzle", () => ({
   drizzleAdapter: authMocks.drizzleAdapter,
 }));
-vi.mock("bun", () => ({ redis: authMocks.redis }));
 vi.mock("~/lib/is-production", () => ({
   get isProduction() {
     return authMocks.isProduction;
   },
 }));
 vi.mock("~/lib/pg-database", () => ({ pgDatabase: authMocks.pgDatabase }));
+vi.mock("~/lib/redis", () => ({ redis: authMocks.redis }));
 vi.mock("~/lib/send-react-email", () => ({
   sendReactEmail: authMocks.sendReactEmail,
 }));

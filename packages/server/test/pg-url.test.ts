@@ -21,6 +21,6 @@ it("falls back to the default local postgres URL", async () => {
   const module = await import("~/lib/pg-url");
 
   expect(module.pgURL).toBe(
-    "postgres://postgres:postgres@localhost:5432/postgres",
+    "postgres://postgres:postgres@localhost:41240/postgres",
   );
 });

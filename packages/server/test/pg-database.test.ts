@@ -2,7 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 
 const connectionString = "postgres://postgres:postgres@127.0.0.1:1/postgres";
 const defaultConnectionString =
-  "postgres://postgres:postgres@localhost:5432/postgres";
+  "postgres://postgres:postgres@localhost:41240/postgres";
 const originalBunArgv = [...Bun.argv];
 
 const schemaKeys = [
