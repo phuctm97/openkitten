@@ -42,22 +42,18 @@ import { WorkingSessions } from "~/lib/working-sessions";
 
 export const serve = defineCommand({
   meta: { description: "Start the OpenKitten server." },
-  args: {
-    yes: {
-      type: "boolean",
-      alias: ["y"],
-      description: "Skip optional config actions.",
-    },
-  },
-  run: ({ args }) =>
-    restart(async (attempt) => {
+  run: () =>
+    restart(async () => {
       const profile = await Profile.create();
-      const skipActions = args.yes || attempt > 1;
+      // Interactive config maintenance belongs to `bun . up`; serve only
+      // validates and runs. First-time setup still prompts for missing
+      // required fields (bot token, user ID) — skipActions only suppresses
+      // the optional change-config menu.
       const telegramConfig = await TelegramConfig.create(profile, {
-        skipActions,
+        skipActions: true,
       });
       const opencodeConfig = await OpencodeConfig.create(profile, {
-        skipActions,
+        skipActions: true,
       });
       const bot = new Bot(telegramConfig.botToken);
       bot.api.config.use(autoRetry());
