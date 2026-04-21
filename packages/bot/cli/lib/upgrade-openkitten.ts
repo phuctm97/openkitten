@@ -105,8 +105,7 @@ export async function upgradeOpenkitten(
   const branch = (
     await capture(["git", "rev-parse", "--abbrev-ref", "HEAD"])
   ).trim();
-  // TODO(temp): remove the "feat/upgrade-command" allowance before merging to main.
-  if (branch !== "main" && branch !== "feat/upgrade-command") {
+  if (branch !== "main") {
     throw new UpgradeOpenkittenError(
       `Cannot upgrade on non-main branch: ${branch}. Switch to main first.`,
     );
