@@ -40,7 +40,9 @@ function respawn(): void {
     logger.info("Relying on service manager to respawn");
     return;
   }
-  const cmd = [process.execPath, ...process.argv.slice(1)];
+  // Always pass --yes: no human is at the terminal during an upgrade, so the
+  // config action prompts must be skipped.
+  const cmd = [process.execPath, ...process.argv.slice(1), "--yes"];
   logger.info("Spawning detached respawner", { cmd });
   const child = Bun.spawn(cmd, {
     cwd: process.cwd(),

@@ -324,7 +324,7 @@ test("spawns detached respawner when not service-managed", async () => {
   });
   expect(result.kind).toBe("restarting");
   expect(spawn).toHaveBeenCalledWith(
-    [process.execPath, ...process.argv.slice(1)],
+    [process.execPath, ...process.argv.slice(1), "--yes"],
     expect.objectContaining({
       cwd: process.cwd(),
       stdin: "ignore",
