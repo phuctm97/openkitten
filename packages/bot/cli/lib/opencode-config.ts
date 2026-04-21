@@ -113,9 +113,6 @@ export namespace OpencodeConfig {
     for (const file of commandFiles) {
       const source = join(defaultCommandsDir, file);
       const destination = join(xdgCommandsDir, file);
-      // Shipped commands are overwritten on every boot so prompt refinements
-      // reach existing installs. Users who want custom commands add them
-      // under a different filename.
       writes.push(async () => {
         const content = await readFile(source, "utf-8");
         await writeFile(destination, content);
