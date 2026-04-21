@@ -1,5 +1,5 @@
 {
-  "include": ["prepare.ts"],
+  "include": ["prepare.ts", "up.ts", "down.ts"],
   "references": [
     { "path": "./packages/bot/cli/tsconfig.json" },
     { "path": "./packages/bot/contract/tsconfig.json" },
