@@ -81,10 +81,10 @@ function mockAuthChildren() {
   }));
 }
 
-async function loadAuthComponent() {
-  const module = await import("~/components/auth/auth");
+async function loadAuthRouterComponent() {
+  const module = await import("~/components/auth/auth-router");
 
-  return module.Auth;
+  return module.AuthRouter;
 }
 
 beforeEach(() => {
@@ -95,9 +95,9 @@ test("throws when neither view nor path is provided", async () => {
   setupBetterAuthUiMocks();
   mockAuthChildren();
 
-  const Auth = await loadAuthComponent();
+  const AuthRouter = await loadAuthRouterComponent();
 
-  expect(() => render(<Auth />)).toThrow(
+  expect(() => render(<AuthRouter />)).toThrow(
     "[Better Auth UI] Either `view` or `path` must be provided",
   );
 });
@@ -106,10 +106,10 @@ test("renders the sign-in view from an explicit view prop", async () => {
   setupBetterAuthUiMocks();
   mockAuthChildren();
 
-  const Auth = await loadAuthComponent();
+  const AuthRouter = await loadAuthRouterComponent();
 
   render(
-    <Auth
+    <AuthRouter
       className="auth-card"
       view="signIn"
       socialLayout="grid"
@@ -135,10 +135,10 @@ test("prefers an explicit view over a conflicting path", async () => {
   const mocks = setupBetterAuthUiMocks();
   mockAuthChildren();
 
-  const Auth = await loadAuthComponent();
+  const AuthRouter = await loadAuthRouterComponent();
 
   render(
-    <Auth
+    <AuthRouter
       path={mocks.auth.viewPaths.auth.signUp}
       socialLayout="vertical"
       socialPosition="bottom"
@@ -154,10 +154,10 @@ test("resolves the sign-up view from the current auth path", async () => {
   const mocks = setupBetterAuthUiMocks();
   mockAuthChildren();
 
-  const Auth = await loadAuthComponent();
+  const AuthRouter = await loadAuthRouterComponent();
 
   render(
-    <Auth
+    <AuthRouter
       className="auth-card"
       path={mocks.auth.viewPaths.auth.signUp}
       socialLayout="vertical"
@@ -183,9 +183,9 @@ test("renders the remaining auth views", async () => {
   const mocks = setupBetterAuthUiMocks();
   mockAuthChildren();
 
-  const Auth = await loadAuthComponent();
+  const AuthRouter = await loadAuthRouterComponent();
 
-  const scenarios: Array<ComponentProps<typeof Auth>> = [
+  const scenarios: Array<ComponentProps<typeof AuthRouter>> = [
     {
       className: "magic",
       path: mocks.auth.viewPaths.auth.magicLink,
@@ -214,7 +214,7 @@ test("renders the remaining auth views", async () => {
   ];
 
   scenarios.forEach((props, index) => {
-    const { unmount } = render(<Auth {...props} />);
+    const { unmount } = render(<AuthRouter {...props} />);
 
     expect(
       screen.getByTestId(expectedTestIds[index] ?? ""),
@@ -241,9 +241,9 @@ test("throws when the resolved auth view is invalid", async () => {
   });
   mockAuthChildren();
 
-  const Auth = await loadAuthComponent();
+  const AuthRouter = await loadAuthRouterComponent();
 
-  expect(() => render(<Auth path="unknown" />)).toThrow(
+  expect(() => render(<AuthRouter path="unknown" />)).toThrow(
     "[Better Auth UI] Valid views are: forgotPassword, magicLink, resetPassword, signIn, signOut, signUp",
   );
 });

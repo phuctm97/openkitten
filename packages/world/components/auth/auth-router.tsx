@@ -1,5 +1,5 @@
 import { useAuth } from "@better-auth-ui/react";
-import type { AuthView } from "@better-auth-ui/react/core";
+import type { AuthView as BetterAuthView } from "@better-auth-ui/react/core";
 
 import { ForgotPassword } from "./forgot-password";
 import { MagicLink } from "./magic-link";
@@ -9,13 +9,13 @@ import { SignIn } from "./sign-in";
 import { SignOut } from "./sign-out";
 import { SignUp } from "./sign-up";
 
-export type AuthProps = {
+export type AuthRouterProps = {
   className?: string;
   path?: string;
   socialLayout?: SocialLayout;
   socialPosition?: "top" | "bottom";
-  /** @remarks `AuthView` */
-  view?: AuthView;
+  /** @remarks `BetterAuthView` */
+  view?: BetterAuthView;
 };
 
 /**
@@ -31,13 +31,13 @@ export type AuthProps = {
  * @throws Error if neither `view` nor `path` is provided
  * @throws Error if the resolved view is not a valid auth view
  */
-export function Auth({
+export function AuthRouter({
   className,
   view,
   path,
   socialLayout,
   socialPosition,
-}: AuthProps) {
+}: AuthRouterProps) {
   const { viewPaths } = useAuth();
 
   if (!view && !path) {
@@ -48,7 +48,7 @@ export function Auth({
 
   const authPathViews = Object.fromEntries(
     Object.entries(viewPaths.auth).map(([k, v]) => [v, k]),
-  ) as Record<string, AuthView>;
+  ) as Record<string, BetterAuthView>;
 
   const currentView = view ?? authPathViews[String(path)];
 
