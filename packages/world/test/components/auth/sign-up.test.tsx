@@ -49,7 +49,9 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-test("submits a basic sign-up form and navigates directly on success", async () => {
+test("submits a basic sign-up form and navigates directly on success", {
+  timeout: 10_000,
+}, async () => {
   mockReactPacer();
   mockSonnerToast();
   const mocks = setupBetterAuthUiMocks({

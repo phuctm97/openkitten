@@ -1,0 +1,17 @@
+services:
+  pg:
+    image: pgvector/pgvector:pg18-trixie
+    environment:
+      POSTGRES_PASSWORD: postgres
+    healthcheck:
+      test: pg_isready --username postgres --dbname postgres
+      start_period: 10s
+      start_interval: 3s
+    ports: ["41240:5432"]
+  redis:
+    image: redis:8-trixie
+    healthcheck:
+      test: redis-cli ping
+      start_period: 10s
+      start_interval: 3s
+    ports: ["41241:6379"]

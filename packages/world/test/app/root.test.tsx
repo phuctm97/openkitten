@@ -9,7 +9,11 @@ const reactQueryMocks = vi.hoisted(() => ({
 }));
 
 const localModuleMocks = vi.hoisted(() => ({
+  authProvider: vi.fn((props: { children: ReactNode }) => (
+    <section data-testid="auth-provider">{props.children}</section>
+  )),
   devtools: vi.fn((): ComponentType => () => null),
+  toaster: vi.fn(() => <div data-testid="toaster" />),
 }));
 
 const rootMocks = vi.hoisted(() => ({
@@ -44,6 +48,15 @@ vi.mock("~/lib/devtools", () => ({
   },
 }));
 
+vi.mock("~/components/auth/auth-provider", () => ({
+  AuthProvider: (props: { children: ReactNode }) =>
+    localModuleMocks.authProvider(props),
+}));
+
+vi.mock("~/components/ui/sonner", () => ({
+  Toaster: () => localModuleMocks.toaster(),
+}));
+
 vi.mock("@tanstack/react-query", async () => {
   const react = await vi.importActual<typeof import("react")>("react");
   const reactQuery = await vi.importActual<
@@ -56,7 +69,7 @@ vi.mock("@tanstack/react-query", async () => {
       reactQueryMocks.queryClientProvider(props);
 
       return react.createElement(
-        "div",
+        "main",
         { "data-testid": "query-client-provider" },
         props.children,
       );
@@ -153,7 +166,12 @@ test("renders the document shell and shared layout", {
   expect(markup).toContain("openkitten-theme");
   expect(markup).toContain("document.documentElement.style.colorScheme");
   expect(markup).toContain("right-4 top-4 z-10");
+  expect(markup).toContain("toaster");
   expect(markup).toContain("query-client-provider");
+  expect(markup).toContain("auth-provider");
+  expect(markup).toContain(
+    '<main data-testid="query-client-provider"><section data-testid="auth-provider"><span>Child Content</span><div data-testid="toaster"></div></section>',
+  );
   expect(markup).toContain("Devtools");
   expect(markup).toContain("Scroll Restoration Placeholder");
   expect(reactQueryMocks.queryClientProvider).toHaveBeenCalledWith(
