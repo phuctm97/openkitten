@@ -36,15 +36,11 @@ async function capture(cmd: string[]): Promise<string> {
 }
 
 function respawn(): void {
-  if (Bun.env["OPENKITTEN_PROFILE"]) {
-    logger.info("Relying on service manager to respawn");
-    return;
-  }
+  if (Bun.env["OPENKITTEN_PROFILE"]) return;
   // --yes tells the detached child to skip the interactive config-actions
   // menu. No human is at the terminal during an upgrade, and the child's
   // stdin is /dev/null — any prompt would deadlock the new process.
   const cmd = [process.execPath, ...process.argv.slice(1), "--yes"];
-  logger.info("Spawning detached respawner", { cmd });
   const child = Bun.spawn(cmd, {
     cwd: process.cwd(),
     env: process.env,
@@ -123,14 +119,8 @@ export async function upgradeOpenkitten(
   ).trim();
 
   if (previousSha === upstreamSha) {
-    logger.info("Already up to date", { sha: shortSha(previousSha) });
     return { kind: "up-to-date", sha: shortSha(previousSha) };
   }
-
-  logger.info("Upgrading OpenKitten", {
-    previousSha: shortSha(previousSha),
-    upstreamSha: shortSha(upstreamSha),
-  });
 
   await capture(["git", "pull", "--ff-only", "origin", branch]);
   await capture(["bun", "install"]);
@@ -140,11 +130,6 @@ export async function upgradeOpenkitten(
   await notifySessions(options.bot, options.database, previousSha, nextSha);
 
   respawn();
-
-  logger.info("Upgrade prepared, ready to restart", {
-    previousSha: shortSha(previousSha),
-    nextSha: shortSha(nextSha),
-  });
 
   return {
     kind: "restarting",
