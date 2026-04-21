@@ -1,4 +1,4 @@
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { styleText } from "node:util";
@@ -8,6 +8,7 @@ import { defineCommand } from "citty";
 import { builtinCommands } from "~/lib/builtin-commands";
 import { getUserId } from "~/lib/get-user-id";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
+import { listCommandFiles } from "~/lib/list-command-files";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { Profile } from "~/lib/profile";
 import { TelegramConfig } from "~/lib/telegram-config";
@@ -75,7 +76,8 @@ After=network.target
 [Service]
 Environment=NODE_ENV=production
 Environment=OPENKITTEN_PROFILE=${profile.name}
-ExecStart=${process.execPath} . serve
+Environment=OPENKITTEN_SERVICE_MANAGED=1
+ExecStart=${process.execPath} . serve --yes
 WorkingDirectory=${botDir}
 Restart=always
 RestartSec=3
@@ -121,12 +123,15 @@ async function installDarwin(profile: Profile): Promise<void> {
     <string>production</string>
     <key>OPENKITTEN_PROFILE</key>
     <string>${profile.name}</string>
+    <key>OPENKITTEN_SERVICE_MANAGED</key>
+    <string>1</string>
   </dict>
   <key>ProgramArguments</key>
   <array>
     <string>${process.execPath}</string>
     <string>.</string>
     <string>serve</string>
+    <string>--yes</string>
   </array>
   <key>WorkingDirectory</key>
   <string>${botDir}</string>
@@ -175,7 +180,7 @@ async function installWin32(profile: Profile): Promise<void> {
   const s = clack.spinner();
   s.start("Updating service");
   await mkdir(logsDir, { recursive: true });
-  const tr = `cmd /C "cd /D \\"${botDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
+  const tr = `cmd /C "cd /D \\"${botDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && set OPENKITTEN_SERVICE_MANAGED=1 && \\"${process.execPath}\\" . serve --yes >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
   s.stop("Updated service");
   clack.note(
@@ -205,24 +210,9 @@ export const up = defineCommand({
       skipActions: args.yes,
     });
     await OpencodeConfig.create(profile, { skipActions: args.yes });
-    let customCommands: { command: string; description: string }[] = [];
-    try {
-      const raw = await readFile(
-        join(profile.dir, ".opencode", "opencode.json"),
-        "utf-8",
-      );
-      const config = JSON.parse(raw) as {
-        command?: Record<string, { description?: string }>;
-      };
-      customCommands = Object.entries(config.command ?? {})
-        .map(([name, entry]) => ({
-          command: name,
-          description: entry.description ?? "",
-        }))
-        .sort((a, b) => a.command.localeCompare(b.command));
-    } catch {
-      // No config or no commands
-    }
+    const customCommands = await listCommandFiles(
+      join(profile.dir, ".opencode", "commands"),
+    );
     await grammySetCommands(telegramConfig.botToken, [
       ...builtinCommands,
       ...customCommands,

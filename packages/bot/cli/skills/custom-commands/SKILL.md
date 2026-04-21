@@ -7,13 +7,13 @@ description: Create, delete, and list custom Telegram bot commands as markdown f
 
 Custom commands are markdown files in the commands directory. Each `.md` file becomes a `/command` — the filename (without `.md`) is the command name.
 
-The commands directory path is: `$OPENCODE_CONFIG_DIR/commands/`
+The commands directory path is: `$OPENKITTEN_OPENCODE_DIR/commands/`
 
-IMPORTANT: Write files DIRECTLY to `$OPENCODE_CONFIG_DIR/commands/`. Do NOT navigate, explore, or resolve the path manually — use it as-is.
+IMPORTANT: Write files DIRECTLY to `$OPENKITTEN_OPENCODE_DIR/commands/`. Do NOT navigate, explore, or resolve the path manually — use it as-is.
 
 ## How to Create a Command
 
-1. Write a `.md` file to `$OPENCODE_CONFIG_DIR/commands/{name}.md`
+1. Write a `.md` file to `$OPENKITTEN_OPENCODE_DIR/commands/{name}.md`
 2. Call the `reload_commands` tool to apply changes immediately
 
 ### File Format
@@ -36,7 +36,7 @@ Body: the prompt template. Use these placeholders:
 
 ### Example
 
-To create `/weather`, write directly to `$OPENCODE_CONFIG_DIR/commands/weather.md`:
+To create `/weather`, write directly to `$OPENKITTEN_OPENCODE_DIR/commands/weather.md`:
 
 ```markdown
 ---
@@ -51,12 +51,12 @@ Then call `reload_commands`.
 
 ## How to Delete a Command
 
-1. Delete `$OPENCODE_CONFIG_DIR/commands/{name}.md`
+1. Delete `$OPENKITTEN_OPENCODE_DIR/commands/{name}.md`
 2. Call the `reload_commands` tool to apply changes immediately
 
 ## How to List Commands
 
-List files in `$OPENCODE_CONFIG_DIR/commands/`.
+List files in `$OPENKITTEN_OPENCODE_DIR/commands/`.
 
 ## Command Name Rules
 
@@ -70,6 +70,7 @@ Telegram bot built-in commands:
 - `/abort` — Stop the current generation
 - `/compact` — Summarize conversation history
 - `/agent` — Switch or list AI agents
+- `/upgrade` — Update OpenKitten and restart (ships as a global OpenCode command that invokes the `upgrade_openkitten` MCP tool)
 
 OpenCode built-in commands (users can use these directly):
 `/compact` `/connect` `/details` `/editor` `/exit` `/export` `/help` `/init` `/models` `/new` `/redo` `/sessions` `/share` `/themes` `/thinking` `/undo` `/unshare`

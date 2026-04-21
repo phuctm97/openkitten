@@ -31,3 +31,7 @@ Exception: generated files may keep the generator's original structure, includin
 ## No Hacks
 
 No dirty hacks: no suppression comments (`@ts-ignore`, `@ts-expect-error`, `biome-ignore`, `istanbul ignore`), no hacky type casts (`as unknown as`, `as any`), no non-null assertions (`!`). The only exception is `as never` when mocking in tests.
+
+## No Comments
+
+Do not write comments before code, functions, values, or types. Rely on clear names and types. The rare exception is a one-line `TODO`/`FIXME` marking tracked work — not explanations of existing code.

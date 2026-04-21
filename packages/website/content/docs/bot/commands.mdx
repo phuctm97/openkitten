@@ -7,7 +7,7 @@ OpenKitten exposes two surfaces: **Telegram slash commands** you chat with, and 
 
 ## Telegram slash commands
 
-Four commands are built in and always registered with BotFather via `setMyCommands` on every start:
+Five commands are built in and always registered with BotFather via `setMyCommands` on every start:
 
 | Command    | Description                          |
 | ---------- | ------------------------------------ |
@@ -15,6 +15,7 @@ Four commands are built in and always registered with BotFather via `setMyComman
 | `/abort`   | Stop the current generation.         |
 | `/compact` | Summarize conversation history.      |
 | `/agent`   | Switch or list AI agents.            |
+| `/upgrade` | Update OpenKitten and restart.       |
 
 ### `/start [message]`
 
@@ -33,6 +34,10 @@ Triggers OpenCode's session summarization so the conversation history stays with
 Without an argument, lists the available agents and marks the active one for the current session.
 
 With a name, switches the session to that agent — the choice is persisted in the local database and sticks across restarts until changed. Subagents and hidden agents are excluded from the list.
+
+### `/upgrade`
+
+Pulls the latest code from `main`, runs `bun install`, notifies every active session, and restarts the process. Refuses on a non-`main` branch or a dirty worktree. When the bot is installed as a service (`bun . up`), the service manager respawns the process with the new code; otherwise a detached child is spawned before exit so the bot comes back in every launch mode (`bun . serve`, `bun dev`, service). Queued "✅ Upgraded `<previous-sha>` → `<new-sha>`" messages are delivered on the next boot.
 
 ### Custom slash commands
 

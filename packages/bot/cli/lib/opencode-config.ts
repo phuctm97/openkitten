@@ -12,6 +12,8 @@ const bin = resolve(import.meta.dirname, "../node_modules/.bin/opencode");
 
 const defaultAgentsDir = resolve(import.meta.dirname, "../agents");
 
+const defaultCommandsDir = resolve(import.meta.dirname, "../commands");
+
 const defaultSkillsDir = resolve(import.meta.dirname, "../skills");
 
 const systemAgents = resolve(import.meta.dirname, "../system-agents.md");
@@ -83,6 +85,7 @@ export namespace OpencodeConfig {
     const skillsDir = join(configDir, "skills");
     const agentSkillsDir = join(configDir, ".agents", "skills");
     const projectPluginsDir = join(configDir, "plugins");
+    const xdgCommandsDir = join(profile.xdgConfigOpencode, "commands");
     await Promise.all([
       mkdir(agentsDir, { recursive: true }),
       mkdir(commandsDir, { recursive: true }),
@@ -91,6 +94,7 @@ export namespace OpencodeConfig {
       mkdir(projectPluginsDir, { recursive: true }),
       mkdir(profile.workspace, { recursive: true }),
       mkdir(profile.xdgConfigSkill, { recursive: true }),
+      mkdir(xdgCommandsDir, { recursive: true }),
     ]);
     const mdGlob = new Bun.Glob("*.md");
     const agentFiles: string[] = [];
@@ -101,6 +105,18 @@ export namespace OpencodeConfig {
       const source = join(defaultAgentsDir, file);
       const destination = join(agentsDir, file);
       writes.push(() => writeDefaultAgentFile(source, destination));
+    }
+    const commandFiles: string[] = [];
+    for await (const file of mdGlob.scan(defaultCommandsDir)) {
+      commandFiles.push(file);
+    }
+    for (const file of commandFiles) {
+      const source = join(defaultCommandsDir, file);
+      const destination = join(xdgCommandsDir, file);
+      writes.push(async () => {
+        const content = await readFile(source, "utf-8");
+        await writeFile(destination, content);
+      });
     }
     const skillGlob = new Bun.Glob("*/**");
     const skillFiles: string[] = [];
