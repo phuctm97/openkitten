@@ -1,13 +1,12 @@
 ---
-description: Pull latest OpenKitten code from main and restart
+description: Pull latest OpenKitten code and restart
 ---
-Upgrade OpenKitten to the latest `main` branch by invoking the `upgrade_openkitten` MCP tool. Do not reimplement the steps yourself — the tool handles every part of the upgrade:
+Invoke the `upgrade_openkitten` MCP tool. Do nothing else.
 
-- Refuses when the working copy is on a non-`main` branch or has uncommitted changes.
-- Runs `git fetch origin main` and returns early if already up to date.
-- Runs `git pull --ff-only origin main` and then `bun install`.
-- Sends a `⏳ Upgrading OpenKitten…` message to every active chat before the restart.
-- Exits the process so the service manager (when installed via `bun . up`) or a detached child (otherwise) respawns with the newly pulled code.
-- After the new process boots, delivers a `✅ Upgraded to <short-sha>` message to every chat it notified.
+Rules:
+- Do NOT re-implement the upgrade steps — the tool handles git fetch, pull, `bun install`, session notifications, and the process restart.
+- Do NOT narrate, explain, offer help, or add follow-up messages. The tool's restart will interrupt your response mid-sentence and any apology or error-speculation you generate during that window will reach the user as a misleading message.
+- Do NOT make any other tool calls after `upgrade_openkitten` — the MCP transport is torn down by the restart and subsequent calls will appear to fail.
+- The user already sees `⏳ Upgrading OpenKitten…` before the restart and `✅ Upgraded to <sha>` after it. No further acknowledgement from you is needed.
 
-Your response will be interrupted by the restart — that is expected. If the user specified conditions to check first (e.g., run tests, wait for an idle moment), honor them before invoking the tool; otherwise invoke it immediately.
+If the user specified pre-conditions (e.g., "run tests first", "wait until idle"), honor them before invoking the tool. Otherwise invoke it immediately and stop.
