@@ -76,7 +76,7 @@ After=network.target
 [Service]
 Environment=NODE_ENV=production
 Environment=OPENKITTEN_PROFILE=${profile.name}
-ExecStart=${process.execPath} . serve
+ExecStart=${process.execPath} . serve --yes
 WorkingDirectory=${botDir}
 Restart=always
 RestartSec=3
@@ -128,6 +128,7 @@ async function installDarwin(profile: Profile): Promise<void> {
     <string>${process.execPath}</string>
     <string>.</string>
     <string>serve</string>
+    <string>--yes</string>
   </array>
   <key>WorkingDirectory</key>
   <string>${botDir}</string>
@@ -176,7 +177,7 @@ async function installWin32(profile: Profile): Promise<void> {
   const s = clack.spinner();
   s.start("Updating service");
   await mkdir(logsDir, { recursive: true });
-  const tr = `cmd /C "cd /D \\"${botDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
+  const tr = `cmd /C "cd /D \\"${botDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && \\"${process.execPath}\\" . serve --yes >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
   s.stop("Updated service");
   clack.note(
