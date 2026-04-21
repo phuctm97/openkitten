@@ -1,9 +1,8 @@
 {
   "include": ["prepare.ts", "up.ts", "down.ts"],
   "references": [
+    { "path": "./packages/bot/api/tsconfig.json" },
     { "path": "./packages/bot/cli/tsconfig.json" },
-    { "path": "./packages/bot/contract/tsconfig.json" },
-    { "path": "./packages/bot/plugin/tsconfig.json" },
     { "path": "./packages/server/tsconfig.json" },
     { "path": "./packages/website/tsconfig.json" },
     { "path": "./packages/world/tsconfig.json" }

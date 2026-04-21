@@ -251,6 +251,7 @@ test("returns opencode config dir in env", async () => {
   const config = await OpencodeConfig.create(profile);
   expect(config.env).toMatchObject({
     OPENCODE_CONFIG_DIR: configDir(),
+    OPENKITTEN_OPENCODE_DIR: configDir(),
   });
 });
 
