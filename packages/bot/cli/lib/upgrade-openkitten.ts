@@ -88,6 +88,9 @@ async function notifySessions(
   }
 }
 
+// Runs privileged shell commands on the bot host (git pull, bun install) and
+// restarts the process. Access must stay gated by grammyFilterChat to the
+// single configured TELEGRAM_USER_ID.
 export async function upgradeOpenkitten(
   options: UpgradeOpenkittenOptions,
 ): Promise<UpgradeOpenkittenResult> {
