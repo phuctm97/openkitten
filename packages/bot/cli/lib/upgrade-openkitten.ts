@@ -1,5 +1,6 @@
 import { resolve } from "node:path";
 import type { Bot } from "grammy";
+import invariant from "tiny-invariant";
 import type { Database } from "~/lib/database";
 import { logger } from "~/lib/logger";
 import * as schema from "~/lib/schema";
@@ -36,11 +37,18 @@ async function capture(cmd: string[]): Promise<string> {
 }
 
 function respawn(): void {
-  if (Bun.env["OPENKITTEN_PROFILE"]) return;
-  // --yes tells the detached child to skip the interactive config-actions
-  // menu. No human is at the terminal during an upgrade, and the child's
-  // stdin is /dev/null — any prompt would deadlock the new process.
-  const cmd = [process.execPath, ...process.argv.slice(1), "--yes"];
+  // OPENKITTEN_SERVICE_MANAGED is set only by the service templates in
+  // `up.ts` (systemd/launchd/schtasks); when present, the OS service
+  // manager will respawn this process on exit, so we skip our own
+  // detached-child respawn to avoid double-starting.
+  if (Bun.env["OPENKITTEN_SERVICE_MANAGED"]) return;
+  // Relaunch exactly `bun <entry> serve --yes` instead of replaying whatever
+  // argv the current process was invoked with: the respawner's contract is
+  // "restart serve," and --yes is required because the child's stdin is
+  // /dev/null — any interactive prompt would deadlock the new process.
+  const entry = process.argv[1];
+  invariant(entry, "process.argv[1] must be the entry script path");
+  const cmd = [process.execPath, entry, "serve", "--yes"];
   const child = Bun.spawn(cmd, {
     cwd: process.cwd(),
     env: process.env,

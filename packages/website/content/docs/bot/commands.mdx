@@ -37,7 +37,7 @@ With a name, switches the session to that agent — the choice is persisted in t
 
 ### `/upgrade`
 
-Pulls the latest code from `main`, runs `bun install`, notifies every active session, and restarts the process. Refuses on a non-`main` branch or a dirty worktree. When the bot is installed as a service (`bun . up`), the service manager respawns the process with the new code; otherwise a detached child is spawned before exit so the bot comes back in every launch mode (`bun . serve`, `bun dev`, service). Queued "✅ Upgraded to `<sha>`" messages are delivered on the next boot.
+Pulls the latest code from `main`, runs `bun install`, notifies every active session, and restarts the process. Refuses on a non-`main` branch or a dirty worktree. When the bot is installed as a service (`bun . up`), the service manager respawns the process with the new code; otherwise a detached child is spawned before exit so the bot comes back in every launch mode (`bun . serve`, `bun dev`, service). Queued "✅ Upgraded `<previous-sha>` → `<new-sha>`" messages are delivered on the next boot.
 
 ### Custom slash commands
 

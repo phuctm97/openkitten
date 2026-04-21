@@ -70,12 +70,12 @@ function mockBot() {
 const originalSpawn = Bun.spawn;
 
 beforeEach(() => {
-  Bun.env["OPENKITTEN_PROFILE"] = "default";
+  Bun.env["OPENKITTEN_SERVICE_MANAGED"] = "1";
 });
 
 afterEach(() => {
   Object.assign(Bun, { spawn: originalSpawn });
-  delete Bun.env["OPENKITTEN_PROFILE"];
+  delete Bun.env["OPENKITTEN_SERVICE_MANAGED"];
 });
 
 test("throws when branch is not main", async () => {
@@ -286,7 +286,7 @@ test("wraps non-zero exit with no output into UpgradeOpenkittenError with exit c
 });
 
 test("spawns detached respawner when not service-managed", async () => {
-  delete Bun.env["OPENKITTEN_PROFILE"];
+  delete Bun.env["OPENKITTEN_SERVICE_MANAGED"];
   const previous = "1".repeat(40);
   const next = "2".repeat(40);
   const unref = vi.fn();
@@ -324,7 +324,7 @@ test("spawns detached respawner when not service-managed", async () => {
   });
   expect(result.kind).toBe("restarting");
   expect(spawn).toHaveBeenCalledWith(
-    [process.execPath, ...process.argv.slice(1), "--yes"],
+    [process.execPath, process.argv[1], "serve", "--yes"],
     expect.objectContaining({
       cwd: process.cwd(),
       stdin: "ignore",

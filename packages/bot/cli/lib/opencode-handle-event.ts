@@ -35,8 +35,14 @@ export async function opencodeHandleEvent(
       await processingMessages.update(event.payload);
       break;
     case "session.error": {
-      if (shutdown.signal.aborted) break;
       const { sessionID, error } = event.payload.properties;
+      if (shutdown.signal.aborted) {
+        logger.debug("Skipped session.error during shutdown", {
+          sessionID,
+          error,
+        });
+        break;
+      }
       logger.error("OpenCode session encountered an error", error, {
         sessionID,
       });

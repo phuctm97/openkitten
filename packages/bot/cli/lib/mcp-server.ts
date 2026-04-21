@@ -157,7 +157,7 @@ export class McpServer implements Disposable {
       "upgrade_openkitten",
       {
         description:
-          "Pull the latest OpenKitten code from main, run `bun install`, and restart the bot. Refuses on non-main branches or dirty worktrees. The current response will be interrupted. Each active chat receives a '⏳ Upgrading OpenKitten…' message before the restart and a '✅ Upgraded to <sha>' message after the new process boots.",
+          "Pull the latest OpenKitten code from main, run `bun install`, and restart the bot. Refuses on non-main branches or dirty worktrees. The current response will be interrupted. Each active chat receives a '⏳ Upgrading OpenKitten…' message before the restart and a '✅ Upgraded <previous-sha> → <new-sha>' message after the new process boots.",
         inputSchema: zod.looseObject({}),
       },
       async () => this.#upgradeOpenkitten(),
