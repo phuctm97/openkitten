@@ -58,6 +58,7 @@ function respawn(): void {
 async function notifySessions(
   bot: Bot,
   database: Database,
+  previousSha: string,
   nextSha: string,
 ): Promise<void> {
   const sessions = database.query.session
@@ -85,7 +86,7 @@ async function notifySessions(
       .values({
         chatId: row.chatId,
         threadId: row.threadId,
-        message: `✅ Upgraded to ${shortSha(nextSha)}`,
+        message: `✅ Upgraded ${shortSha(previousSha)} → ${shortSha(nextSha)}`,
       })
       .run();
   }
@@ -136,7 +137,7 @@ export async function upgradeOpenkitten(
 
   const nextSha = (await capture(["git", "rev-parse", "HEAD"])).trim();
 
-  await notifySessions(options.bot, options.database, nextSha);
+  await notifySessions(options.bot, options.database, previousSha, nextSha);
 
   respawn();
 

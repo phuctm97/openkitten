@@ -179,12 +179,12 @@ test("pulls, installs, notifies sessions, and returns restarting", async () => {
   expect(insertValues).toHaveBeenNthCalledWith(1, {
     chatId: 100,
     threadId: 0,
-    message: "✅ Upgraded to 2222222",
+    message: "✅ Upgraded 1111111 → 2222222",
   });
   expect(insertValues).toHaveBeenNthCalledWith(2, {
     chatId: 200,
     threadId: 7,
-    message: "✅ Upgraded to 2222222",
+    message: "✅ Upgraded 1111111 → 2222222",
   });
 });
 
@@ -218,7 +218,7 @@ test("skips restart notification when sendMessage fails", async () => {
   expect(insertValues).toHaveBeenCalledWith({
     chatId: 200,
     threadId: 0,
-    message: "✅ Upgraded to 3333333",
+    message: "✅ Upgraded 1111111 → 3333333",
   });
 });
 
