@@ -19,7 +19,7 @@ import { grammyHandleFile } from "~/lib/grammy-handle-file";
 import { grammyHandleMediaGroupFlush } from "~/lib/grammy-handle-media-group-flush";
 import { grammyHandleStart } from "~/lib/grammy-handle-start";
 import { grammyHandleText } from "~/lib/grammy-handle-text";
-import { grammySetCommands } from "~/lib/grammy-set-commands";
+import { grammyResetCommands } from "~/lib/grammy-reset-commands";
 import { listCommandFiles } from "~/lib/list-command-files";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
@@ -66,7 +66,11 @@ export const serve = defineCommand({
       using database = Database.create(profile);
       const commandsDir = join(profile.dir, ".opencode", "commands");
       const customCommands = await listCommandFiles(commandsDir);
-      await grammySetCommands(telegramConfig.botToken, [
+      // Wipe override scopes at startup so stale ones (set by an earlier
+      // version, BotFather, or manual API calls) can't shadow the menu
+      // we're about to push. Runtime reloads keep using `grammySetCommands`
+      // so they don't clobber user-set overrides on every /reload_commands.
+      await grammyResetCommands(telegramConfig.botToken, [
         ...builtinCommands,
         ...customCommands,
       ]);

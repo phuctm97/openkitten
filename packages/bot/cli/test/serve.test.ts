@@ -5,7 +5,7 @@ import { Database } from "~/lib/database";
 import { ExistingSessions } from "~/lib/existing-sessions";
 import { GrammyEventLoop } from "~/lib/grammy-event-loop";
 import { GrammyEventStream } from "~/lib/grammy-event-stream";
-import { grammySetCommands } from "~/lib/grammy-set-commands";
+import { grammyResetCommands } from "~/lib/grammy-reset-commands";
 import { logger } from "~/lib/logger";
 import { McpServer } from "~/lib/mcp-server";
 import { MediaGroupBuffer } from "~/lib/media-group-buffer";
@@ -75,7 +75,7 @@ vi.mock("~/lib/scheduler", () => ({
   },
 }));
 
-vi.mock("~/lib/grammy-set-commands");
+vi.mock("~/lib/grammy-reset-commands");
 
 vi.mock("~/lib/send-restart-notifications", () => ({
   sendRestartNotifications: vi.fn(async () => {}),
@@ -110,7 +110,7 @@ beforeEach(() => {
   vi.mocked(readFile)
     .mockReset()
     .mockResolvedValue("" as never);
-  vi.mocked(grammySetCommands).mockReset().mockResolvedValue(undefined);
+  vi.mocked(grammyResetCommands).mockReset().mockResolvedValue(undefined);
 });
 
 function mockTelegramConfig() {
@@ -872,9 +872,9 @@ test("loads custom commands from .md files in commands dir", async () => {
     return "";
   });
   const run = runCommand(serve, { rawArgs: [] });
-  await vi.waitFor(() => expect(grammySetCommands).toHaveBeenCalled());
-  const call = vi.mocked(grammySetCommands).mock.calls[0];
-  if (!call) throw new Error("Expected grammySetCommands to be called");
+  await vi.waitFor(() => expect(grammyResetCommands).toHaveBeenCalled());
+  const call = vi.mocked(grammyResetCommands).mock.calls[0];
+  if (!call) throw new Error("Expected grammyResetCommands to be called");
   const commands = call[1];
   const custom = commands.filter(
     (c: { command: string }) => c.command === "alpha" || c.command === "beta",
@@ -892,9 +892,9 @@ test("handles .md files without frontmatter description", async () => {
   vi.mocked(readdir).mockResolvedValue(["nodesc.md"] as never);
   vi.mocked(readFile).mockResolvedValue("No frontmatter here");
   const run = runCommand(serve, { rawArgs: [] });
-  await vi.waitFor(() => expect(grammySetCommands).toHaveBeenCalled());
-  const call = vi.mocked(grammySetCommands).mock.calls[0];
-  if (!call) throw new Error("Expected grammySetCommands to be called");
+  await vi.waitFor(() => expect(grammyResetCommands).toHaveBeenCalled());
+  const call = vi.mocked(grammyResetCommands).mock.calls[0];
+  if (!call) throw new Error("Expected grammyResetCommands to be called");
   const commands = call[1];
   const custom = commands.filter(
     (c: { command: string }) => c.command === "nodesc",
@@ -908,9 +908,9 @@ test("handles readdir failure gracefully with empty commands", async () => {
   const { shutdown } = mockAll();
   vi.mocked(readdir).mockRejectedValue(new Error("ENOENT"));
   const run = runCommand(serve, { rawArgs: [] });
-  await vi.waitFor(() => expect(grammySetCommands).toHaveBeenCalled());
-  const call = vi.mocked(grammySetCommands).mock.calls[0];
-  if (!call) throw new Error("Expected grammySetCommands to be called");
+  await vi.waitFor(() => expect(grammyResetCommands).toHaveBeenCalled());
+  const call = vi.mocked(grammyResetCommands).mock.calls[0];
+  if (!call) throw new Error("Expected grammyResetCommands to be called");
   const commands = call[1];
   const custom = commands.filter(
     (c: { command: string }) =>
