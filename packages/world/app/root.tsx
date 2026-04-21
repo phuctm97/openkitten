@@ -10,12 +10,14 @@ import {
   ScrollRestoration,
 } from "react-router";
 import type { Route } from "~/.react-router/types/app/+types/root";
+import { AuthProvider } from "~/components/auth/auth-provider";
 import { JotaiConnector } from "~/components/jotai-connector";
 import { ThemeAnchor } from "~/components/theme-anchor";
 import { ThemeConnector } from "~/components/theme-connector";
 import { ThemeInitializer } from "~/components/theme-initializer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Toaster } from "~/components/ui/sonner";
 import { Devtools } from "~/lib/devtools";
 import { hydrationAtom } from "~/lib/hydration-atom";
 import { queryClient } from "~/lib/query-client";
@@ -39,11 +41,14 @@ export function Layout({ children }: PropsWithChildren) {
         <Links />
       </head>
       <body className="m-0 min-h-full antialiased">
+        <JotaiConnector />
+        <ThemeConnector />
+        <ThemeAnchor />
         <QueryClientProvider client={queryClient}>
-          <JotaiConnector />
-          <ThemeConnector />
-          <ThemeAnchor />
-          {children}
+          <AuthProvider>
+            {children}
+            <Toaster />
+          </AuthProvider>
           {import.meta.env.DEV && <Devtools />}
         </QueryClientProvider>
         <ScrollRestoration />

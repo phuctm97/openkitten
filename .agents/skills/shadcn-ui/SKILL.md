@@ -46,6 +46,8 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
      - if upstream changes that code in a meaningfully different way, do not blindly remove it; compare the behavior, preserve the intentional difference when appropriate, and report the difference clearly
      - keep shared error formatting/toasting in `packages/world/lib/format-error.ts` and `packages/world/lib/toast-error.ts`
      - when generated auth components need to surface unknown error objects, prefer `formatError(...)` for inline text and `toastError(...)` for toast-only paths instead of re-implementing error-shape handling locally
+     - rename generated `packages/world/components/auth/auth.tsx` to `packages/world/components/auth/auth-router.tsx`, and update relevant names such as `Auth` / `AuthProps` to `AuthRouter` / `AuthRouterProps`; alias Better Auth UI's `AuthView` type as `BetterAuthView`
+     - keep `packages/world/components/auth/auth-link.tsx` and `packages/world/components/auth/auth-provider.tsx`; adapt them to upstream changes when applicable
     - Add or update tests so coverage stays at 100%
 
 6. Prefer bundled Radix over individual `@radix-ui/*` packages.
