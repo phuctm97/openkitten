@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import type { Bot } from "grammy";
 import invariant from "tiny-invariant";
 import type { Database } from "~/lib/database";
+import { getUserId } from "~/lib/get-user-id";
 import { logger } from "~/lib/logger";
 import * as schema from "~/lib/schema";
 import { UpgradeOpenkittenError } from "~/lib/upgrade-openkitten-error";
@@ -36,8 +37,48 @@ async function capture(cmd: string[]): Promise<string> {
   return stdout;
 }
 
-function respawn(): void {
-  if (Bun.env["OPENKITTEN_SERVICE_MANAGED"]) return;
+function serviceRestartCommand(): string[] {
+  const profileName = Bun.env["OPENKITTEN_PROFILE"];
+  if (!profileName) {
+    throw new UpgradeOpenkittenError(
+      "OPENKITTEN_PROFILE must be set in service-managed mode",
+    );
+  }
+  switch (process.platform) {
+    case "darwin": {
+      const target = `gui/${getUserId()}/com.openkitten.profiles.${profileName}`;
+      return ["sh", "-c", `sleep 2 && launchctl kickstart -k ${target}`];
+    }
+    case "linux": {
+      const label = `openkitten-${profileName}-profile`;
+      return ["sh", "-c", `sleep 2 && systemctl --user restart ${label}`];
+    }
+    case "win32": {
+      const taskName = `\\OpenKitten\\Profiles\\${profileName}`;
+      return [
+        "cmd",
+        "/C",
+        `timeout /T 2 /NOBREAK > NUL && schtasks /End /TN "${taskName}" & schtasks /Run /TN "${taskName}"`,
+      ];
+    }
+    default:
+      throw new UpgradeOpenkittenError(
+        `${process.platform} is not supported for service restart`,
+      );
+  }
+}
+
+function respawn(serviceCmd: string[] | null): void {
+  if (serviceCmd) {
+    const child = Bun.spawn(serviceCmd, {
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      detached: true,
+    });
+    child.unref();
+    return;
+  }
   const entry = process.argv[1];
   invariant(entry, "process.argv[1] must be the entry script path");
   const cmd = [process.execPath, entry, "serve", "--yes"];
@@ -91,6 +132,10 @@ async function notifySessions(
 export async function upgradeOpenkitten(
   options: UpgradeOpenkittenOptions,
 ): Promise<UpgradeOpenkittenResult> {
+  const serviceCmd = Bun.env["OPENKITTEN_SERVICE_MANAGED"]
+    ? serviceRestartCommand()
+    : null;
+
   const branch = (
     await capture(["git", "rev-parse", "--abbrev-ref", "HEAD"])
   ).trim();
@@ -125,7 +170,7 @@ export async function upgradeOpenkitten(
 
   await notifySessions(options.bot, options.database, previousSha, nextSha);
 
-  respawn();
+  respawn(serviceCmd);
 
   return {
     kind: "restarting",
