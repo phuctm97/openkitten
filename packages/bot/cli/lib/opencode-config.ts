@@ -28,6 +28,20 @@ const defaultConfigJson = {
   default_agent: "assist",
 };
 
+const opencodePluginFilename = "openkitten.js";
+
+const opencodePluginSource = `export default {
+  id: "openkitten-metadata",
+  server: async () => ({
+    "tool.execute.before": async ({ tool, sessionID, callID }, { args }) => {
+      if (!tool.startsWith("openkitten_")) return;
+      if (typeof args !== "object" || args === null) return;
+      args.__OPENKITTEN__ = { sessionID, callID };
+    },
+  }),
+};
+`;
+
 interface OpencodeConfigCreateOptions {
   readonly skipActions?: boolean | undefined;
 }
@@ -148,6 +162,12 @@ export namespace OpencodeConfig {
         join(configDir, "opencode.json"),
         JSON.stringify(defaultConfigJson, null, 2),
         { flag: "wx" },
+      ),
+    );
+    writes.push(() =>
+      writeFile(
+        join(projectPluginsDir, opencodePluginFilename),
+        opencodePluginSource,
       ),
     );
     writes.push(() =>

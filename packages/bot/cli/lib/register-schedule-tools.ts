@@ -1,61 +1,61 @@
 import type { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { JobOptions } from "bunqueue/client";
 import zod from "zod";
 import type { Scheduler } from "~/lib/scheduler";
 
-const taskKindSchema = zod.enum(["session", "background"]);
+const overlapSchema = zod.enum(["queue", "skip", "cancel_previous"]);
 
-const runRecordSchema = zod.object({
-  jobId: zod.string(),
-  startedAt: zod.number(),
-  finishedAt: zod.number(),
-  status: zod.enum([
-    "running",
-    "completed_notified",
-    "completed_silent",
-    "failed",
-  ]),
-  notifiedUser: zod.boolean(),
-  output: zod.string().nullable(),
-  error: zod.string().nullable(),
-});
+const runStatusSchema = zod.enum([
+  "pending",
+  "running",
+  "reported",
+  "silent",
+  "failed",
+  "cancelled",
+  "skipped",
+]);
+
+const runTriggerSchema = zod.enum(["cron", "manual"]);
 
 const scheduleTaskSchema = zod.object({
   id: zod.string(),
   sessionId: zod.string(),
-  kind: taskKindSchema,
-  cron: zod.string(),
   description: zod.string(),
   prompt: zod.string(),
+  cron: zod.string(),
+  timezone: zod.string(),
   once: zod.boolean(),
+  enabled: zod.boolean(),
+  overlap: overlapSchema,
+  notifyOnFailure: zod.boolean(),
+  maxRuntimeMs: zod.number().nullable(),
   createdAt: zod.number(),
   updatedAt: zod.number(),
-  lastTriggeredAt: zod.number().nullable(),
-  nextRunAt: zod.number().nullable(),
-  lastRun: runRecordSchema.nullable(),
+});
+
+const runRecordSchema = zod.object({
+  id: zod.string(),
+  scheduleId: zod.string(),
+  sessionId: zod.string(),
+  queueJobId: zod.string().nullable(),
+  trigger: runTriggerSchema,
+  status: runStatusSchema,
+  startedAt: zod.number(),
+  finishedAt: zod.number().nullable(),
+  output: zod.string().nullable(),
+  error: zod.string().nullable(),
 });
 
 const scheduleCreateInputSchema = zod.looseObject({
-  kind: taskKindSchema
-    .default("session")
-    .describe(
-      [
-        "Task execution mode.",
-        '"session" (recommended for most workflows): executes inside the current Telegram chat. The user sees the response directly and can reply naturally. Best for workflows expecting user interaction (e.g. expense classification where the user replies "chung"/"riêng").',
-        '"background": executes in an isolated ephemeral session. Only sends a Telegram message when something noteworthy is found. Can run up to 15 minutes for complex external-tool workflows (Gmail, Sheets, APIs). Results are recorded in queue_schedule_runs — NOT injected into the main chat context. Best for silent monitoring and alerting where no user reply is expected.',
-        'Default: "session".',
-      ].join(" "),
-    ),
   cron: zod
     .string()
     .trim()
     .min(1)
     .describe(
       [
-        "Cron expression in UTC (5-field: minute hour dom month dow).",
+        "Cron expression (5-field: minute hour dom month dow).",
         "Examples: '0 9 * * *' (daily 9am), '*/30 * * * *' (every 30min), '0 0 * * 1' (Monday midnight).",
         "Shortcuts: @hourly, @daily, @weekly, @monthly.",
-        "Always call queue_server_time first to know the current server time before computing the expression.",
+        "Interpreted in the schedule's timezone (default UTC). Always call queue_server_time first to compute the correct expression.",
       ].join(" "),
     ),
   description: zod
@@ -63,7 +63,7 @@ const scheduleCreateInputSchema = zod.looseObject({
     .trim()
     .min(1)
     .describe(
-      "Short human-readable label for this task, shown when listing schedules. Example: 'Daily standup summary', 'Hourly server health check'.",
+      "Short human-readable label shown when listing schedules. Example: 'Daily standup summary', 'Hourly server health check'.",
     ),
   prompt: zod
     .string()
@@ -72,20 +72,50 @@ const scheduleCreateInputSchema = zod.looseObject({
     .describe(
       [
         "The instruction the AI agent will execute each time the schedule fires.",
-        "Write this as a self-contained instruction — it runs in a separate context from this conversation.",
-        'For "session" kind: write it like a message the user would send, e.g. "Summarize what happened today".',
-        'For "background" kind: write it as a check or query, e.g. "Check if the deployment pipeline has any failures". The AI will decide whether the result is worth reporting.',
+        "Runs in a fresh ephemeral session — write as a self-contained instruction.",
+        "If the task finds nothing worth reporting, it stays silent: no Telegram message, no session noise — only a 'silent' run record for history tracing.",
+        "Describe the check or query, e.g. 'Check if any bank transaction emails arrived since the last run. If any, list them concisely with amount/merchant. If none, do not report anything.'",
       ].join(" "),
     ),
   once: zod
     .boolean()
     .optional()
     .describe(
-      "If true, the task fires once at the next matching cron time, then auto-deletes. Use for one-time reminders. Default: false (recurring).",
+      "If true, fires once at the next matching cron time, then auto-disables (row preserved for history). Default: false (recurring).",
+    ),
+  timezone: zod
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      "IANA timezone for interpreting the cron expression (e.g. 'Asia/Ho_Chi_Minh', 'Europe/London'). Default: 'UTC'.",
+    ),
+  overlap: overlapSchema
+    .optional()
+    .describe(
+      [
+        "Behavior when a cron tick fires while a previous run is still executing.",
+        "'queue' (default): let the new run stack behind the active one.",
+        "'skip': drop the new tick and record a 'skipped' run.",
+        "'cancel_previous': abort the active run and start the new one.",
+      ].join(" "),
+    ),
+  notifyOnFailure: zod
+    .boolean()
+    .optional()
+    .describe(
+      "When true, delivers a Telegram message on execution failure. Default false (failures are silent but recorded in queue_runs).",
+    ),
+  maxRuntimeMs: zod
+    .number()
+    .int()
+    .min(1000)
+    .optional()
+    .describe(
+      "Maximum time in milliseconds the ephemeral session is allowed to run before the run is finalized as silent. Default: 900000 (15 minutes).",
     ),
 });
-
-const scheduleListInputSchema = zod.looseObject({});
 
 const scheduleIdInputSchema = zod.looseObject({
   id: zod
@@ -93,38 +123,39 @@ const scheduleIdInputSchema = zod.looseObject({
     .trim()
     .uuid()
     .describe(
-      "The scheduled task UUID. Use queue_schedule_list to find task IDs. Must be a plain UUID — do not include extra text or serialized data.",
+      "The scheduled task UUID. Use queue_schedule_list to find task IDs. Must be a plain UUID.",
     ),
 });
 
 const scheduleUpdateInputSchema = zod.looseObject({
-  id: zod
-    .string()
-    .trim()
-    .uuid()
-    .describe(
-      "The scheduled task UUID to update. Use queue_schedule_list to find task IDs. Must be a plain UUID.",
-    ),
-  description: zod
-    .string()
-    .trim()
-    .min(1)
-    .optional()
-    .describe("New human-readable label for the task."),
-  prompt: zod
-    .string()
-    .trim()
-    .min(1)
-    .optional()
-    .describe("New instruction the AI agent will execute on schedule."),
-  cron: zod
-    .string()
-    .trim()
-    .min(1)
-    .optional()
-    .describe(
-      "New cron expression in UTC. The schedule restarts immediately with the new timing.",
-    ),
+  id: zod.string().trim().uuid().describe("The scheduled task UUID to update."),
+  description: zod.string().trim().min(1).optional(),
+  prompt: zod.string().trim().min(1).optional(),
+  cron: zod.string().trim().min(1).optional(),
+  timezone: zod.string().trim().min(1).optional(),
+  overlap: overlapSchema.optional(),
+  notifyOnFailure: zod.boolean().optional(),
+  maxRuntimeMs: zod.number().int().min(1000).nullable().optional(),
+});
+
+const scheduleListInputSchema = zod.looseObject({
+  sessionId: zod.string().trim().min(1).optional(),
+  enabled: zod.boolean().optional(),
+});
+
+const runListInputSchema = zod.looseObject({
+  scheduleId: zod.string().trim().uuid().optional(),
+  sessionId: zod.string().trim().min(1).optional(),
+  status: runStatusSchema.optional(),
+  trigger: runTriggerSchema.optional(),
+  since: zod.number().int().min(0).optional(),
+  until: zod.number().int().min(0).optional(),
+  limit: zod.number().int().min(1).max(500).optional(),
+  offset: zod.number().int().min(0).optional(),
+});
+
+const runIdInputSchema = zod.looseObject({
+  id: zod.string().trim().uuid().describe("The scheduled run UUID."),
 });
 
 interface ScheduleToolsContext {
@@ -137,166 +168,10 @@ export function registerScheduleTools(
   ctx: ScheduleToolsContext,
 ): void {
   server.registerTool(
-    "queue_schedule_create",
-    {
-      description:
-        'Create a scheduled task that runs on a cron schedule. Use kind "session" for tasks that respond in the chat (reminders, summaries, recurring analysis). Use kind "background" for silent monitoring that only notifies the user when something noteworthy is found. Background tasks run in an isolated session and poll for up to 15 minutes — suitable for workflows involving external tools (Gmail, Sheets, APIs). Results are visible via queue_schedule_runs, not in the main chat.',
-      inputSchema: scheduleCreateInputSchema,
-      outputSchema: scheduleTaskSchema,
-    },
-    async (args) => {
-      const metadata = ctx.getMetadata(args);
-      const task = await ctx.scheduler.create({
-        sessionId: metadata.sessionID,
-        kind: args.kind ?? "session",
-        cron: args.cron,
-        description: args.description,
-        prompt: args.prompt,
-        once: args.once ?? false,
-      });
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Created schedule [${task.id}]: "${task.description}" (${task.kind}, cron: ${task.cron}, nextRunAt: ${task.nextRunAt ? new Date(task.nextRunAt).toISOString() : "N/A"})`,
-          },
-        ],
-        structuredContent: { ...task },
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_schedule_list",
-    {
-      description:
-        "List all scheduled tasks with their IDs, prompts, cron expressions, and next run times. Use this to find task IDs before calling queue_schedule_update, queue_schedule_delete, or queue_schedule_trigger.",
-      inputSchema: scheduleListInputSchema,
-      outputSchema: zod.object({
-        tasks: zod.array(scheduleTaskSchema),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const tasks = ctx.scheduler.list();
-      const lines = tasks.map(
-        (t) =>
-          `- [${t.id}] (${t.kind}) "${t.description}" | cron: ${t.cron} | prompt: ${t.prompt} | nextRunAt: ${t.nextRunAt ? new Date(t.nextRunAt).toISOString() : "N/A"} | lastRun: ${t.lastRun?.status ?? "none"}`,
-      );
-      const text =
-        tasks.length === 0
-          ? "No scheduled tasks."
-          : `${tasks.length} scheduled task(s):\n${lines.join("\n")}`;
-      return {
-        content: [{ type: "text", text }],
-        structuredContent: { tasks: tasks.map((t) => ({ ...t })) },
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_schedule_delete",
-    {
-      description:
-        "Permanently delete a scheduled task. The task stops running immediately.",
-      inputSchema: scheduleIdInputSchema,
-      outputSchema: zod.object({ deleted: zod.boolean() }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      await ctx.scheduler.delete(args.id);
-      return {
-        content: [{ type: "text", text: `Deleted schedule ${args.id}.` }],
-        structuredContent: { deleted: true },
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_schedule_trigger",
-    {
-      description:
-        "Enqueue a scheduled task for immediate execution without waiting for the next cron tick. The job is processed asynchronously. Background tasks may take up to 15 minutes for complex workflows (e.g. Gmail/Sheets with multiple tool calls). Returns scheduleId, jobId, and enqueuedAt for tracking. Use queue_schedule_runs to check execution result, output, and whether the user was notified.",
-      inputSchema: scheduleIdInputSchema,
-      outputSchema: zod.object({
-        scheduleId: zod.string(),
-        jobId: zod.string(),
-        enqueuedAt: zod.number(),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const result = await ctx.scheduler.trigger(args.id);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Triggered schedule ${result.scheduleId} → job ${result.jobId}`,
-          },
-        ],
-        structuredContent: { ...result },
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_schedule_update",
-    {
-      description:
-        "Update an existing scheduled task. Only the provided fields are changed — omitted fields keep their current values. If the cron expression changes, the new schedule takes effect immediately.",
-      inputSchema: scheduleUpdateInputSchema,
-      outputSchema: scheduleTaskSchema,
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const task = await ctx.scheduler.update(args.id, {
-        ...(args.description !== undefined && {
-          description: args.description,
-        }),
-        ...(args.prompt !== undefined && { prompt: args.prompt }),
-        ...(args.cron !== undefined && { cron: args.cron }),
-      });
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Updated schedule [${task.id}]: "${task.description}" (cron: ${task.cron}, nextRunAt: ${task.nextRunAt ? new Date(task.nextRunAt).toISOString() : "N/A"})`,
-          },
-        ],
-        structuredContent: { ...task },
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_schedule_runs",
-    {
-      description:
-        "Get execution history for a scheduled task. Shows the last 20 runs with jobId, startedAt, finishedAt, status (completed_notified, completed_silent, failed), notifiedUser, output preview, and error details. Use this to inspect background task behavior without polluting the main chat context.",
-      inputSchema: scheduleIdInputSchema,
-      outputSchema: zod.object({
-        runs: zod.array(runRecordSchema),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const runs = ctx.scheduler.getRuns(args.id);
-      const text =
-        runs.length === 0
-          ? "No execution history."
-          : `${runs.length} run(s):\n${runs.map((r) => `- [${r.jobId}] ${r.status} notified:${r.notifiedUser} (${new Date(r.startedAt).toISOString()} → ${r.finishedAt ? new Date(r.finishedAt).toISOString() : "pending"}, ${r.finishedAt ? `${r.finishedAt - r.startedAt}ms` : "running"})${r.output ? ` output: ${r.output.slice(0, 200)}` : ""}${r.error ? ` error: ${r.error}` : ""}`).join("\n")}`;
-      return {
-        content: [{ type: "text", text }],
-        structuredContent: { runs: runs.map((r) => ({ ...r })) },
-      };
-    },
-  );
-
-  server.registerTool(
     "queue_server_time",
     {
       description:
-        "Get the current server time in multiple formats. Call this before creating or updating scheduled tasks to compute correct UTC cron expressions.",
+        "Get the current server time in multiple formats. Call this before creating or updating scheduled tasks to compute correct cron expressions in the desired timezone.",
       inputSchema: zod.looseObject({}),
       outputSchema: zod.object({
         iso: zod.string(),
@@ -326,122 +201,265 @@ export function registerScheduleTools(
     },
   );
 
-  // -------------------------------------------------------------------------
-  // Queue tools — expose bunqueue capabilities to the agent
-  // -------------------------------------------------------------------------
-
   server.registerTool(
-    "queue_add_job",
+    "queue_schedule_create",
     {
       description:
-        "Queue a one-off job for immediate or delayed execution via bunqueue queue.add(). Accepts all bunqueue JobOptions. Returns the full bunqueue Job.",
-      inputSchema: zod.looseObject({
-        kind: taskKindSchema
-          .default("session")
-          .describe(
-            'Execution mode: "session" responds in chat, "background" runs silently.',
-          ),
-        description: zod
-          .string()
-          .trim()
-          .min(1)
-          .describe("Short label for this job."),
-        prompt: zod
-          .string()
-          .trim()
-          .min(1)
-          .describe("The instruction the AI agent will execute."),
-        priority: zod
-          .number()
-          .int()
-          .optional()
-          .describe("Job priority. Higher = processed sooner."),
-        delay: zod
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe("Delay in ms before job becomes available."),
-        attempts: zod
-          .number()
-          .int()
-          .optional()
-          .describe("Maximum number of retry attempts."),
-        backoff: zod
-          .union([
-            zod.number(),
-            zod.object({
-              type: zod.enum(["fixed", "exponential"]),
-              delay: zod.number(),
-            }),
-          ])
-          .optional()
-          .describe("Backoff delay or config between retries."),
-        timeout: zod
-          .number()
-          .int()
-          .optional()
-          .describe("Processing timeout in ms."),
-        jobId: zod
-          .string()
-          .optional()
-          .describe("Custom job ID for idempotent/deduplication."),
-        removeOnComplete: zod
-          .union([zod.boolean(), zod.number()])
-          .optional()
-          .describe(
-            "Remove job on completion (true, false, or max age in ms).",
-          ),
-        removeOnFail: zod
-          .union([zod.boolean(), zod.number()])
-          .optional()
-          .describe("Remove job on failure (true, false, or max age in ms)."),
-        lifo: zod
-          .boolean()
-          .optional()
-          .describe("Process in LIFO order (newest first)."),
-        stallTimeout: zod
-          .number()
-          .int()
-          .optional()
-          .describe("Stall timeout in ms."),
-        durable: zod
-          .boolean()
-          .optional()
-          .describe("Force immediate persistence to disk."),
-      }),
+        "Create a scheduled task. Runs in an ephemeral OpenCode session on each cron tick. If the run produces meaningful output, it's delivered to the user's Telegram chat. If the instruction finds nothing worth reporting, the run stays silent in both the chat and the session — only a 'silent' run record is kept for history tracing via queue_runs.",
+      inputSchema: scheduleCreateInputSchema,
+      outputSchema: scheduleTaskSchema,
     },
     async (args) => {
       const metadata = ctx.getMetadata(args);
-      const opts: JobOptions = {};
-      if (args.priority !== undefined) opts.priority = args.priority;
-      if (args.delay !== undefined) opts.delay = args.delay;
-      if (args.attempts !== undefined) opts.attempts = args.attempts;
-      if (args.backoff !== undefined) opts.backoff = args.backoff;
-      if (args.timeout !== undefined) opts.timeout = args.timeout;
-      if (args.jobId !== undefined) opts.jobId = args.jobId;
-      if (args.removeOnComplete !== undefined)
-        opts.removeOnComplete = args.removeOnComplete;
-      if (args.removeOnFail !== undefined)
-        opts.removeOnFail = args.removeOnFail;
-      if (args.lifo !== undefined) opts.lifo = args.lifo;
-      if (args.stallTimeout !== undefined)
-        opts.stallTimeout = args.stallTimeout;
-      if (args.durable !== undefined) opts.durable = args.durable;
-      const job = await ctx.scheduler.addJob(
-        metadata.sessionID,
-        args.kind ?? "session",
-        args.description,
-        args.prompt,
-        Object.keys(opts).length > 0 ? opts : undefined,
-      );
+      const task = await ctx.scheduler.create({
+        sessionId: metadata.sessionID,
+        cron: args.cron,
+        description: args.description,
+        prompt: args.prompt,
+        once: args.once ?? false,
+        ...(args.timezone !== undefined && { timezone: args.timezone }),
+        ...(args.overlap !== undefined && { overlap: args.overlap }),
+        ...(args.notifyOnFailure !== undefined && {
+          notifyOnFailure: args.notifyOnFailure,
+        }),
+        ...(args.maxRuntimeMs !== undefined && {
+          maxRuntimeMs: args.maxRuntimeMs,
+        }),
+      });
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(job.toJSON(), null, 2),
+            text: `Created schedule [${task.id}]: "${task.description}" (cron: ${task.cron} ${task.timezone}${task.once ? ", once" : ""})`,
           },
         ],
+        structuredContent: { ...task },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_schedule_list",
+    {
+      description:
+        "List scheduled tasks with optional filters. Use this to find task IDs before calling queue_schedule_update, queue_schedule_delete, queue_schedule_trigger, queue_schedule_enable, or queue_schedule_disable.",
+      inputSchema: scheduleListInputSchema,
+      outputSchema: zod.object({ tasks: zod.array(scheduleTaskSchema) }),
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const filter: Scheduler.ListFilter = {
+        ...(args.sessionId !== undefined && { sessionId: args.sessionId }),
+        ...(args.enabled !== undefined && { enabled: args.enabled }),
+      };
+      const tasks = ctx.scheduler.list(filter);
+      const lines = tasks.map(
+        (t) =>
+          `- [${t.id}] ${t.enabled ? "▶" : "⏸"} "${t.description}" | cron: ${t.cron} ${t.timezone}${t.once ? " (once)" : ""} | overlap: ${t.overlap}${t.notifyOnFailure ? " | notifyOnFailure" : ""}`,
+      );
+      const text =
+        tasks.length === 0
+          ? "No scheduled tasks."
+          : `${tasks.length} scheduled task(s):\n${lines.join("\n")}`;
+      return {
+        content: [{ type: "text", text }],
+        structuredContent: { tasks: tasks.map((t) => ({ ...t })) },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_schedule_update",
+    {
+      description:
+        "Update fields on an existing scheduled task. Omitted fields keep their current values. If cron or timezone changes, the schedule re-registers immediately.",
+      inputSchema: scheduleUpdateInputSchema,
+      outputSchema: scheduleTaskSchema,
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const task = await ctx.scheduler.update(args.id, {
+        ...(args.description !== undefined && {
+          description: args.description,
+        }),
+        ...(args.prompt !== undefined && { prompt: args.prompt }),
+        ...(args.cron !== undefined && { cron: args.cron }),
+        ...(args.timezone !== undefined && { timezone: args.timezone }),
+        ...(args.overlap !== undefined && { overlap: args.overlap }),
+        ...(args.notifyOnFailure !== undefined && {
+          notifyOnFailure: args.notifyOnFailure,
+        }),
+        ...(args.maxRuntimeMs !== undefined && {
+          maxRuntimeMs: args.maxRuntimeMs,
+        }),
+      });
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Updated schedule [${task.id}]: "${task.description}"`,
+          },
+        ],
+        structuredContent: { ...task },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_schedule_delete",
+    {
+      description:
+        "Permanently delete a scheduled task and all its run history. Any in-flight run is cancelled. Use queue_schedule_disable to pause without losing history.",
+      inputSchema: scheduleIdInputSchema,
+      outputSchema: zod.object({ deleted: zod.boolean() }),
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      await ctx.scheduler.delete(args.id);
+      return {
+        content: [{ type: "text", text: `Deleted schedule ${args.id}.` }],
+        structuredContent: { deleted: true },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_schedule_enable",
+    {
+      description:
+        "Re-enable a previously disabled schedule. The cron is re-registered and firing resumes at the next matching time.",
+      inputSchema: scheduleIdInputSchema,
+      outputSchema: scheduleTaskSchema,
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const task = await ctx.scheduler.enable(args.id);
+      return {
+        content: [{ type: "text", text: `Enabled schedule ${task.id}.` }],
+        structuredContent: { ...task },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_schedule_disable",
+    {
+      description:
+        "Pause a schedule without deleting it. The cron is removed from the queue and no new runs fire until queue_schedule_enable is called. Existing run history is preserved.",
+      inputSchema: scheduleIdInputSchema,
+      outputSchema: scheduleTaskSchema,
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const task = await ctx.scheduler.disable(args.id);
+      return {
+        content: [{ type: "text", text: `Disabled schedule ${task.id}.` }],
+        structuredContent: { ...task },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_schedule_trigger",
+    {
+      description:
+        "Enqueue a scheduled task for immediate execution without waiting for the next cron tick. Returns the run id (pre-created with status 'pending', transitions to 'running' when the worker picks it up). Use queue_run_get with the returned run id to poll the result.",
+      inputSchema: scheduleIdInputSchema,
+      outputSchema: zod.object({
+        scheduleId: zod.string(),
+        runId: zod.string(),
+        queueJobId: zod.string(),
+        enqueuedAt: zod.number(),
+      }),
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const result = await ctx.scheduler.trigger(args.id);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Triggered schedule ${result.scheduleId} → run ${result.runId} (job ${result.queueJobId})`,
+          },
+        ],
+        structuredContent: { ...result },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_runs",
+    {
+      description:
+        "List scheduled run records with optional filters. Each run has its own UUID, a status (pending, running, reported, silent, failed, cancelled, skipped), and either output text (on 'reported') or error text (on 'failed'). Use this to trace what scheduled tasks have done, even across bot restarts.",
+      inputSchema: runListInputSchema,
+      outputSchema: zod.object({ runs: zod.array(runRecordSchema) }),
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const runs = ctx.scheduler.listRuns({
+        ...(args.scheduleId !== undefined && { scheduleId: args.scheduleId }),
+        ...(args.sessionId !== undefined && { sessionId: args.sessionId }),
+        ...(args.status !== undefined && { status: args.status }),
+        ...(args.trigger !== undefined && { trigger: args.trigger }),
+        ...(args.since !== undefined && { since: args.since }),
+        ...(args.until !== undefined && { until: args.until }),
+        ...(args.limit !== undefined && { limit: args.limit }),
+        ...(args.offset !== undefined && { offset: args.offset }),
+      });
+      const text =
+        runs.length === 0
+          ? "No matching runs."
+          : `${runs.length} run(s):\n${runs
+              .map(
+                (r) =>
+                  `- [${r.id}] ${r.status} (${r.trigger}) schedule=${r.scheduleId} ${new Date(r.startedAt).toISOString()}${r.finishedAt ? ` → ${new Date(r.finishedAt).toISOString()} (${r.finishedAt - r.startedAt}ms)` : " running"}${r.output ? ` | output: ${r.output.slice(0, 200)}` : ""}${r.error ? ` | error: ${r.error}` : ""}`,
+              )
+              .join("\n")}`;
+      return {
+        content: [{ type: "text", text }],
+        structuredContent: { runs: runs.map((r) => ({ ...r })) },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_run_get",
+    {
+      description:
+        "Fetch full details of a single scheduled run by its UUID, including the complete output or error text.",
+      inputSchema: runIdInputSchema,
+      outputSchema: runRecordSchema,
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const run = ctx.scheduler.getRun(args.id);
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Run ${run.id}: ${run.status} (${run.trigger})${run.output ? `\nOutput:\n${run.output}` : ""}${run.error ? `\nError: ${run.error}` : ""}`,
+          },
+        ],
+        structuredContent: { ...run },
+      };
+    },
+  );
+
+  server.registerTool(
+    "queue_run_cancel",
+    {
+      description:
+        "Cancel an in-flight scheduled run. The ephemeral session is aborted and the run is recorded as 'cancelled'. Only works on runs in 'pending' or 'running' status.",
+      inputSchema: runIdInputSchema,
+      outputSchema: runRecordSchema,
+    },
+    async (args) => {
+      ctx.getMetadata(args);
+      const run = await ctx.scheduler.cancelRun(args.id);
+      return {
+        content: [{ type: "text", text: `Cancelled run ${run.id}.` }],
+        structuredContent: { ...run },
       };
     },
   );
@@ -450,7 +468,7 @@ export function registerScheduleTools(
     "queue_status",
     {
       description:
-        "Get current queue status via bunqueue getJobCountsAsync() and isPaused(). Returns full JobCounts.",
+        "Get current bunqueue job-queue status: paused/running state and JobCounts by state.",
       inputSchema: zod.looseObject({}),
     },
     async (args) => {
@@ -460,247 +478,7 @@ export function registerScheduleTools(
       const paused = queue.isPaused();
       return {
         content: [
-          {
-            type: "text",
-            text: JSON.stringify({ paused, counts }, null, 2),
-          },
-        ],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_pause",
-    {
-      description: "Pause the job queue via bunqueue pause().",
-      inputSchema: zod.looseObject({}),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      ctx.scheduler.bunqueue.pause();
-      return {
-        content: [{ type: "text", text: "Queue paused." }],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_resume",
-    {
-      description: "Resume the job queue via bunqueue resume().",
-      inputSchema: zod.looseObject({}),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      ctx.scheduler.bunqueue.resume();
-      return {
-        content: [{ type: "text", text: "Queue resumed." }],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_cancel_job",
-    {
-      description: "Cancel a job via bunqueue cancel(jobId, gracePeriodMs?).",
-      inputSchema: zod.looseObject({
-        jobId: zod
-          .string()
-          .trim()
-          .min(1)
-          .describe(
-            "The job ID to cancel. Must be a plain ID string — do not include extra text.",
-          ),
-        gracePeriodMs: zod
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe("Grace period in ms before cancellation."),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      ctx.scheduler.bunqueue.cancel(args.jobId, args.gracePeriodMs);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Cancellation requested for job ${args.jobId}.`,
-          },
-        ],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_get_job",
-    {
-      description:
-        "Get a job by ID via bunqueue getJob(). Returns the full bunqueue Job as JSON (toJSON()).",
-      inputSchema: zod.looseObject({
-        jobId: zod
-          .string()
-          .trim()
-          .min(1)
-          .describe(
-            "The job ID to look up. Must be a plain ID string — do not include extra text.",
-          ),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const job = await ctx.scheduler.bunqueue.getJob(args.jobId);
-      if (!job) {
-        return {
-          content: [{ type: "text", text: `Job ${args.jobId} not found.` }],
-        };
-      }
-      const state = await job.getState();
-      const json = job.toJSON();
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ ...json, state }, null, 2),
-          },
-        ],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_list_crons",
-    {
-      description:
-        "List all active cron schedulers via bunqueue listCrons(). Returns full SchedulerInfo[].",
-      inputSchema: zod.looseObject({}),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const crons = await ctx.scheduler.bunqueue.listCrons();
-      return {
-        content: [{ type: "text", text: JSON.stringify(crons, null, 2) }],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_dlq_list",
-    {
-      description:
-        "List dead-lettered jobs via bunqueue getDlq(filter?) and getDlqStats(). Returns full DlqStats and DlqEntry[] (including attempts array, retryCount, lastRetryAt, nextRetryAt, expiresAt).",
-      inputSchema: zod.looseObject({
-        reason: zod
-          .enum([
-            "explicit_fail",
-            "max_attempts_exceeded",
-            "timeout",
-            "stalled",
-            "ttl_expired",
-            "worker_lost",
-            "unknown",
-          ])
-          .optional()
-          .describe("Filter by failure reason."),
-        olderThan: zod
-          .number()
-          .optional()
-          .describe("Filter entries older than this timestamp."),
-        newerThan: zod
-          .number()
-          .optional()
-          .describe("Filter entries newer than this timestamp."),
-        retriable: zod
-          .boolean()
-          .optional()
-          .describe("Filter by retriable status."),
-        expired: zod.boolean().optional().describe("Filter by expired status."),
-        limit: zod.number().int().optional().describe("Max entries to return."),
-        offset: zod
-          .number()
-          .int()
-          .optional()
-          .describe("Offset for pagination."),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const queue = ctx.scheduler.bunqueue;
-      const stats = queue.getDlqStats();
-      const filter = {
-        ...(args.reason !== undefined && { reason: args.reason }),
-        ...(args.olderThan !== undefined && { olderThan: args.olderThan }),
-        ...(args.newerThan !== undefined && { newerThan: args.newerThan }),
-        ...(args.retriable !== undefined && { retriable: args.retriable }),
-        ...(args.expired !== undefined && { expired: args.expired }),
-        ...(args.limit !== undefined && { limit: args.limit }),
-        ...(args.offset !== undefined && { offset: args.offset }),
-      };
-      const entries =
-        Object.keys(filter).length > 0 ? queue.getDlq(filter) : queue.getDlq();
-      const serializedEntries = entries.map((entry) => ({
-        ...entry,
-        job: entry.job.toJSON(),
-      }));
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify(
-              { stats, entries: serializedEntries },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_dlq_retry",
-    {
-      description:
-        "Retry dead-lettered jobs via bunqueue retryDlq(id?). Returns count of retried entries.",
-      inputSchema: zod.looseObject({
-        id: zod
-          .string()
-          .trim()
-          .optional()
-          .describe("DLQ entry ID to retry. Omit to retry all."),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const retried = ctx.scheduler.bunqueue.retryDlq(args.id);
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ retried }, null, 2),
-          },
-        ],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_dlq_purge",
-    {
-      description:
-        "Purge all dead-lettered jobs via bunqueue purgeDlq(). Returns count of purged entries.",
-      inputSchema: zod.looseObject({}),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const purged = ctx.scheduler.bunqueue.purgeDlq();
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ purged }, null, 2),
-          },
+          { type: "text", text: JSON.stringify({ paused, counts }, null, 2) },
         ],
       };
     },
@@ -710,7 +488,7 @@ export function registerScheduleTools(
     "queue_list_jobs",
     {
       description:
-        "List jobs by state via bunqueue queue.getJobsAsync(). Returns full Job[] as JSON.",
+        "List raw bunqueue jobs by state. Returns full Job JSON — useful for low-level debugging when queue_runs doesn't show what you expect.",
       inputSchema: zod.looseObject({
         state: zod
           .enum([
@@ -721,23 +499,10 @@ export function registerScheduleTools(
             "delayed",
             "prioritized",
           ])
-          .optional()
-          .describe("Filter by job state. Omit for all states."),
-        start: zod
-          .number()
-          .int()
-          .min(0)
-          .optional()
-          .describe("Start index for pagination."),
-        end: zod
-          .number()
-          .int()
-          .optional()
-          .describe("End index for pagination."),
-        asc: zod
-          .boolean()
-          .optional()
-          .describe("Sort ascending by creation time."),
+          .optional(),
+        start: zod.number().int().min(0).optional(),
+        end: zod.number().int().optional(),
+        asc: zod.boolean().optional(),
       }),
     },
     async (args) => {
@@ -765,110 +530,17 @@ export function registerScheduleTools(
   );
 
   server.registerTool(
-    "queue_remove_job",
+    "queue_list_crons",
     {
       description:
-        "Remove a specific job from the queue via bunqueue queue.removeAsync().",
-      inputSchema: zod.looseObject({
-        jobId: zod
-          .string()
-          .trim()
-          .min(1)
-          .describe("The job ID to remove. Must be a plain ID string."),
-      }),
+        "List active bunqueue cron schedulers. Useful to confirm that schedules are actually registered with the queue engine.",
+      inputSchema: zod.looseObject({}),
     },
     async (args) => {
       ctx.getMetadata(args);
-      await ctx.scheduler.bunqueue.queue.removeAsync(args.jobId);
+      const crons = await ctx.scheduler.bunqueue.listCrons();
       return {
-        content: [{ type: "text", text: `Removed job ${args.jobId}.` }],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_retry_job",
-    {
-      description: "Retry a specific failed job via bunqueue queue.retryJob().",
-      inputSchema: zod.looseObject({
-        jobId: zod
-          .string()
-          .trim()
-          .min(1)
-          .describe("The job ID to retry. Must be a plain ID string."),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      await ctx.scheduler.bunqueue.queue.retryJob(args.jobId);
-      return {
-        content: [{ type: "text", text: `Retried job ${args.jobId}.` }],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_clean",
-    {
-      description:
-        "Clean up old jobs by state via bunqueue queue.cleanAsync(). Returns array of removed job IDs.",
-      inputSchema: zod.looseObject({
-        grace: zod
-          .number()
-          .int()
-          .min(0)
-          .describe(
-            "Grace period in ms — only jobs older than this are removed.",
-          ),
-        limit: zod
-          .number()
-          .int()
-          .min(1)
-          .describe("Maximum number of jobs to remove."),
-        state: zod
-          .enum(["completed", "failed", "delayed", "waiting", "active"])
-          .optional()
-          .describe("Job state to clean. Defaults to completed."),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      const removed = await ctx.scheduler.bunqueue.queue.cleanAsync(
-        args.grace,
-        args.limit,
-        args.state,
-      );
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ removed }, null, 2),
-          },
-        ],
-      };
-    },
-  );
-
-  server.registerTool(
-    "queue_promote_job",
-    {
-      description:
-        "Promote a delayed job to waiting state via bunqueue queue.promoteJob().",
-      inputSchema: zod.looseObject({
-        jobId: zod
-          .string()
-          .trim()
-          .min(1)
-          .describe(
-            "The delayed job ID to promote. Must be a plain ID string.",
-          ),
-      }),
-    },
-    async (args) => {
-      ctx.getMetadata(args);
-      await ctx.scheduler.bunqueue.queue.promoteJob(args.jobId);
-      return {
-        content: [{ type: "text", text: `Promoted job ${args.jobId}.` }],
+        content: [{ type: "text", text: JSON.stringify(crons, null, 2) }],
       };
     },
   );

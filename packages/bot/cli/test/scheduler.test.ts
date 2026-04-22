@@ -1,46 +1,84 @@
+import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
 import { Scheduler } from "~/lib/scheduler";
-import { schedule as scheduleTable, session } from "~/lib/schema";
+import {
+  scheduleRun as scheduleRunTable,
+  schedule as scheduleTable,
+  session as sessionTable,
+} from "~/lib/schema";
 
 let capturedProcessor: ((job: unknown) => Promise<unknown>) | undefined;
+const cronRegistry: Array<{ id: string; name: string; next: number }> = [];
+const abortSignals = new Map<string, AbortController>();
 
-const mockQueue = {
-  upsertJobScheduler: vi.fn().mockImplementation((id: string) => {
-    cronRegistry.push({ id, name: id, next: Date.now() + 60_000 });
-    return Promise.resolve({ id, name: id, next: Date.now() + 60_000 });
-  }),
-  removeJobScheduler: vi.fn().mockResolvedValue(true),
-  getJobSchedulers: vi.fn().mockResolvedValue([]),
-  add: vi.fn(),
-};
-
-const mockCron = vi.fn().mockImplementation((id: string) => {
+const mockUpsert = vi.fn().mockImplementation((id: string) => {
   cronRegistry.push({ id, name: id, next: Date.now() + 60_000 });
   return Promise.resolve({ id, name: id, next: Date.now() + 60_000 });
 });
-const mockRemoveCron = vi.fn().mockResolvedValue(true);
-const cronRegistry: Array<{ id: string; name: string; next: number }> = [];
+
+const mockRemoveJobScheduler = vi.fn().mockImplementation((id: string) => {
+  const idx = cronRegistry.findIndex((c) => c.id === id);
+  if (idx >= 0) cronRegistry.splice(idx, 1);
+  return Promise.resolve(true);
+});
+
+const mockAdd = vi.fn();
+const mockCancel = vi.fn().mockImplementation((jobId: string) => {
+  const controller = abortSignals.get(jobId);
+  if (controller) controller.abort();
+});
+const mockGetSignal = vi.fn().mockImplementation((jobId: string) => {
+  const existing = abortSignals.get(jobId);
+  if (existing) return existing.signal;
+  const controller = new AbortController();
+  abortSignals.set(jobId, controller);
+  return controller.signal;
+});
+const mockRemoveCron = vi.fn().mockImplementation((id: string) => {
+  const idx = cronRegistry.findIndex((c) => c.id === id);
+  if (idx >= 0) cronRegistry.splice(idx, 1);
+  return Promise.resolve(true);
+});
 const mockListCrons = vi
   .fn()
   .mockImplementation(() => Promise.resolve([...cronRegistry]));
 const mockClose = vi.fn().mockResolvedValue(undefined);
 const mockOn = vi.fn();
+const mockGetJobsAsync = vi.fn().mockResolvedValue([]);
+const mockGetJobCountsAsync = vi.fn().mockResolvedValue({
+  waiting: 0,
+  active: 0,
+  completed: 0,
+  failed: 0,
+  delayed: 0,
+  prioritized: 0,
+  paused: 0,
+});
+const mockIsPaused = vi.fn().mockReturnValue(false);
 
 vi.mock("bunqueue/client", () => ({
   Bunqueue: class MockBunqueue {
-    queue = mockQueue;
+    queue = {
+      upsertJobScheduler: mockUpsert,
+      removeJobScheduler: mockRemoveJobScheduler,
+      add: mockAdd,
+      getJobsAsync: mockGetJobsAsync,
+    };
     constructor(
       _name: string,
       opts: { processor: (job: unknown) => Promise<unknown> },
     ) {
       capturedProcessor = opts.processor;
     }
-    cron = mockCron;
     removeCron = mockRemoveCron;
     listCrons = mockListCrons;
     close = mockClose;
     on = mockOn;
+    cancel = mockCancel;
+    getSignal = mockGetSignal;
+    getJobCountsAsync = mockGetJobCountsAsync;
+    isPaused = mockIsPaused;
   },
 }));
 
@@ -51,7 +89,7 @@ vi.mock("~/lib/get-session-agent", () => ({
 }));
 
 let database: Database;
-let mockBot: {
+let bot: {
   api: { sendMessage: ReturnType<typeof vi.fn> };
 };
 let opencodeClient: {
@@ -64,69 +102,61 @@ let opencodeClient: {
   };
 };
 let existingSessions: {
-  find: ReturnType<typeof vi.fn>;
   get: ReturnType<typeof vi.fn>;
 };
 let scheduler: Scheduler;
 
+const ephemeralSessionId = "ephemeral-session-1";
+const userSessionId = "sess-1";
+
 beforeEach(async () => {
   vi.useFakeTimers();
-
   database = Database.create();
-  mockBot = { api: { sendMessage: vi.fn().mockResolvedValue(undefined) } };
+  bot = { api: { sendMessage: vi.fn().mockResolvedValue(undefined) } };
   opencodeClient = {
     session: {
       promptAsync: vi.fn().mockResolvedValue({ data: undefined }),
-      create: vi
-        .fn()
-        .mockResolvedValue({ data: { id: "ephemeral-session-1" } }),
+      create: vi.fn().mockResolvedValue({ data: { id: ephemeralSessionId } }),
       abort: vi.fn().mockResolvedValue(undefined),
       status: vi.fn().mockResolvedValue({
-        data: { "ephemeral-session-1": { type: "idle" } },
+        data: { [ephemeralSessionId]: { type: "idle" } },
       }),
       messages: vi.fn().mockResolvedValue({
         data: [
           {
-            info: { role: "user" },
-            parts: [],
-          },
-          {
             info: { role: "assistant" },
-            parts: [
-              {
-                type: "text",
-                text: "[NO_REPORT]",
-              },
-            ],
+            parts: [{ type: "text", text: "[NO_REPORT]" }],
           },
         ],
       }),
     },
   };
   existingSessions = {
-    find: vi.fn().mockResolvedValue("session-1"),
     get: vi.fn().mockReturnValue({ chatId: 123, threadId: undefined }),
   };
   mockGetSessionAgent.mockReturnValue(undefined);
 
-  const schema = await import("~/lib/schema");
   database
-    .insert(schema.session)
-    .values({ id: "session-1", chatId: 123, threadId: 0 })
+    .insert(sessionTable)
+    .values({ id: userSessionId, chatId: 123, threadId: 0 })
     .run();
 
   capturedProcessor = undefined;
   cronRegistry.length = 0;
-  mockCron.mockClear();
+  abortSignals.clear();
+  mockUpsert.mockClear();
+  mockRemoveJobScheduler.mockClear();
+  mockAdd.mockReset();
+  mockAdd.mockResolvedValue({ id: "job-1", name: "job-1" });
+  mockCancel.mockClear();
+  mockGetSignal.mockClear();
   mockRemoveCron.mockClear();
   mockListCrons.mockClear();
   mockClose.mockClear();
   mockOn.mockClear();
-  mockQueue.upsertJobScheduler.mockClear();
-  mockQueue.removeJobScheduler.mockClear();
 
   scheduler = await Scheduler.create(
-    mockBot as never,
+    bot as never,
     database,
     opencodeClient as never,
     existingSessions as never,
@@ -140,528 +170,1516 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-// ---------------------------------------------------------------------------
-// create()
-// ---------------------------------------------------------------------------
-
-test("create() returns task with all fields", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "hourly",
-    prompt: "do something",
-    once: false,
+async function fireCron(
+  scheduleId: string,
+  jobId = `cron-${scheduleId}`,
+): Promise<void> {
+  if (!capturedProcessor) throw new Error("processor not captured");
+  await capturedProcessor({
+    id: jobId,
+    name: scheduleId,
+    data: { scheduleId },
   });
-
-  expect(task.id).toMatch(
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
-  );
-  expect(task.sessionId).toBe("session-1");
-  expect(task.kind).toBe("session");
-  expect(task.cron).toBe("0 * * * *");
-  expect(task.description).toBe("hourly");
-  expect(task.prompt).toBe("do something");
-  expect(task.once).toBe(false);
-  expect(task.nextRunAt).toBe(Date.now() + 60_000);
-});
-
-test("create() registers cron in bunqueue for recurring tasks", async () => {
-  await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "hourly",
-    prompt: "do something",
-    once: false,
-  });
-
-  expect(mockCron).toHaveBeenCalledWith(
-    expect.any(String),
-    "0 * * * *",
-    expect.objectContaining({
-      sessionId: "session-1",
-      kind: "session",
-      prompt: "do something",
-      once: false,
-    }),
-  );
-});
-
-test("create() uses upsertJobScheduler with limit for once tasks", async () => {
-  await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "one-time",
-    prompt: "run once",
-    once: true,
-  });
-
-  expect(mockQueue.upsertJobScheduler).toHaveBeenCalledWith(
-    expect.any(String),
-    { pattern: "0 * * * *", limit: 1 },
-    expect.objectContaining({
-      data: expect.objectContaining({ once: true }),
-    }),
-  );
-  expect(mockCron).not.toHaveBeenCalled();
-});
-
-test("create() with background kind", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "@daily",
-    description: "bg task",
-    prompt: "check status",
-    once: false,
-  });
-
-  expect(task.kind).toBe("background");
-});
-
-test("create() returns null nextRunAt when cron not found in listCrons", async () => {
-  mockCron.mockImplementationOnce(() => Promise.resolve(null));
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-
-  expect(task.nextRunAt).toBeNull();
-});
-
-// ---------------------------------------------------------------------------
-// list()
-// ---------------------------------------------------------------------------
-
-test("list() returns all tasks with full data", async () => {
-  await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "Task A",
-    prompt: "prompt A",
-    once: false,
-  });
-  await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "@daily",
-    description: "Task B",
-    prompt: "prompt B",
-    once: true,
-  });
-
-  const tasks = scheduler.list();
-
-  expect(tasks).toHaveLength(2);
-  const taskA = tasks.find((t) => t.description === "Task A");
-  expect(taskA?.kind).toBe("session");
-  expect(taskA?.prompt).toBe("prompt A");
-  expect(taskA?.sessionId).toBe("session-1");
-
-  const taskB = tasks.find((t) => t.description === "Task B");
-  expect(taskB?.kind).toBe("background");
-  expect(taskB?.prompt).toBe("prompt B");
-  expect(taskB?.once).toBe(true);
-});
-
-test("list() returns empty array when no tasks exist", () => {
-  expect(scheduler.list()).toHaveLength(0);
-});
-
-// ---------------------------------------------------------------------------
-// get()
-// ---------------------------------------------------------------------------
-
-test("get() returns task by ID", async () => {
-  const created = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "find me",
-    prompt: "p",
-    once: false,
-  });
-
-  const found = scheduler.get(created.id);
-  expect(found.id).toBe(created.id);
-  expect(found.description).toBe("find me");
-});
-
-test("get() throws NotFoundError for missing ID", () => {
-  expect(() => scheduler.get("nonexistent")).toThrow(Scheduler.NotFoundError);
-});
-
-// ---------------------------------------------------------------------------
-// delete()
-// ---------------------------------------------------------------------------
-
-test("delete() removes task from Map and bunqueue", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "to delete",
-    prompt: "p",
-    once: false,
-  });
-
-  await scheduler.delete(task.id);
-  expect(scheduler.list()).toHaveLength(0);
-  expect(mockRemoveCron).toHaveBeenCalledWith(task.id);
-});
-
-// ---------------------------------------------------------------------------
-// trigger()
-// ---------------------------------------------------------------------------
-
-test("trigger() enqueues a job via bunqueue instead of executing inline", async () => {
-  const mockAdd = vi.fn().mockResolvedValue({
-    id: "triggered-1",
-    name: "trigger-task-1",
-  });
-  mockQueue.add = mockAdd;
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "trigger me",
-    prompt: "run this",
-    once: false,
-  });
-
-  const result = await scheduler.trigger(task.id);
-
-  expect(result.scheduleId).toBe(task.id);
-  expect(result.jobId).toBe("triggered-1");
-  expect(result.enqueuedAt).toBeTypeOf("number");
-  expect(mockAdd).toHaveBeenCalledWith(
-    `trigger-${task.id}`,
-    expect.objectContaining({
-      sessionId: "session-1",
-      prompt: "run this",
-    }),
-  );
-  // Should NOT execute inline — promptAsync not called directly
-  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
-});
-
-test("processor includes agent when getSessionAgent returns a value", async () => {
-  mockGetSessionAgent.mockReturnValue("my-agent");
-
-  await fireJob("agent-task", {
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    prompt: "agent prompt",
-    description: "d",
-    once: false,
-  });
-
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
-    expect.objectContaining({
-      sessionID: "session-1",
-      agent: "my-agent",
-    }),
-    { throwOnError: true },
-  );
-});
-
-test("trigger() throws NotFoundError when task is missing", async () => {
-  await expect(scheduler.trigger("no-such-id")).rejects.toThrow(
-    Scheduler.NotFoundError,
-  );
-});
-
-// ---------------------------------------------------------------------------
-// update()
-// ---------------------------------------------------------------------------
-
-test("update() changes description", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "old",
-    prompt: "p",
-    once: false,
-  });
-
-  const updated = await scheduler.update(task.id, {
-    description: "new description",
-  });
-
-  expect(updated.description).toBe("new description");
-  expect(updated.cron).toBe("0 * * * *");
-});
-
-test("update() changes prompt", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "old prompt",
-    once: false,
-  });
-
-  const updated = await scheduler.update(task.id, { prompt: "new prompt" });
-  expect(updated.prompt).toBe("new prompt");
-});
-
-test("update() changes cron and recreates bunqueue scheduler", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-
-  mockRemoveCron.mockClear();
-  mockCron.mockClear();
-
-  const updated = await scheduler.update(task.id, { cron: "@daily" });
-  expect(updated.cron).toBe("@daily");
-  expect(mockRemoveCron).toHaveBeenCalledWith(task.id);
-  expect(mockCron).toHaveBeenCalledWith(
-    task.id,
-    "@daily",
-    expect.objectContaining({ prompt: "p" }),
-  );
-});
-
-test("update() with no changes returns task unchanged", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-
-  const updated = await scheduler.update(task.id, {});
-  expect(updated.description).toBe("d");
-  expect(updated.prompt).toBe("p");
-  expect(updated.cron).toBe("0 * * * *");
-});
-
-test("update() syncs bunqueue data when only prompt changes on recurring task", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "old prompt",
-    once: false,
-  });
-
-  mockCron.mockClear();
-
-  await scheduler.update(task.id, { prompt: "new prompt" });
-
-  expect(mockCron).toHaveBeenCalledWith(
-    task.id,
-    "0 * * * *",
-    expect.objectContaining({ prompt: "new prompt" }),
-  );
-  expect(mockRemoveCron).not.toHaveBeenCalled();
-});
-
-test("update() does not re-register cron for once-task when only description changes", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "old",
-    prompt: "p",
-    once: true,
-  });
-
-  mockCron.mockClear();
-  mockQueue.upsertJobScheduler.mockClear();
-
-  await scheduler.update(task.id, { description: "new" });
-
-  expect(mockCron).not.toHaveBeenCalled();
-  expect(mockQueue.upsertJobScheduler).not.toHaveBeenCalled();
-});
-
-test("update() throws NotFoundError for missing ID", async () => {
-  await expect(
-    scheduler.update("nonexistent", { prompt: "x" }),
-  ).rejects.toThrow(Scheduler.NotFoundError);
-});
-
-// ---------------------------------------------------------------------------
-// #processJob — via capturedProcessor
-// ---------------------------------------------------------------------------
-
-async function fireJob(
-  taskId: string,
-  data: Record<string, unknown>,
-  name?: string,
-) {
-  if (!capturedProcessor)
-    throw new Error(
-      "capturedProcessor was never set — Scheduler.create() not called?",
-    );
-  const job = { name: name ?? taskId, data: { taskId, ...data } };
-  await capturedProcessor(job);
 }
 
-// ---------------------------------------------------------------------------
-// #execute — background kind
-// ---------------------------------------------------------------------------
-
-async function triggerBackground(task: Scheduler.Task) {
-  await fireJob(task.id, {
-    sessionId: task.sessionId,
-    kind: task.kind,
-    cron: task.cron,
-    prompt: task.prompt,
-    description: task.description,
-    once: task.once,
+async function fireManual(
+  scheduleId: string,
+  jobId = `manual-${scheduleId}`,
+): Promise<void> {
+  if (!capturedProcessor) throw new Error("processor not captured");
+  await capturedProcessor({
+    id: jobId,
+    name: `trigger-${scheduleId}`,
+    data: { scheduleId },
   });
-  // Background execution is async — advance timers to let polling complete
-  await vi.advanceTimersByTimeAsync(2000);
-  // Flush microtasks so async operations resolve
-  await vi.advanceTimersByTimeAsync(0);
 }
 
-function mockBackgroundResponse(text: string) {
+function mockAssistantText(text: string): void {
   opencodeClient.session.messages.mockResolvedValueOnce({
     data: [{ info: { role: "assistant" }, parts: [{ type: "text", text }] }],
   });
 }
 
-test("background task sends response to Telegram when meaningful", async () => {
-  mockBackgroundResponse("Important report data");
+async function advanceForExecution(): Promise<void> {
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+}
 
+test("create() returns a task with all fields populated", async () => {
   const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
+    sessionId: userSessionId,
     cron: "0 * * * *",
-    description: "bg report",
-    prompt: "check data",
+    description: "Hourly",
+    prompt: "do something",
     once: false,
   });
-
-  await triggerBackground(task);
-
-  expect(opencodeClient.session.create).toHaveBeenCalledWith(
-    {},
-    { throwOnError: true },
+  expect(task.id).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   );
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
-    expect.objectContaining({ sessionID: "ephemeral-session-1" }),
-    { throwOnError: true },
-  );
-  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
-    123,
-    "Important report data",
-    {},
-  );
-  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
-    sessionID: "ephemeral-session-1",
-  });
+  expect(task.sessionId).toBe(userSessionId);
+  expect(task.cron).toBe("0 * * * *");
+  expect(task.timezone).toBe("UTC");
+  expect(task.once).toBe(false);
+  expect(task.enabled).toBe(true);
+  expect(task.overlap).toBe("queue");
+  expect(task.notifyOnFailure).toBe(false);
+  expect(task.maxRuntimeMs).toBeNull();
 });
 
-test("background task skips Telegram when response is NO_REPORT", async () => {
+test("create() respects all optional fields", async () => {
   const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
+    sessionId: userSessionId,
+    cron: "@daily",
+    description: "Custom",
+    prompt: "p",
+    once: true,
+    timezone: "Asia/Ho_Chi_Minh",
+    overlap: "skip",
+    notifyOnFailure: true,
+    maxRuntimeMs: 60000,
+  });
+  expect(task.timezone).toBe("Asia/Ho_Chi_Minh");
+  expect(task.overlap).toBe("skip");
+  expect(task.notifyOnFailure).toBe(true);
+  expect(task.maxRuntimeMs).toBe(60000);
+  expect(task.once).toBe(true);
+});
+
+test("create() registers with upsertJobScheduler for recurring tasks", async () => {
+  await scheduler.create({
+    sessionId: userSessionId,
     cron: "0 * * * *",
-    description: "bg check",
-    prompt: "check status",
+    description: "d",
+    prompt: "p",
     once: false,
   });
-
-  await triggerBackground(task);
-
-  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
-  expect(opencodeClient.session.abort).toHaveBeenCalled();
+  expect(mockUpsert).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({
+      pattern: "0 * * * *",
+      timezone: "UTC",
+      preventOverlap: false,
+    }),
+    expect.objectContaining({ data: expect.any(Object) }),
+  );
+  const call = mockUpsert.mock.calls.at(-1);
+  expect(call?.[1]).not.toHaveProperty("limit");
 });
 
-test("background task cleans up ephemeral session on error", async () => {
-  opencodeClient.session.promptAsync.mockRejectedValueOnce(
-    new Error("AI failed"),
-  );
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
+test("create() registers once-tasks with limit=1", async () => {
+  await scheduler.create({
+    sessionId: userSessionId,
     cron: "0 * * * *",
-    description: "bg fail",
-    prompt: "fail prompt",
+    description: "d",
+    prompt: "p",
+    once: true,
+  });
+  expect(mockUpsert).toHaveBeenCalledWith(
+    expect.any(String),
+    expect.objectContaining({ pattern: "0 * * * *", limit: 1 }),
+    expect.any(Object),
+  );
+});
+
+test("create() rolls back DB insert when register fails", async () => {
+  mockUpsert.mockRejectedValueOnce(new Error("register failed"));
+  await expect(
+    scheduler.create({
+      sessionId: userSessionId,
+      cron: "0 * * * *",
+      description: "d",
+      prompt: "p",
+      once: false,
+    }),
+  ).rejects.toThrow("register failed");
+  expect(database.select().from(scheduleTable).all()).toHaveLength(0);
+});
+
+test("get() returns task by id", async () => {
+  const created = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "find me",
+    prompt: "p",
     once: false,
   });
-
-  // Background execution is async — does not throw through processor
-  await triggerBackground(task);
-
-  // But run history should record the failure
-  const runs = scheduler.getRuns(task.id);
-  expect(runs[0]?.status).toBe("failed");
-  expect(runs[0]?.error).toBe("AI failed");
-  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
-    sessionID: "ephemeral-session-1",
-  });
+  const found = scheduler.get(created.id);
+  expect(found.description).toBe("find me");
 });
 
-test("background task with threadId sends to correct thread", async () => {
-  const schema = await import("~/lib/schema");
+test("get() throws NotFoundError for missing id", () => {
+  expect(() => scheduler.get("nonexistent")).toThrow(Scheduler.NotFoundError);
+});
+
+test("list() returns empty array when none exist", () => {
+  expect(scheduler.list()).toHaveLength(0);
+});
+
+test("list() returns all tasks", async () => {
+  await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "A",
+    prompt: "pA",
+    once: false,
+  });
+  await scheduler.create({
+    sessionId: userSessionId,
+    cron: "@daily",
+    description: "B",
+    prompt: "pB",
+    once: true,
+  });
+  const tasks = scheduler.list();
+  expect(tasks).toHaveLength(2);
+  expect(tasks.map((t) => t.description).sort()).toEqual(["A", "B"]);
+});
+
+test("list() filters by sessionId", async () => {
   database
-    .insert(schema.session)
-    .values({ id: "session-thread", chatId: 456, threadId: 42 })
+    .insert(sessionTable)
+    .values({ id: "sess-2", chatId: 456, threadId: 0 })
+    .run();
+  await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "A",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.create({
+    sessionId: "sess-2",
+    cron: "0 * * * *",
+    description: "B",
+    prompt: "p",
+    once: false,
+  });
+  const filtered = scheduler.list({ sessionId: "sess-2" });
+  expect(filtered).toHaveLength(1);
+  expect(filtered[0]?.description).toBe("B");
+});
+
+test("list() filters by enabled", async () => {
+  const a = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "A",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "B",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.disable(a.id);
+  expect(scheduler.list({ enabled: true })).toHaveLength(1);
+  expect(scheduler.list({ enabled: false })).toHaveLength(1);
+});
+
+test("update() changes description without re-registering", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "old",
+    prompt: "p",
+    once: false,
+  });
+  mockUpsert.mockClear();
+  mockRemoveCron.mockClear();
+  const updated = await scheduler.update(task.id, { description: "new" });
+  expect(updated.description).toBe("new");
+  expect(mockUpsert).not.toHaveBeenCalled();
+  expect(mockRemoveCron).not.toHaveBeenCalled();
+});
+
+test("update() changes prompt only", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "old",
+    once: false,
+  });
+  const updated = await scheduler.update(task.id, { prompt: "new" });
+  expect(updated.prompt).toBe("new");
+});
+
+test("update() re-registers when cron changes", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockUpsert.mockClear();
+  mockRemoveCron.mockClear();
+  const updated = await scheduler.update(task.id, { cron: "@daily" });
+  expect(updated.cron).toBe("@daily");
+  expect(mockRemoveCron).toHaveBeenCalledWith(task.id);
+  expect(mockUpsert).toHaveBeenCalled();
+});
+
+test("update() re-registers when timezone changes", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockUpsert.mockClear();
+  const updated = await scheduler.update(task.id, {
+    timezone: "Asia/Ho_Chi_Minh",
+  });
+  expect(updated.timezone).toBe("Asia/Ho_Chi_Minh");
+  expect(mockUpsert).toHaveBeenCalled();
+});
+
+test("update() updates overlap and notifyOnFailure and maxRuntimeMs", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const updated = await scheduler.update(task.id, {
+    overlap: "skip",
+    notifyOnFailure: true,
+    maxRuntimeMs: 30000,
+  });
+  expect(updated.overlap).toBe("skip");
+  expect(updated.notifyOnFailure).toBe(true);
+  expect(updated.maxRuntimeMs).toBe(30000);
+});
+
+test("update() with no changes is a no-op", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const updated = await scheduler.update(task.id, {});
+  expect(updated.description).toBe("d");
+  expect(updated.prompt).toBe("p");
+});
+
+test("update() throws NotFoundError for missing id", async () => {
+  await expect(
+    scheduler.update("nonexistent", { prompt: "x" }),
+  ).rejects.toThrow(Scheduler.NotFoundError);
+});
+
+test("update() skips re-registration when schedule is disabled", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.disable(task.id);
+  mockUpsert.mockClear();
+  mockRemoveCron.mockClear();
+  await scheduler.update(task.id, { cron: "@daily" });
+  expect(mockUpsert).not.toHaveBeenCalled();
+  expect(mockRemoveCron).not.toHaveBeenCalled();
+});
+
+test("update() rolls back on register failure", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockUpsert.mockRejectedValueOnce(new Error("new register failed"));
+  await expect(scheduler.update(task.id, { cron: "@daily" })).rejects.toThrow(
+    "new register failed",
+  );
+  const row = scheduler.get(task.id);
+  expect(row.cron).toBe("0 * * * *");
+});
+
+test("update() logs when restore of old cron also fails", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockUpsert
+    .mockRejectedValueOnce(new Error("new failed"))
+    .mockRejectedValueOnce(new Error("restore failed"));
+  await expect(scheduler.update(task.id, { cron: "@daily" })).rejects.toThrow(
+    "new failed",
+  );
+});
+
+test("enable() is no-op when already enabled", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockUpsert.mockClear();
+  await scheduler.enable(task.id);
+  expect(mockUpsert).not.toHaveBeenCalled();
+});
+
+test("enable() re-registers a disabled schedule", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.disable(task.id);
+  mockUpsert.mockClear();
+  const enabled = await scheduler.enable(task.id);
+  expect(enabled.enabled).toBe(true);
+  expect(mockUpsert).toHaveBeenCalled();
+});
+
+test("enable() rolls back on register failure", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.disable(task.id);
+  mockUpsert.mockRejectedValueOnce(new Error("enable failed"));
+  await expect(scheduler.enable(task.id)).rejects.toThrow("enable failed");
+  expect(scheduler.get(task.id).enabled).toBe(false);
+});
+
+test("disable() is no-op when already disabled", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.disable(task.id);
+  mockRemoveCron.mockClear();
+  await scheduler.disable(task.id);
+  expect(mockRemoveCron).not.toHaveBeenCalled();
+});
+
+test("disable() unregisters an enabled schedule", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockRemoveCron.mockClear();
+  const disabled = await scheduler.disable(task.id);
+  expect(disabled.enabled).toBe(false);
+  expect(mockRemoveCron).toHaveBeenCalledWith(task.id);
+});
+
+test("delete() removes schedule and unregisters when enabled", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockRemoveCron.mockClear();
+  await scheduler.delete(task.id);
+  expect(mockRemoveCron).toHaveBeenCalledWith(task.id);
+  expect(scheduler.list()).toHaveLength(0);
+});
+
+test("delete() skips unregister for disabled schedules", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.disable(task.id);
+  mockRemoveCron.mockClear();
+  await scheduler.delete(task.id);
+  expect(mockRemoveCron).not.toHaveBeenCalled();
+});
+
+test("delete() cancels in-flight run without queueJobId", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-noJob",
+      scheduleId: task.id,
+      sessionId: userSessionId,
+      trigger: "manual",
+      status: "pending",
+      startedAt: new Date(),
+    })
+    .run();
+  mockCancel.mockClear();
+  await scheduler.delete(task.id);
+  expect(mockCancel).not.toHaveBeenCalled();
+});
+
+test("delete() cancels in-flight runs", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-inflight",
+      scheduleId: task.id,
+      sessionId: userSessionId,
+      queueJobId: "job-active",
+      trigger: "cron",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  await scheduler.delete(task.id);
+  expect(mockCancel).toHaveBeenCalledWith("job-active");
+});
+
+test("delete() throws NotFoundError for missing id", async () => {
+  await expect(scheduler.delete("nonexistent")).rejects.toThrow(
+    Scheduler.NotFoundError,
+  );
+});
+
+test("trigger() pre-creates a pending run and returns its id", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAdd.mockResolvedValue({ id: "triggered-1" });
+  const result = await scheduler.trigger(task.id);
+  expect(result.scheduleId).toBe(task.id);
+  expect(result.queueJobId).toBe("triggered-1");
+  expect(result.runId).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+  );
+  expect(mockAdd).toHaveBeenCalledWith(`trigger-${task.id}`, {
+    scheduleId: task.id,
+    runId: result.runId,
+  });
+  const row = scheduler.getRun(result.runId);
+  expect(row.status).toBe("pending");
+  expect(row.trigger).toBe("manual");
+  expect(row.scheduleId).toBe(task.id);
+});
+
+test("trigger() rolls back pre-created run when queue.add rejects", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAdd.mockRejectedValueOnce(new Error("bunqueue down"));
+  await expect(scheduler.trigger(task.id)).rejects.toThrow("bunqueue down");
+  expect(scheduler.listRuns({ scheduleId: task.id })).toHaveLength(0);
+});
+
+test("trigger() throws NotFoundError for missing id", async () => {
+  await expect(scheduler.trigger("nonexistent")).rejects.toThrow(
+    Scheduler.NotFoundError,
+  );
+});
+
+test("listRuns() returns runs filtered by scheduleId", async () => {
+  const now = new Date();
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-1",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-1",
+      scheduleId: "sched-1",
+      sessionId: userSessionId,
+      trigger: "cron",
+      status: "reported",
+      startedAt: now,
+      finishedAt: now,
+      output: "hi",
+    })
+    .run();
+  const runs = scheduler.listRuns({ scheduleId: "sched-1" });
+  expect(runs).toHaveLength(1);
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.output).toBe("hi");
+});
+
+test("listRuns() filters by session, status, trigger, and time range", async () => {
+  const now = Date.now();
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-1",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  const rows = [
+    {
+      id: "r-old",
+      status: "reported",
+      trigger: "cron",
+      startedAt: now - 10000,
+    },
+    { id: "r-new", status: "failed", trigger: "manual", startedAt: now + 1000 },
+    { id: "r-mid", status: "silent", trigger: "cron", startedAt: now - 2000 },
+  ];
+  for (const r of rows) {
+    database
+      .insert(scheduleRunTable)
+      .values({
+        id: r.id,
+        scheduleId: "sched-1",
+        sessionId: userSessionId,
+        trigger: r.trigger,
+        status: r.status,
+        startedAt: new Date(r.startedAt),
+      })
+      .run();
+  }
+  expect(scheduler.listRuns({ status: "failed" })).toHaveLength(1);
+  expect(scheduler.listRuns({ trigger: "manual" })).toHaveLength(1);
+  expect(scheduler.listRuns({ sessionId: userSessionId })).toHaveLength(3);
+  expect(
+    scheduler.listRuns({ since: now - 5000, until: now + 500 }),
+  ).toHaveLength(1);
+});
+
+test("listRuns() ignores out-of-range since/until values", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-range",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  const now = Date.now();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "r-in-range",
+      scheduleId: "sched-range",
+      sessionId: userSessionId,
+      trigger: "cron",
+      status: "reported",
+      startedAt: new Date(now),
+    })
+    .run();
+  expect(
+    scheduler.listRuns({
+      scheduleId: "sched-range",
+      since: 0,
+      until: Number.MAX_SAFE_INTEGER,
+    }),
+  ).toHaveLength(1);
+  expect(
+    scheduler.listRuns({
+      scheduleId: "sched-range",
+      until: Number.MAX_SAFE_INTEGER,
+    }),
+  ).toHaveLength(1);
+  expect(
+    scheduler.listRuns({ scheduleId: "sched-range", since: now + 1000 }),
+  ).toHaveLength(0);
+});
+
+test("listRuns() respects limit and offset", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-1",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  for (let i = 0; i < 5; i++) {
+    database
+      .insert(scheduleRunTable)
+      .values({
+        id: `r-${i}`,
+        scheduleId: "sched-1",
+        sessionId: userSessionId,
+        trigger: "cron",
+        status: "silent",
+        startedAt: new Date(Date.now() + i * 1000),
+      })
+      .run();
+  }
+  expect(scheduler.listRuns({ limit: 2 })).toHaveLength(2);
+  expect(scheduler.listRuns({ limit: 2, offset: 2 })).toHaveLength(2);
+});
+
+test("getRun() returns a run by id", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-1",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-1",
+      scheduleId: "sched-1",
+      sessionId: userSessionId,
+      trigger: "cron",
+      status: "reported",
+      startedAt: new Date(),
+    })
+    .run();
+  expect(scheduler.getRun("run-1").status).toBe("reported");
+});
+
+test("getRun() throws RunNotFoundError for missing id", () => {
+  expect(() => scheduler.getRun("nonexistent")).toThrow(
+    Scheduler.RunNotFoundError,
+  );
+});
+
+test("cancelRun() cancels running run and calls bunqueue.cancel", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-1",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-live",
+      scheduleId: "sched-1",
+      sessionId: userSessionId,
+      queueJobId: "job-live",
+      trigger: "cron",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  const result = await scheduler.cancelRun("run-live");
+  expect(result.status).toBe("cancelled");
+  expect(mockCancel).toHaveBeenCalledWith("job-live");
+});
+
+test("cancelRun() cancels pending run without queueJobId", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-1",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-pending",
+      scheduleId: "sched-1",
+      sessionId: userSessionId,
+      trigger: "manual",
+      status: "pending",
+      startedAt: new Date(),
+    })
+    .run();
+  const result = await scheduler.cancelRun("run-pending");
+  expect(result.status).toBe("cancelled");
+});
+
+test("cancelRun() throws RunNotFoundError for missing id", async () => {
+  await expect(scheduler.cancelRun("nonexistent")).rejects.toThrow(
+    Scheduler.RunNotFoundError,
+  );
+});
+
+test("cancelRun() throws RunNotCancellableError on terminal status", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-1",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-done",
+      scheduleId: "sched-1",
+      sessionId: userSessionId,
+      trigger: "cron",
+      status: "reported",
+      startedAt: new Date(),
+    })
+    .run();
+  await expect(scheduler.cancelRun("run-done")).rejects.toThrow(
+    Scheduler.RunNotCancellableError,
+  );
+});
+
+test("processor transitions pending run to running when runId is supplied", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAdd.mockResolvedValue({ id: "manual-job-1" });
+  const { runId } = await scheduler.trigger(task.id);
+  if (!capturedProcessor) throw new Error("processor not captured");
+  mockAssistantText("manual-done");
+  const firePromise = capturedProcessor({
+    id: "manual-job-1",
+    name: `trigger-${task.id}`,
+    data: { scheduleId: task.id, runId },
+  });
+  await advanceForExecution();
+  await firePromise;
+  const run = scheduler.getRun(runId);
+  expect(run.status).toBe("reported");
+  expect(run.queueJobId).toBe("manual-job-1");
+  expect(run.output).toBe("manual-done");
+  expect(scheduler.listRuns({ scheduleId: task.id })).toHaveLength(1);
+});
+
+test("processor skips when supplied runId was cancelled before pickup", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAdd.mockResolvedValue({ id: "manual-job-2" });
+  const { runId } = await scheduler.trigger(task.id);
+  await scheduler.cancelRun(runId);
+  if (!capturedProcessor) throw new Error("processor not captured");
+  opencodeClient.session.create.mockClear();
+  await capturedProcessor({
+    id: "manual-job-2",
+    name: `trigger-${task.id}`,
+    data: { scheduleId: task.id, runId },
+  });
+  expect(opencodeClient.session.create).not.toHaveBeenCalled();
+  expect(scheduler.getRun(runId).status).toBe("cancelled");
+});
+
+test("processor skips when schedule no longer exists", async () => {
+  await fireCron("ghost-id");
+  expect(opencodeClient.session.create).not.toHaveBeenCalled();
+});
+
+test("processor skips when job data is missing scheduleId", async () => {
+  if (!capturedProcessor) throw new Error("processor not captured");
+  await capturedProcessor({
+    id: "job-empty",
+    name: "cron-nothing",
+    data: {},
+  });
+  expect(opencodeClient.session.create).not.toHaveBeenCalled();
+});
+
+test("processor skips cron ticks when schedule is disabled", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.disable(task.id);
+  opencodeClient.session.create.mockClear();
+  await fireCron(task.id);
+  expect(opencodeClient.session.create).not.toHaveBeenCalled();
+});
+
+test("processor accepts manual trigger even when disabled", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.disable(task.id);
+  mockAssistantText("report");
+  const firePromise = fireManual(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(opencodeClient.session.create).toHaveBeenCalled();
+  expect(bot.api.sendMessage).toHaveBeenCalled();
+});
+
+test("reported run posts to Telegram and records output", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAssistantText("Important report");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "Important report", {});
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.output).toBe("Important report");
+});
+
+test("silent run with NO_REPORT marker sends nothing to Telegram", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(bot.api.sendMessage).not.toHaveBeenCalled();
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("silent");
+});
+
+test("text containing NO_REPORT mid-sentence is reported, not silent", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAssistantText(
+    "The marker [NO_REPORT] is a convention — here's the result.",
+  );
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(
+    123,
+    "The marker [NO_REPORT] is a convention — here's the result.",
+    {},
+  );
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+});
+
+test("NO_REPORT with trailing whitespace still counts as silent", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAssistantText("  [NO_REPORT]\n");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(bot.api.sendMessage).not.toHaveBeenCalled();
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("silent");
+});
+
+test("run with thread delivers to message_thread_id", async () => {
+  database
+    .insert(sessionTable)
+    .values({ id: "sess-thread", chatId: 456, threadId: 42 })
     .run();
   existingSessions.get.mockReturnValue({ chatId: 456, threadId: 42 });
-  mockBackgroundResponse("Thread report");
-
   const task = await scheduler.create({
-    sessionId: "session-thread",
-    kind: "background",
+    sessionId: "sess-thread",
     cron: "0 * * * *",
-    description: "threaded bg",
-    prompt: "check thread",
+    description: "d",
+    prompt: "p",
     once: false,
   });
-
-  await triggerBackground(task);
-
-  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(456, "Thread report", {
+  mockAssistantText("Thread report");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(456, "Thread report", {
     message_thread_id: 42,
   });
 });
 
-test("background task skips when response contains NO_REPORT marker", async () => {
-  mockBackgroundResponse("After checking: [NO_REPORT]");
-
+test("failed run records error and does not notify by default", async () => {
   const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
+    sessionId: userSessionId,
     cron: "0 * * * *",
-    description: "truncated",
-    prompt: "check",
+    description: "d",
+    prompt: "p",
     once: false,
   });
-
-  await triggerBackground(task);
-
-  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(
+    new Error("AI down"),
+  );
+  let caught: unknown;
+  const firePromise = fireCron(task.id).catch((e) => {
+    caught = e;
+  });
+  await advanceForExecution();
+  await firePromise;
+  expect((caught as Error).message).toBe("AI down");
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("failed");
+  expect(runs[0]?.error).toBe("AI down");
+  expect(bot.api.sendMessage).not.toHaveBeenCalled();
 });
 
-test("background task skips notification when no text in messages", async () => {
+test("failed run with notifyOnFailure and thread sends to thread", async () => {
+  database
+    .insert(sessionTable)
+    .values({ id: "sess-t", chatId: 789, threadId: 7 })
+    .run();
+  existingSessions.get.mockReturnValue({ chatId: 789, threadId: 7 });
+  const task = await scheduler.create({
+    sessionId: "sess-t",
+    cron: "0 * * * *",
+    description: "crit",
+    prompt: "p",
+    once: false,
+    notifyOnFailure: true,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(new Error("db"));
+  let caught: unknown;
+  const firePromise = fireCron(task.id).catch((e) => {
+    caught = e;
+  });
+  await advanceForExecution();
+  await firePromise;
+  expect((caught as Error).message).toBe("db");
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(789, expect.any(String), {
+    message_thread_id: 7,
+  });
+});
+
+test("failed run with notifyOnFailure sends Telegram alert", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "critical",
+    prompt: "p",
+    once: false,
+    notifyOnFailure: true,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(new Error("boom"));
+  let caught: unknown;
+  const firePromise = fireCron(task.id).catch((e) => {
+    caught = e;
+  });
+  await advanceForExecution();
+  await firePromise;
+  expect((caught as Error).message).toBe("boom");
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(
+    123,
+    expect.stringContaining("failed: boom"),
+    {},
+  );
+});
+
+test("failed run when session.create throws skips ephemeral abort", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.create.mockRejectedValueOnce(
+    new Error("create failed"),
+  );
+  opencodeClient.session.abort.mockClear();
+  let caught: unknown;
+  const firePromise = fireCron(task.id).catch((e) => {
+    caught = e;
+  });
+  await advanceForExecution();
+  await firePromise;
+  expect((caught as Error).message).toBe("create failed");
+  expect(opencodeClient.session.abort).not.toHaveBeenCalled();
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("failed");
+});
+
+test("failed run records non-Error string exceptions", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce("string-error");
+  let caught: unknown;
+  const firePromise = fireCron(task.id).catch((e) => {
+    caught = e;
+  });
+  await advanceForExecution();
+  await firePromise;
+  expect(caught).toBe("string-error");
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.error).toBe("string-error");
+});
+
+test("failed run logs when notification delivery also fails", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    notifyOnFailure: true,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(new Error("x"));
+  bot.api.sendMessage.mockRejectedValueOnce(new Error("notify failed"));
+  let caught: unknown;
+  const firePromise = fireCron(task.id).catch((e) => {
+    caught = e;
+  });
+  await advanceForExecution();
+  await firePromise;
+  expect((caught as Error).message).toBe("x");
+});
+
+test("execution stays silent when user session is unavailable", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  existingSessions.get.mockReturnValueOnce(undefined);
+  await fireCron(task.id);
+  expect(opencodeClient.session.create).not.toHaveBeenCalled();
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("silent");
+  expect(runs[0]?.error).toBe("user session unavailable");
+});
+
+test("execution aborts ephemeral session in finally even on success", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAssistantText("ok");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
+    sessionID: ephemeralSessionId,
+  });
+});
+
+test("abort failure during cleanup is logged but not thrown", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAssistantText("ok");
+  opencodeClient.session.abort.mockRejectedValueOnce(new Error("abort failed"));
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await expect(firePromise).resolves.toBeUndefined();
+});
+
+test("agent from session is passed to ephemeral prompt", async () => {
+  mockGetSessionAgent.mockReturnValue("custom-agent");
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({ agent: "custom-agent" }),
+    { throwOnError: true },
+  );
+});
+
+test("once-task disables the schedule after a cron fire", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: true,
+  });
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(scheduler.get(task.id).enabled).toBe(false);
+  expect(mockRemoveCron).toHaveBeenCalledWith(task.id);
+});
+
+test("once-task manual trigger does not disable the schedule", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: true,
+  });
+  const firePromise = fireManual(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(scheduler.get(task.id).enabled).toBe(true);
+});
+
+test("once-task logs when removeCron fails after fire", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: true,
+  });
+  mockRemoveCron.mockRejectedValueOnce(new Error("remove failed"));
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await expect(firePromise).resolves.toBeUndefined();
+});
+
+test("overlap=skip records skipped run when another is running", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "* * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    overlap: "skip",
+  });
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-active",
+      scheduleId: task.id,
+      sessionId: userSessionId,
+      queueJobId: "job-active",
+      trigger: "cron",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  await fireCron(task.id);
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  const skipped = runs.find((r) => r.status === "skipped");
+  expect(skipped).toBeDefined();
+  expect(opencodeClient.session.create).not.toHaveBeenCalled();
+});
+
+test("overlap=skip proceeds when nothing is running", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "* * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    overlap: "skip",
+  });
+  mockAssistantText("hi");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(bot.api.sendMessage).toHaveBeenCalled();
+});
+
+test("overlap=cancel_previous with null queueJobId just updates status", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "* * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    overlap: "cancel_previous",
+  });
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-nokey",
+      scheduleId: task.id,
+      sessionId: userSessionId,
+      trigger: "cron",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  mockAssistantText("new");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const prev = scheduler.getRun("run-nokey");
+  expect(prev.status).toBe("cancelled");
+});
+
+test("pending run status is parseable via getRun", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-p",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-pending",
+      scheduleId: "sched-p",
+      sessionId: userSessionId,
+      trigger: "manual",
+      status: "pending",
+      startedAt: new Date(),
+    })
+    .run();
+  expect(scheduler.getRun("run-pending").status).toBe("pending");
+});
+
+test("overlap=cancel_previous cancels prior running run and proceeds", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "* * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    overlap: "cancel_previous",
+  });
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-prev",
+      scheduleId: task.id,
+      sessionId: userSessionId,
+      queueJobId: "job-prev",
+      trigger: "cron",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  mockAssistantText("new");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(mockCancel).toHaveBeenCalledWith("job-prev");
+  const prev = scheduler.getRun("run-prev");
+  expect(prev.status).toBe("cancelled");
+});
+
+test("overlap=queue runs both without cancellation", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "* * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-prev",
+      scheduleId: task.id,
+      sessionId: userSessionId,
+      queueJobId: "job-prev",
+      trigger: "cron",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  mockAssistantText("new");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(mockCancel).not.toHaveBeenCalled();
+});
+
+test("manual trigger ignores overlap policy", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "* * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    overlap: "skip",
+  });
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-active",
+      scheduleId: task.id,
+      sessionId: userSessionId,
+      trigger: "cron",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  mockAssistantText("manual");
+  const firePromise = fireManual(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(opencodeClient.session.create).toHaveBeenCalled();
+});
+
+test("per-session lock serializes concurrent runs in the same session", async () => {
+  const taskA = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "* * * * *",
+    description: "A",
+    prompt: "pA",
+    once: false,
+  });
+  const taskB = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "* * * * *",
+    description: "B",
+    prompt: "pB",
+    once: false,
+  });
+  opencodeClient.session.create
+    .mockResolvedValueOnce({ data: { id: "eph-a" } })
+    .mockResolvedValueOnce({ data: { id: "eph-b" } });
+  opencodeClient.session.messages
+    .mockResolvedValueOnce({
+      data: [
+        { info: { role: "assistant" }, parts: [{ type: "text", text: "A" }] },
+      ],
+    })
+    .mockResolvedValueOnce({
+      data: [
+        { info: { role: "assistant" }, parts: [{ type: "text", text: "B" }] },
+      ],
+    });
+  opencodeClient.session.status.mockResolvedValue({
+    data: { "eph-a": { type: "idle" }, "eph-b": { type: "idle" } },
+  });
+  const firePromiseA = fireCron(taskA.id, "job-a");
+  const firePromiseB = fireCron(taskB.id, "job-b");
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+  await firePromiseA;
+  await firePromiseB;
+  expect(opencodeClient.session.create).toHaveBeenCalledTimes(2);
+});
+
+test("retention trims run records beyond the cap", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "* * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const baseTime = Date.now();
+  for (let i = 0; i < 502; i++) {
+    database
+      .insert(scheduleRunTable)
+      .values({
+        id: `seed-${i}`,
+        scheduleId: task.id,
+        sessionId: userSessionId,
+        trigger: "cron",
+        status: "silent",
+        startedAt: new Date(baseTime + i * 1000),
+      })
+      .run();
+  }
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = database
+    .select()
+    .from(scheduleRunTable)
+    .where(eq(scheduleRunTable.scheduleId, task.id))
+    .all();
+  expect(runs.length).toBeLessThanOrEqual(500);
+});
+
+test("#waitForText breaks when session is idle and has no assistant text", async () => {
+  opencodeClient.session.status.mockResolvedValueOnce({
+    data: { [ephemeralSessionId]: { type: "idle" } },
+  });
   opencodeClient.session.messages.mockResolvedValueOnce({
     data: [
       {
@@ -670,805 +1688,344 @@ test("background task skips notification when no text in messages", async () => 
       },
     ],
   });
-
   const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
+    sessionId: userSessionId,
     cron: "0 * * * *",
-    description: "no text",
-    prompt: "check files",
+    description: "d",
+    prompt: "p",
     once: false,
   });
-
-  await triggerBackground(task);
-
-  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("silent");
+  expect(bot.api.sendMessage).not.toHaveBeenCalled();
 });
 
-test("background task logs warning when ephemeral session abort fails", async () => {
-  opencodeClient.session.abort.mockRejectedValueOnce(new Error("abort failed"));
-
+test("#waitForText aborts after sleep when signal fires mid-interval", async () => {
   const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
+    sessionId: userSessionId,
     cron: "0 * * * *",
-    description: "abort error",
-    prompt: "check",
+    description: "d",
+    prompt: "p",
     once: false,
   });
-
-  await triggerBackground(task);
-
-  expect(opencodeClient.session.abort).toHaveBeenCalled();
+  const jobId = "sleep-abort-job";
+  const firePromise = fireCron(task.id, jobId);
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+  abortSignals.get(jobId)?.abort();
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("cancelled");
 });
 
-test("background task polls while session is busy then reads result", async () => {
-  opencodeClient.session.status.mockResolvedValueOnce({
-    data: { "ephemeral-session-1": { type: "busy" } },
+test("#waitForText aborts on signal before sleep in subsequent iterations", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
   });
-  opencodeClient.session.status.mockResolvedValueOnce({
-    data: { "ephemeral-session-1": { type: "idle" } },
+  opencodeClient.session.status.mockImplementationOnce(async () => {
+    for (const [, ctrl] of abortSignals) ctrl.abort();
+    throw new Error("trigger retry");
   });
+  const firePromise = fireCron(task.id, "abort-iter");
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("cancelled");
+});
+
+test("#waitForText returns null when max attempts exhausted with no text", async () => {
+  opencodeClient.session.status.mockResolvedValue({ data: {} });
+  opencodeClient.session.messages.mockResolvedValue({
+    data: [{ info: { role: "user" }, parts: [] }],
+  });
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    maxRuntimeMs: 4000,
+  });
+  const firePromise = fireCron(task.id);
+  for (let i = 0; i < 10; i++) {
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("silent");
+});
+
+test("#waitForText continues after a busy status", async () => {
+  opencodeClient.session.status
+    .mockResolvedValueOnce({ data: { [ephemeralSessionId]: { type: "busy" } } })
+    .mockResolvedValueOnce({
+      data: { [ephemeralSessionId]: { type: "idle" } },
+    });
   opencodeClient.session.messages.mockResolvedValueOnce({
     data: [
-      {
-        info: { role: "assistant" },
-        parts: [{ type: "text", text: "Polled result" }],
-      },
+      { info: { role: "assistant" }, parts: [{ type: "text", text: "yo" }] },
     ],
   });
-
   const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
+    sessionId: userSessionId,
     cron: "0 * * * *",
-    description: "poll test",
-    prompt: "check",
+    description: "d",
+    prompt: "p",
     once: false,
   });
-
-  await fireJob(task.id, {
-    sessionId: task.sessionId,
-    kind: task.kind,
-    cron: task.cron,
-    prompt: task.prompt,
-    description: task.description,
-    once: task.once,
-  });
+  const firePromise = fireCron(task.id);
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(0);
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(0);
-
-  expect(opencodeClient.session.status).toHaveBeenCalledTimes(2);
-  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
-    123,
-    "Polled result",
-    {},
-  );
+  await firePromise;
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "yo", {});
 });
 
-test("background task recovers when poll times out (30s)", async () => {
-  // First poll: status call hangs — never resolves, timeout wins
+test("#waitForText recovers from a poll error and retries", async () => {
+  opencodeClient.session.status.mockRejectedValueOnce(new Error("transient"));
+  mockAssistantText("recovered");
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const firePromise = fireCron(task.id);
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+  await firePromise;
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "recovered", {});
+});
+
+test("#waitForText recovers from a hung status call (poll timeout)", async () => {
   opencodeClient.session.status.mockImplementationOnce(
     () => new Promise(() => {}),
   );
-  // Second poll: idle with result
-  mockBackgroundResponse("After timeout");
-
+  mockAssistantText("after-timeout");
   const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
+    sessionId: userSessionId,
     cron: "0 * * * *",
-    description: "poll timeout",
-    prompt: "check",
+    description: "d",
+    prompt: "p",
     once: false,
   });
-
-  await fireJob(task.id, {
-    sessionId: task.sessionId,
-    kind: task.kind,
-    cron: task.cron,
-    prompt: task.prompt,
-    description: task.description,
-    once: task.once,
-  });
-  // First poll: 2s wait + 30s timeout
+  const firePromise = fireCron(task.id);
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(30_000);
   await vi.advanceTimersByTimeAsync(0);
-  // Second poll: 2s wait + instant result
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(0);
-
-  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
-    123,
-    "After timeout",
-    {},
-  );
+  await firePromise;
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "after-timeout", {});
 });
 
-test("background task recovers from poll error and continues", async () => {
-  // First poll: status call hangs (will timeout after 30s in production,
-  // but in tests the mock just throws)
-  opencodeClient.session.status.mockRejectedValueOnce(
-    new Error("Poll timeout"),
-  );
-  // Second poll: idle with result
-  mockBackgroundResponse("After timeout");
-
+test("execution records cancelled when signal fires during polling", async () => {
   const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "0 * * * *",
-    description: "timeout recovery",
-    prompt: "check",
-    once: false,
-  });
-
-  await triggerBackground(task);
-  // Extra advance for the retry after timeout
-  await vi.advanceTimersByTimeAsync(2000);
-  await vi.advanceTimersByTimeAsync(0);
-
-  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
-    123,
-    "After timeout",
-    {},
-  );
-});
-
-test("background task continues polling on retry status then resolves", async () => {
-  opencodeClient.session.status.mockResolvedValueOnce({
-    data: {
-      "ephemeral-session-1": {
-        type: "retry",
-        attempt: 1,
-        message: "retrying",
-        next: Date.now() + 1000,
-      },
-    },
-  });
-  opencodeClient.session.messages.mockResolvedValueOnce({
-    data: [{ info: { role: "user" }, parts: [] }],
-  });
-  opencodeClient.session.status.mockResolvedValueOnce({
-    data: { "ephemeral-session-1": { type: "idle" } },
-  });
-  mockBackgroundResponse("Retry result");
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "0 * * * *",
-    description: "retry poll",
-    prompt: "check",
-    once: false,
-  });
-
-  await fireJob(task.id, {
-    sessionId: task.sessionId,
-    kind: task.kind,
-    cron: task.cron,
-    prompt: task.prompt,
-    description: task.description,
-    once: task.once,
-  });
-  await vi.advanceTimersByTimeAsync(2000);
-  await vi.advanceTimersByTimeAsync(0);
-  await vi.advanceTimersByTimeAsync(2000);
-  await vi.advanceTimersByTimeAsync(0);
-
-  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(123, "Retry result", {});
-});
-
-test("background task breaks on idle with no text response", async () => {
-  opencodeClient.session.status.mockResolvedValueOnce({
-    data: { "ephemeral-session-1": { type: "idle" } },
-  });
-  opencodeClient.session.messages.mockResolvedValueOnce({
-    data: [{ info: { role: "user" }, parts: [] }],
-  });
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "0 * * * *",
-    description: "idle no text",
-    prompt: "check",
-    once: false,
-  });
-
-  await triggerBackground(task);
-
-  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
-});
-
-test("background task continues polling when session not in status map yet", async () => {
-  // First poll: session not in status map (not started yet) — should continue
-  opencodeClient.session.status.mockResolvedValueOnce({ data: {} });
-  opencodeClient.session.messages.mockResolvedValueOnce({
-    data: [{ info: { role: "user" }, parts: [] }],
-  });
-  // Second poll: session is idle with result
-  opencodeClient.session.status.mockResolvedValueOnce({
-    data: { "ephemeral-session-1": { type: "idle" } },
-  });
-  mockBackgroundResponse("Delayed result");
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "0 * * * *",
-    description: "no status initially",
-    prompt: "check",
-    once: false,
-  });
-
-  await fireJob(task.id, {
-    sessionId: task.sessionId,
-    kind: task.kind,
-    cron: task.cron,
-    prompt: task.prompt,
-    description: task.description,
-    once: task.once,
-  });
-  await vi.advanceTimersByTimeAsync(2000);
-  await vi.advanceTimersByTimeAsync(0);
-  await vi.advanceTimersByTimeAsync(2000);
-  await vi.advanceTimersByTimeAsync(0);
-
-  expect(mockBot.api.sendMessage).toHaveBeenCalledWith(
-    123,
-    "Delayed result",
-    {},
-  );
-});
-
-test("background task skips execution when location is undefined", async () => {
-  existingSessions.get.mockReturnValueOnce(undefined);
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "0 * * * *",
-    description: "bg no location",
-    prompt: "check",
-    once: false,
-  });
-
-  await fireJob(task.id, {
-    sessionId: task.sessionId,
-    kind: task.kind,
-    cron: task.cron,
-    prompt: task.prompt,
-    description: task.description,
-    once: task.once,
-  });
-
-  expect(opencodeClient.session.create).not.toHaveBeenCalled();
-  expect(mockBot.api.sendMessage).not.toHaveBeenCalled();
-});
-
-test("delete() throws NotFoundError for nonexistent ID", async () => {
-  await expect(scheduler.delete("nonexistent")).rejects.toThrow(
-    Scheduler.NotFoundError,
-  );
-});
-
-// ---------------------------------------------------------------------------
-// Job processor (bunqueue fires job)
-// ---------------------------------------------------------------------------
-
-test("processor executes task and populates Map", async () => {
-  await fireJob("task-1", {
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    prompt: "auto run",
-    description: "d",
-    once: false,
-  });
-
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
-    expect.objectContaining({
-      sessionID: "session-1",
-      parts: [{ type: "text", text: "[Scheduled Task] auto run" }],
-    }),
-    { throwOnError: true },
-  );
-  // Task should now be in the Map
-  const found = scheduler.get("task-1");
-  expect(found.prompt).toBe("auto run");
-});
-
-test("processor uses Map data over stale bunqueue data when entry exists", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
+    sessionId: userSessionId,
     cron: "0 * * * *",
     description: "d",
-    prompt: "original",
-    once: false,
-  });
-
-  // Update prompt in Map only (no cron change on once=false does sync, but simulate the
-  // case where Map has fresh data)
-  await scheduler.update(task.id, { prompt: "updated prompt" });
-  opencodeClient.session.promptAsync.mockClear();
-
-  // Processor fires with old bunqueue data
-  await fireJob(task.id, {
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    prompt: "original",
-    description: "d",
-    once: false,
-  });
-
-  // Should use the Map's "updated prompt", not bunqueue's "original"
-  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
-    expect.objectContaining({
-      parts: [{ type: "text", text: "[Scheduled Task] updated prompt" }],
-    }),
-    { throwOnError: true },
-  );
-});
-
-test("processor populates Map from job data on first fire after restart", async () => {
-  // Map is empty (simulates post-restart state)
-  expect(scheduler.list()).toHaveLength(0);
-
-  await fireJob("restored-task", {
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    prompt: "restored",
-    description: "restored desc",
-    once: false,
-  });
-
-  const found = scheduler.get("restored-task");
-  expect(found.prompt).toBe("restored");
-  expect(found.description).toBe("restored desc");
-});
-
-test("manual trigger does not delete once-task from Map", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "once manual",
     prompt: "p",
-    once: true,
+    once: false,
   });
+  opencodeClient.session.messages.mockImplementationOnce(async () => {
+    for (const [, controller] of abortSignals) controller.abort();
+    return {
+      data: [
+        { info: { role: "assistant" }, parts: [{ type: "text", text: "hi" }] },
+      ],
+    };
+  });
+  const firePromise = fireCron(task.id, "abort-mid");
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("cancelled");
+  expect(runs[0]?.output).toBe("hi");
+  expect(bot.api.sendMessage).not.toHaveBeenCalled();
+});
 
-  await fireJob(
-    task.id,
-    {
-      sessionId: "session-1",
-      kind: "session",
-      cron: "0 * * * *",
+test("execution aborts when signal is triggered before prompt", async () => {
+  const task = await scheduler.create({
+    sessionId: userSessionId,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.create.mockImplementationOnce(async () => {
+    for (const [, controller] of abortSignals) controller.abort();
+    return { data: { id: ephemeralSessionId } };
+  });
+  mockAssistantText("hello");
+  const firePromise = fireCron(task.id, "abort-job");
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("cancelled");
+  expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
+  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
+    sessionID: ephemeralSessionId,
+  });
+});
+
+test("#recover finalizes stuck runs as failed with bot restart", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-recover",
+      sessionId: userSessionId,
+      description: "d",
       prompt: "p",
-      description: "once manual",
-      once: true,
-    },
-    `trigger-${task.id}`,
-  );
-
-  // Task should still be in the Map after manual trigger
-  expect(scheduler.get(task.id).description).toBe("once manual");
-});
-
-test("processor deletes once-task from Map after execution", async () => {
-  await fireJob("once-task", {
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    prompt: "one time",
-    description: "d",
-    once: true,
-  });
-
-  expect(() => scheduler.get("once-task")).toThrow(Scheduler.NotFoundError);
-});
-
-test("processor deletes once-task even when execution fails", async () => {
-  opencodeClient.session.promptAsync.mockRejectedValueOnce(
-    new Error("once fail"),
-  );
-
-  await expect(
-    fireJob("once-fail", {
-      sessionId: "session-1",
-      kind: "session",
       cron: "0 * * * *",
-      prompt: "fail once",
-      description: "d",
-      once: true,
-    }),
-  ).rejects.toThrow("once fail");
-
-  expect(() => scheduler.get("once-fail")).toThrow(Scheduler.NotFoundError);
-});
-
-// ---------------------------------------------------------------------------
-// dispose
-// ---------------------------------------------------------------------------
-
-// ---------------------------------------------------------------------------
-// getRuns()
-// ---------------------------------------------------------------------------
-
-test("getRuns() returns run history after execution", async () => {
-  await fireJob("run-test", {
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    prompt: "run me",
-    description: "d",
-    once: false,
-  });
-
-  const runs = scheduler.getRuns("run-test");
-  expect(runs).toHaveLength(1);
-  expect(runs[0]?.status).toBe("completed_notified");
-  expect(runs[0]?.error).toBeNull();
-  expect(runs[0]?.startedAt).toBeLessThanOrEqual(runs[0]?.finishedAt ?? 0);
-});
-
-test("getRuns() throws NotFoundError for missing ID", () => {
-  expect(() => scheduler.getRuns("nonexistent")).toThrow(
-    Scheduler.NotFoundError,
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-stuck",
+      scheduleId: "sched-recover",
+      sessionId: userSessionId,
+      trigger: "cron",
+      status: "running",
+      startedAt: new Date(Date.now() - 60_000),
+    })
+    .run();
+  scheduler[Symbol.dispose]();
+  const restored = await Scheduler.create(
+    bot as never,
+    database,
+    opencodeClient as never,
+    existingSessions as never,
   );
+  const run = restored.getRun("run-stuck");
+  expect(run.status).toBe("failed");
+  expect(run.error).toBe("bot restart");
+  restored[Symbol.dispose]();
 });
 
-test("getRuns() records failed status with error message", async () => {
-  opencodeClient.session.promptAsync.mockRejectedValueOnce(
-    new Error("api error"),
+test("#recover re-registers enabled schedules not yet in bunqueue", async () => {
+  scheduler[Symbol.dispose]();
+  const freshDb = Database.create();
+  freshDb
+    .insert(sessionTable)
+    .values({ id: userSessionId, chatId: 123, threadId: 0 })
+    .run();
+  freshDb
+    .insert(scheduleTable)
+    .values({
+      id: "sched-recover",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+      enabled: true,
+    })
+    .run();
+  mockListCrons.mockResolvedValueOnce([]);
+  mockUpsert.mockClear();
+  const restored = await Scheduler.create(
+    bot as never,
+    freshDb,
+    opencodeClient as never,
+    existingSessions as never,
   );
-
-  await expect(
-    fireJob("fail-run", {
-      sessionId: "session-1",
-      kind: "session",
-      cron: "0 * * * *",
-      prompt: "fail",
-      description: "d",
-      once: false,
-    }),
-  ).rejects.toThrow("api error");
-
-  const runs = scheduler.getRuns("fail-run");
-  expect(runs).toHaveLength(1);
-  expect(runs[0]?.status).toBe("failed");
-  expect(runs[0]?.error).toBe("api error");
-});
-
-test("getRuns() records non-Error thrown values", async () => {
-  opencodeClient.session.promptAsync.mockRejectedValueOnce("string error");
-
-  await expect(
-    fireJob("string-err", {
-      sessionId: "session-1",
-      kind: "session",
-      cron: "0 * * * *",
-      prompt: "fail",
-      description: "d",
-      once: false,
-    }),
-  ).rejects.toBe("string error");
-
-  const runs = scheduler.getRuns("string-err");
-  expect(runs[0]?.error).toBe("string error");
-});
-
-test("create() returns null nextRunAt when cron does not register in bunqueue", async () => {
-  mockCron.mockResolvedValueOnce(null);
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "null info",
-    prompt: "p",
-    once: false,
-  });
-
-  expect(task.nextRunAt).toBeNull();
-});
-
-test("create() returns null nextRunAt when once-task upsert does not register cron", async () => {
-  mockQueue.upsertJobScheduler.mockResolvedValueOnce(null);
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "null once",
-    prompt: "p",
-    once: true,
-  });
-
-  expect(task.nextRunAt).toBeNull();
-});
-
-test("update() fetches nextRunAt from bunqueue when once-task upsert returns null on cron change", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: true,
-  });
-
-  mockQueue.upsertJobScheduler.mockResolvedValueOnce(null);
-
-  const updated = await scheduler.update(task.id, { cron: "@daily" });
-  expect(updated.nextRunAt).toBe(Date.now() + 60_000);
-});
-
-test("update() fetches nextRunAt from bunqueue when cron returns null info", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-
-  mockCron.mockResolvedValueOnce(null);
-
-  const updated = await scheduler.update(task.id, { cron: "@daily" });
-  expect(updated.nextRunAt).toBe(Date.now() + 60_000);
-});
-
-test("update() fetches nextRunAt from bunqueue when data-only cron returns null", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-
-  mockCron.mockResolvedValueOnce(null);
-
-  const updated = await scheduler.update(task.id, { prompt: "new" });
-  expect(updated.nextRunAt).toBe(Date.now() + 60_000);
-});
-
-test("background task records failure when session.create fails", async () => {
-  opencodeClient.session.create.mockRejectedValueOnce(
-    new Error("session create failed"),
+  expect(mockUpsert).toHaveBeenCalledWith(
+    "sched-recover",
+    expect.any(Object),
+    expect.any(Object),
   );
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "0 * * * *",
-    description: "bg create fail",
-    prompt: "check",
-    once: false,
-  });
-
-  await triggerBackground(task);
-
-  const runs = scheduler.getRuns(task.id);
-  expect(runs[0]?.status).toBe("failed");
-  expect(runs[0]?.error).toBe("session create failed");
-  expect(runs[0]?.finishedAt).toBeGreaterThan(0);
+  restored[Symbol.dispose]();
+  freshDb[Symbol.dispose]();
 });
 
-test("background task records non-Error thrown values", async () => {
-  opencodeClient.session.promptAsync.mockRejectedValueOnce("string error");
-
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "0 * * * *",
-    description: "bg string error",
-    prompt: "fail",
-    once: false,
-  });
-
-  await triggerBackground(task);
-
-  const runs = scheduler.getRuns(task.id);
-  expect(runs[0]?.error).toBe("string error");
-});
-
-test("background once-task fired by cron is removed from Map after completion", async () => {
-  await fireJob("bg-once", {
-    sessionId: "session-1",
-    kind: "background",
-    cron: "0 * * * *",
-    prompt: "bg once",
-    description: "d",
-    once: true,
-  });
-  // Background execution is async — advance timers to let polling and onComplete run
-  await vi.advanceTimersByTimeAsync(2000);
-  await vi.advanceTimersByTimeAsync(0);
-
-  expect(() => scheduler.get("bg-once")).toThrow(Scheduler.NotFoundError);
-});
-
-test("run history trims to last 20 entries", async () => {
-  // Fire 22 jobs to exceed maxRunHistory (20)
-  for (let i = 0; i < 22; i++) {
-    await fireJob("trim-test", {
-      sessionId: "session-1",
-      kind: "session",
-      cron: "0 * * * *",
-      prompt: `run ${i}`,
+test("#recover skips schedules already registered in bunqueue", async () => {
+  scheduler[Symbol.dispose]();
+  const freshDb = Database.create();
+  freshDb
+    .insert(sessionTable)
+    .values({ id: userSessionId, chatId: 123, threadId: 0 })
+    .run();
+  freshDb
+    .insert(scheduleTable)
+    .values({
+      id: "sched-exist",
+      sessionId: userSessionId,
       description: "d",
-      once: false,
-    });
-  }
-
-  const runs = scheduler.getRuns("trim-test");
-  expect(runs).toHaveLength(20);
+      prompt: "p",
+      cron: "0 * * * *",
+      enabled: true,
+    })
+    .run();
+  mockListCrons.mockResolvedValueOnce([
+    { id: "sched-exist", name: "sched-exist", next: 0 },
+  ]);
+  mockUpsert.mockClear();
+  const restored = await Scheduler.create(
+    bot as never,
+    freshDb,
+    opencodeClient as never,
+    existingSessions as never,
+  );
+  expect(mockUpsert).not.toHaveBeenCalled();
+  restored[Symbol.dispose]();
+  freshDb[Symbol.dispose]();
 });
 
-// ---------------------------------------------------------------------------
-// dispose
-// ---------------------------------------------------------------------------
+test("#recover skips disabled schedules", async () => {
+  scheduler[Symbol.dispose]();
+  const freshDb = Database.create();
+  freshDb
+    .insert(sessionTable)
+    .values({ id: userSessionId, chatId: 123, threadId: 0 })
+    .run();
+  freshDb
+    .insert(scheduleTable)
+    .values({
+      id: "sched-disabled",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+      enabled: false,
+    })
+    .run();
+  mockListCrons.mockResolvedValueOnce([]);
+  mockUpsert.mockClear();
+  const restored = await Scheduler.create(
+    bot as never,
+    freshDb,
+    opencodeClient as never,
+    existingSessions as never,
+  );
+  expect(mockUpsert).not.toHaveBeenCalled();
+  restored[Symbol.dispose]();
+  freshDb[Symbol.dispose]();
+});
+
+test("bunqueue accessor exposes the underlying instance", () => {
+  expect(scheduler.bunqueue).toBeDefined();
+});
 
 test("dispose closes bunqueue", () => {
   scheduler[Symbol.dispose]();
   expect(mockClose).toHaveBeenCalled();
 });
-
-// ---------------------------------------------------------------------------
-// NotFoundError
-// ---------------------------------------------------------------------------
-
-test("NotFoundError has correct message and id property", () => {
-  const error = new Scheduler.NotFoundError("abc-123");
-  expect(error).toBeInstanceOf(Error);
-  expect(error).toBeInstanceOf(Scheduler.NotFoundError);
-  expect(error.message).toBe("Scheduled task not found: abc-123");
-  expect(error.id).toBe("abc-123");
-});
-
-// ---------------------------------------------------------------------------
-// Invalid kind validation
-// ---------------------------------------------------------------------------
-
-test("throws on unknown task kind when retrieving via get()", async () => {
-  // Processor stores the data in Map regardless of kind
-  await fireJob("bad-kind", {
-    sessionId: "session-1",
-    kind: "invalid",
-    cron: "0 * * * *",
-    prompt: "p",
-    description: "d",
-    once: false,
-  });
-
-  // Validation happens when converting to Task via #toTask
-  expect(() => scheduler.get("bad-kind")).toThrow(
-    "Unknown scheduled task kind: invalid",
-  );
-});
-
-// ---------------------------------------------------------------------------
-// update() with once-task uses upsertJobScheduler
-// ---------------------------------------------------------------------------
-
-test("update() cron on once-task uses upsertJobScheduler", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "once update",
-    prompt: "p",
-    once: true,
-  });
-
-  mockRemoveCron.mockClear();
-  mockQueue.upsertJobScheduler.mockClear();
-
-  await scheduler.update(task.id, { cron: "@daily" });
-
-  expect(mockRemoveCron).toHaveBeenCalledWith(task.id);
-  expect(mockQueue.upsertJobScheduler).toHaveBeenCalledWith(
-    task.id,
-    { pattern: "@daily", limit: 1 },
-    expect.objectContaining({
-      data: expect.objectContaining({ once: true }),
-    }),
-  );
-});
-
-// ---------------------------------------------------------------------------
-// bunqueue accessor
-// ---------------------------------------------------------------------------
-
-test("bunqueue exposes the underlying Bunqueue instance", () => {
-  const queue = scheduler.bunqueue;
-  expect(queue).toBeDefined();
-  expect(queue.cron).toBe(mockCron);
-  expect(queue.listCrons).toBe(mockListCrons);
-});
-
-// ---------------------------------------------------------------------------
-// addJob()
-// ---------------------------------------------------------------------------
-
-test("addJob() queues a job via bunqueue queue.add", async () => {
-  const mockAdd = vi.fn().mockResolvedValue({
-    id: "j-1",
-    name: "j-1",
-    data: {},
-    delay: 0,
-    priority: 0,
-    timestamp: 1000,
-  });
-  mockQueue.add = mockAdd;
-
-  const job = await scheduler.addJob(
-    "session-1",
-    "session",
-    "test job",
-    "do it",
-  );
-
-  expect(mockAdd).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.objectContaining({ prompt: "do it", once: true, cron: "" }),
-    undefined,
-  );
-  expect(job.id).toBe("j-1");
-});
-
-test("addJob() passes full JobOptions to bunqueue", async () => {
-  const mockAdd = vi.fn().mockResolvedValue({
-    id: "j-2",
-    name: "j-2",
-    data: {},
-    delay: 5000,
-    priority: 10,
-    timestamp: 1000,
-  });
-  mockQueue.add = mockAdd;
-
-  await scheduler.addJob("session-1", "session", "delayed", "later", {
-    delay: 5000,
-    priority: 10,
-    attempts: 3,
-    timeout: 30000,
-  });
-
-  expect(mockAdd).toHaveBeenCalledWith(
-    expect.any(String),
-    expect.objectContaining({ prompt: "later" }),
-    { delay: 5000, priority: 10, attempts: 3, timeout: 30000 },
-  );
-});
-
-test("addJob() does not appear in list()", async () => {
-  mockQueue.add = vi.fn().mockResolvedValue({
-    id: "j-1",
-    name: "j-1",
-    data: {},
-    delay: 0,
-    priority: 0,
-    timestamp: 1000,
-  });
-
-  await scheduler.addJob("session-1", "session", "one-off", "do it");
-  expect(scheduler.list()).toHaveLength(0);
-});
-
-// ---------------------------------------------------------------------------
-// error handling
-// ---------------------------------------------------------------------------
 
 test("dispose logs error when queue close fails", () => {
   mockClose.mockRejectedValueOnce(new Error("close failed"));
@@ -1478,332 +2035,100 @@ test("dispose logs error when queue close fails", () => {
 
 test("registers an error handler on bunqueue", () => {
   expect(mockOn).toHaveBeenCalledWith("error", expect.any(Function));
-  const errorHandler = mockOn.mock.calls.find(
+  const handler = mockOn.mock.calls.find(
     (call: unknown[]) => call[0] === "error",
   )?.[1] as (error: Error) => void;
-  errorHandler(new Error("test error"));
+  handler(new Error("test"));
 });
 
-// ---------------------------------------------------------------------------
-// create() rollback on cron failure
-// ---------------------------------------------------------------------------
-
-test("create() does not store task when cron registration fails", async () => {
-  mockCron.mockRejectedValueOnce(new Error("cron failed"));
-
-  await expect(
-    scheduler.create({
-      sessionId: "session-1",
-      kind: "session",
-      cron: "0 * * * *",
-      description: "will rollback",
-      prompt: "p",
-      once: false,
-    }),
-  ).rejects.toThrow("cron failed");
-
-  expect(scheduler.list()).toHaveLength(0);
-  expect(database.select().from(scheduleTable).all()).toHaveLength(0);
+test("NotFoundError has correct shape", () => {
+  const err = new Scheduler.NotFoundError("abc");
+  expect(err).toBeInstanceOf(Error);
+  expect(err).toBeInstanceOf(Scheduler.NotFoundError);
+  expect(err.id).toBe("abc");
+  expect(err.message).toBe("Scheduled task not found: abc");
 });
 
-test("create() does not store task when upsertJobScheduler fails for once-task", async () => {
-  mockQueue.upsertJobScheduler.mockRejectedValueOnce(
-    new Error("upsert failed"),
-  );
-
-  await expect(
-    scheduler.create({
-      sessionId: "session-1",
-      kind: "session",
-      cron: "0 * * * *",
-      description: "will rollback",
-      prompt: "p",
-      once: true,
-    }),
-  ).rejects.toThrow("upsert failed");
-
-  expect(scheduler.list()).toHaveLength(0);
-  expect(database.select().from(scheduleTable).all()).toHaveLength(0);
+test("RunNotFoundError has correct shape", () => {
+  const err = new Scheduler.RunNotFoundError("r1");
+  expect(err).toBeInstanceOf(Error);
+  expect(err).toBeInstanceOf(Scheduler.RunNotFoundError);
+  expect(err.id).toBe("r1");
 });
 
-// ---------------------------------------------------------------------------
-// delete() error propagation
-// ---------------------------------------------------------------------------
-
-test("delete() propagates removeCron error and keeps task", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "keep on error",
-    prompt: "p",
-    once: false,
-  });
-
-  mockRemoveCron.mockRejectedValueOnce(new Error("removeCron failed"));
-
-  await expect(scheduler.delete(task.id)).rejects.toThrow("removeCron failed");
-  expect(scheduler.list()).toHaveLength(1);
-  expect(database.select().from(scheduleTable).all()).toHaveLength(1);
+test("RunNotCancellableError includes id and status", () => {
+  const err = new Scheduler.RunNotCancellableError("r2", "failed");
+  expect(err).toBeInstanceOf(Error);
+  expect(err).toBeInstanceOf(Scheduler.RunNotCancellableError);
+  expect(err.id).toBe("r2");
+  expect(err.status).toBe("failed");
 });
 
-// ---------------------------------------------------------------------------
-// update() error paths
-// ---------------------------------------------------------------------------
-
-test("update() propagates error when new cron registration fails and restores old cron", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-
-  mockCron
-    .mockRejectedValueOnce(new Error("new cron failed"))
-    .mockResolvedValueOnce({ id: "x", name: "x", next: 0 });
-
-  await expect(scheduler.update(task.id, { cron: "@daily" })).rejects.toThrow(
-    "new cron failed",
-  );
-
-  const lastCronCall = mockCron.mock.calls.at(-1);
-  expect(lastCronCall?.[1]).toBe("0 * * * *");
-});
-
-test("update() logs error when restore of old cron also fails", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-
-  mockCron
-    .mockRejectedValueOnce(new Error("new cron failed"))
-    .mockRejectedValueOnce(new Error("restore also failed"));
-
-  await expect(scheduler.update(task.id, { cron: "@daily" })).rejects.toThrow(
-    "new cron failed",
-  );
-});
-
-test("update() logs error when restore of old once-task cron also fails", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: true,
-  });
-
-  mockQueue.upsertJobScheduler
-    .mockRejectedValueOnce(new Error("new upsert failed"))
-    .mockRejectedValueOnce(new Error("restore also failed"));
-
-  await expect(scheduler.update(task.id, { cron: "@daily" })).rejects.toThrow(
-    "new upsert failed",
-  );
-});
-
-test("update() keeps old data in Map when cron re-registration fails", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-
-  mockCron
-    .mockRejectedValueOnce(new Error("cron failed"))
-    .mockResolvedValueOnce({ id: "x", name: "x", next: 0 });
-
-  await expect(scheduler.update(task.id, { cron: "@daily" })).rejects.toThrow(
-    "cron failed",
-  );
-
-  const found = scheduler.get(task.id);
-  expect(found.cron).toBe("0 * * * *");
-});
-
-// ---------------------------------------------------------------------------
-// Recovery from database on restart
-// ---------------------------------------------------------------------------
-
-function seedSession(db: Database): void {
-  db.insert(session).values({ id: "session-1", chatId: 1 }).run();
-}
-
-function seedSchedule(
-  db: Database,
-  overrides?: Partial<typeof scheduleTable.$inferInsert>,
-): void {
-  db.insert(scheduleTable)
+test("parseOverlap throws on unknown value via list() output", async () => {
+  database
+    .insert(scheduleTable)
     .values({
-      id: "recovered-1",
-      sessionId: "session-1",
-      kind: "session",
-      description: "recovered task",
-      prompt: "recovered prompt",
+      id: "bad-overlap",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
       cron: "0 * * * *",
-      once: false,
-      ...overrides,
+      overlap: "invalid",
     })
     .run();
-}
-
-test("recover() restores tasks from database on startup", async () => {
-  scheduler[Symbol.dispose]();
-
-  const freshDb = Database.create();
-  seedSession(freshDb);
-  seedSchedule(freshDb);
-
-  const restored = await Scheduler.create(
-    mockBot as never,
-    freshDb,
-    opencodeClient as never,
-    existingSessions as never,
+  expect(() => scheduler.get("bad-overlap")).toThrow(
+    "Invalid overlap value: invalid",
   );
-
-  const tasks = restored.list();
-  expect(tasks).toHaveLength(1);
-  expect(tasks[0]?.id).toBe("recovered-1");
-  expect(tasks[0]?.description).toBe("recovered task");
-  expect(tasks[0]?.prompt).toBe("recovered prompt");
-  expect(tasks[0]?.cron).toBe("0 * * * *");
-  expect(tasks[0]?.nextRunAt).toBe(Date.now() + 60_000);
-
-  restored[Symbol.dispose]();
-  freshDb[Symbol.dispose]();
 });
 
-test("recover() re-registers missing crons in bunqueue", async () => {
-  scheduler[Symbol.dispose]();
-
-  const freshDb = Database.create();
-  seedSession(freshDb);
-  seedSchedule(freshDb);
-  mockListCrons.mockResolvedValueOnce([]);
-
-  const restored = await Scheduler.create(
-    mockBot as never,
-    freshDb,
-    opencodeClient as never,
-    existingSessions as never,
-  );
-
-  expect(mockCron).toHaveBeenCalledWith(
-    "recovered-1",
-    "0 * * * *",
-    expect.objectContaining({ taskId: "recovered-1" }),
-  );
-
-  restored[Symbol.dispose]();
-  freshDb[Symbol.dispose]();
+test("parseRunStatus throws on unknown status via getRun()", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-bad",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "bad-run",
+      scheduleId: "sched-bad",
+      sessionId: userSessionId,
+      trigger: "cron",
+      status: "bogus",
+      startedAt: new Date(),
+    })
+    .run();
+  expect(() => scheduler.getRun("bad-run")).toThrow("Invalid run status");
 });
 
-test("recover() re-registers once-task via upsertJobScheduler", async () => {
-  scheduler[Symbol.dispose]();
-
-  const freshDb = Database.create();
-  seedSession(freshDb);
-  seedSchedule(freshDb, { id: "once-1", once: true, cron: "@daily" });
-  mockListCrons.mockResolvedValueOnce([]);
-
-  const restored = await Scheduler.create(
-    mockBot as never,
-    freshDb,
-    opencodeClient as never,
-    existingSessions as never,
+test("parseRunTrigger throws on unknown trigger via getRun()", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-bad2",
+      sessionId: userSessionId,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "bad-trigger-run",
+      scheduleId: "sched-bad2",
+      sessionId: userSessionId,
+      trigger: "webhook",
+      status: "reported",
+      startedAt: new Date(),
+    })
+    .run();
+  expect(() => scheduler.getRun("bad-trigger-run")).toThrow(
+    "Invalid run trigger",
   );
-
-  expect(mockQueue.upsertJobScheduler).toHaveBeenCalledWith(
-    "once-1",
-    { pattern: "@daily", limit: 1 },
-    expect.objectContaining({ name: "once-1" }),
-  );
-
-  restored[Symbol.dispose]();
-  freshDb[Symbol.dispose]();
-});
-
-test("recover() skips cron registration when already in bunqueue", async () => {
-  scheduler[Symbol.dispose]();
-
-  const freshDb = Database.create();
-  seedSession(freshDb);
-  seedSchedule(freshDb);
-  mockListCrons.mockResolvedValueOnce([
-    { id: "recovered-1", name: "recovered-1", next: 0 },
-  ]);
-  mockCron.mockClear();
-
-  const restored = await Scheduler.create(
-    mockBot as never,
-    freshDb,
-    opencodeClient as never,
-    existingSessions as never,
-  );
-
-  expect(mockCron).not.toHaveBeenCalled();
-  expect(restored.list()).toHaveLength(1);
-
-  restored[Symbol.dispose]();
-  freshDb[Symbol.dispose]();
-});
-
-test("create() persists schedule to database", async () => {
-  await scheduler.create({
-    sessionId: "session-1",
-    kind: "background",
-    cron: "@hourly",
-    description: "persisted",
-    prompt: "p",
-    once: false,
-  });
-
-  const rows = database.select().from(scheduleTable).all();
-  expect(rows).toHaveLength(1);
-  expect(rows[0]?.description).toBe("persisted");
-  expect(rows[0]?.kind).toBe("background");
-});
-
-test("update() persists changes to database", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "original",
-    prompt: "p",
-    once: false,
-  });
-
-  await scheduler.update(task.id, { prompt: "updated" });
-
-  const rows = database.select().from(scheduleTable).all();
-  expect(rows[0]?.prompt).toBe("updated");
-});
-
-test("delete() removes schedule from database", async () => {
-  const task = await scheduler.create({
-    sessionId: "session-1",
-    kind: "session",
-    cron: "0 * * * *",
-    description: "to delete",
-    prompt: "p",
-    once: false,
-  });
-
-  await scheduler.delete(task.id);
-
-  const rows = database.select().from(scheduleTable).all();
-  expect(rows).toHaveLength(0);
 });

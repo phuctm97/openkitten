@@ -118,6 +118,27 @@ test("writes opencode config", async () => {
   expect(config.default_agent).toBe("assist");
 });
 
+test("writes the openkitten metadata-injection plugin", async () => {
+  await OpencodeConfig.create(profile);
+  const content = await readFile(
+    join(configDir(), "plugins", "openkitten.js"),
+    "utf-8",
+  );
+  expect(content).toContain("tool.execute.before");
+  expect(content).toContain("openkitten_");
+  expect(content).toContain("__OPENKITTEN__");
+  expect(content).toContain("{ sessionID, callID }");
+});
+
+test("overwrites the openkitten plugin on every startup", async () => {
+  await OpencodeConfig.create(profile);
+  const pluginPath = join(configDir(), "plugins", "openkitten.js");
+  await writeFile(pluginPath, "stale");
+  await OpencodeConfig.create(profile);
+  const content = await readFile(pluginPath, "utf-8");
+  expect(content).toContain("tool.execute.before");
+});
+
 test("copies skill directory with SKILL.md and scripts", async () => {
   await OpencodeConfig.create(profile);
   const skillMd = await readFile(

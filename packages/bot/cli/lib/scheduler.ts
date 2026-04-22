@@ -1,46 +1,82 @@
+import { randomUUID } from "node:crypto";
 import type { OpencodeClient } from "@opencode-ai/sdk/v2/client";
-import type { Job, JobOptions } from "bunqueue/client";
+import type { Job } from "bunqueue/client";
 import { Bunqueue } from "bunqueue/client";
-import { eq } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte } from "drizzle-orm";
 import type { Bot } from "grammy";
 import type { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getSessionAgent } from "~/lib/get-session-agent";
 import { logger } from "~/lib/logger";
-import { schedule as scheduleTable } from "~/lib/schema";
-
-const sessionPromptPrefix = "[Scheduled Task] ";
+import {
+  scheduleRun as scheduleRunTable,
+  schedule as scheduleTable,
+} from "~/lib/schema";
 
 const noReportMarker = "[NO_REPORT]";
 
-const backgroundPromptPrefix = `[Scheduled Background Task] You MUST end with a final text response after using any tools. If there is nothing meaningful to report, respond with exactly: ${noReportMarker}\nOtherwise, provide a concise report for the user.\n\n`;
+const promptPrefix = `[Scheduled Task] You MUST end with a final text response after using any tools. If there is nothing meaningful to report to the user, respond with exactly: ${noReportMarker}\nOtherwise, provide a concise report for the user.\n\n`;
 
-const validKinds: ReadonlySet<string> = new Set<Scheduler.TaskKind>([
-  "session",
-  "background",
-]);
+const defaultMaxRuntimeMs = 15 * 60 * 1000;
 
-const maxRunHistory = 20;
+const pollIntervalMs = 2000;
 
-const pollTimeout = Symbol("pollTimeout");
+const pollTimeoutMs = 30_000;
+
+const maxRunsPerSchedule = 500;
+
+const pollTimeoutSymbol = Symbol("pollTimeout");
+
+type ScheduleRow = typeof scheduleTable.$inferSelect;
+
+type RunRow = typeof scheduleRunTable.$inferSelect;
 
 interface TaskData {
-  readonly taskId: string;
-  readonly sessionId: string;
-  readonly kind: Scheduler.TaskKind;
-  readonly cron: string;
-  readonly description: string;
-  readonly prompt: string;
-  readonly once: boolean;
+  readonly scheduleId: string;
+  readonly runId?: string;
 }
 
-interface TaskMeta {
-  data: TaskData;
-  createdAt: number;
-  updatedAt: number;
-  lastTriggeredAt: number | null;
-  nextRunAt: number | null;
-  runs: Scheduler.RunRecord[];
+function parseOverlap(value: string): Scheduler.Overlap {
+  switch (value) {
+    case "queue":
+    case "skip":
+    case "cancel_previous":
+      return value;
+    default:
+      throw new Error(`Invalid overlap value: ${value}`);
+  }
+}
+
+function parseRunStatus(value: string): Scheduler.RunStatus {
+  switch (value) {
+    case "pending":
+    case "running":
+    case "reported":
+    case "silent":
+    case "failed":
+    case "cancelled":
+    case "skipped":
+      return value;
+    default:
+      throw new Error(`Invalid run status: ${value}`);
+  }
+}
+
+function parseRunTrigger(value: string): Scheduler.RunTrigger {
+  switch (value) {
+    case "cron":
+    case "manual":
+      return value;
+    default:
+      throw new Error(`Invalid run trigger: ${value}`);
+  }
+}
+
+function toValidDate(value: number | undefined): Date | null {
+  if (value === undefined) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
 }
 
 export class Scheduler implements Disposable {
@@ -49,7 +85,7 @@ export class Scheduler implements Disposable {
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #queue: Bunqueue<TaskData>;
-  readonly #tasks = new Map<string, TaskMeta>();
+  readonly #sessionLocks = new Map<string, Promise<void>>();
 
   private constructor(
     bot: Bot,
@@ -63,8 +99,9 @@ export class Scheduler implements Disposable {
     this.#existingSessions = existingSessions;
     this.#queue = new Bunqueue<TaskData>("scheduler", {
       embedded: true,
-      processor: (job: Job<TaskData>) => this.#processJob(job),
+      processor: (job) => this.#processJob(job),
       concurrency: 5,
+      heartbeatInterval: 10_000,
       removeOnComplete: { count: 50 },
       retry: {
         strategy: "exponential",
@@ -78,38 +115,27 @@ export class Scheduler implements Disposable {
   }
 
   async create(input: Scheduler.CreateInput): Promise<Scheduler.Task> {
-    const id = crypto.randomUUID();
-    const taskData: TaskData = {
-      taskId: id,
-      sessionId: input.sessionId,
-      kind: input.kind,
-      cron: input.cron,
-      description: input.description,
-      prompt: input.prompt,
-      once: input.once,
-    };
+    const id = randomUUID();
+    const timezone = input.timezone ?? "UTC";
+    const overlap = input.overlap ?? "queue";
     this.#database
       .insert(scheduleTable)
       .values({
         id,
         sessionId: input.sessionId,
-        kind: input.kind,
         description: input.description,
         prompt: input.prompt,
         cron: input.cron,
+        timezone,
         once: input.once,
+        enabled: true,
+        overlap,
+        notifyOnFailure: input.notifyOnFailure ?? false,
+        maxRuntimeMs: input.maxRuntimeMs ?? null,
       })
       .run();
     try {
-      if (input.once) {
-        await this.#queue.queue.upsertJobScheduler(
-          id,
-          { pattern: input.cron, limit: 1 },
-          { name: id, data: taskData },
-        );
-      } else {
-        await this.#queue.cron(id, input.cron, taskData);
-      }
+      await this.#register(id, input.cron, timezone, input.once);
     } catch (error) {
       this.#database
         .delete(scheduleTable)
@@ -117,313 +143,503 @@ export class Scheduler implements Disposable {
         .run();
       throw error;
     }
-    const nextRunAt = await this.#fetchNextRunAt(id);
-    const now = Date.now();
-    const meta: TaskMeta = {
-      data: taskData,
-      createdAt: now,
-      updatedAt: now,
-      lastTriggeredAt: null,
-      nextRunAt,
-      runs: [],
-    };
-    this.#tasks.set(id, meta);
-    return this.#toTask(meta);
-  }
-
-  list(): Scheduler.Task[] {
-    return [...this.#tasks.values()].map((meta) => this.#toTask(meta));
+    return this.get(id);
   }
 
   get(id: string): Scheduler.Task {
-    const meta = this.#tasks.get(id);
-    if (!meta) throw new Scheduler.NotFoundError(id);
-    return this.#toTask(meta);
+    const row = this.#findSchedule(id);
+    return this.#toTask(row);
   }
 
-  getRuns(id: string): Scheduler.RunRecord[] {
-    const meta = this.#tasks.get(id);
-    if (!meta) throw new Scheduler.NotFoundError(id);
-    return [...meta.runs];
-  }
-
-  async delete(id: string): Promise<void> {
-    const meta = this.#tasks.get(id);
-    if (!meta) throw new Scheduler.NotFoundError(id);
-    this.#database.delete(scheduleTable).where(eq(scheduleTable.id, id)).run();
-    try {
-      await this.#queue.removeCron(id);
-    } catch (error) {
-      this.#database
-        .insert(scheduleTable)
-        .values({
-          id,
-          sessionId: meta.data.sessionId,
-          kind: meta.data.kind,
-          description: meta.data.description,
-          prompt: meta.data.prompt,
-          cron: meta.data.cron,
-          once: meta.data.once,
-        })
-        .run();
-      throw error;
-    }
-    this.#tasks.delete(id);
-  }
-
-  async trigger(id: string): Promise<Scheduler.TriggerResult> {
-    const meta = this.#tasks.get(id);
-    if (!meta) throw new Scheduler.NotFoundError(id);
-    const now = Date.now();
-    meta.lastTriggeredAt = now;
-    const job = await this.#queue.queue.add(
-      `trigger-${meta.data.taskId}`,
-      meta.data,
-    );
-    return {
-      scheduleId: id,
-      jobId: job.id,
-      enqueuedAt: now,
-    };
+  list(filter: Scheduler.ListFilter = {}): Scheduler.Task[] {
+    const conditions = [];
+    if (filter.sessionId !== undefined)
+      conditions.push(eq(scheduleTable.sessionId, filter.sessionId));
+    if (filter.enabled !== undefined)
+      conditions.push(eq(scheduleTable.enabled, filter.enabled));
+    const rows = this.#database
+      .select()
+      .from(scheduleTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(asc(scheduleTable.createdAt))
+      .all();
+    return rows.map((row) => this.#toTask(row));
   }
 
   async update(
     id: string,
     input: Scheduler.UpdateInput,
   ): Promise<Scheduler.Task> {
-    const meta = this.#tasks.get(id);
-    if (!meta) throw new Scheduler.NotFoundError(id);
-    const existing = meta.data;
-    const cron = input.cron ?? existing.cron;
-    const description = input.description ?? existing.description;
-    const prompt = input.prompt ?? existing.prompt;
-    const updated: TaskData = {
+    const existing = this.#findSchedule(id);
+    const next: ScheduleRow = {
       ...existing,
-      cron,
-      description,
-      prompt,
+      ...(input.description !== undefined && {
+        description: input.description,
+      }),
+      ...(input.prompt !== undefined && { prompt: input.prompt }),
+      ...(input.cron !== undefined && { cron: input.cron }),
+      ...(input.timezone !== undefined && { timezone: input.timezone }),
+      ...(input.overlap !== undefined && { overlap: input.overlap }),
+      ...(input.notifyOnFailure !== undefined && {
+        notifyOnFailure: input.notifyOnFailure,
+      }),
+      ...(input.maxRuntimeMs !== undefined && {
+        maxRuntimeMs: input.maxRuntimeMs,
+      }),
     };
     const cronChanged =
-      input.cron !== undefined && input.cron !== existing.cron;
-    const dataChanged =
-      description !== existing.description || prompt !== existing.prompt;
-    let nextRunAt = meta.nextRunAt;
-    if (cronChanged || dataChanged) {
-      this.#database
-        .update(scheduleTable)
-        .set({
-          description,
-          prompt,
-          cron,
-        })
-        .where(eq(scheduleTable.id, id))
-        .run();
-    }
+      next.cron !== existing.cron || next.timezone !== existing.timezone;
+    this.#database
+      .update(scheduleTable)
+      .set({
+        description: next.description,
+        prompt: next.prompt,
+        cron: next.cron,
+        timezone: next.timezone,
+        overlap: next.overlap,
+        notifyOnFailure: next.notifyOnFailure,
+        maxRuntimeMs: next.maxRuntimeMs,
+      })
+      .where(eq(scheduleTable.id, id))
+      .run();
     try {
-      if (cronChanged) {
-        await this.#queue.removeCron(id);
-        try {
-          if (existing.once) {
-            await this.#queue.queue.upsertJobScheduler(
-              id,
-              { pattern: cron, limit: 1 },
-              { name: id, data: updated },
-            );
-          } else {
-            await this.#queue.cron(id, cron, updated);
-          }
-          nextRunAt = await this.#fetchNextRunAt(id);
-        } catch (error) {
-          if (existing.once) {
-            await this.#queue.queue
-              .upsertJobScheduler(
-                id,
-                { pattern: existing.cron, limit: 1 },
-                { name: id, data: existing },
-              )
-              .catch((restoreError) => {
-                logger.error(
-                  "Failed to restore old cron after update failure",
-                  restoreError,
-                  { taskId: id },
-                );
-              });
-          } else {
-            await this.#queue
-              .cron(id, existing.cron, existing)
-              .catch((restoreError) => {
-                logger.error(
-                  "Failed to restore old cron after update failure",
-                  restoreError,
-                  { taskId: id },
-                );
-              });
-          }
-          throw error;
-        }
-      } else if (dataChanged && !existing.once) {
-        await this.#queue.cron(id, cron, updated);
-        nextRunAt = await this.#fetchNextRunAt(id);
+      if (cronChanged && existing.enabled) {
+        await this.#unregister(id);
+        await this.#register(id, next.cron, next.timezone, next.once);
       }
     } catch (error) {
       this.#database
         .update(scheduleTable)
         .set({
-          description: existing.description,
-          prompt: existing.prompt,
           cron: existing.cron,
+          timezone: existing.timezone,
         })
+        .where(eq(scheduleTable.id, id))
+        .run();
+      await this.#register(
+        id,
+        existing.cron,
+        existing.timezone,
+        existing.once,
+      ).catch((restoreError) => {
+        logger.error(
+          "Failed to restore old cron after update failure",
+          restoreError,
+          { scheduleId: id },
+        );
+      });
+      throw error;
+    }
+    return this.get(id);
+  }
+
+  async enable(id: string): Promise<Scheduler.Task> {
+    const existing = this.#findSchedule(id);
+    if (existing.enabled) return this.#toTask(existing);
+    this.#database
+      .update(scheduleTable)
+      .set({ enabled: true })
+      .where(eq(scheduleTable.id, id))
+      .run();
+    try {
+      await this.#register(id, existing.cron, existing.timezone, existing.once);
+    } catch (error) {
+      this.#database
+        .update(scheduleTable)
+        .set({ enabled: false })
         .where(eq(scheduleTable.id, id))
         .run();
       throw error;
     }
-    meta.data = updated;
-    meta.updatedAt = Date.now();
-    meta.nextRunAt = nextRunAt;
-    return this.#toTask(meta);
+    return this.get(id);
   }
 
-  #toTask(meta: TaskMeta): Scheduler.Task {
-    const { data } = meta;
-    if (!validKinds.has(data.kind))
-      throw new Error(`Unknown scheduled task kind: ${data.kind}`);
+  async disable(id: string): Promise<Scheduler.Task> {
+    const existing = this.#findSchedule(id);
+    if (!existing.enabled) return this.#toTask(existing);
+    await this.#unregister(id);
+    this.#database
+      .update(scheduleTable)
+      .set({ enabled: false })
+      .where(eq(scheduleTable.id, id))
+      .run();
+    return this.get(id);
+  }
+
+  async delete(id: string): Promise<void> {
+    const existing = this.#findSchedule(id);
+    if (existing.enabled) await this.#unregister(id);
+    this.#cancelRunningForSchedule(id);
+    this.#database.delete(scheduleTable).where(eq(scheduleTable.id, id)).run();
+  }
+
+  async trigger(id: string): Promise<Scheduler.TriggerResult> {
+    const existing = this.#findSchedule(id);
+    const runId = randomUUID();
+    this.#database
+      .insert(scheduleRunTable)
+      .values({
+        id: runId,
+        scheduleId: existing.id,
+        sessionId: existing.sessionId,
+        trigger: "manual",
+        status: "pending",
+        startedAt: new Date(),
+      })
+      .run();
+    try {
+      const data: TaskData = { scheduleId: existing.id, runId };
+      const job = await this.#queue.queue.add(`trigger-${existing.id}`, data);
+      return {
+        scheduleId: existing.id,
+        runId,
+        queueJobId: job.id,
+        enqueuedAt: Date.now(),
+      };
+    } catch (error) {
+      this.#database
+        .delete(scheduleRunTable)
+        .where(eq(scheduleRunTable.id, runId))
+        .run();
+      throw error;
+    }
+  }
+
+  listRuns(filter: Scheduler.RunFilter): Scheduler.Run[] {
+    const conditions = [];
+    if (filter.scheduleId !== undefined)
+      conditions.push(eq(scheduleRunTable.scheduleId, filter.scheduleId));
+    if (filter.sessionId !== undefined)
+      conditions.push(eq(scheduleRunTable.sessionId, filter.sessionId));
+    if (filter.status !== undefined)
+      conditions.push(eq(scheduleRunTable.status, filter.status));
+    if (filter.trigger !== undefined)
+      conditions.push(eq(scheduleRunTable.trigger, filter.trigger));
+    const since = toValidDate(filter.since);
+    if (since) conditions.push(gte(scheduleRunTable.startedAt, since));
+    const until = toValidDate(filter.until);
+    if (until) conditions.push(lte(scheduleRunTable.startedAt, until));
+    const rows = this.#database
+      .select()
+      .from(scheduleRunTable)
+      .where(conditions.length > 0 ? and(...conditions) : undefined)
+      .orderBy(desc(scheduleRunTable.startedAt))
+      .limit(filter.limit ?? 50)
+      .offset(filter.offset ?? 0)
+      .all();
+    return rows.map((row) => this.#toRun(row));
+  }
+
+  getRun(runId: string): Scheduler.Run {
+    const row = this.#findRun(runId);
+    return this.#toRun(row);
+  }
+
+  async cancelRun(runId: string): Promise<Scheduler.Run> {
+    const row = this.#findRun(runId);
+    if (row.status !== "running" && row.status !== "pending") {
+      throw new Scheduler.RunNotCancellableError(runId, row.status);
+    }
+    if (row.queueJobId) this.#queue.cancel(row.queueJobId);
+    this.#database
+      .update(scheduleRunTable)
+      .set({ status: "cancelled", finishedAt: new Date() })
+      .where(
+        and(
+          eq(scheduleRunTable.id, runId),
+          inArray(scheduleRunTable.status, ["running", "pending"]),
+        ),
+      )
+      .run();
+    return this.getRun(runId);
+  }
+
+  get bunqueue(): Bunqueue<TaskData> {
+    return this.#queue;
+  }
+
+  #findSchedule(id: string): ScheduleRow {
+    const row = this.#database.query.schedule
+      .findFirst({ where: eq(scheduleTable.id, id) })
+      .sync();
+    if (!row) throw new Scheduler.NotFoundError(id);
+    return row;
+  }
+
+  #findRun(id: string): RunRow {
+    const row = this.#database.query.scheduleRun
+      .findFirst({ where: eq(scheduleRunTable.id, id) })
+      .sync();
+    if (!row) throw new Scheduler.RunNotFoundError(id);
+    return row;
+  }
+
+  #toTask(row: ScheduleRow): Scheduler.Task {
     return {
-      id: data.taskId,
-      sessionId: data.sessionId,
-      kind: data.kind,
-      description: data.description,
-      prompt: data.prompt,
-      cron: data.cron,
-      once: data.once,
-      createdAt: meta.createdAt,
-      updatedAt: meta.updatedAt,
-      lastTriggeredAt: meta.lastTriggeredAt,
-      nextRunAt: meta.nextRunAt,
-      lastRun: meta.runs[meta.runs.length - 1] ?? null,
+      id: row.id,
+      sessionId: row.sessionId,
+      description: row.description,
+      prompt: row.prompt,
+      cron: row.cron,
+      timezone: row.timezone,
+      once: row.once,
+      enabled: row.enabled,
+      overlap: parseOverlap(row.overlap),
+      notifyOnFailure: row.notifyOnFailure,
+      maxRuntimeMs: row.maxRuntimeMs,
+      createdAt: row.createdAt.getTime(),
+      updatedAt: row.updatedAt.getTime(),
     };
   }
 
-  async #fetchNextRunAt(taskId: string): Promise<number | null> {
-    const crons = await this.#queue.listCrons();
-    return crons.find((c) => c.id === taskId)?.next ?? null;
+  #toRun(row: RunRow): Scheduler.Run {
+    return {
+      id: row.id,
+      scheduleId: row.scheduleId,
+      sessionId: row.sessionId,
+      queueJobId: row.queueJobId,
+      trigger: parseRunTrigger(row.trigger),
+      status: parseRunStatus(row.status),
+      startedAt: row.startedAt.getTime(),
+      finishedAt: row.finishedAt ? row.finishedAt.getTime() : null,
+      output: row.output,
+      error: row.error,
+    };
   }
 
-  #addRun(meta: TaskMeta, run: Scheduler.RunRecord): void {
-    meta.runs.push(run);
-    if (meta.runs.length > maxRunHistory) {
-      meta.runs.splice(0, meta.runs.length - maxRunHistory);
+  async #register(
+    scheduleId: string,
+    cron: string,
+    timezone: string,
+    once: boolean,
+  ): Promise<void> {
+    const data: TaskData = { scheduleId };
+    if (once) {
+      await this.#queue.queue.upsertJobScheduler(
+        scheduleId,
+        { pattern: cron, limit: 1, timezone, preventOverlap: false },
+        { name: scheduleId, data },
+      );
+    } else {
+      await this.#queue.queue.upsertJobScheduler(
+        scheduleId,
+        { pattern: cron, timezone, preventOverlap: false },
+        { name: scheduleId, data },
+      );
+    }
+  }
+
+  async #unregister(scheduleId: string): Promise<void> {
+    await this.#queue.removeCron(scheduleId);
+  }
+
+  #cancelRunningForSchedule(scheduleId: string): void {
+    const running = this.#database
+      .select()
+      .from(scheduleRunTable)
+      .where(
+        and(
+          eq(scheduleRunTable.scheduleId, scheduleId),
+          inArray(scheduleRunTable.status, ["running", "pending"]),
+        ),
+      )
+      .all();
+    for (const run of running) {
+      if (run.queueJobId) this.#queue.cancel(run.queueJobId);
+      this.#database
+        .update(scheduleRunTable)
+        .set({ status: "cancelled", finishedAt: new Date() })
+        .where(
+          and(
+            eq(scheduleRunTable.id, run.id),
+            inArray(scheduleRunTable.status, ["running", "pending"]),
+          ),
+        )
+        .run();
+    }
+  }
+
+  #applyOverlap(row: ScheduleRow, queueJobId: string): "proceed" | "skipped" {
+    const overlap = parseOverlap(row.overlap);
+    if (overlap === "queue") return "proceed";
+    const running = this.#database
+      .select()
+      .from(scheduleRunTable)
+      .where(
+        and(
+          eq(scheduleRunTable.scheduleId, row.id),
+          eq(scheduleRunTable.status, "running"),
+        ),
+      )
+      .all();
+    if (running.length === 0) return "proceed";
+    if (overlap === "skip") {
+      const now = new Date();
+      this.#database
+        .insert(scheduleRunTable)
+        .values({
+          id: randomUUID(),
+          scheduleId: row.id,
+          sessionId: row.sessionId,
+          queueJobId,
+          trigger: "cron",
+          status: "skipped",
+          startedAt: now,
+          finishedAt: now,
+        })
+        .run();
+      this.#trimRetention(row.id);
+      return "skipped";
+    }
+    for (const prev of running) {
+      if (prev.queueJobId) this.#queue.cancel(prev.queueJobId);
+      this.#database
+        .update(scheduleRunTable)
+        .set({ status: "cancelled", finishedAt: new Date() })
+        .where(
+          and(
+            eq(scheduleRunTable.id, prev.id),
+            eq(scheduleRunTable.status, "running"),
+          ),
+        )
+        .run();
+    }
+    return "proceed";
+  }
+
+  #trimRetention(scheduleId: string): void {
+    const rows = this.#database
+      .select({ id: scheduleRunTable.id })
+      .from(scheduleRunTable)
+      .where(eq(scheduleRunTable.scheduleId, scheduleId))
+      .orderBy(desc(scheduleRunTable.startedAt))
+      .all();
+    if (rows.length <= maxRunsPerSchedule) return;
+    const toDelete = rows.slice(maxRunsPerSchedule).map((r) => r.id);
+    this.#database
+      .delete(scheduleRunTable)
+      .where(inArray(scheduleRunTable.id, toDelete))
+      .run();
+  }
+
+  async #withSessionLock<T>(
+    sessionId: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const prev = this.#sessionLocks.get(sessionId) ?? Promise.resolve();
+    const { promise: done, resolve } = Promise.withResolvers<void>();
+    this.#sessionLocks.set(sessionId, done);
+    try {
+      await prev;
+      return await fn();
+    } finally {
+      resolve();
+      if (this.#sessionLocks.get(sessionId) === done) {
+        this.#sessionLocks.delete(sessionId);
+      }
     }
   }
 
   async #processJob(job: Job<TaskData>): Promise<void> {
     const isManualTrigger = job.name.startsWith("trigger-");
-    const existing = this.#tasks.get(job.data.taskId);
-    const data = existing?.data ?? job.data;
-    const meta: TaskMeta = existing ?? {
-      data,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      lastTriggeredAt: null,
-      nextRunAt: null,
-      runs: [],
-    };
-    if (!existing) {
-      this.#tasks.set(data.taskId, meta);
-    }
-    if (!data.once) {
-      meta.nextRunAt = await this.#fetchNextRunAt(data.taskId);
-    }
-    if (data.kind === "background") {
-      this.#startBackgroundExecution(data, meta, job.id, () => {
-        if (data.once && !isManualTrigger) {
-          this.#database
-            .delete(scheduleTable)
-            .where(eq(scheduleTable.id, data.taskId))
-            .run();
-          this.#tasks.delete(data.taskId);
-        }
+    const requestedId = job.data?.scheduleId;
+    if (!requestedId) {
+      logger.warn("Scheduler job missing scheduleId", {
+        jobId: job.id,
+        jobName: job.name,
+        data: job.data,
       });
       return;
     }
-    const run: Scheduler.RunRecord = {
-      jobId: job.id,
-      startedAt: Date.now(),
-      finishedAt: 0,
-      status: "completed_silent",
-      notifiedUser: false,
-      output: null,
-      error: null,
-    };
-    try {
-      const agent = getSessionAgent(this.#database, data.sessionId);
-      await this.#opencodeClient.session.promptAsync(
-        {
-          sessionID: data.sessionId,
-          ...(agent && { agent }),
-          parts: [
-            { type: "text", text: `${sessionPromptPrefix}${data.prompt}` },
-          ],
-        },
-        { throwOnError: true },
-      );
-      run.status = "completed_notified";
-      run.notifiedUser = true;
-    } catch (error) {
-      run.status = "failed";
-      run.error = error instanceof Error ? error.message : String(error);
-      throw error;
-    } finally {
-      run.finishedAt = Date.now();
-      this.#addRun(meta, run);
-      if (data.once && !isManualTrigger) {
+    const scheduleRow = this.#database.query.schedule
+      .findFirst({ where: eq(scheduleTable.id, requestedId) })
+      .sync();
+    if (!scheduleRow) {
+      logger.warn("Scheduled task no longer exists, skipping job", {
+        jobId: job.id,
+        scheduleId: requestedId,
+      });
+      return;
+    }
+    if (!scheduleRow.enabled && !isManualTrigger) return;
+    if (!isManualTrigger) {
+      const decision = this.#applyOverlap(scheduleRow, job.id);
+      if (decision === "skipped") return;
+    }
+    await this.#withSessionLock(scheduleRow.sessionId, async () => {
+      const existingRunId = job.data?.runId;
+      let runId: string;
+      if (existingRunId) {
+        const claimed = this.#database
+          .update(scheduleRunTable)
+          .set({
+            status: "running",
+            queueJobId: job.id,
+            startedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(scheduleRunTable.id, existingRunId),
+              eq(scheduleRunTable.status, "pending"),
+            ),
+          )
+          .returning({ id: scheduleRunTable.id })
+          .all();
+        if (claimed.length === 0) return;
+        runId = existingRunId;
+      } else {
+        runId = randomUUID();
         this.#database
-          .delete(scheduleTable)
-          .where(eq(scheduleTable.id, data.taskId))
+          .insert(scheduleRunTable)
+          .values({
+            id: runId,
+            scheduleId: scheduleRow.id,
+            sessionId: scheduleRow.sessionId,
+            queueJobId: job.id,
+            trigger: isManualTrigger ? "manual" : "cron",
+            status: "running",
+            startedAt: new Date(),
+          })
           .run();
-        this.#tasks.delete(data.taskId);
       }
-    }
+      try {
+        await this.#executeRun(scheduleRow, runId, job);
+      } finally {
+        this.#trimRetention(scheduleRow.id);
+        if (scheduleRow.once && !isManualTrigger) {
+          this.#database
+            .update(scheduleTable)
+            .set({ enabled: false })
+            .where(eq(scheduleTable.id, scheduleRow.id))
+            .run();
+          await this.#queue.removeCron(scheduleRow.id).catch((error) => {
+            logger.warn(
+              "Failed to remove cron for completed once-task",
+              error,
+              {
+                scheduleId: scheduleRow.id,
+              },
+            );
+          });
+        }
+      }
+    });
   }
 
-  #startBackgroundExecution(
-    data: TaskData,
-    meta: TaskMeta,
-    jobId: string,
-    onComplete: () => void,
-  ): void {
-    const run: Scheduler.RunRecord = {
-      jobId,
-      startedAt: Date.now(),
-      finishedAt: 0,
-      status: "running",
-      notifiedUser: false,
-      output: null,
-      error: null,
-    };
-    this.#addRun(meta, run);
-    this.#executeBackground(data, run)
-      .catch((error) => {
-        logger.error("Background task failed", error, {
-          taskId: data.taskId,
-        });
-      })
-      .finally(onComplete);
-  }
-
-  async #executeBackground(
-    data: TaskData,
-    run: Scheduler.RunRecord,
+  async #executeRun(
+    scheduleRow: ScheduleRow,
+    runId: string,
+    job: Job<TaskData>,
   ): Promise<void> {
-    const location = this.#existingSessions.get(data.sessionId);
+    const location = this.#existingSessions.get(scheduleRow.sessionId);
     if (!location) {
-      logger.warn("Background task session not found, skipping", {
-        taskId: data.taskId,
-        sessionId: data.sessionId,
-      });
-      run.status = "completed_silent";
-      run.finishedAt = Date.now();
+      this.#finalizeRun(runId, "silent", null, "user session unavailable");
       return;
     }
+    const sendOptions = location.threadId
+      ? { message_thread_id: location.threadId }
+      : {};
+    const signal = this.#queue.getSignal(job.id);
     let ephemeralId: string | undefined;
     try {
       const created = await this.#opencodeClient.session.create(
@@ -431,35 +647,50 @@ export class Scheduler implements Disposable {
         { throwOnError: true },
       );
       ephemeralId = created.data.id;
+      if (signal?.aborted) {
+        this.#finalizeRun(runId, "cancelled", null, null);
+        return;
+      }
+      const agent = getSessionAgent(this.#database, scheduleRow.sessionId);
       await this.#opencodeClient.session.promptAsync(
         {
           sessionID: ephemeralId,
+          ...(agent && { agent }),
           parts: [
-            {
-              type: "text",
-              text: `${backgroundPromptPrefix}${data.prompt}`,
-            },
+            { type: "text", text: `${promptPrefix}${scheduleRow.prompt}` },
           ],
         },
         { throwOnError: true },
       );
-      const text = await this.#waitForText(ephemeralId, data.taskId, run);
-      if (text) run.output = text;
-      if (!text || text.includes(noReportMarker)) {
-        run.status = "completed_silent";
-        run.finishedAt = Date.now();
+      const text = await this.#waitForText(ephemeralId, scheduleRow, signal);
+      if (signal?.aborted) {
+        this.#finalizeRun(runId, "cancelled", text, null);
         return;
       }
-      await this.#bot.api.sendMessage(location.chatId, text, {
-        ...(location.threadId && { message_thread_id: location.threadId }),
-      });
-      run.status = "completed_notified";
-      run.notifiedUser = true;
-      run.finishedAt = Date.now();
+      if (!text || text.trim() === noReportMarker) {
+        this.#finalizeRun(runId, "silent", text, null);
+        return;
+      }
+      await this.#bot.api.sendMessage(location.chatId, text, sendOptions);
+      this.#finalizeRun(runId, "reported", text, null);
     } catch (error) {
-      run.status = "failed";
-      run.error = error instanceof Error ? error.message : String(error);
-      run.finishedAt = Date.now();
+      const message = error instanceof Error ? error.message : String(error);
+      this.#finalizeRun(runId, "failed", null, message);
+      if (scheduleRow.notifyOnFailure) {
+        await this.#bot.api
+          .sendMessage(
+            location.chatId,
+            `⚠️ Scheduled task "${scheduleRow.description}" failed: ${message}`,
+            sendOptions,
+          )
+          .catch((notifyError) => {
+            logger.error(
+              "Failed to deliver failure notification",
+              notifyError,
+              { runId },
+            );
+          });
+      }
       throw error;
     } finally {
       if (ephemeralId) {
@@ -467,39 +698,54 @@ export class Scheduler implements Disposable {
           .abort({ sessionID: ephemeralId })
           .catch((error) => {
             logger.warn("Failed to abort ephemeral session", error, {
-              sessionID: ephemeralId,
+              ephemeralId,
             });
           });
       }
     }
   }
 
+  #finalizeRun(
+    runId: string,
+    status: Scheduler.RunStatus,
+    output: string | null,
+    error: string | null,
+  ): void {
+    this.#database
+      .update(scheduleRunTable)
+      .set({
+        status,
+        output,
+        error,
+        finishedAt: new Date(),
+      })
+      .where(eq(scheduleRunTable.id, runId))
+      .run();
+  }
+
   async #waitForText(
     sessionId: string,
-    taskId: string,
-    run: Scheduler.RunRecord,
+    scheduleRow: ScheduleRow,
+    signal: AbortSignal | null,
   ): Promise<string | null> {
-    const maxAttempts = 450;
-    const intervalMs = 2000;
-    const pollTimeoutMs = 30_000;
+    const maxRuntime = scheduleRow.maxRuntimeMs ?? defaultMaxRuntimeMs;
+    const maxAttempts = Math.max(1, Math.ceil(maxRuntime / pollIntervalMs));
     for (let i = 0; i < maxAttempts; i++) {
-      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+      if (signal?.aborted) return null;
+      await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+      if (signal?.aborted) return null;
       try {
         const result = await this.#pollOnce(sessionId, pollTimeoutMs);
-        if (result === "busy") {
-          run.output = `Polling... attempt ${i + 1}/${maxAttempts}, session busy`;
-          continue;
-        }
+        if (result === "busy") continue;
         if (result === "idle") break;
         if (result) return result;
       } catch (error) {
         logger.warn("Background poll iteration failed, retrying", error, {
-          taskId,
+          scheduleId: scheduleRow.id,
           attempt: i,
         });
       }
     }
-    logger.warn("Background task produced no text response", { taskId });
     return null;
   }
 
@@ -510,12 +756,12 @@ export class Scheduler implements Disposable {
     let timer: Timer | undefined;
     const result = await Promise.race([
       this.#pollSession(sessionId),
-      new Promise<typeof pollTimeout>((resolve) => {
-        timer = setTimeout(resolve, timeoutMs, pollTimeout);
+      new Promise<typeof pollTimeoutSymbol>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs, pollTimeoutSymbol);
       }),
     ]);
     clearTimeout(timer);
-    if (result === pollTimeout) throw new Error("Poll timeout");
+    if (result === pollTimeoutSymbol) throw new Error("Poll timeout");
     return result;
   }
 
@@ -544,61 +790,33 @@ export class Scheduler implements Disposable {
     return null;
   }
 
-  async addJob(
-    sessionId: string,
-    kind: Scheduler.TaskKind,
-    description: string,
-    prompt: string,
-    opts?: JobOptions | undefined,
-  ): Promise<Job<TaskData>> {
-    const taskData: TaskData = {
-      taskId: crypto.randomUUID(),
-      sessionId,
-      kind,
-      cron: "",
-      description,
-      prompt,
-      once: true,
-    };
-    return this.#queue.queue.add(taskData.taskId, taskData, opts);
-  }
-
-  get bunqueue(): Bunqueue<TaskData> {
-    return this.#queue;
-  }
-
   async #recover(): Promise<void> {
-    const rows = this.#database.select().from(scheduleTable).all();
-    const cronIds = new Set((await this.#queue.listCrons()).map((c) => c.id));
-    for (const row of rows) {
-      const taskData: TaskData = {
-        taskId: row.id,
-        sessionId: row.sessionId,
-        kind: row.kind as Scheduler.TaskKind,
-        cron: row.cron,
-        description: row.description,
-        prompt: row.prompt,
-        once: row.once,
-      };
-      if (!cronIds.has(row.id)) {
-        if (row.once) {
-          await this.#queue.queue.upsertJobScheduler(
-            row.id,
-            { pattern: row.cron, limit: 1 },
-            { name: row.id, data: taskData },
-          );
-        } else {
-          await this.#queue.cron(row.id, row.cron, taskData);
-        }
-      }
-      this.#tasks.set(row.id, {
-        data: taskData,
-        createdAt: row.createdAt.getTime(),
-        updatedAt: row.updatedAt.getTime(),
-        lastTriggeredAt: null,
-        nextRunAt: await this.#fetchNextRunAt(row.id),
-        runs: [],
+    const stuck = this.#database
+      .update(scheduleRunTable)
+      .set({
+        status: "failed",
+        error: "bot restart",
+        finishedAt: new Date(),
+      })
+      .where(inArray(scheduleRunTable.status, ["running", "pending"]))
+      .returning({ id: scheduleRunTable.id })
+      .all();
+    if (stuck.length > 0) {
+      logger.info("Finalized stuck scheduled runs on recovery", {
+        count: stuck.length,
       });
+    }
+    const rows = this.#database
+      .select()
+      .from(scheduleTable)
+      .where(eq(scheduleTable.enabled, true))
+      .all();
+    const registered = new Set(
+      (await this.#queue.listCrons()).map((c) => c.id),
+    );
+    for (const row of rows) {
+      if (registered.has(row.id)) continue;
+      await this.#register(row.id, row.cron, row.timezone, row.once);
     }
     if (rows.length > 0) {
       logger.info("Recovered scheduled tasks", { count: rows.length });
@@ -620,6 +838,25 @@ export class Scheduler implements Disposable {
     }
   };
 
+  static readonly RunNotFoundError = class RunNotFoundError extends Error {
+    readonly id: string;
+    constructor(id: string) {
+      super(`Scheduled run not found: ${id}`);
+      this.id = id;
+    }
+  };
+
+  static readonly RunNotCancellableError =
+    class RunNotCancellableError extends Error {
+      readonly id: string;
+      readonly status: string;
+      constructor(id: string, status: string) {
+        super(`Scheduled run ${id} is not cancellable (status: ${status})`);
+        this.id = id;
+        this.status = status;
+      }
+    };
+
   static async create(
     bot: Bot,
     database: Database,
@@ -639,56 +876,90 @@ export class Scheduler implements Disposable {
 }
 
 export namespace Scheduler {
-  export type TaskKind = "session" | "background";
+  export type Overlap = "queue" | "skip" | "cancel_previous";
+
   export type RunStatus =
+    | "pending"
     | "running"
-    | "completed_notified"
-    | "completed_silent"
-    | "failed";
+    | "reported"
+    | "silent"
+    | "failed"
+    | "cancelled"
+    | "skipped";
+
+  export type RunTrigger = "cron" | "manual";
 
   export interface CreateInput {
     readonly sessionId: string;
-    readonly kind: TaskKind;
     readonly cron: string;
     readonly description: string;
     readonly prompt: string;
     readonly once: boolean;
+    readonly timezone?: string;
+    readonly overlap?: Overlap;
+    readonly notifyOnFailure?: boolean;
+    readonly maxRuntimeMs?: number;
   }
 
   export interface UpdateInput {
     readonly description?: string;
     readonly prompt?: string;
     readonly cron?: string;
+    readonly timezone?: string;
+    readonly overlap?: Overlap;
+    readonly notifyOnFailure?: boolean;
+    readonly maxRuntimeMs?: number | null;
   }
 
-  export interface RunRecord {
-    readonly jobId: string;
-    startedAt: number;
-    finishedAt: number;
-    status: RunStatus;
-    notifiedUser: boolean;
-    output: string | null;
-    error: string | null;
+  export interface ListFilter {
+    readonly sessionId?: string;
+    readonly enabled?: boolean;
+  }
+
+  export interface RunFilter {
+    readonly scheduleId?: string;
+    readonly sessionId?: string;
+    readonly status?: RunStatus;
+    readonly trigger?: RunTrigger;
+    readonly since?: number;
+    readonly until?: number;
+    readonly limit?: number;
+    readonly offset?: number;
   }
 
   export interface TriggerResult {
     readonly scheduleId: string;
-    readonly jobId: string;
+    readonly runId: string;
+    readonly queueJobId: string;
     readonly enqueuedAt: number;
   }
 
   export interface Task {
     readonly id: string;
     readonly sessionId: string;
-    readonly kind: TaskKind;
-    readonly cron: string;
     readonly description: string;
     readonly prompt: string;
+    readonly cron: string;
+    readonly timezone: string;
     readonly once: boolean;
+    readonly enabled: boolean;
+    readonly overlap: Overlap;
+    readonly notifyOnFailure: boolean;
+    readonly maxRuntimeMs: number | null;
     readonly createdAt: number;
     readonly updatedAt: number;
-    readonly lastTriggeredAt: number | null;
-    readonly nextRunAt: number | null;
-    readonly lastRun: RunRecord | null;
+  }
+
+  export interface Run {
+    readonly id: string;
+    readonly scheduleId: string;
+    readonly sessionId: string;
+    readonly queueJobId: string | null;
+    readonly trigger: RunTrigger;
+    readonly status: RunStatus;
+    readonly startedAt: number;
+    readonly finishedAt: number | null;
+    readonly output: string | null;
+    readonly error: string | null;
   }
 }

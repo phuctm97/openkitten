@@ -29,7 +29,7 @@ Installed at `~/.openkitten/profiles/<profile>/system/config/opencode/skills/`:
 
 <Cards>
   <Card title="custom-commands" description="Create, delete, and list custom Telegram /slash commands. Calls reload_commands on save." />
-  <Card title="schedules" description="Author, test, and debug scheduled tasks against the OpenKitten queue (session or background)." />
+  <Card title="schedules" description="Author, test, and debug scheduled tasks. Silent-by-default cron jobs with full run history." />
   <Card title="skill-creator" description="Create new skills, install from skills.sh, list, update, and remove." />
   <Card title="telegram-api" description="Administer the bot itself — change name/description/avatar, delete messages, call any Bot API method." />
 </Cards>
@@ -40,7 +40,7 @@ Activated when the user asks to add, remove, or list Telegram slash commands. It
 
 ### `schedules`
 
-Covers the full lifecycle of scheduled tasks: picking `session` vs `background`, computing UTC cron expressions, creating/updating/deleting, manual triggers, run-history inspection, and debugging. All operations go through the `queue_schedule_*` and `queue_*` MCP tools. See [Schedules](/docs/bot/schedules).
+Covers the full lifecycle of scheduled tasks: choosing a timezone and cron expression, creating/updating schedules, enabling/disabling, manual triggers, and inspecting run history. Emphasizes silent-by-default behavior (`[NO_REPORT]` marker) and the separation between schedules, queue jobs, and run records. See [Schedules](/docs/bot/schedules).
 
 ### `skill-creator`
 

@@ -1,125 +1,190 @@
 ---
 title: Schedules
-description: Cron-driven session and background tasks.
+description: Recurring and one-time tasks that fire on a cron pattern and report back to your chat.
 ---
 
-OpenKitten has a built-in scheduler backed by [Bunqueue](https://github.com/pomber/bunqueue) that can run two kinds of recurring jobs: **session** tasks that respond in chat, and **background** tasks that run silently and only notify you when something noteworthy happens.
+OpenKitten has a built-in scheduler that runs tasks on a cron expression. Each tick runs in a fresh isolated OpenCode session, the agent produces a final text response, and the result is either delivered to your Telegram chat or stays silent — based on what the task itself says.
 
-Schedules are created, inspected, and triggered through MCP tools — usually by asking the bot in natural language while the **`schedules`** skill is active.
+You manage schedules by talking to the bot in natural language. The agent has the **`schedules`** skill active by default, so it knows how to use the right tools.
 
-## Session vs background
+## Creating a schedule
+
+Just ask. Some examples:
+
+- *"Every day at 9am, summarize yesterday's commits across my repos."*
+- *"Check my Gmail for new bank emails every hour. If any, list them for me to classify."*
+- *"Remind me in 30 minutes to move my laundry."*
+- *"Every Monday morning, send me my calendar for the week."*
+
+The bot will:
+
+1. Check the server time.
+2. Pick a timezone (asks if unclear — otherwise uses UTC).
+3. Compose a cron expression.
+4. Create the schedule and confirm the ID back.
+
+You don't have to memorize cron syntax or IDs — the agent handles both.
+
+## What happens when a schedule fires
+
+Each scheduled tick produces one **run** with a terminal status:
 
 <Cards>
-  <Card title="session" description="Executes inside the current Telegram chat. User sees the response directly and can reply naturally. Best for reminders, summaries, and workflows that expect a reply." />
-  <Card title="background" description="Runs in an isolated ephemeral session. Can run up to ~15 minutes. Only sends a Telegram message when something noteworthy is found. Results are recorded in run history, not injected back into chat." />
+  <Card title="reported" description="The task produced meaningful output. The text is delivered to your Telegram chat as a message." />
+  <Card title="silent" description="The task explicitly said there's nothing to report (or produced no text). Nothing is sent to your chat — but the run is still recorded in history." />
+  <Card title="failed" description="The task threw an error. Recorded with the error message. By default stays silent; set notifyOnFailure to get a chat alert." />
+  <Card title="cancelled" description="You explicitly cancelled the run, or the schedule was deleted mid-execution, or an overlap policy preempted it." />
+  <Card title="skipped" description="A cron tick was dropped because an earlier run for this schedule was still active (only with overlap: skip)." />
 </Cards>
 
-Pick **session** when:
+**Silent-by-default is a feature, not a bug.** It's what makes "check Gmail every 5 minutes" usable without 288 notifications a day. The task only speaks when there's something real to say.
 
-- the reply should be visible in the main chat,
-- continuity with the ongoing conversation matters,
-- the user is expected to reply.
+## Inspecting history
 
-Pick **background** when:
+Every run — reported, silent, failed, cancelled, skipped — is persisted. Ask the agent:
 
-- the job should be silent most of the time,
-- only an alert on a specific condition matters,
-- the job involves long-running external tool calls (Gmail, Sheets, third-party APIs).
+- *"Show me the last 10 runs of the Gmail check."*
+- *"Did any run fail today?"*
+- *"What did the 9am summary say on Tuesday?"*
+- *"Show me the full output of that one run."*
 
-## Prompt wording rules
+The agent uses `queue_runs` and `queue_run_get` under the hood. You never see the tools — only the answer.
 
-For **session** schedules, wording like `Reply with …` / `Respond with …` keeps the agent from routing through direct Telegram tool calls. Avoid `Send a message to …`.
+## Managing schedules
 
-For **background** schedules, state explicitly whether the task should notify only when needed or stay silent when there's nothing to report. The built-in wrapper appends:
+| You say | The bot does |
+|---|---|
+| *"What schedules do I have?"* | lists all schedules with status |
+| *"Pause the Gmail check for the weekend."* | disables without deleting (history preserved) |
+| *"Turn it back on."* | re-enables; next cron tick resumes |
+| *"Change it to every 2 hours instead."* | updates cron, re-registers atomically |
+| *"Run the report now, don't wait."* | triggers immediately, regardless of cron |
+| *"Cancel the one that's currently running."* | aborts the active run |
+| *"Delete it."* | removes permanently; all run history cascade-deletes |
 
-> You MUST end with a final text response after using any tools. If there is nothing meaningful to report, respond with exactly: `[NO_REPORT]`.
+Pause (disable) and delete are **different**. Disable is reversible and keeps history. Delete is destructive.
 
-When the agent answers with `[NO_REPORT]`, the run is marked `completed_silent` and no Telegram message is sent.
+## Options you can ask for
 
-## Cron
+When creating or updating a schedule, the agent understands these concepts:
 
-- **Cron is always UTC.**
-- Use 5-field expressions: `minute hour dom month dow`.
-- Shortcuts are supported: `@hourly`, `@daily`, `@weekly`, `@monthly`.
-- Always call `queue_server_time` before computing an expression so you know the current clock on the host.
-- For test schedules, set the fire time **2-3 minutes in the future** — closer times are ambiguous because of creation delay.
+### Timezone
 
-## Core tools
+Any IANA zone: `Asia/Ho_Chi_Minh`, `Europe/London`, `America/New_York`, `UTC` (default).
 
-All schedule/queue tools are exposed on the OpenKitten MCP server:
+*"Run at 9am Vietnam time."* → cron fires at 09:00 `Asia/Ho_Chi_Minh`.
 
-### Schedule lifecycle
+### once
 
-- `queue_schedule_create` — create a new schedule (`kind`, `cron`, `description`, `prompt`, optional `once`).
-- `queue_schedule_list` — list all schedules with IDs, cron, next-run, and last-run status.
-- `queue_schedule_update` — change `description`, `prompt`, or `cron` on an existing schedule.
-- `queue_schedule_delete` — remove a schedule permanently.
-- `queue_schedule_trigger` — fire a schedule now without waiting for the next cron tick.
-- `queue_schedule_runs` — last 20 executions for a schedule (status, notifiedUser, output preview, error).
-- `queue_server_time` — current ISO/UTC/unix time and local timezone.
+Fires exactly once at the next matching cron time, then auto-pauses. Row is preserved so you can see it in history.
 
-### Raw queue tools (Bunqueue)
+*"Remind me once in 2 hours to call mom."* → cron `<+2hr>`, `once: true`.
 
-- `queue_add_job` — enqueue a one-off job with full `JobOptions` (priority, delay, attempts, backoff, timeout, …).
-- `queue_status` — paused state + full job counts.
-- `queue_pause` / `queue_resume` — pause or resume the whole queue.
-- `queue_list_jobs` — paginated job list filtered by state.
-- `queue_get_job` / `queue_remove_job` / `queue_cancel_job` / `queue_retry_job` / `queue_promote_job` — per-job operations.
-- `queue_list_crons` — inspect registered cron schedulers.
-- `queue_clean` — remove old jobs by state and age.
+### overlap
 
-### Dead-letter queue
+What happens if a new tick fires while the previous run is still executing:
 
-- `queue_dlq_list` — failed jobs with attempt history; filter by reason (`max_attempts_exceeded`, `timeout`, `stalled`, `ttl_expired`, `worker_lost`, `explicit_fail`, `unknown`).
-- `queue_dlq_retry` — retry one DLQ entry or all.
-- `queue_dlq_purge` — permanently clear the DLQ.
+- **queue** (default) — let them stack.
+- **skip** — drop the new tick. Good for expensive tasks that should never overlap.
+- **cancel_previous** — abort the active one, run the new one. Good for "always snapshot current state" patterns.
 
-## Run statuses
+### notifyOnFailure
 
-When you call `queue_schedule_runs`, each entry carries a status:
+Default is silent-on-failure (failures recorded but not shown in chat). Set to true for critical tasks where a silent failure is dangerous.
 
-| Status                | Meaning                                                           |
-| --------------------- | ----------------------------------------------------------------- |
-| `running`             | The job is still processing (polling up to ~15 min).              |
-| `completed_notified`  | Finished and a Telegram message was sent to the user.             |
-| `completed_silent`    | Finished; background agent returned `[NO_REPORT]` or equivalent.  |
-| `failed`              | Threw, timed out, or was canceled.                                |
+*"If my deployment-health check ever fails, tell me immediately."* → `notifyOnFailure: true`.
 
-## Minimal prompt templates
+### maxRuntimeMs
 
-**Session**
+Cap how long the ephemeral agent gets before the run is finalized as `silent`. Default 15 minutes. Useful for fast checks where a hang would be noise:
 
-```
-Reply with exactly: <text>.
-```
+*"Quick ping every minute — give up after 10 seconds."* → `maxRuntimeMs: 10000`.
 
-**Background**
+## Cron reference
 
-```
-Run a minimal background test. If successful, say exactly: <text>.
-```
+OpenKitten uses standard 5-field cron: `minute hour day-of-month month day-of-week`.
 
-**Background with monitoring semantics**
+| Expression | Meaning |
+|---|---|
+| `0 9 * * *` | every day at 09:00 |
+| `*/15 * * * *` | every 15 minutes |
+| `0 9 * * 1-5` | weekdays at 09:00 |
+| `0 0 1 * *` | midnight on the first of each month |
+| `@hourly` | top of every hour |
+| `@daily` | midnight every day |
+| `@weekly` / `@monthly` | shortcut aliases |
 
-```
-Check <something>. If anything has changed since the last run, report it. Otherwise respond with [NO_REPORT].
-```
+All expressions are interpreted in the schedule's timezone (default `UTC`).
 
-## Debug checklist
+## Prompt wording tips
 
-If a schedule seems off, ask the bot to walk this in order:
+When you describe a task, the agent turns your words into the schedule's prompt. The prompt runs in a fresh ephemeral session each time — it doesn't carry any memory of your chat. A few things that help:
 
-1. `queue_server_time` — confirm the host clock.
-2. `queue_schedule_list` — confirm the schedule exists and has a `nextRunAt`.
-3. `queue_schedule_runs` — inspect recent runs.
-4. `queue_status` — check the queue isn't paused / backlogged.
-5. `queue_list_jobs` — list waiting/active/delayed jobs.
-6. `queue_get_job` — look at a specific job's state and payload.
+**For tasks that often have nothing to report**, include the silent-contract. The agent does this automatically when you say things like "only tell me if …" or "check silently":
 
-Always keep causes separated: prompt/agent issue vs. cron registration vs. queue dispatch vs. delivery.
+> *If there is nothing to report, respond with exactly `[NO_REPORT]`. Otherwise, reply with a concise summary.*
+
+**For reminders** — just phrase it as the text you want to hear:
+
+> *"Remind me to take my vitamins."* — the scheduled agent will say "Remind you to take your vitamins" at the fire time.
+
+**For multi-step checks** (API calls, multiple tool uses), be explicit about what to do with each outcome:
+
+> *"Check the deployment pipeline. If green, `[NO_REPORT]`. If red, list the failing stage and the error."*
+
+## Troubleshooting
+
+If a schedule looks off, ask the bot:
+
+1. *"What's the server time?"* — confirms clock and resolved timezone.
+2. *"Is the Gmail schedule still enabled?"* — confirms it exists and isn't paused.
+3. *"Show me the last 5 runs."* — reveals whether anything has fired and what the statuses were.
+4. *"Get full details of run `<id>`."* — output + error for a specific run.
+
+If *none of this* helps, the agent can inspect the low-level queue via `queue_status` / `queue_list_crons` / `queue_list_jobs`, but that's rarely needed — the run history almost always has the answer.
+
+## Full MCP tool list
+
+The agent uses these tools behind the scenes. You don't call them directly, but they're listed here for reference.
+
+> **Naming:** each tool is registered on OpenKitten's MCP server under the unprefixed name below (`queue_schedule_create`, etc.). OpenCode exposes them to agents with the server name prepended (`openkitten_queue_schedule_create`). Skill authors write the prefixed form; this page shows the unprefixed form.
+
+
+### Schedules
+
+| Tool | Purpose |
+|---|---|
+| `queue_schedule_create` | create a schedule |
+| `queue_schedule_list` | list schedules (filter by session or enabled flag) |
+| `queue_schedule_update` | change any field |
+| `queue_schedule_delete` | remove permanently (cascade-deletes run history) |
+| `queue_schedule_enable` / `_disable` | resume / pause without losing history |
+| `queue_schedule_trigger` | fire immediately, ignoring cron and overlap; returns the new `runId` directly |
+
+### Runs (history)
+
+| Tool | Purpose |
+|---|---|
+| `queue_runs` | list runs with filters (`scheduleId`, `sessionId`, `status`, `trigger`, `since`, `until`, `limit`, `offset`) |
+| `queue_run_get` | fetch one run by id, full output / error |
+| `queue_run_cancel` | abort an in-flight run |
+
+### Meta
+
+| Tool | Purpose |
+|---|---|
+| `queue_server_time` | current time in UTC / local, useful before computing cron |
+
+### Diagnostic (rarely needed)
+
+| Tool | Purpose |
+|---|---|
+| `queue_status` | queue paused state + raw job counts |
+| `queue_list_jobs` | raw Bunqueue job listing by state |
+| `queue_list_crons` | registered cron schedulers |
 
 ## Hygiene
 
-- Clean up temporary test schedules after verification.
-- Remove any "wait helper" jobs you created for timing tests.
-- Report manual-trigger problems separately from auto-fire problems.
+- Delete test schedules you don't need anymore — disable isn't enough if you won't re-use them.
+- Run history for a schedule is capped at the most recent 500 runs; older ones are pruned automatically. For high-frequency schedules, pull important output into your own store or ask the agent to archive it.
+- If the bot restarts mid-run, any in-flight run is finalized as `failed` with `error: "bot restart"`. The next cron tick runs fresh. This is normal.
