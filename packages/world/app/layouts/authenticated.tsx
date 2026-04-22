@@ -10,7 +10,6 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
     queryKey: ["auth", "getSession", null],
     queryFn: ({ signal }) =>
       authClient.getSession({
-        query: undefined,
         fetchOptions: {
           signal,
           throw: true,
