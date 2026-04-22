@@ -164,6 +164,7 @@ export class McpServer implements Disposable {
     );
     registerScheduleTools(server, {
       scheduler: this.#scheduler,
+      existingSessions: this.#existingSessions,
       getMetadata: (args) => this.#getMetadata(args),
     });
     const transport = new WebStandardStreamableHTTPServerTransport();

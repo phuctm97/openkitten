@@ -13,6 +13,7 @@ export class ExistingSessions {
   readonly #opencodeClient: OpencodeClient;
   readonly #hooks = createHooks<ExistingSessions.Hooks>();
   readonly #removingPromises = new Map<string, Promise<void>>();
+  #unreachableLocations: readonly ExistingSessions.UnreachableLocation[] = [];
 
   private constructor(
     bot: Bot,
@@ -156,10 +157,18 @@ export class ExistingSessions {
     const unreachableSessions = currentSessions.filter(
       (_, i) => !reachabilityResults[i]?.value,
     );
+    this.#unreachableLocations = unreachableSessions.map((s) => ({
+      chatId: s.chatId,
+      threadId: s.threadId ?? 0,
+    }));
     const removalResults = await Promise.allSettled(
       unreachableSessions.map((s) => this.remove(s.id)),
     );
     Errors.throwIfAny(removalResults);
+  }
+
+  get unreachableLocations(): readonly ExistingSessions.UnreachableLocation[] {
+    return this.#unreachableLocations;
   }
 
   get sessionIds(): readonly string[] {
@@ -287,6 +296,11 @@ export namespace ExistingSessions {
 
   export interface BeforeRemoveEvent extends Location {
     readonly sessionId: string;
+  }
+
+  export interface UnreachableLocation {
+    readonly chatId: number;
+    readonly threadId: number;
   }
 
   export interface Hooks {

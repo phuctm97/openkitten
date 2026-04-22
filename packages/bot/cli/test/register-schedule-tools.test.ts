@@ -24,7 +24,8 @@ function makeRegisteredTools() {
 function makeTask(overrides?: Partial<Scheduler.Task>): Scheduler.Task {
   return {
     id: "task-1",
-    sessionId: "sess-1",
+    chatId: 123,
+    threadId: 0,
     cron: "0 * * * *",
     timezone: "UTC",
     description: "Hourly",
@@ -125,9 +126,21 @@ describe("registerScheduleTools", () => {
     getMetadata.mockClear();
   });
 
+  const existingSessions = {
+    get: vi.fn<() => { chatId: number; threadId: number | undefined }>(() => ({
+      chatId: 123,
+      threadId: 456,
+    })),
+  };
+
   function setup() {
     const { registeredTools, mockServer } = makeRegisteredTools();
-    registerScheduleTools(mockServer as never, { scheduler, getMetadata });
+    registerScheduleTools(mockServer as never, {
+      scheduler,
+      existingSessions: existingSessions as never,
+      getMetadata,
+    });
+    existingSessions.get.mockClear();
     return registeredTools;
   }
 
@@ -179,7 +192,8 @@ describe("registerScheduleTools", () => {
       maxRuntimeMs: 30000,
     });
     expect(mockCreate).toHaveBeenCalledWith({
-      sessionId: "sess-1",
+      chatId: 123,
+      threadId: 456,
       cron: "0 9 * * *",
       description: "d",
       prompt: "p",
@@ -236,14 +250,38 @@ describe("registerScheduleTools", () => {
     const tools = setup();
     const result = (await tools.get("queue_schedule_list")?.handler({
       ...rawMetadataArg,
-      sessionId: "sess-1",
       enabled: true,
     })) as { structuredContent: { tasks: unknown[] } };
     expect(mockList).toHaveBeenCalledWith({
-      sessionId: "sess-1",
+      chatId: 123,
+      threadId: 456,
       enabled: true,
     });
     expect(result.structuredContent.tasks).toHaveLength(1);
+  });
+
+  test("queue_schedule_list scopes to caller chat without enabled filter", async () => {
+    mockList.mockReturnValue([]);
+    const tools = setup();
+    await tools.get("queue_schedule_list")?.handler(rawMetadataArg);
+    expect(mockList).toHaveBeenCalledWith({
+      chatId: 123,
+      threadId: 456,
+    });
+  });
+
+  test("queue_schedule_list defaults threadId to 0 when caller has no thread", async () => {
+    existingSessions.get.mockReturnValueOnce({
+      chatId: 123,
+      threadId: undefined,
+    });
+    mockList.mockReturnValue([]);
+    const tools = setup();
+    await tools.get("queue_schedule_list")?.handler(rawMetadataArg);
+    expect(mockList).toHaveBeenCalledWith({
+      chatId: 123,
+      threadId: 0,
+    });
   });
 
   test("queue_schedule_list with no tasks returns friendly text", async () => {
@@ -350,7 +388,6 @@ describe("registerScheduleTools", () => {
     await tools.get("queue_runs")?.handler({
       ...rawMetadataArg,
       scheduleId: "task-1",
-      sessionId: "sess-1",
       status: "reported",
       trigger: "cron",
       since: 1000,
@@ -360,7 +397,6 @@ describe("registerScheduleTools", () => {
     });
     expect(mockListRuns).toHaveBeenCalledWith({
       scheduleId: "task-1",
-      sessionId: "sess-1",
       status: "reported",
       trigger: "cron",
       since: 1000,

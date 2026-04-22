@@ -8,24 +8,40 @@ test("message references session", () => {
   expect(fk?.reference().foreignTable).toBe(schema.session);
 });
 
-test("schedule references session", () => {
+test("schedule has no session foreign key", () => {
   const config = getTableConfig(schema.schedule);
-  const fk = config.foreignKeys[0];
-  expect(fk?.reference().foreignTable).toBe(schema.session);
+  expect(config.foreignKeys).toHaveLength(0);
 });
 
-test("sessionRelations includes schedules", () => {
+test("schedule indexes chatId and threadId", () => {
+  const config = getTableConfig(schema.schedule);
+  const idx = config.indexes.find(
+    (i) => i.config.name === "schedule_chat_id_thread_id_idx",
+  );
+  expect(idx).toBeDefined();
+});
+
+test("sessionRelations includes scheduleRuns", () => {
   expect(schema.sessionRelations.table).toBe(schema.session);
 });
 
-test("scheduleRelations maps to session", () => {
+test("scheduleRelations maps to runs", () => {
   expect(schema.scheduleRelations.table).toBe(schema.schedule);
 });
 
-test("scheduleRun references schedule", () => {
+test("scheduleRun references schedule and session", () => {
   const config = getTableConfig(schema.scheduleRun);
-  const fk = config.foreignKeys[0];
-  expect(fk?.reference().foreignTable).toBe(schema.schedule);
+  const tables = config.foreignKeys.map((fk) => fk.reference().foreignTable);
+  expect(tables).toContain(schema.schedule);
+  expect(tables).toContain(schema.session);
+});
+
+test("scheduleRun.session_id is set null on parent delete", () => {
+  const config = getTableConfig(schema.scheduleRun);
+  const sessionFk = config.foreignKeys.find(
+    (fk) => fk.reference().foreignTable === schema.session,
+  );
+  expect(sessionFk?.onDelete).toBe("set null");
 });
 
 test("scheduleRunRelations maps to schedule", () => {

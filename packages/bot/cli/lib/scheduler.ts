@@ -79,13 +79,17 @@ function toValidDate(value: number | undefined): Date | null {
   return date;
 }
 
+function chatLockKey(chatId: number, threadId: number): string {
+  return `${chatId}:${threadId}`;
+}
+
 export class Scheduler implements Disposable {
   readonly #bot: Bot;
   readonly #database: Database;
   readonly #opencodeClient: OpencodeClient;
   readonly #existingSessions: ExistingSessions;
   readonly #queue: Bunqueue<TaskData>;
-  readonly #sessionLocks = new Map<string, Promise<void>>();
+  readonly #chatLocks = new Map<string, Promise<void>>();
 
   private constructor(
     bot: Bot,
@@ -122,7 +126,8 @@ export class Scheduler implements Disposable {
       .insert(scheduleTable)
       .values({
         id,
-        sessionId: input.sessionId,
+        chatId: input.chatId,
+        threadId: input.threadId ?? 0,
         description: input.description,
         prompt: input.prompt,
         cron: input.cron,
@@ -153,8 +158,10 @@ export class Scheduler implements Disposable {
 
   list(filter: Scheduler.ListFilter = {}): Scheduler.Task[] {
     const conditions = [];
-    if (filter.sessionId !== undefined)
-      conditions.push(eq(scheduleTable.sessionId, filter.sessionId));
+    if (filter.chatId !== undefined)
+      conditions.push(eq(scheduleTable.chatId, filter.chatId));
+    if (filter.threadId !== undefined)
+      conditions.push(eq(scheduleTable.threadId, filter.threadId));
     if (filter.enabled !== undefined)
       conditions.push(eq(scheduleTable.enabled, filter.enabled));
     const rows = this.#database
@@ -273,6 +280,32 @@ export class Scheduler implements Disposable {
     this.#database.delete(scheduleTable).where(eq(scheduleTable.id, id)).run();
   }
 
+  async deleteByChat(chatId: number, threadId: number): Promise<void> {
+    const rows = this.#database
+      .select({ id: scheduleTable.id, enabled: scheduleTable.enabled })
+      .from(scheduleTable)
+      .where(
+        and(
+          eq(scheduleTable.chatId, chatId),
+          eq(scheduleTable.threadId, threadId),
+        ),
+      )
+      .all();
+    for (const row of rows) {
+      if (row.enabled) await this.#unregister(row.id);
+      this.#cancelRunningForSchedule(row.id);
+    }
+    this.#database
+      .delete(scheduleTable)
+      .where(
+        and(
+          eq(scheduleTable.chatId, chatId),
+          eq(scheduleTable.threadId, threadId),
+        ),
+      )
+      .run();
+  }
+
   async trigger(id: string): Promise<Scheduler.TriggerResult> {
     const existing = this.#findSchedule(id);
     const runId = randomUUID();
@@ -281,7 +314,7 @@ export class Scheduler implements Disposable {
       .values({
         id: runId,
         scheduleId: existing.id,
-        sessionId: existing.sessionId,
+        sessionId: this.#resolveSessionId(existing),
         trigger: "manual",
         status: "pending",
         startedAt: new Date(),
@@ -374,10 +407,19 @@ export class Scheduler implements Disposable {
     return row;
   }
 
+  #resolveSessionId(row: ScheduleRow): string | null {
+    const location = {
+      chatId: row.chatId,
+      threadId: row.threadId || undefined,
+    };
+    return this.#existingSessions.find(location) ?? null;
+  }
+
   #toTask(row: ScheduleRow): Scheduler.Task {
     return {
       id: row.id,
-      sessionId: row.sessionId,
+      chatId: row.chatId,
+      threadId: row.threadId,
       description: row.description,
       prompt: row.prompt,
       cron: row.cron,
@@ -480,7 +522,7 @@ export class Scheduler implements Disposable {
         .values({
           id: randomUUID(),
           scheduleId: row.id,
-          sessionId: row.sessionId,
+          sessionId: this.#resolveSessionId(row),
           queueJobId,
           trigger: "cron",
           status: "skipped",
@@ -522,20 +564,17 @@ export class Scheduler implements Disposable {
       .run();
   }
 
-  async #withSessionLock<T>(
-    sessionId: string,
-    fn: () => Promise<T>,
-  ): Promise<T> {
-    const prev = this.#sessionLocks.get(sessionId) ?? Promise.resolve();
+  async #withChatLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+    const prev = this.#chatLocks.get(key) ?? Promise.resolve();
     const { promise: done, resolve } = Promise.withResolvers<void>();
-    this.#sessionLocks.set(sessionId, done);
+    this.#chatLocks.set(key, done);
     try {
       await prev;
       return await fn();
     } finally {
       resolve();
-      if (this.#sessionLocks.get(sessionId) === done) {
-        this.#sessionLocks.delete(sessionId);
+      if (this.#chatLocks.get(key) === done) {
+        this.#chatLocks.delete(key);
       }
     }
   }
@@ -566,64 +605,67 @@ export class Scheduler implements Disposable {
       const decision = this.#applyOverlap(scheduleRow, job.id);
       if (decision === "skipped") return;
     }
-    await this.#withSessionLock(scheduleRow.sessionId, async () => {
-      const existingRunId = job.data?.runId;
-      let runId: string;
-      if (existingRunId) {
-        const claimed = this.#database
-          .update(scheduleRunTable)
-          .set({
-            status: "running",
-            queueJobId: job.id,
-            startedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(scheduleRunTable.id, existingRunId),
-              eq(scheduleRunTable.status, "pending"),
-            ),
-          )
-          .returning({ id: scheduleRunTable.id })
-          .all();
-        if (claimed.length === 0) return;
-        runId = existingRunId;
-      } else {
-        runId = randomUUID();
-        this.#database
-          .insert(scheduleRunTable)
-          .values({
-            id: runId,
-            scheduleId: scheduleRow.id,
-            sessionId: scheduleRow.sessionId,
-            queueJobId: job.id,
-            trigger: isManualTrigger ? "manual" : "cron",
-            status: "running",
-            startedAt: new Date(),
-          })
-          .run();
-      }
-      try {
-        await this.#executeRun(scheduleRow, runId, job);
-      } finally {
-        this.#trimRetention(scheduleRow.id);
-        if (scheduleRow.once && !isManualTrigger) {
+    await this.#withChatLock(
+      chatLockKey(scheduleRow.chatId, scheduleRow.threadId),
+      async () => {
+        const existingRunId = job.data?.runId;
+        let runId: string;
+        if (existingRunId) {
+          const claimed = this.#database
+            .update(scheduleRunTable)
+            .set({
+              status: "running",
+              queueJobId: job.id,
+              startedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(scheduleRunTable.id, existingRunId),
+                eq(scheduleRunTable.status, "pending"),
+              ),
+            )
+            .returning({ id: scheduleRunTable.id })
+            .all();
+          if (claimed.length === 0) return;
+          runId = existingRunId;
+        } else {
+          runId = randomUUID();
           this.#database
-            .update(scheduleTable)
-            .set({ enabled: false })
-            .where(eq(scheduleTable.id, scheduleRow.id))
+            .insert(scheduleRunTable)
+            .values({
+              id: runId,
+              scheduleId: scheduleRow.id,
+              sessionId: this.#resolveSessionId(scheduleRow),
+              queueJobId: job.id,
+              trigger: isManualTrigger ? "manual" : "cron",
+              status: "running",
+              startedAt: new Date(),
+            })
             .run();
-          await this.#queue.removeCron(scheduleRow.id).catch((error) => {
-            logger.warn(
-              "Failed to remove cron for completed once-task",
-              error,
-              {
-                scheduleId: scheduleRow.id,
-              },
-            );
-          });
         }
-      }
-    });
+        try {
+          await this.#executeRun(scheduleRow, runId, job);
+        } finally {
+          this.#trimRetention(scheduleRow.id);
+          if (scheduleRow.once && !isManualTrigger) {
+            this.#database
+              .update(scheduleTable)
+              .set({ enabled: false })
+              .where(eq(scheduleTable.id, scheduleRow.id))
+              .run();
+            await this.#queue.removeCron(scheduleRow.id).catch((error) => {
+              logger.warn(
+                "Failed to remove cron for completed once-task",
+                error,
+                {
+                  scheduleId: scheduleRow.id,
+                },
+              );
+            });
+          }
+        }
+      },
+    );
   }
 
   async #executeRun(
@@ -631,13 +673,8 @@ export class Scheduler implements Disposable {
     runId: string,
     job: Job<TaskData>,
   ): Promise<void> {
-    const location = this.#existingSessions.get(scheduleRow.sessionId);
-    if (!location) {
-      this.#finalizeRun(runId, "silent", null, "user session unavailable");
-      return;
-    }
-    const sendOptions = location.threadId
-      ? { message_thread_id: location.threadId }
+    const sendOptions = scheduleRow.threadId
+      ? { message_thread_id: scheduleRow.threadId }
       : {};
     const signal = this.#queue.getSignal(job.id);
     let ephemeralId: string | undefined;
@@ -651,7 +688,10 @@ export class Scheduler implements Disposable {
         this.#finalizeRun(runId, "cancelled", null, null);
         return;
       }
-      const agent = getSessionAgent(this.#database, scheduleRow.sessionId);
+      const userSessionId = this.#resolveSessionId(scheduleRow);
+      const agent = userSessionId
+        ? getSessionAgent(this.#database, userSessionId)
+        : undefined;
       await this.#opencodeClient.session.promptAsync(
         {
           sessionID: ephemeralId,
@@ -671,7 +711,7 @@ export class Scheduler implements Disposable {
         this.#finalizeRun(runId, "silent", text, null);
         return;
       }
-      await this.#bot.api.sendMessage(location.chatId, text, sendOptions);
+      await this.#bot.api.sendMessage(scheduleRow.chatId, text, sendOptions);
       this.#finalizeRun(runId, "reported", text, null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -679,7 +719,7 @@ export class Scheduler implements Disposable {
       if (scheduleRow.notifyOnFailure) {
         await this.#bot.api
           .sendMessage(
-            location.chatId,
+            scheduleRow.chatId,
             `⚠️ Scheduled task "${scheduleRow.description}" failed: ${message}`,
             sendOptions,
           )
@@ -869,6 +909,9 @@ export class Scheduler implements Disposable {
       opencodeClient,
       existingSessions,
     );
+    for (const location of existingSessions.unreachableLocations) {
+      await scheduler.deleteByChat(location.chatId, location.threadId);
+    }
     await scheduler.#recover();
     logger.info("Scheduler started");
     return scheduler;
@@ -890,7 +933,8 @@ export namespace Scheduler {
   export type RunTrigger = "cron" | "manual";
 
   export interface CreateInput {
-    readonly sessionId: string;
+    readonly chatId: number;
+    readonly threadId?: number;
     readonly cron: string;
     readonly description: string;
     readonly prompt: string;
@@ -912,7 +956,8 @@ export namespace Scheduler {
   }
 
   export interface ListFilter {
-    readonly sessionId?: string;
+    readonly chatId?: number;
+    readonly threadId?: number;
     readonly enabled?: boolean;
   }
 
@@ -936,7 +981,8 @@ export namespace Scheduler {
 
   export interface Task {
     readonly id: string;
-    readonly sessionId: string;
+    readonly chatId: number;
+    readonly threadId: number;
     readonly description: string;
     readonly prompt: string;
     readonly cron: string;
@@ -953,7 +999,7 @@ export namespace Scheduler {
   export interface Run {
     readonly id: string;
     readonly scheduleId: string;
-    readonly sessionId: string;
+    readonly sessionId: string | null;
     readonly queueJobId: string | null;
     readonly trigger: RunTrigger;
     readonly status: RunStatus;
