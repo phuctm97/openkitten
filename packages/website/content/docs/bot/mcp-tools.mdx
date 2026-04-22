@@ -52,35 +52,40 @@ reload_extensions(message: string)
 
 The current agent response is interrupted by design — the restart is the whole point of the tool call.
 
-## Scheduler tools
+## Schedule tools
 
-Seven high-level tools covering schedule CRUD and observation:
+Schedules fire on a cron pattern, execute in an isolated ephemeral OpenCode session, and either deliver their result to Telegram or stay silent. See [Schedules](/docs/bot/schedules) for the full end-user guide.
 
-- `queue_schedule_create` — cron, kind (`session` | `background`), description, prompt, optional `once`.
-- `queue_schedule_list` — every schedule with `nextRunAt` and last-run status.
-- `queue_schedule_update` — patch `description` / `prompt` / `cron`.
-- `queue_schedule_delete` — permanent removal.
-- `queue_schedule_trigger` — immediate run, returns the scheduleId, jobId, and enqueuedAt.
-- `queue_schedule_runs` — last 20 executions (status, notifiedUser, output, error).
-- `queue_server_time` — current ISO/UTC/unix time + timezone + offset.
+### Schedule lifecycle
 
-## Raw queue tools
+- `queue_schedule_create` — create a schedule. Inputs: `cron`, `description`, `prompt`, optional `once`, `timezone`, `overlap` (`queue` | `skip` | `cancel_previous`), `notifyOnFailure`, `maxRuntimeMs`.
+- `queue_schedule_list` — list schedules. Optional filters: `sessionId`, `enabled`.
+- `queue_schedule_update` — patch any subset of `description`, `prompt`, `cron`, `timezone`, `overlap`, `notifyOnFailure`, `maxRuntimeMs`. Cron/timezone changes re-register atomically.
+- `queue_schedule_enable` / `queue_schedule_disable` — pause and resume without deleting history.
+- `queue_schedule_delete` — permanent removal. Cascade-deletes all run history.
+- `queue_schedule_trigger` — fire immediately, bypassing cron, `enabled`, and `overlap`. Pre-creates the run row with `status: 'pending'` and returns its `runId` (plus `queueJobId` and `enqueuedAt`). Poll the result with `queue_run_get({ id: runId })`.
 
-Lower-level Bunqueue wrappers for building custom workflows or debugging:
+### Run history
 
-- `queue_add_job` — enqueue a one-off job with full `JobOptions` (priority, delay, attempts, backoff, timeout, jobId, removeOnComplete, removeOnFail, lifo, stallTimeout, durable).
-- `queue_status` — paused state and job counts.
-- `queue_pause` / `queue_resume` — global pause/resume.
-- `queue_list_jobs` — paginated listing filtered by state (`waiting`, `active`, `completed`, `failed`, `delayed`, `prioritized`).
-- `queue_get_job` / `queue_remove_job` / `queue_cancel_job` / `queue_retry_job` / `queue_promote_job` — per-job operations.
-- `queue_list_crons` — active cron schedulers.
-- `queue_clean` — bulk remove old jobs with a grace period and limit.
+Every execution (reported, silent, failed, cancelled, skipped) is persisted in the `schedule_run` table with a dedicated UUID.
 
-## Dead-letter queue
+- `queue_runs` — list runs. Filters: `scheduleId`, `sessionId`, `status`, `trigger` (`cron` | `manual`), `since`, `until`, `limit` (default 50), `offset`.
+- `queue_run_get` — fetch a single run by its id, including full `output` or `error`.
+- `queue_run_cancel` — abort an in-flight run. Only works on `pending` or `running` runs.
 
-- `queue_dlq_list` — failed jobs with attempts, retry counts, and TTLs; filter by `reason`, `olderThan`, `newerThan`, `retriable`, `expired`, pagination.
-- `queue_dlq_retry` — retry one entry or all.
-- `queue_dlq_purge` — clear the DLQ.
+Run statuses: `pending` → `running` → one of `reported`, `silent`, `failed`, `cancelled`, `skipped`.
+
+### Meta
+
+- `queue_server_time` — current ISO / UTC / unix time + host timezone + offset. Call this before computing a cron expression.
+
+### Diagnostic (low-level)
+
+Direct bunqueue passthroughs. Not for user-facing answers — use `queue_runs` for that. Useful only when the schedule layer and the queue layer might disagree.
+
+- `queue_status` — paused state and raw job counts.
+- `queue_list_jobs` — paginated bunqueue job list by state.
+- `queue_list_crons` — registered cron schedulers.
 
 ## Metadata injection
 

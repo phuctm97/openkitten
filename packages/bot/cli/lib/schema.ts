@@ -54,11 +54,17 @@ export const schedule = sqliteTable(
         onDelete: "cascade",
         onUpdate: "cascade",
       }),
-    kind: text().notNull(),
     description: text().notNull(),
     prompt: text().notNull(),
     cron: text().notNull(),
+    timezone: text().notNull().default("UTC"),
     once: integer({ mode: "boolean" }).notNull().default(false),
+    enabled: integer({ mode: "boolean" }).notNull().default(true),
+    overlap: text().notNull().default("queue"),
+    notifyOnFailure: integer("notify_on_failure", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    maxRuntimeMs: integer("max_runtime_ms"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
@@ -68,6 +74,42 @@ export const schedule = sqliteTable(
       .$onUpdateFn(() => new Date()),
   },
   (table) => [index("schedule_session_id_idx").on(table.sessionId)],
+);
+
+export const scheduleRun = sqliteTable(
+  "schedule_run",
+  {
+    id: text().primaryKey(),
+    scheduleId: text("schedule_id")
+      .notNull()
+      .references(() => schedule.id, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
+    sessionId: text("session_id").notNull(),
+    queueJobId: text("queue_job_id"),
+    trigger: text().notNull(),
+    status: text().notNull(),
+    startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+    finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+    output: text(),
+    error: text(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`)
+      .$onUpdateFn(() => new Date()),
+  },
+  (table) => [
+    index("schedule_run_schedule_id_idx").on(table.scheduleId),
+    index("schedule_run_session_id_idx").on(table.sessionId),
+    index("schedule_run_status_started_at_idx").on(
+      table.status,
+      table.startedAt,
+    ),
+  ],
 );
 
 export const restartNotification = sqliteTable("restart_notification", {
@@ -92,9 +134,17 @@ export const messageRelations = relations(message, ({ one }) => ({
   }),
 }));
 
-export const scheduleRelations = relations(schedule, ({ one }) => ({
+export const scheduleRelations = relations(schedule, ({ one, many }) => ({
   session: one(session, {
     fields: [schedule.sessionId],
     references: [session.id],
+  }),
+  runs: many(scheduleRun),
+}));
+
+export const scheduleRunRelations = relations(scheduleRun, ({ one }) => ({
+  schedule: one(schedule, {
+    fields: [scheduleRun.scheduleId],
+    references: [schedule.id],
   }),
 }));

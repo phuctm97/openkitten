@@ -1,221 +1,195 @@
 ---
 name: schedules
-description: Create, test, debug, and maintain OpenKitten scheduled jobs using the queue schedule tools.
+description: Create, inspect, trigger, update, and clean up scheduled tasks. Use whenever the user asks about recurring jobs, reminders, background checks, or wants history of past runs.
 ---
 
-# Schedule Jobs
+# Scheduled Tasks
 
-Use this skill when you need to create, update, inspect, trigger, debug, or clean up scheduled jobs that run through the OpenKitten queue scheduler.
+OpenKitten exposes a scheduler that fires tasks on a cron pattern. Each tick runs in a fresh ephemeral OpenCode session, produces a final text response, and is either delivered to the user (as a Telegram message) or stays silent — based on what the task itself emits.
 
-This skill is specifically for these MCP tools:
+This skill covers these MCP tools. **Use them exactly as listed** — do not invent variants:
 
-- `openkitten_queue_server_time`
-- `openkitten_queue_schedule_create`
-- `openkitten_queue_schedule_list`
-- `openkitten_queue_schedule_update`
-- `openkitten_queue_schedule_delete`
-- `openkitten_queue_schedule_trigger`
-- `openkitten_queue_schedule_runs`
-- `openkitten_queue_status`
-- `openkitten_queue_list_jobs`
-- `openkitten_queue_get_job`
+| Tool | Purpose |
+|---|---|
+| `openkitten_queue_server_time` | get the current server time before choosing a cron expression |
+| `openkitten_queue_schedule_create` | create a new recurring or one-time schedule |
+| `openkitten_queue_schedule_list` | list schedules, optionally filtered |
+| `openkitten_queue_schedule_update` | change cron / timezone / prompt / description / overlap / notifyOnFailure / maxRuntimeMs |
+| `openkitten_queue_schedule_enable` | resume a paused schedule |
+| `openkitten_queue_schedule_disable` | pause without deleting (history preserved) |
+| `openkitten_queue_schedule_delete` | permanently remove; all runs cascade-delete |
+| `openkitten_queue_schedule_trigger` | fire immediately (bypasses cron + overlap policy) |
+| `openkitten_queue_runs` | list run history |
+| `openkitten_queue_run_get` | fetch one run by id, with full output/error |
+| `openkitten_queue_run_cancel` | abort an in-flight run |
 
-## Core Mental Model
+Low-level diagnostic tools (`openkitten_queue_status`, `_list_jobs`, `_list_crons`) also exist but **do not use them for user-facing answers** — use `queue_runs` instead.
 
-There are three separate layers to keep straight:
+## Mental model (important)
 
-1. **Schedule definition**
-   - cron
-   - kind (`session` or `background`)
-   - description
-   - prompt
+There are **three distinct layers**. Do not conflate them.
 
-2. **Queue job execution**
-   - the actual Bunqueue job that gets dispatched
+1. **Schedule** — a row in the `schedule` table. Has cron, prompt, enabled flag. Written by `_create`, updated by `_update`, removed by `_delete`.
+2. **Queue job** — an internal bunqueue job dispatched on each cron tick. Exists briefly, then is reaped. **Never reference these when answering the user.** The only time you inspect them is for low-level debugging.
+3. **Run** — a row in the `schedule_run` table, one per execution (including silent and skipped). **This is what the user means when they ask about "runs".**
 
-3. **Schedule run record**
-   - higher-level run history for a schedule
-   - statuses like `running`, `completed_notified`, `completed_silent`, `failed`
+> **Never say "I found N queue jobs" to the user.** That's the wrong layer. Always answer questions about history via `openkitten_queue_runs`.
 
-Do not assume these three layers update at the same time.
+## Run statuses
 
-## Session vs Background
+Every run ends in one of these terminal states:
 
-### Use `kind: session` when
+| Status | Meaning | User-visible? |
+|---|---|---|
+| `reported` | produced meaningful text; Telegram message was sent | ✓ yes |
+| `silent` | produced `[NO_REPORT]` marker or no text within `maxRuntimeMs` | ✗ no |
+| `failed` | threw an error during execution; `error` field populated | only if `notifyOnFailure: true` on the schedule |
+| `cancelled` | aborted by the user, by `_delete`, or by `overlap: cancel_previous` | ✗ no |
+| `skipped` | `overlap: skip` dropped this tick because another run was active | ✗ no |
 
-- the user should see the response in the main chat
-- the user is expected to reply
-- reply context matters
-- you want conversation continuity
+Transient states (only seen mid-execution): `pending`, `running`.
 
-Examples:
+## Creating a schedule — standard workflow
 
-- expense classification prompts
-- daily review summaries
-- reminders that expect a reply
+1. Call `openkitten_queue_server_time` first. Do not guess the current time.
+2. Ask or infer the **timezone**. If the user said "9am" they almost certainly mean their local time. If you don't know, ask. Defaults to `UTC` if omitted.
+3. Compute the cron expression in that timezone.
+4. Decide the **prompt wording**:
+   - The prompt runs in a fresh ephemeral session that knows nothing about the current chat.
+   - Write it **self-contained** — no references to "this conversation".
+   - If the schedule might often have nothing to report, include the **silent contract**:
+     > *If there is nothing to report, respond with exactly `[NO_REPORT]` and nothing else. Otherwise, reply with a concise summary.*
+5. Call `openkitten_queue_schedule_create` with `cron`, `description`, `prompt`, and optionally `timezone`, `once`, `overlap`, `notifyOnFailure`, `maxRuntimeMs`.
+6. Confirm the returned schedule id to the user in one line.
 
-### Use `kind: background` when
+**Never set `once` for a recurring reminder.** Once-tasks fire exactly once and auto-disable.
 
-- the job should monitor silently
-- the user only needs a notification when something noteworthy happens
-- the result does not need to appear as normal conversation turns unless notified
+## Querying run history — how to answer *"show me recent runs"*
 
-Examples:
+**First choice — no filters:**
 
-- background alerting
-- silent monitoring
-- periodic checks that often produce no report
+```
+openkitten_queue_runs({ scheduleId: "<id>", limit: 5 })
+```
 
-## Prompt Wording Rules
+That returns the most recent 5 runs across all statuses. This answers *"the last 5 runs"* in one call.
 
-For **session schedules**, prefer wording like:
+**Do NOT:**
 
-- "Reply with ..."
-- "Respond with ..."
-- "Say ..."
+- iterate through every (status × trigger) combination calling the tool N times
+- pass `since: 0`, `until: Number.MAX_SAFE_INTEGER`, or any "dummy" range bounds — just omit `since`/`until` entirely
+- filter by `sessionId` unless the user explicitly asked for cross-session history
 
-Avoid wording like:
+**Common follow-ups:**
 
-- "Send a message ..."
-- "Send to Telegram ..."
+| User asks… | Call |
+|---|---|
+| last 5 runs of schedule X | `queue_runs({ scheduleId, limit: 5 })` |
+| only the failures | `queue_runs({ scheduleId, status: "failed" })` |
+| anything in the last hour | `queue_runs({ scheduleId, since: <nowMs - 3_600_000> })` |
+| details of one specific run | `queue_run_get({ id: "<runId>" })` |
+| runs for a different chat | `queue_runs({ sessionId: "<sid>" })` |
 
-Reason: session jobs should respond normally in-session. Wording like "send" can confuse the agent into trying direct Telegram tool flows unnecessarily.
+When the tool returns an empty list, say so plainly: *"No runs yet."* Do not speculate about why.
 
-For **background schedules**, explicitly state whether the task should:
+## Pause vs. delete — choose the right tool
 
-- notify the user only when needed
-- finish silently when there is nothing to report
+| User says… | Call |
+|---|---|
+| "pause" / "stop" / "turn off" / "don't run for now" | `openkitten_queue_schedule_disable` |
+| "resume" / "turn on" / "start again" | `openkitten_queue_schedule_enable` |
+| "delete" / "remove" / "get rid of" | `openkitten_queue_schedule_delete` |
 
-## Cron Rules
+**Do not say "deleted" when you called disable**, and vice versa. Delete is destructive (cascade-removes all run history); disable is reversible. If the user said "pause", call `_disable` and confirm with "Paused." If they said "delete", call `_delete` and confirm with "Deleted."
 
-- Cron is UTC.
-- Always call `openkitten_queue_server_time` before choosing a cron expression.
-- Do not schedule a one-time test too close to the current minute.
-- Prefer setting a test schedule at least **2-3 minutes in the future** to avoid timing ambiguity and creation-delay misses.
+## Update vs. create — never re-create to "update"
 
-## Standard Workflow for Creating a Schedule
+If a schedule already exists and the user wants to change it — cron, prompt, timezone, overlap, anything — call `openkitten_queue_schedule_update`. Do not `_delete` + `_create`. Deleting loses all history.
 
-1. Call `openkitten_queue_server_time`
-2. Decide `session` vs `background`
-3. Choose a UTC cron expression
-4. Create the schedule with `openkitten_queue_schedule_create`
-5. Confirm the returned schedule ID
-6. Inspect with `openkitten_queue_schedule_list`
+The cron and timezone are updated atomically: an in-flight run at the moment of the change will still finish with the old prompt; the next tick uses the new one.
 
-## Standard Workflow for Manual Testing
+## Manual trigger semantics
 
-When testing a schedule manually:
+`openkitten_queue_schedule_trigger` runs the schedule immediately. It **bypasses**:
 
-1. Trigger with `openkitten_queue_schedule_trigger`
-2. Inspect `openkitten_queue_schedule_runs`
-3. Inspect `openkitten_queue_status`
-4. If needed, inspect `openkitten_queue_get_job` or `openkitten_queue_list_jobs`
+- the cron timing (fires now, not on the minute boundary)
+- the `enabled` flag (works even if the schedule is disabled)
+- the `overlap` policy (always proceeds)
 
-Look for:
+Use this for *"run it now"* requests. The tool **returns the `runId` directly** (the run is pre-created with `status: "pending"`). To fetch the result:
 
-- whether a run record exists
-- whether it is `running`, `completed_notified`, `completed_silent`, or `failed`
-- whether the user was notified
-- whether output preview exists
+```
+openkitten_queue_run_get({ id: "<returned-runId>" })
+```
 
-## Standard Workflow for Auto-Fire Testing
+Poll it a few seconds after triggering — you'll see the status transition from `pending` → `running` → one of `reported` / `silent` / `failed` / `cancelled`. Do not iterate `queue_runs` with status filters to find the run; the `runId` is already in the trigger response.
 
-When testing whether cron auto-fire works:
+## Cron quick reference
 
-1. Get server time first
-2. Create a one-time schedule 2-3 minutes in the future
-3. Record the exact cron used
-4. Wait until after the fire time
-5. Check:
-   - `openkitten_queue_schedule_runs`
-   - `openkitten_queue_schedule_list`
-   - `openkitten_queue_status`
-   - `openkitten_queue_list_jobs`
+- Format: 5 fields — `minute hour day-of-month month day-of-week`.
+- Examples:
+  - `0 9 * * *` — every day at 09:00 (in the schedule's timezone)
+  - `*/15 * * * *` — every 15 minutes
+  - `0 9 * * 1-5` — weekdays at 09:00
+  - `0 0 1 * *` — midnight on the first of each month
+- Shortcuts: `@hourly`, `@daily`, `@weekly`, `@monthly`.
+- Always in the schedule's `timezone` (default `UTC`).
+- For test schedules, pick a cron at least **2 minutes in the future**, not "next minute," to avoid creation-delay misses.
 
-If a schedule does not fire, report:
+## Overlap policy
 
-- server time at creation
-- cron used
-- schedule ID
-- whether `nextRunAt` was shown
-- whether any run history appeared
-- whether any queue job appeared
+Controls what happens when a cron tick fires while a previous run is still executing:
 
-## Reading Run State Correctly
+| Value | Behavior | When to pick |
+|---|---|---|
+| `queue` (default) | stack; run them back-to-back | most tasks |
+| `skip` | drop the new tick, record a `skipped` run | long-running tasks where duplicates waste work |
+| `cancel_previous` | abort the in-flight run, start the new | *"always snapshot current state"* pattern |
 
-Common interpretations:
+## Failure behavior
 
-- `completed_notified`
-  - the run finished and the user was notified
+By default, failures are silent in Telegram but recorded as `failed` runs with an `error` column. To get alerts, set `notifyOnFailure: true` on the schedule — then a failure will send `⚠️ Scheduled task "..." failed: ...` to the chat. Use `notifyOnFailure: true` only for critical schedules where a silent failure is dangerous.
 
-- `completed_silent`
-  - the run finished and intentionally produced no user-facing message
+If the bot restarts mid-run, the stuck row is finalized as `failed` with `error: "bot restart"`. This is normal; the next cron tick runs fresh.
 
-- `running` with output like `Polling... attempt X/450, session busy`
-  - the job is still actively progressing, not necessarily stuck
+## Diagnostic checklist
 
-- no execution history
-  - either the schedule did not dispatch
-  - or you checked before anything observable was created
+If behavior looks off, check in this order:
 
-## Expense-Tracking Specific Guidance
+1. `openkitten_queue_server_time` — what time does the server think it is? Check the timezone in the schedule matches what the user expects.
+2. `openkitten_queue_schedule_list` — does the schedule exist, and is it `enabled`?
+3. `openkitten_queue_runs({ scheduleId })` — do recent runs exist? What are their statuses?
+4. `openkitten_queue_run_get({ id })` on a suspicious run — full `output` and `error`.
+5. Only after (1–4) look at `_status` / `_list_jobs` / `_list_crons`. Those report on bunqueue internals, not what the user asked about.
 
-For expense jobs:
+## Common mistakes to avoid
 
-- use `session` if the user is expected to reply `chung` / `riêng`
-- use compact outputs
-- if no relevant new transaction emails exist, prefer a minimal response like `no new mails`
-- if asking for classification, list items individually with:
-  - transaction date/time
-  - merchant/source
-  - amount
-  - a short numbered reply format
+- ❌ **Conflating queue jobs with runs.** Answer user questions from `queue_runs`. Do not report bunqueue job counts.
+- ❌ **Iterating through every status × trigger combo.** Call `queue_runs` once with just `scheduleId` and `limit`.
+- ❌ **Passing `since: 0` or `until: Number.MAX_SAFE_INTEGER`.** These are meaningless; just omit the field.
+- ❌ **Saying "deleted" after calling disable.** Use the exact word matching the tool you called.
+- ❌ **Deleting + recreating to make changes.** Always use `_update`.
+- ❌ **Setting `once: true` for a recurring schedule.** Once-tasks fire exactly once.
+- ❌ **Picking a one-minute-future test cron.** Creation delay can cause a miss; use 2+ minutes.
+- ❌ **Creating many test schedules without cleaning up.** Delete them when done.
+- ❌ **Writing prompts that refer to "this conversation" or "you".** Each run is a fresh session.
 
-Do not narrate process steps in the user-facing output.
+## Minimal prompt templates
 
-## Debug Checklist
+**Silent monitor** — only notify when something happens:
+```
+Check <condition>. If nothing to report, respond with exactly [NO_REPORT]. Otherwise, reply with a one-paragraph summary of what you found.
+```
 
-If behavior looks wrong, check these in order:
+**Recurring reminder** — always speaks:
+```
+Remind the user: <text>.
+```
 
-1. `openkitten_queue_server_time`
-2. `openkitten_queue_schedule_list`
-3. `openkitten_queue_schedule_runs`
-4. `openkitten_queue_status`
-5. `openkitten_queue_list_jobs`
-6. `openkitten_queue_get_job`
+**One-time reminder** — fires once, auto-disables:
+Use `once: true` on create. Prompt as recurring reminder.
 
-Keep causes separate:
-
-- prompt/agent issue
-- schedule creation issue
-- cron registration issue
-- queue dispatch issue
-- run finalization issue
-- delivery / session-routing issue
-
-## Important Hygiene
-
-- Clean up temporary test schedules after verification.
-- If you create wait-helper jobs for testing, remove them too.
-- When reporting issues, distinguish clearly between:
-  - manual trigger problems
-  - auto-fire problems
-  - session-only problems
-  - background-only problems
-
-## Minimal Prompt Templates
-
-### Session template
-
-`Reply with exactly: <text>.`
-
-### Background template
-
-`Run a minimal background test. If successful, say exactly: <text>.`
-
-### Expense session template
-
-Describe the Gmail/Sheets comparison task, then explicitly say:
-
-- if nothing is new, reply with exactly `no new mails`
-- if classification is needed, reply only with a compact numbered list
+**Silent expense check** (domain-specific example):
+```
+Check Gmail for new bank-transaction emails since the last run. If none, respond with exactly [NO_REPORT]. Otherwise, list each transaction (date, merchant, amount) and ask the user to classify as shared or personal.
+```

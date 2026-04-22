@@ -14,7 +14,7 @@ Under the hood it wires [grammY](https://grammy.dev) (Telegram) to [OpenCode](ht
   <Card title="Multiple agents" description="Ship with 'assist', 'build', and 'plan' agents. Switch per-session with /agent." />
   <Card title="Self-extending skills" description="Tell the bot to learn something — the skill-creator skill authors a new SKILL.md and reloads it live." />
   <Card title="Self-authored /commands" description="Ask for a new /slash shortcut — the custom-commands skill writes the markdown and reloads BotFather on the fly." />
-  <Card title="Scheduled tasks" description="Cron jobs that respond in-chat (session) or monitor silently (background)." />
+  <Card title="Scheduled tasks" description="Cron jobs that report to your chat when they find something and stay silent when they don't. Full persistent run history." />
   <Card title="Files & media" description="Photos, documents, video, audio, voice, animations, stickers — inbound and outbound." />
 </Cards>
 
@@ -50,5 +50,5 @@ Only the configured Telegram `userId` can talk to the bot. Every inbound update 
 - [Agents](/docs/bot/agents) — what `assist`, `build`, and `plan` do, and how to add your own.
 - [Skills](/docs/bot/skills) — built-in skills and authoring new ones.
 - [Custom commands](/docs/bot/custom-commands) — your own `/slash` commands as markdown files.
-- [Schedules](/docs/bot/schedules) — session vs. background cron jobs.
+- [Schedules](/docs/bot/schedules) — recurring and one-time tasks that fire on a cron pattern, silent by default.
 - [MCP tools](/docs/bot/mcp-tools) — the tools the agent can call on the OpenKitten MCP server.
