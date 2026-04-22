@@ -45,7 +45,16 @@ test("renders the auth route for the current auth path", async () => {
   render(<Component {...authComponentProps} />);
 
   expect(authRouteMocks.authRouter).toHaveBeenCalledWith({
+    className: "relative z-10",
     path: "forgot-password",
   });
-  expect(screen.getByRole("main")).toHaveClass("grid", "min-h-screen");
+  expect(screen.getByRole("main")).toHaveClass(
+    "relative",
+    "grid",
+    "min-h-screen",
+    "overflow-hidden",
+  );
+  expect(
+    screen.getByRole("main").querySelector("[aria-hidden='true']"),
+  ).not.toBeNull();
 });
