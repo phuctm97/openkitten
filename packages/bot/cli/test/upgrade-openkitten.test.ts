@@ -68,14 +68,30 @@ function mockBot() {
 }
 
 const originalSpawn = Bun.spawn;
+const originalPlatform = process.platform;
+const originalGetUid = process.getuid;
 
 beforeEach(() => {
   Bun.env["OPENKITTEN_SERVICE_MANAGED"] = "1";
+  Bun.env["OPENKITTEN_PROFILE"] = "default";
+  Object.defineProperty(process, "getuid", {
+    value: () => 1000,
+    configurable: true,
+  });
 });
 
 afterEach(() => {
   Object.assign(Bun, { spawn: originalSpawn });
+  Object.defineProperty(process, "platform", {
+    value: originalPlatform,
+    configurable: true,
+  });
+  Object.defineProperty(process, "getuid", {
+    value: originalGetUid,
+    configurable: true,
+  });
   delete Bun.env["OPENKITTEN_SERVICE_MANAGED"];
+  delete Bun.env["OPENKITTEN_PROFILE"];
 });
 
 test("throws when branch is not main", async () => {
@@ -135,6 +151,10 @@ test("returns up-to-date when HEAD matches origin/main", async () => {
 });
 
 test("pulls, installs, notifies sessions, and returns restarting", async () => {
+  Object.defineProperty(process, "platform", {
+    value: "darwin",
+    configurable: true,
+  });
   const previous = "1".repeat(40);
   const upstream = "2".repeat(40);
   const next = "2".repeat(40);
@@ -148,6 +168,13 @@ test("pulls, installs, notifies sessions, and returns restarting", async () => {
       { match: ["git", "pull", "--ff-only", "origin", "main"], stdout: "" },
       { match: ["bun", "install"], stdout: "" },
       { match: ["git", "rev-parse", "HEAD"], stdout: `${next}\n` },
+      {
+        match: [
+          "sh",
+          "-c",
+          "sleep 2 && launchctl kickstart -k gui/1000/com.openkitten.profiles.default",
+        ],
+      },
     ]),
   });
   const { bot, sendMessage } = mockBot();
@@ -189,6 +216,10 @@ test("pulls, installs, notifies sessions, and returns restarting", async () => {
 });
 
 test("skips restart notification when sendMessage fails", async () => {
+  Object.defineProperty(process, "platform", {
+    value: "darwin",
+    configurable: true,
+  });
   const previous = "1".repeat(40);
   const next = "3".repeat(40);
   Object.assign(Bun, {
@@ -201,6 +232,13 @@ test("skips restart notification when sendMessage fails", async () => {
       { match: ["git", "pull", "--ff-only", "origin", "main"], stdout: "" },
       { match: ["bun", "install"], stdout: "" },
       { match: ["git", "rev-parse", "HEAD"], stdout: `${next}\n` },
+      {
+        match: [
+          "sh",
+          "-c",
+          "sleep 2 && launchctl kickstart -k gui/1000/com.openkitten.profiles.default",
+        ],
+      },
     ]),
   });
   const { bot, sendMessage } = mockBot();
@@ -335,10 +373,18 @@ test("spawns detached respawner when not service-managed", async () => {
   expect(unref).toHaveBeenCalled();
 });
 
-test("skips respawn when service-managed", async () => {
+function setPlatform(value: NodeJS.Platform): void {
+  Object.defineProperty(process, "platform", { value, configurable: true });
+}
+
+function runServiceManagedRespawn(
+  platform: NodeJS.Platform,
+): ReturnType<typeof vi.fn> {
+  setPlatform(platform);
   const previous = "1".repeat(40);
   const next = "2".repeat(40);
-  const spawn = mockSpawn([
+  const unref = vi.fn();
+  const scripts: SpawnScript[] = [
     { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
     { match: ["git", "status", "--porcelain"], stdout: "" },
     { match: ["git", "fetch", "origin", "main"], stdout: "" },
@@ -347,8 +393,28 @@ test("skips respawn when service-managed", async () => {
     { match: ["git", "pull", "--ff-only", "origin", "main"], stdout: "" },
     { match: ["bun", "install"], stdout: "" },
     { match: ["git", "rev-parse", "HEAD"], stdout: `${next}\n` },
-  ]);
+  ];
+  const spawn = vi.fn((cmd: readonly string[]) => {
+    if (cmd[0] === "sh" || cmd[0] === "cmd") {
+      return { stdout: null, stderr: null, exited: Promise.resolve(0), unref };
+    }
+    const script = scripts.shift();
+    if (!script || !cmdMatches(cmd, script.match)) {
+      throw new Error(`Unexpected spawn: ${cmd.join(" ")}`);
+    }
+    return {
+      stdout: streamFor(script.stdout ?? ""),
+      stderr: streamFor(script.stderr ?? ""),
+      exited: Promise.resolve(script.exitCode ?? 0),
+      unref: vi.fn(),
+    };
+  });
   Object.assign(Bun, { spawn });
+  return spawn;
+}
+
+test("spawns launchctl kickstart on darwin when service-managed", async () => {
+  const spawn = runServiceManagedRespawn("darwin");
   const { bot } = mockBot();
   const { database } = mockDatabase([{ chatId: 100, threadId: 0 }]);
   const result = await upgradeOpenkitten({
@@ -356,7 +422,103 @@ test("skips respawn when service-managed", async () => {
     database: database as never,
   });
   expect(result.kind).toBe("restarting");
-  // The mock throws on unexpected spawn, so absence of a respawn call means
-  // service-managed mode skipped it correctly.
-  expect(spawn).toHaveBeenCalledTimes(8);
+  expect(spawn).toHaveBeenCalledWith(
+    [
+      "sh",
+      "-c",
+      "sleep 2 && launchctl kickstart -k gui/1000/com.openkitten.profiles.default",
+    ],
+    expect.objectContaining({
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      detached: true,
+    }),
+  );
+});
+
+test("spawns systemctl restart on linux when service-managed", async () => {
+  const spawn = runServiceManagedRespawn("linux");
+  const { bot } = mockBot();
+  const { database } = mockDatabase([{ chatId: 100, threadId: 0 }]);
+  const result = await upgradeOpenkitten({
+    bot: bot as never,
+    database: database as never,
+  });
+  expect(result.kind).toBe("restarting");
+  expect(spawn).toHaveBeenCalledWith(
+    [
+      "sh",
+      "-c",
+      "sleep 2 && systemctl --user restart openkitten-default-profile",
+    ],
+    expect.objectContaining({
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      detached: true,
+    }),
+  );
+});
+
+test("spawns schtasks end/run on win32 when service-managed", async () => {
+  const spawn = runServiceManagedRespawn("win32");
+  const { bot } = mockBot();
+  const { database } = mockDatabase([{ chatId: 100, threadId: 0 }]);
+  const result = await upgradeOpenkitten({
+    bot: bot as never,
+    database: database as never,
+  });
+  expect(result.kind).toBe("restarting");
+  expect(spawn).toHaveBeenCalledWith(
+    [
+      "cmd",
+      "/C",
+      'timeout /T 2 /NOBREAK > NUL && schtasks /End /TN "\\OpenKitten\\Profiles\\default" & schtasks /Run /TN "\\OpenKitten\\Profiles\\default"',
+    ],
+    expect.objectContaining({
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      detached: true,
+    }),
+  );
+});
+
+test("throws when service-managed without OPENKITTEN_PROFILE", async () => {
+  delete Bun.env["OPENKITTEN_PROFILE"];
+  const spawn = mockSpawn([]);
+  Object.assign(Bun, { spawn });
+  const { bot, sendMessage } = mockBot();
+  const { database, insertValues } = mockDatabase([
+    { chatId: 100, threadId: 0 },
+  ]);
+  await expect(
+    upgradeOpenkitten({ bot: bot as never, database: database as never }),
+  ).rejects.toMatchObject({
+    name: "UpgradeOpenkittenError",
+    message: expect.stringContaining("OPENKITTEN_PROFILE must be set"),
+  });
+  expect(spawn).not.toHaveBeenCalled();
+  expect(sendMessage).not.toHaveBeenCalled();
+  expect(insertValues).not.toHaveBeenCalled();
+});
+
+test("throws when service-managed on unsupported platform", async () => {
+  setPlatform("freebsd");
+  const spawn = mockSpawn([]);
+  Object.assign(Bun, { spawn });
+  const { bot, sendMessage } = mockBot();
+  const { database, insertValues } = mockDatabase([
+    { chatId: 100, threadId: 0 },
+  ]);
+  await expect(
+    upgradeOpenkitten({ bot: bot as never, database: database as never }),
+  ).rejects.toMatchObject({
+    name: "UpgradeOpenkittenError",
+    message: expect.stringContaining("freebsd is not supported"),
+  });
+  expect(spawn).not.toHaveBeenCalled();
+  expect(sendMessage).not.toHaveBeenCalled();
+  expect(insertValues).not.toHaveBeenCalled();
 });
