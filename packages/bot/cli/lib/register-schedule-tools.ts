@@ -1,5 +1,6 @@
 import type { McpServer as Server } from "@modelcontextprotocol/sdk/server/mcp.js";
 import zod from "zod";
+import type { ExistingSessions } from "~/lib/existing-sessions";
 import type { Scheduler } from "~/lib/scheduler";
 
 const overlapSchema = zod.enum(["queue", "skip", "cancel_previous"]);
@@ -18,7 +19,8 @@ const runTriggerSchema = zod.enum(["cron", "manual"]);
 
 const scheduleTaskSchema = zod.object({
   id: zod.string(),
-  sessionId: zod.string(),
+  chatId: zod.number(),
+  threadId: zod.number(),
   description: zod.string(),
   prompt: zod.string(),
   cron: zod.string(),
@@ -35,7 +37,7 @@ const scheduleTaskSchema = zod.object({
 const runRecordSchema = zod.object({
   id: zod.string(),
   scheduleId: zod.string(),
-  sessionId: zod.string(),
+  sessionId: zod.string().nullable(),
   queueJobId: zod.string().nullable(),
   trigger: runTriggerSchema,
   status: runStatusSchema,
@@ -139,13 +141,11 @@ const scheduleUpdateInputSchema = zod.looseObject({
 });
 
 const scheduleListInputSchema = zod.looseObject({
-  sessionId: zod.string().trim().min(1).optional(),
   enabled: zod.boolean().optional(),
 });
 
 const runListInputSchema = zod.looseObject({
   scheduleId: zod.string().trim().uuid().optional(),
-  sessionId: zod.string().trim().min(1).optional(),
   status: runStatusSchema.optional(),
   trigger: runTriggerSchema.optional(),
   since: zod.number().int().min(0).optional(),
@@ -160,7 +160,22 @@ const runIdInputSchema = zod.looseObject({
 
 interface ScheduleToolsContext {
   readonly scheduler: Scheduler;
+  readonly existingSessions: ExistingSessions;
   readonly getMetadata: (args: unknown) => { sessionID: string };
+}
+
+function resolveCallerLocation(
+  ctx: ScheduleToolsContext,
+  args: unknown,
+): { chatId: number; threadId: number } {
+  const metadata = ctx.getMetadata(args);
+  const location = ctx.existingSessions.get(metadata.sessionID, {
+    unsafe: true,
+  });
+  return {
+    chatId: location.chatId,
+    threadId: location.threadId ?? 0,
+  };
 }
 
 export function registerScheduleTools(
@@ -205,14 +220,15 @@ export function registerScheduleTools(
     "queue_schedule_create",
     {
       description:
-        "Create a scheduled task. Runs in an ephemeral OpenCode session on each cron tick. If the run produces meaningful output, it's delivered to the user's Telegram chat. If the instruction finds nothing worth reporting, the run stays silent in both the chat and the session — only a 'silent' run record is kept for history tracing via queue_runs.",
+        "Create a scheduled task bound to the current chat (and thread, if applicable). Runs in an ephemeral OpenCode session on each cron tick. If the run produces meaningful output, it's delivered to the chat. If the instruction finds nothing worth reporting, the run stays silent — only a 'silent' run record is kept for history tracing via queue_runs.",
       inputSchema: scheduleCreateInputSchema,
       outputSchema: scheduleTaskSchema,
     },
     async (args) => {
-      const metadata = ctx.getMetadata(args);
+      const location = resolveCallerLocation(ctx, args);
       const task = await ctx.scheduler.create({
-        sessionId: metadata.sessionID,
+        chatId: location.chatId,
+        threadId: location.threadId,
         cron: args.cron,
         description: args.description,
         prompt: args.prompt,
@@ -242,14 +258,15 @@ export function registerScheduleTools(
     "queue_schedule_list",
     {
       description:
-        "List scheduled tasks with optional filters. Use this to find task IDs before calling queue_schedule_update, queue_schedule_delete, queue_schedule_trigger, queue_schedule_enable, or queue_schedule_disable.",
+        "List scheduled tasks for the current chat (and thread, if applicable). Use this to find task IDs before calling queue_schedule_update, queue_schedule_delete, queue_schedule_trigger, queue_schedule_enable, or queue_schedule_disable.",
       inputSchema: scheduleListInputSchema,
       outputSchema: zod.object({ tasks: zod.array(scheduleTaskSchema) }),
     },
     async (args) => {
-      ctx.getMetadata(args);
+      const location = resolveCallerLocation(ctx, args);
       const filter: Scheduler.ListFilter = {
-        ...(args.sessionId !== undefined && { sessionId: args.sessionId }),
+        chatId: location.chatId,
+        threadId: location.threadId,
         ...(args.enabled !== undefined && { enabled: args.enabled }),
       };
       const tasks = ctx.scheduler.list(filter);
@@ -391,7 +408,7 @@ export function registerScheduleTools(
     "queue_runs",
     {
       description:
-        "List scheduled run records with optional filters. Each run has its own UUID, a status (pending, running, reported, silent, failed, cancelled, skipped), and either output text (on 'reported') or error text (on 'failed'). Use this to trace what scheduled tasks have done, even across bot restarts.",
+        "List scheduled run records with optional filters. Each run has its own UUID, a status (pending, running, reported, silent, failed, cancelled, skipped), and either output text (on 'reported') or error text (on 'failed'). Filter by scheduleId to scope to one task; otherwise all runs are returned. Use this to trace what scheduled tasks have done, even across bot restarts.",
       inputSchema: runListInputSchema,
       outputSchema: zod.object({ runs: zod.array(runRecordSchema) }),
     },
@@ -399,7 +416,6 @@ export function registerScheduleTools(
       ctx.getMetadata(args);
       const runs = ctx.scheduler.listRuns({
         ...(args.scheduleId !== undefined && { scheduleId: args.scheduleId }),
-        ...(args.sessionId !== undefined && { sessionId: args.sessionId }),
         ...(args.status !== undefined && { status: args.status }),
         ...(args.trigger !== undefined && { trigger: args.trigger }),
         ...(args.since !== undefined && { since: args.since }),

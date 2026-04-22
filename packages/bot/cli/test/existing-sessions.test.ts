@@ -745,6 +745,31 @@ test("beforeRemove hook awaits async hooks", async () => {
   expect(order).toEqual(["hook", "done"]);
 });
 
+test("unreachableLocations exposes chats removed during initialize", async () => {
+  const sendChatAction = vi.fn(async (...args: unknown[]) => {
+    if (args[0] === 200) throw createGoneError();
+  });
+  const database = Database.create();
+  database.insert(schema.session).values({ id: "s1", chatId: 100 }).run();
+  database
+    .insert(schema.session)
+    .values({ id: "s2", chatId: 200, threadId: 5 })
+    .run();
+  const opencodeClient = mockOpencodeClient();
+  opencodeClient.session.abort.mockResolvedValue({ data: undefined });
+  const es = await ExistingSessions.create(
+    createMockBot(sendChatAction),
+    database,
+    opencodeClient as never,
+  );
+  expect(es.unreachableLocations).toEqual([{ chatId: 200, threadId: 5 }]);
+});
+
+test("unreachableLocations is empty when all chats are reachable", async () => {
+  const { es } = await setup();
+  expect(es.unreachableLocations).toEqual([]);
+});
+
 test("hook returns unregister function", async () => {
   const { es, opencodeClient } = await setup();
   opencodeClient.session.create

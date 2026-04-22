@@ -103,6 +103,8 @@ let opencodeClient: {
 };
 let existingSessions: {
   get: ReturnType<typeof vi.fn>;
+  find: ReturnType<typeof vi.fn>;
+  unreachableLocations: { chatId: number; threadId: number }[];
 };
 let scheduler: Scheduler;
 
@@ -133,6 +135,8 @@ beforeEach(async () => {
   };
   existingSessions = {
     get: vi.fn().mockReturnValue({ chatId: 123, threadId: undefined }),
+    find: vi.fn().mockReturnValue(userSessionId),
+    unreachableLocations: [],
   };
   mockGetSessionAgent.mockReturnValue(undefined);
 
@@ -207,7 +211,7 @@ async function advanceForExecution(): Promise<void> {
 
 test("create() returns a task with all fields populated", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "Hourly",
     prompt: "do something",
@@ -216,7 +220,8 @@ test("create() returns a task with all fields populated", async () => {
   expect(task.id).toMatch(
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
   );
-  expect(task.sessionId).toBe(userSessionId);
+  expect(task.chatId).toBe(123);
+  expect(task.threadId).toBe(0);
   expect(task.cron).toBe("0 * * * *");
   expect(task.timezone).toBe("UTC");
   expect(task.once).toBe(false);
@@ -228,7 +233,7 @@ test("create() returns a task with all fields populated", async () => {
 
 test("create() respects all optional fields", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "@daily",
     description: "Custom",
     prompt: "p",
@@ -247,7 +252,7 @@ test("create() respects all optional fields", async () => {
 
 test("create() registers with upsertJobScheduler for recurring tasks", async () => {
   await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -268,7 +273,7 @@ test("create() registers with upsertJobScheduler for recurring tasks", async () 
 
 test("create() registers once-tasks with limit=1", async () => {
   await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -285,7 +290,7 @@ test("create() rolls back DB insert when register fails", async () => {
   mockUpsert.mockRejectedValueOnce(new Error("register failed"));
   await expect(
     scheduler.create({
-      sessionId: userSessionId,
+      chatId: 123,
       cron: "0 * * * *",
       description: "d",
       prompt: "p",
@@ -297,7 +302,7 @@ test("create() rolls back DB insert when register fails", async () => {
 
 test("get() returns task by id", async () => {
   const created = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "find me",
     prompt: "p",
@@ -317,14 +322,14 @@ test("list() returns empty array when none exist", () => {
 
 test("list() returns all tasks", async () => {
   await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "A",
     prompt: "pA",
     once: false,
   });
   await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "@daily",
     description: "B",
     prompt: "pB",
@@ -335,40 +340,54 @@ test("list() returns all tasks", async () => {
   expect(tasks.map((t) => t.description).sort()).toEqual(["A", "B"]);
 });
 
-test("list() filters by sessionId", async () => {
-  database
-    .insert(sessionTable)
-    .values({ id: "sess-2", chatId: 456, threadId: 0 })
-    .run();
+test("list() filters by chatId/threadId", async () => {
   await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "A",
     prompt: "p",
     once: false,
   });
   await scheduler.create({
-    sessionId: "sess-2",
+    chatId: 456,
     cron: "0 * * * *",
     description: "B",
     prompt: "p",
     once: false,
   });
-  const filtered = scheduler.list({ sessionId: "sess-2" });
+  const filtered = scheduler.list({ chatId: 456, threadId: 0 });
   expect(filtered).toHaveLength(1);
   expect(filtered[0]?.description).toBe("B");
 });
 
-test("list() filters by enabled", async () => {
-  const a = await scheduler.create({
-    sessionId: userSessionId,
+test("list() filters by chatId only", async () => {
+  await scheduler.create({
+    chatId: 123,
     cron: "0 * * * *",
     description: "A",
     prompt: "p",
     once: false,
   });
   await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 456,
+    cron: "0 * * * *",
+    description: "B",
+    prompt: "p",
+    once: false,
+  });
+  expect(scheduler.list({ chatId: 123 })).toHaveLength(1);
+});
+
+test("list() filters by enabled", async () => {
+  const a = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "A",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.create({
+    chatId: 123,
     cron: "0 * * * *",
     description: "B",
     prompt: "p",
@@ -381,7 +400,7 @@ test("list() filters by enabled", async () => {
 
 test("update() changes description without re-registering", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "old",
     prompt: "p",
@@ -397,7 +416,7 @@ test("update() changes description without re-registering", async () => {
 
 test("update() changes prompt only", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "old",
@@ -409,7 +428,7 @@ test("update() changes prompt only", async () => {
 
 test("update() re-registers when cron changes", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -425,7 +444,7 @@ test("update() re-registers when cron changes", async () => {
 
 test("update() re-registers when timezone changes", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -441,7 +460,7 @@ test("update() re-registers when timezone changes", async () => {
 
 test("update() updates overlap and notifyOnFailure and maxRuntimeMs", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -459,7 +478,7 @@ test("update() updates overlap and notifyOnFailure and maxRuntimeMs", async () =
 
 test("update() with no changes is a no-op", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -478,7 +497,7 @@ test("update() throws NotFoundError for missing id", async () => {
 
 test("update() skips re-registration when schedule is disabled", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -494,7 +513,7 @@ test("update() skips re-registration when schedule is disabled", async () => {
 
 test("update() rolls back on register failure", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -510,7 +529,7 @@ test("update() rolls back on register failure", async () => {
 
 test("update() logs when restore of old cron also fails", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -526,7 +545,7 @@ test("update() logs when restore of old cron also fails", async () => {
 
 test("enable() is no-op when already enabled", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -539,7 +558,7 @@ test("enable() is no-op when already enabled", async () => {
 
 test("enable() re-registers a disabled schedule", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -554,7 +573,7 @@ test("enable() re-registers a disabled schedule", async () => {
 
 test("enable() rolls back on register failure", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -568,7 +587,7 @@ test("enable() rolls back on register failure", async () => {
 
 test("disable() is no-op when already disabled", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -582,7 +601,7 @@ test("disable() is no-op when already disabled", async () => {
 
 test("disable() unregisters an enabled schedule", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -596,7 +615,7 @@ test("disable() unregisters an enabled schedule", async () => {
 
 test("delete() removes schedule and unregisters when enabled", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -610,7 +629,7 @@ test("delete() removes schedule and unregisters when enabled", async () => {
 
 test("delete() skips unregister for disabled schedules", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -624,7 +643,7 @@ test("delete() skips unregister for disabled schedules", async () => {
 
 test("delete() cancels in-flight run without queueJobId", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -648,7 +667,7 @@ test("delete() cancels in-flight run without queueJobId", async () => {
 
 test("delete() cancels in-flight runs", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -670,6 +689,98 @@ test("delete() cancels in-flight runs", async () => {
   expect(mockCancel).toHaveBeenCalledWith("job-active");
 });
 
+test("deleteByChat removes all schedules for chat/thread and unregisters enabled ones", async () => {
+  const taskA = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "A",
+    prompt: "p",
+    once: false,
+  });
+  const taskB = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "B",
+    prompt: "p",
+    once: false,
+  });
+  await scheduler.disable(taskB.id);
+  await scheduler.create({
+    chatId: 999,
+    cron: "0 * * * *",
+    description: "C",
+    prompt: "p",
+    once: false,
+  });
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-active-A",
+      scheduleId: taskA.id,
+      sessionId: userSessionId,
+      queueJobId: "job-active",
+      trigger: "cron",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  mockRemoveCron.mockClear();
+  mockCancel.mockClear();
+  await scheduler.deleteByChat(123, 0);
+  expect(mockRemoveCron).toHaveBeenCalledWith(taskA.id);
+  expect(mockRemoveCron).not.toHaveBeenCalledWith(taskB.id);
+  expect(mockCancel).toHaveBeenCalledWith("job-active");
+  expect(scheduler.list({ chatId: 123 })).toHaveLength(0);
+  expect(scheduler.list({ chatId: 999 })).toHaveLength(1);
+});
+
+test("Scheduler.create cleans up schedules for unreachable chats from initialize", async () => {
+  scheduler[Symbol.dispose]();
+  const freshDb = Database.create();
+  freshDb
+    .insert(scheduleTable)
+    .values({
+      id: "stale-schedule",
+      chatId: 123,
+      threadId: 0,
+      description: "stale",
+      prompt: "p",
+      cron: "0 * * * *",
+      enabled: true,
+    })
+    .run();
+  freshDb
+    .insert(scheduleTable)
+    .values({
+      id: "live-schedule",
+      chatId: 555,
+      threadId: 0,
+      description: "live",
+      prompt: "p",
+      cron: "0 * * * *",
+      enabled: true,
+    })
+    .run();
+  mockListCrons.mockResolvedValue([]);
+  mockUpsert.mockClear();
+  const restored = await Scheduler.create(
+    bot as never,
+    freshDb,
+    opencodeClient as never,
+    {
+      ...existingSessions,
+      unreachableLocations: [{ chatId: 123, threadId: 0 }],
+    } as never,
+  );
+  expect(() => restored.get("stale-schedule")).toThrow(Scheduler.NotFoundError);
+  expect(restored.get("live-schedule").id).toBe("live-schedule");
+  const upsertedIds = mockUpsert.mock.calls.map((call) => call[0] as string);
+  expect(upsertedIds).not.toContain("stale-schedule");
+  expect(upsertedIds).toContain("live-schedule");
+  restored[Symbol.dispose]();
+  freshDb[Symbol.dispose]();
+});
+
 test("delete() throws NotFoundError for missing id", async () => {
   await expect(scheduler.delete("nonexistent")).rejects.toThrow(
     Scheduler.NotFoundError,
@@ -678,7 +789,7 @@ test("delete() throws NotFoundError for missing id", async () => {
 
 test("trigger() pre-creates a pending run and returns its id", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -703,7 +814,7 @@ test("trigger() pre-creates a pending run and returns its id", async () => {
 
 test("trigger() rolls back pre-created run when queue.add rejects", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -726,7 +837,7 @@ test("listRuns() returns runs filtered by scheduleId", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-1",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -757,7 +868,7 @@ test("listRuns() filters by session, status, trigger, and time range", async () 
     .insert(scheduleTable)
     .values({
       id: "sched-1",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -799,7 +910,7 @@ test("listRuns() ignores out-of-range since/until values", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-range",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -840,7 +951,7 @@ test("listRuns() respects limit and offset", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-1",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -868,7 +979,7 @@ test("getRun() returns a run by id", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-1",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -899,7 +1010,7 @@ test("cancelRun() cancels running run and calls bunqueue.cancel", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-1",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -927,7 +1038,7 @@ test("cancelRun() cancels pending run without queueJobId", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-1",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -959,7 +1070,7 @@ test("cancelRun() throws RunNotCancellableError on terminal status", async () =>
     .insert(scheduleTable)
     .values({
       id: "sched-1",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -983,7 +1094,7 @@ test("cancelRun() throws RunNotCancellableError on terminal status", async () =>
 
 test("processor transitions pending run to running when runId is supplied", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1009,7 +1120,7 @@ test("processor transitions pending run to running when runId is supplied", asyn
 
 test("processor skips when supplied runId was cancelled before pickup", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1046,7 +1157,7 @@ test("processor skips when job data is missing scheduleId", async () => {
 
 test("processor skips cron ticks when schedule is disabled", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1060,7 +1171,7 @@ test("processor skips cron ticks when schedule is disabled", async () => {
 
 test("processor accepts manual trigger even when disabled", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1077,7 +1188,7 @@ test("processor accepts manual trigger even when disabled", async () => {
 
 test("reported run posts to Telegram and records output", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1095,7 +1206,7 @@ test("reported run posts to Telegram and records output", async () => {
 
 test("silent run with NO_REPORT marker sends nothing to Telegram", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1111,7 +1222,7 @@ test("silent run with NO_REPORT marker sends nothing to Telegram", async () => {
 
 test("text containing NO_REPORT mid-sentence is reported, not silent", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1134,7 +1245,7 @@ test("text containing NO_REPORT mid-sentence is reported, not silent", async () 
 
 test("NO_REPORT with trailing whitespace still counts as silent", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1150,13 +1261,9 @@ test("NO_REPORT with trailing whitespace still counts as silent", async () => {
 });
 
 test("run with thread delivers to message_thread_id", async () => {
-  database
-    .insert(sessionTable)
-    .values({ id: "sess-thread", chatId: 456, threadId: 42 })
-    .run();
-  existingSessions.get.mockReturnValue({ chatId: 456, threadId: 42 });
   const task = await scheduler.create({
-    sessionId: "sess-thread",
+    chatId: 456,
+    threadId: 42,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1173,7 +1280,7 @@ test("run with thread delivers to message_thread_id", async () => {
 
 test("failed run records error and does not notify by default", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1196,13 +1303,9 @@ test("failed run records error and does not notify by default", async () => {
 });
 
 test("failed run with notifyOnFailure and thread sends to thread", async () => {
-  database
-    .insert(sessionTable)
-    .values({ id: "sess-t", chatId: 789, threadId: 7 })
-    .run();
-  existingSessions.get.mockReturnValue({ chatId: 789, threadId: 7 });
   const task = await scheduler.create({
-    sessionId: "sess-t",
+    chatId: 789,
+    threadId: 7,
     cron: "0 * * * *",
     description: "crit",
     prompt: "p",
@@ -1224,7 +1327,7 @@ test("failed run with notifyOnFailure and thread sends to thread", async () => {
 
 test("failed run with notifyOnFailure sends Telegram alert", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "critical",
     prompt: "p",
@@ -1248,7 +1351,7 @@ test("failed run with notifyOnFailure sends Telegram alert", async () => {
 
 test("failed run when session.create throws skips ephemeral abort", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1272,7 +1375,7 @@ test("failed run when session.create throws skips ephemeral abort", async () => 
 
 test("failed run records non-Error string exceptions", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1292,7 +1395,7 @@ test("failed run records non-Error string exceptions", async () => {
 
 test("failed run logs when notification delivery also fails", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1310,25 +1413,28 @@ test("failed run logs when notification delivery also fails", async () => {
   expect((caught as Error).message).toBe("x");
 });
 
-test("execution stays silent when user session is unavailable", async () => {
+test("execution proceeds with null sessionId when no user session exists", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
     once: false,
   });
-  existingSessions.get.mockReturnValueOnce(undefined);
-  await fireCron(task.id);
-  expect(opencodeClient.session.create).not.toHaveBeenCalled();
+  existingSessions.find.mockReturnValue(undefined);
+  mockAssistantText("delivered");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "delivered", {});
   const runs = scheduler.listRuns({ scheduleId: task.id });
-  expect(runs[0]?.status).toBe("silent");
-  expect(runs[0]?.error).toBe("user session unavailable");
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.sessionId).toBeNull();
 });
 
 test("execution aborts ephemeral session in finally even on success", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1345,7 +1451,7 @@ test("execution aborts ephemeral session in finally even on success", async () =
 
 test("abort failure during cleanup is logged but not thrown", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1361,7 +1467,7 @@ test("abort failure during cleanup is logged but not thrown", async () => {
 test("agent from session is passed to ephemeral prompt", async () => {
   mockGetSessionAgent.mockReturnValue("custom-agent");
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1378,7 +1484,7 @@ test("agent from session is passed to ephemeral prompt", async () => {
 
 test("once-task disables the schedule after a cron fire", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1393,7 +1499,7 @@ test("once-task disables the schedule after a cron fire", async () => {
 
 test("once-task manual trigger does not disable the schedule", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1407,7 +1513,7 @@ test("once-task manual trigger does not disable the schedule", async () => {
 
 test("once-task logs when removeCron fails after fire", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1421,7 +1527,7 @@ test("once-task logs when removeCron fails after fire", async () => {
 
 test("overlap=skip records skipped run when another is running", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "* * * * *",
     description: "d",
     prompt: "p",
@@ -1449,7 +1555,7 @@ test("overlap=skip records skipped run when another is running", async () => {
 
 test("overlap=skip proceeds when nothing is running", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "* * * * *",
     description: "d",
     prompt: "p",
@@ -1465,7 +1571,7 @@ test("overlap=skip proceeds when nothing is running", async () => {
 
 test("overlap=cancel_previous with null queueJobId just updates status", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "* * * * *",
     description: "d",
     prompt: "p",
@@ -1496,7 +1602,7 @@ test("pending run status is parseable via getRun", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-p",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -1518,7 +1624,7 @@ test("pending run status is parseable via getRun", async () => {
 
 test("overlap=cancel_previous cancels prior running run and proceeds", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "* * * * *",
     description: "d",
     prompt: "p",
@@ -1548,7 +1654,7 @@ test("overlap=cancel_previous cancels prior running run and proceeds", async () 
 
 test("overlap=queue runs both without cancellation", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "* * * * *",
     description: "d",
     prompt: "p",
@@ -1575,7 +1681,7 @@ test("overlap=queue runs both without cancellation", async () => {
 
 test("manual trigger ignores overlap policy", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "* * * * *",
     description: "d",
     prompt: "p",
@@ -1600,16 +1706,16 @@ test("manual trigger ignores overlap policy", async () => {
   expect(opencodeClient.session.create).toHaveBeenCalled();
 });
 
-test("per-session lock serializes concurrent runs in the same session", async () => {
+test("per-chat lock serializes concurrent runs in the same chat", async () => {
   const taskA = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "* * * * *",
     description: "A",
     prompt: "pA",
     once: false,
   });
   const taskB = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "* * * * *",
     description: "B",
     prompt: "pB",
@@ -1645,7 +1751,7 @@ test("per-session lock serializes concurrent runs in the same session", async ()
 
 test("retention trims run records beyond the cap", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "* * * * *",
     description: "d",
     prompt: "p",
@@ -1689,7 +1795,7 @@ test("#waitForText breaks when session is idle and has no assistant text", async
     ],
   });
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1705,7 +1811,7 @@ test("#waitForText breaks when session is idle and has no assistant text", async
 
 test("#waitForText aborts after sleep when signal fires mid-interval", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1724,7 +1830,7 @@ test("#waitForText aborts after sleep when signal fires mid-interval", async () 
 
 test("#waitForText aborts on signal before sleep in subsequent iterations", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1750,7 +1856,7 @@ test("#waitForText returns null when max attempts exhausted with no text", async
     data: [{ info: { role: "user" }, parts: [] }],
   });
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1779,7 +1885,7 @@ test("#waitForText continues after a busy status", async () => {
     ],
   });
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1798,7 +1904,7 @@ test("#waitForText recovers from a poll error and retries", async () => {
   opencodeClient.session.status.mockRejectedValueOnce(new Error("transient"));
   mockAssistantText("recovered");
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1819,7 +1925,7 @@ test("#waitForText recovers from a hung status call (poll timeout)", async () =>
   );
   mockAssistantText("after-timeout");
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1837,7 +1943,7 @@ test("#waitForText recovers from a hung status call (poll timeout)", async () =>
 
 test("execution records cancelled when signal fires during polling", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1862,7 +1968,7 @@ test("execution records cancelled when signal fires during polling", async () =>
 
 test("execution aborts when signal is triggered before prompt", async () => {
   const task = await scheduler.create({
-    sessionId: userSessionId,
+    chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
@@ -1889,7 +1995,7 @@ test("#recover finalizes stuck runs as failed with bot restart", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-recover",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -1930,7 +2036,7 @@ test("#recover re-registers enabled schedules not yet in bunqueue", async () => 
     .insert(scheduleTable)
     .values({
       id: "sched-recover",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -1965,7 +2071,7 @@ test("#recover skips schedules already registered in bunqueue", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-exist",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -1998,7 +2104,7 @@ test("#recover skips disabled schedules", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-disabled",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -2069,7 +2175,7 @@ test("parseOverlap throws on unknown value via list() output", async () => {
     .insert(scheduleTable)
     .values({
       id: "bad-overlap",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -2086,7 +2192,7 @@ test("parseRunStatus throws on unknown status via getRun()", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-bad",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",
@@ -2111,7 +2217,7 @@ test("parseRunTrigger throws on unknown trigger via getRun()", async () => {
     .insert(scheduleTable)
     .values({
       id: "sched-bad2",
-      sessionId: userSessionId,
+      chatId: 123,
       description: "d",
       prompt: "p",
       cron: "0 * * * *",

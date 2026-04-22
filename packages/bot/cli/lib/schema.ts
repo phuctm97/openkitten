@@ -48,12 +48,8 @@ export const schedule = sqliteTable(
   "schedule",
   {
     id: text().primaryKey(),
-    sessionId: text("session_id")
-      .notNull()
-      .references(() => session.id, {
-        onDelete: "cascade",
-        onUpdate: "cascade",
-      }),
+    chatId: integer("chat_id").notNull(),
+    threadId: integer("thread_id").notNull().default(0),
     description: text().notNull(),
     prompt: text().notNull(),
     cron: text().notNull(),
@@ -73,7 +69,9 @@ export const schedule = sqliteTable(
       .default(sql`(unixepoch() * 1000)`)
       .$onUpdateFn(() => new Date()),
   },
-  (table) => [index("schedule_session_id_idx").on(table.sessionId)],
+  (table) => [
+    index("schedule_chat_id_thread_id_idx").on(table.chatId, table.threadId),
+  ],
 );
 
 export const scheduleRun = sqliteTable(
@@ -86,7 +84,10 @@ export const scheduleRun = sqliteTable(
         onDelete: "cascade",
         onUpdate: "cascade",
       }),
-    sessionId: text("session_id").notNull(),
+    sessionId: text("session_id").references(() => session.id, {
+      onDelete: "set null",
+      onUpdate: "cascade",
+    }),
     queueJobId: text("queue_job_id"),
     trigger: text().notNull(),
     status: text().notNull(),
@@ -124,7 +125,7 @@ export const restartNotification = sqliteTable("restart_notification", {
 
 export const sessionRelations = relations(session, ({ many }) => ({
   messages: many(message),
-  schedules: many(schedule),
+  scheduleRuns: many(scheduleRun),
 }));
 
 export const messageRelations = relations(message, ({ one }) => ({
@@ -134,11 +135,7 @@ export const messageRelations = relations(message, ({ one }) => ({
   }),
 }));
 
-export const scheduleRelations = relations(schedule, ({ one, many }) => ({
-  session: one(session, {
-    fields: [schedule.sessionId],
-    references: [session.id],
-  }),
+export const scheduleRelations = relations(schedule, ({ many }) => ({
   runs: many(scheduleRun),
 }));
 
@@ -146,5 +143,9 @@ export const scheduleRunRelations = relations(scheduleRun, ({ one }) => ({
   schedule: one(schedule, {
     fields: [scheduleRun.scheduleId],
     references: [schedule.id],
+  }),
+  session: one(session, {
+    fields: [scheduleRun.sessionId],
+    references: [session.id],
   }),
 }));
