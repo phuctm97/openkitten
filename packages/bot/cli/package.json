@@ -15,7 +15,7 @@
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opencode-ai/sdk": "^1.14.20",
     "@openkitten/api": "workspace:*",
-    "@orpc/server": "^1.13.14",
+    "@orpc/server": "^1.14.0",
     "boxen": "^8.0.1",
     "bunqueue": "^2.7.10",
     "citty": "^0.2.2",
