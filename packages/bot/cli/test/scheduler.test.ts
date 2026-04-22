@@ -46,6 +46,9 @@ const mockListCrons = vi
 const mockClose = vi.fn().mockResolvedValue(undefined);
 const mockOn = vi.fn();
 const mockGetJobsAsync = vi.fn().mockResolvedValue([]);
+const mockGetJob = vi
+  .fn()
+  .mockImplementation((id: string) => Promise.resolve({ id, name: id }));
 const mockGetJobCountsAsync = vi.fn().mockResolvedValue({
   waiting: 0,
   active: 0,
@@ -77,6 +80,7 @@ vi.mock("bunqueue/client", () => ({
     on = mockOn;
     cancel = mockCancel;
     getSignal = mockGetSignal;
+    getJob = mockGetJob;
     getJobCountsAsync = mockGetJobCountsAsync;
     isPaused = mockIsPaused;
   },
@@ -158,6 +162,10 @@ beforeEach(async () => {
   mockListCrons.mockClear();
   mockClose.mockClear();
   mockOn.mockClear();
+  mockGetJob.mockReset();
+  mockGetJob.mockImplementation((id: string) =>
+    Promise.resolve({ id, name: id }),
+  );
 
   scheduler = await Scheduler.create(
     bot as never,
@@ -810,6 +818,21 @@ test("trigger() pre-creates a pending run and returns its id", async () => {
   expect(row.status).toBe("pending");
   expect(row.trigger).toBe("manual");
   expect(row.scheduleId).toBe(task.id);
+  expect(row.queueJobId).toBe("triggered-1");
+});
+
+test("cancelRun() cancels bunqueue job for a pre-pickup manual trigger", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAdd.mockResolvedValue({ id: "manual-pending-1" });
+  const { runId } = await scheduler.trigger(task.id);
+  await scheduler.cancelRun(runId);
+  expect(mockCancel).toHaveBeenCalledWith("manual-pending-1");
 });
 
 test("trigger() rolls back pre-created run when queue.add rejects", async () => {
@@ -1447,6 +1470,26 @@ test("execution aborts ephemeral session in finally even on success", async () =
   expect(opencodeClient.session.abort).toHaveBeenCalledWith({
     sessionID: ephemeralSessionId,
   });
+});
+
+test("processor returns without awaiting ephemeral session abort", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAssistantText("ok");
+  const { promise: abortPromise, resolve: resolveAbort } =
+    Promise.withResolvers<undefined>();
+  opencodeClient.session.abort.mockReturnValueOnce(abortPromise);
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+  resolveAbort(undefined);
 });
 
 test("abort failure during cleanup is logged but not thrown", async () => {
@@ -2137,6 +2180,194 @@ test("dispose logs error when queue close fails", () => {
   mockClose.mockRejectedValueOnce(new Error("close failed"));
   scheduler[Symbol.dispose]();
   expect(mockClose).toHaveBeenCalled();
+});
+
+test("orphan reconciler marks running run failed when bunqueue job is gone", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-orphan",
+      chatId: 123,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-orphan",
+      scheduleId: "sched-orphan",
+      sessionId: userSessionId,
+      queueJobId: "gone-job",
+      trigger: "manual",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  mockGetJob.mockImplementation((id: string) => {
+    if (id === "gone-job") return Promise.resolve(null);
+    return Promise.resolve({ id, name: id });
+  });
+  await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+  const run = scheduler.getRun("run-orphan");
+  expect(run.status).toBe("failed");
+  expect(run.error).toBe("orphaned");
+  expect(run.finishedAt).not.toBeNull();
+});
+
+test("orphan reconciler also rescues pending run whose bunqueue job is gone", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-orphan-pending",
+      chatId: 123,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-orphan-pending",
+      scheduleId: "sched-orphan-pending",
+      sessionId: userSessionId,
+      queueJobId: "vanished-job",
+      trigger: "manual",
+      status: "pending",
+      startedAt: new Date(),
+    })
+    .run();
+  mockGetJob.mockImplementation((id: string) => {
+    if (id === "vanished-job") return Promise.resolve(null);
+    return Promise.resolve({ id, name: id });
+  });
+  await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+  const run = scheduler.getRun("run-orphan-pending");
+  expect(run.status).toBe("failed");
+  expect(run.error).toBe("orphaned");
+});
+
+test("orphan reconciler skips rows with null queueJobId", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-null",
+      chatId: 123,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-no-job",
+      scheduleId: "sched-null",
+      sessionId: userSessionId,
+      trigger: "manual",
+      status: "pending",
+      startedAt: new Date(),
+    })
+    .run();
+  mockGetJob.mockClear();
+  await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+  const run = scheduler.getRun("run-no-job");
+  expect(run.status).toBe("pending");
+  expect(mockGetJob).not.toHaveBeenCalled();
+});
+
+test("orphan reconciler leaves running run alone when job is still present", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-live",
+      chatId: 123,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-live",
+      scheduleId: "sched-live",
+      sessionId: userSessionId,
+      queueJobId: "live-job",
+      trigger: "manual",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+  const run = scheduler.getRun("run-live");
+  expect(run.status).toBe("running");
+  expect(mockGetJob).toHaveBeenCalledWith("live-job");
+});
+
+test("orphan reconciliation errors are logged and do not stop the interval", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-boom",
+      chatId: 123,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-boom",
+      scheduleId: "sched-boom",
+      sessionId: userSessionId,
+      queueJobId: "boom-job",
+      trigger: "manual",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  mockGetJob.mockRejectedValueOnce(new Error("lookup failed"));
+  await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+  const runAfterFirst = scheduler.getRun("run-boom");
+  expect(runAfterFirst.status).toBe("running");
+  mockGetJob.mockImplementation(() => Promise.resolve(null));
+  await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+  const runAfterSecond = scheduler.getRun("run-boom");
+  expect(runAfterSecond.status).toBe("failed");
+  expect(runAfterSecond.error).toBe("orphaned");
+});
+
+test("dispose stops the reconcile interval", async () => {
+  database
+    .insert(scheduleTable)
+    .values({
+      id: "sched-after-dispose",
+      chatId: 123,
+      description: "d",
+      prompt: "p",
+      cron: "0 * * * *",
+    })
+    .run();
+  database
+    .insert(scheduleRunTable)
+    .values({
+      id: "run-after-dispose",
+      scheduleId: "sched-after-dispose",
+      sessionId: userSessionId,
+      queueJobId: "any-job",
+      trigger: "manual",
+      status: "running",
+      startedAt: new Date(),
+    })
+    .run();
+  mockGetJob.mockClear();
+  scheduler[Symbol.dispose]();
+  await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+  expect(mockGetJob).not.toHaveBeenCalled();
 });
 
 test("registers an error handler on bunqueue", () => {

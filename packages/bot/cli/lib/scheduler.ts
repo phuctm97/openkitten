@@ -25,6 +25,8 @@ const pollTimeoutMs = 30_000;
 
 const maxRunsPerSchedule = 500;
 
+const reconcileIntervalMs = 5 * 60 * 1000;
+
 const pollTimeoutSymbol = Symbol("pollTimeout");
 
 type ScheduleRow = typeof scheduleTable.$inferSelect;
@@ -90,6 +92,7 @@ export class Scheduler implements Disposable {
   readonly #existingSessions: ExistingSessions;
   readonly #queue: Bunqueue<TaskData>;
   readonly #chatLocks = new Map<string, Promise<void>>();
+  readonly #reconcileInterval: Timer;
 
   private constructor(
     bot: Bot,
@@ -116,6 +119,11 @@ export class Scheduler implements Disposable {
     this.#queue.on("error", (error) => {
       logger.error("Scheduler queue error", error);
     });
+    this.#reconcileInterval = setInterval(() => {
+      this.#reconcileOrphans().catch((error) => {
+        logger.error("Orphan reconciliation failed", error);
+      });
+    }, reconcileIntervalMs);
   }
 
   async create(input: Scheduler.CreateInput): Promise<Scheduler.Task> {
@@ -323,6 +331,11 @@ export class Scheduler implements Disposable {
     try {
       const data: TaskData = { scheduleId: existing.id, runId };
       const job = await this.#queue.queue.add(`trigger-${existing.id}`, data);
+      this.#database
+        .update(scheduleRunTable)
+        .set({ queueJobId: job.id })
+        .where(eq(scheduleRunTable.id, runId))
+        .run();
       return {
         scheduleId: existing.id,
         runId,
@@ -734,7 +747,7 @@ export class Scheduler implements Disposable {
       throw error;
     } finally {
       if (ephemeralId) {
-        await this.#opencodeClient.session
+        this.#opencodeClient.session
           .abort({ sessionID: ephemeralId })
           .catch((error) => {
             logger.warn("Failed to abort ephemeral session", error, {
@@ -830,6 +843,37 @@ export class Scheduler implements Disposable {
     return null;
   }
 
+  async #reconcileOrphans(): Promise<void> {
+    const candidates = this.#database
+      .select()
+      .from(scheduleRunTable)
+      .where(inArray(scheduleRunTable.status, ["running", "pending"]))
+      .all();
+    for (const row of candidates) {
+      if (!row.queueJobId) continue;
+      const job = await this.#queue.getJob(row.queueJobId);
+      if (job) continue;
+      this.#database
+        .update(scheduleRunTable)
+        .set({
+          status: "failed",
+          error: "orphaned",
+          finishedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(scheduleRunTable.id, row.id),
+            inArray(scheduleRunTable.status, ["running", "pending"]),
+          ),
+        )
+        .run();
+      logger.warn("Orphaned scheduled run marked failed", {
+        runId: row.id,
+        queueJobId: row.queueJobId,
+      });
+    }
+  }
+
   async #recover(): Promise<void> {
     const stuck = this.#database
       .update(scheduleRunTable)
@@ -864,6 +908,7 @@ export class Scheduler implements Disposable {
   }
 
   [Symbol.dispose](): void {
+    clearInterval(this.#reconcileInterval);
     this.#queue.close().catch((error) => {
       logger.error("Failed to close scheduler queue", error);
     });
