@@ -5,22 +5,8 @@
     {
       "idx": 0,
       "version": "6",
-      "when": 1776834883314,
-      "tag": "0000_common_kronos",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "6",
-      "when": 1777000000000,
-      "tag": "0001_schedule_chat_thread",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "6",
-      "when": 1776932377865,
-      "tag": "0002_lucky_kinsey_walden",
+      "when": 1776942310296,
+      "tag": "0000_bored_mach_iv",
       "breakpoints": true
     }
   ]

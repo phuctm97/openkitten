@@ -16,7 +16,8 @@ CREATE TABLE `restart_notification` (
 --> statement-breakpoint
 CREATE TABLE `schedule` (
 	`id` text PRIMARY KEY NOT NULL,
-	`session_id` text NOT NULL,
+	`chat_id` integer NOT NULL,
+	`thread_id` integer DEFAULT 0 NOT NULL,
 	`description` text NOT NULL,
 	`prompt` text NOT NULL,
 	`cron` text NOT NULL,
@@ -26,16 +27,16 @@ CREATE TABLE `schedule` (
 	`overlap` text DEFAULT 'queue' NOT NULL,
 	`notify_on_failure` integer DEFAULT false NOT NULL,
 	`max_runtime_ms` integer,
+	`session_id` text,
 	`created_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
-	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL,
-	FOREIGN KEY (`session_id`) REFERENCES `session`(`id`) ON UPDATE cascade ON DELETE cascade
+	`updated_at` integer DEFAULT (unixepoch() * 1000) NOT NULL
 );
 --> statement-breakpoint
-CREATE INDEX `schedule_session_id_idx` ON `schedule` (`session_id`);--> statement-breakpoint
+CREATE INDEX `schedule_chat_id_thread_id_idx` ON `schedule` (`chat_id`,`thread_id`);--> statement-breakpoint
 CREATE TABLE `schedule_run` (
 	`id` text PRIMARY KEY NOT NULL,
 	`schedule_id` text NOT NULL,
-	`session_id` text NOT NULL,
+	`run_session_id` text,
 	`queue_job_id` text,
 	`trigger` text NOT NULL,
 	`status` text NOT NULL,
@@ -49,7 +50,6 @@ CREATE TABLE `schedule_run` (
 );
 --> statement-breakpoint
 CREATE INDEX `schedule_run_schedule_id_idx` ON `schedule_run` (`schedule_id`);--> statement-breakpoint
-CREATE INDEX `schedule_run_session_id_idx` ON `schedule_run` (`session_id`);--> statement-breakpoint
 CREATE INDEX `schedule_run_status_started_at_idx` ON `schedule_run` (`status`,`started_at`);--> statement-breakpoint
 CREATE TABLE `session` (
 	`id` text PRIMARY KEY NOT NULL,

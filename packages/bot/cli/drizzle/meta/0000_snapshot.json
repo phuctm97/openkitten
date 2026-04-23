@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "61ed017d-15ba-4024-904f-2accd9535366",
+  "id": "096a4994-d399-4119-9c75-5d03b7a87222",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "message": {
@@ -109,12 +109,20 @@
           "notNull": true,
           "autoincrement": false
         },
-        "session_id": {
-          "name": "session_id",
-          "type": "text",
+        "chat_id": {
+          "name": "chat_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "thread_id": {
+          "name": "thread_id",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
         },
         "description": {
           "name": "description",
@@ -184,6 +192,13 @@
           "notNull": false,
           "autoincrement": false
         },
+        "session_id": {
+          "name": "session_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "integer",
@@ -202,23 +217,13 @@
         }
       },
       "indexes": {
-        "schedule_session_id_idx": {
-          "name": "schedule_session_id_idx",
-          "columns": ["session_id"],
+        "schedule_chat_id_thread_id_idx": {
+          "name": "schedule_chat_id_thread_id_idx",
+          "columns": ["chat_id", "thread_id"],
           "isUnique": false
         }
       },
-      "foreignKeys": {
-        "schedule_session_id_session_id_fk": {
-          "name": "schedule_session_id_session_id_fk",
-          "tableFrom": "schedule",
-          "tableTo": "session",
-          "columnsFrom": ["session_id"],
-          "columnsTo": ["id"],
-          "onDelete": "cascade",
-          "onUpdate": "cascade"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -240,11 +245,11 @@
           "notNull": true,
           "autoincrement": false
         },
-        "session_id": {
-          "name": "session_id",
+        "run_session_id": {
+          "name": "run_session_id",
           "type": "text",
           "primaryKey": false,
-          "notNull": true,
+          "notNull": false,
           "autoincrement": false
         },
         "queue_job_id": {
@@ -317,11 +322,6 @@
         "schedule_run_schedule_id_idx": {
           "name": "schedule_run_schedule_id_idx",
           "columns": ["schedule_id"],
-          "isUnique": false
-        },
-        "schedule_run_session_id_idx": {
-          "name": "schedule_run_session_id_idx",
-          "columns": ["session_id"],
           "isUnique": false
         },
         "schedule_run_status_started_at_idx": {
