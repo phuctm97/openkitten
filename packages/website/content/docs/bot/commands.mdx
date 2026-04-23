@@ -37,7 +37,18 @@ With a name, switches the session to that agent — the choice is persisted in t
 
 ### `/upgrade`
 
-Pulls the latest code from `main`, runs `bun install`, notifies every active session, and restarts the process. Refuses on a non-`main` branch or a dirty worktree. When the bot is installed as a service (`bun . up`), the service manager respawns the process with the new code; otherwise a detached child is spawned before exit so the bot comes back in every launch mode (`bun . serve`, `bun dev`, service). Queued "✅ Upgraded `<previous-sha>` → `<new-sha>`" messages are delivered on the next boot.
+Pulls the latest code from `main`, runs `bun install`, notifies every active session, and restarts the process. When the bot is installed as a service (`bun . up`), the service manager respawns the process with the new code; otherwise a detached child is spawned before exit so the bot comes back in every launch mode (`bun . serve`, `bun dev`, service).
+
+Every active session immediately gets `⏳ Upgrading OpenKitten…`. After the pull completes and the new process boots, exactly one follow-up message is delivered per session, depending on what actually changed:
+
+| Outcome | Message |
+|---|---|
+| `git pull` moved `HEAD` (new commits applied) | `✅ OpenKitten upgraded` |
+| `git pull` ran but nothing new was on `origin/main` | `ℹ️ OpenKitten is already on the latest version` |
+| Pull skipped because the working tree has uncommitted changes | `⚠️ Upgrade skipped: working tree has uncommitted changes` |
+| Pull skipped because you're not on `main` | `⚠️ Upgrade skipped: not on main branch` |
+
+The follow-up is queued by the child `bun . up` process after it actually runs, so the message reflects the real outcome rather than a guess. Dirty-worktree and non-`main` runs still proceed through `bun install` and service restart — they just don't pull.
 
 ### Custom slash commands
 

@@ -21,7 +21,7 @@ test("schedule indexes chatId and threadId", () => {
   expect(idx).toBeDefined();
 });
 
-test("sessionRelations includes scheduleRuns", () => {
+test("sessionRelations maps to session", () => {
   expect(schema.sessionRelations.table).toBe(schema.session);
 });
 
@@ -29,19 +29,10 @@ test("scheduleRelations maps to runs", () => {
   expect(schema.scheduleRelations.table).toBe(schema.schedule);
 });
 
-test("scheduleRun references schedule and session", () => {
+test("scheduleRun references only schedule (no FK to session — runSessionId can hold external opencode ids)", () => {
   const config = getTableConfig(schema.scheduleRun);
   const tables = config.foreignKeys.map((fk) => fk.reference().foreignTable);
-  expect(tables).toContain(schema.schedule);
-  expect(tables).toContain(schema.session);
-});
-
-test("scheduleRun.session_id is set null on parent delete", () => {
-  const config = getTableConfig(schema.scheduleRun);
-  const sessionFk = config.foreignKeys.find(
-    (fk) => fk.reference().foreignTable === schema.session,
-  );
-  expect(sessionFk?.onDelete).toBe("set null");
+  expect(tables).toEqual([schema.schedule]);
 });
 
 test("scheduleRunRelations maps to schedule", () => {

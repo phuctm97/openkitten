@@ -337,6 +337,7 @@ describe("McpServer", () => {
 
     const toolNames = registeredTools.map((t: { name: string }) => t.name);
     expect(toolNames).toContain("send_file");
+    expect(toolNames).toContain("send_message");
     expect(toolNames).toContain("queue_schedule_create");
     expect(toolNames).toContain("queue_schedule_list");
     expect(toolNames).toContain("queue_schedule_delete");
@@ -513,6 +514,108 @@ describe("McpServer", () => {
         kind: "sticker",
       },
     });
+  });
+
+  test("send_message delivers plain text to the caller session's chat and thread", async () => {
+    using _server = await McpServer.create(
+      bot,
+      mockDatabase,
+      mockShutdown,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find((entry) => entry.name === "send_message");
+    if (!tool) throw new Error("send_message tool was not registered");
+
+    const result = await tool.handler({
+      text: "hello from scheduled run",
+      __OPENKITTEN__: { sessionID: "sess-1", callID: "call-1" },
+    });
+
+    expect(existingSessionsGet).toHaveBeenCalledWith("sess-1");
+    expect(botApi.sendMessage).toHaveBeenCalledWith(
+      123,
+      "hello from scheduled run",
+      { message_thread_id: 456 },
+    );
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Sent message to chat 123/456." }],
+      structuredContent: { chatId: 123, threadId: 456 },
+    });
+  });
+
+  test("send_message omits thread id when the session is not in a thread", async () => {
+    existingSessionsGet.mockReturnValueOnce({
+      chatId: 999,
+      threadId: undefined,
+    });
+
+    using _server = await McpServer.create(
+      bot,
+      mockDatabase,
+      mockShutdown,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find((entry) => entry.name === "send_message");
+    if (!tool) throw new Error("send_message tool was not registered");
+
+    const result = await tool.handler({
+      text: "ping",
+      __OPENKITTEN__: { sessionID: "sess-nothread", callID: "call-1" },
+    });
+
+    expect(botApi.sendMessage).toHaveBeenCalledWith(999, "ping", {});
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Sent message to chat 999." }],
+      structuredContent: { chatId: 999 },
+    });
+  });
+
+  test("send_message rejects unknown sessions", async () => {
+    existingSessionsGet.mockReturnValueOnce(undefined);
+
+    using _server = await McpServer.create(
+      bot,
+      mockDatabase,
+      mockShutdown,
+      mockClient,
+      existingSessions,
+      mockScheduler,
+    );
+    await capturedFetch(
+      new Request("http://localhost/mcp", {
+        method: "POST",
+        headers: { authorization: "Bearer test-token-abc123" },
+      }),
+    );
+
+    const tool = registeredTools.find((entry) => entry.name === "send_message");
+    if (!tool) throw new Error("send_message tool was not registered");
+
+    await expect(
+      tool.handler({
+        text: "ping",
+        __OPENKITTEN__: { sessionID: "sess-unknown", callID: "call-1" },
+      }),
+    ).rejects.toThrow("Session not found: sess-unknown");
+    expect(botApi.sendMessage).not.toHaveBeenCalled();
   });
 
   test("send_file rejects missing local files", async () => {

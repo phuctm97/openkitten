@@ -51,7 +51,7 @@ test("throws when OPENKITTEN_ENABLE_UPGRADE is not set", async () => {
   expect(insertValues).not.toHaveBeenCalled();
 });
 
-test("notifies sessions and spawns `bun . up --yes` detached", async () => {
+test("notifies sessions and spawns `bun . up --yes --notify-restart` detached", async () => {
   const unref = vi.fn();
   const spawn = vi.fn(() => ({
     stdin: null,
@@ -83,18 +83,9 @@ test("notifies sessions and spawns `bun . up --yes` detached", async () => {
     "⏳ Upgrading OpenKitten…",
     { message_thread_id: 7 },
   );
-  expect(insertValues).toHaveBeenNthCalledWith(1, {
-    chatId: 100,
-    threadId: 0,
-    message: "✅ OpenKitten upgraded",
-  });
-  expect(insertValues).toHaveBeenNthCalledWith(2, {
-    chatId: 200,
-    threadId: 7,
-    message: "✅ OpenKitten upgraded",
-  });
+  expect(insertValues).not.toHaveBeenCalled();
   expect(spawn).toHaveBeenCalledWith(
-    [process.execPath, process.argv[1], "up", "--yes"],
+    [process.execPath, process.argv[1], "up", "--yes", "--notify-restart"],
     expect.objectContaining({
       cwd: process.cwd(),
       stdin: "ignore",
@@ -106,7 +97,7 @@ test("notifies sessions and spawns `bun . up --yes` detached", async () => {
   expect(unref).toHaveBeenCalled();
 });
 
-test("skips restart notification when sendMessage fails", async () => {
+test("continues past a failed sendMessage without crashing", async () => {
   const unref = vi.fn();
   Object.assign(Bun, {
     spawn: vi.fn(() => ({
@@ -128,10 +119,6 @@ test("skips restart notification when sendMessage fails", async () => {
     database: database as never,
   });
   expect(result.kind).toBe("restarting");
-  expect(insertValues).toHaveBeenCalledTimes(1);
-  expect(insertValues).toHaveBeenCalledWith({
-    chatId: 200,
-    threadId: 0,
-    message: "✅ OpenKitten upgraded",
-  });
+  expect(sendMessage).toHaveBeenCalledTimes(2);
+  expect(insertValues).not.toHaveBeenCalled();
 });

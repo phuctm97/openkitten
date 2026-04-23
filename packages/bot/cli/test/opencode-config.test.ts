@@ -276,6 +276,11 @@ test("returns opencode config dir in env", async () => {
   });
 });
 
+test("exposes OpenKitten-vendored opencode binary path in env so scripts can invoke it reliably", async () => {
+  const config = await OpencodeConfig.create(profile);
+  expect(config.env.OPENKITTEN_OPENCODE_BIN).toBe(config.bin);
+});
+
 test("injects default runtime OpenCode plugins", async () => {
   const config = await OpencodeConfig.create(profile);
   const runtimeConfigContent = config.env.OPENCODE_CONFIG_CONTENT;

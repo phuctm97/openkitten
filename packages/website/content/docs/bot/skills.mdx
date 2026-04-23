@@ -5,7 +5,7 @@ description: Built-in skills and authoring new capabilities for the bot.
 
 A **skill** is a markdown file that teaches an agent *when* and *how* to perform a specialized task. Skills are discovered by description and only loaded into the agent's context when the current request matches.
 
-OpenKitten ships four built-in skills and integrates with the [skills.sh](https://skills.sh) ecosystem via `npx skills`. The **`skill-creator`** skill lets the agent author or install new skills from inside Telegram and auto-reload the bot to activate them — you never have to touch the filesystem.
+OpenKitten ships five built-in skills and integrates with the [skills.sh](https://skills.sh) ecosystem via `npx skills`. The **`skill-creator`** skill lets the agent author or install new skills from inside Telegram and auto-reload the bot to activate them — you never have to touch the filesystem.
 
 ## Ask the bot to learn something new
 
@@ -29,6 +29,7 @@ Installed at `~/.openkitten/profiles/<profile>/system/config/opencode/skills/`:
 
 <Cards>
   <Card title="custom-commands" description="Create, delete, and list custom Telegram /slash commands. Calls reload_commands on save." />
+  <Card title="opencode-sessions" description="List, inspect, and export OpenCode sessions from the shell. Used to discover session ids for session-bound schedules and to trace what a scheduled run actually did." />
   <Card title="schedules" description="Author, test, and debug scheduled tasks. Silent-by-default cron jobs with full run history." />
   <Card title="skill-creator" description="Create new skills, install from skills.sh, list, update, and remove." />
   <Card title="telegram-api" description="Administer the bot itself — change name/description/avatar, delete messages, call any Bot API method." />
@@ -37,6 +38,21 @@ Installed at `~/.openkitten/profiles/<profile>/system/config/opencode/skills/`:
 ### `custom-commands`
 
 Activated when the user asks to add, remove, or list Telegram slash commands. It writes `.md` files directly to `$OPENCODE_CONFIG_DIR/commands/` and calls the `reload_commands` MCP tool so changes take effect immediately — no restart required. See [Custom commands](/docs/bot/custom-commands).
+
+### `opencode-sessions`
+
+Activated when the user asks about OpenCode sessions — listing them, reading what happened inside one, or picking one to pin a schedule to. Uses the OpenKitten-vendored `opencode` CLI (exposed to the shell as `$OPENKITTEN_OPENCODE_BIN` so it's never confused with a user-installed standalone) plus `jq` for narrowing output.
+
+Typical flows:
+
+- List sessions: `"$OPENKITTEN_OPENCODE_BIN" session list --format json -n 10 | jq ...`
+- Export one session: `"$OPENKITTEN_OPENCODE_BIN" export <sessionID> | jq ...`
+- Sanitized export (redacts transcripts and file content): `"$OPENKITTEN_OPENCODE_BIN" export <sessionID> --sanitize`
+
+This skill pairs with [`schedules`](/docs/bot/schedules) for two workflows:
+
+1. **Binding a schedule to a session**: "every hour, continue the analysis in my invoices session" → this skill discovers/verifies the session id → `schedules` creates a session-bound schedule.
+2. **Inspecting what a run did**: `queue_run_get` returns a `runSessionId`; this skill exports that session to trace tool calls, reasoning, and intermediate messages that aren't captured by the terse run output.
 
 ### `schedules`
 
@@ -108,6 +124,7 @@ New skills **aren't** available until OpenCode restarts. The `skill-creator` ski
 Do not overwrite:
 
 - `custom-commands`
+- `opencode-sessions`
 - `schedules`
 - `skill-creator`
 - `telegram-api`

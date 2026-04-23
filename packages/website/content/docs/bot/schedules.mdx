@@ -3,7 +3,10 @@ title: Schedules
 description: Recurring and one-time tasks that fire on a cron pattern and report back to your chat.
 ---
 
-OpenKitten has a built-in scheduler that runs tasks on a cron expression. Each tick runs in a fresh isolated OpenCode session, the agent produces a final text response, and the result is either delivered to your Telegram chat or stays silent — based on what the task itself says.
+OpenKitten has a built-in scheduler that runs tasks on a cron expression. Schedules come in two flavors:
+
+- **Chat-bound** (default): each tick runs in a fresh isolated OpenCode session with no memory of prior runs. The final text response is delivered to your Telegram chat unless the task declares itself silent.
+- **Session-bound**: you pin the schedule to a specific OpenCode session id. Every tick sends the prompt into the same session, so context carries across runs. Telegram delivery piggybacks on the normal session-to-chat pipeline when the pinned session is mapped to a Telegram chat — otherwise the prompt can call `send_message` explicitly.
 
 You manage schedules by talking to the bot in natural language. The agent has the **`schedules`** skill active by default, so it knows how to use the right tools.
 
@@ -49,6 +52,18 @@ Every run — reported, silent, failed, cancelled, skipped — is persisted. Ask
 - *"Show me the full output of that one run."*
 
 The agent uses `queue_runs` and `queue_run_get` under the hood. You never see the tools — only the answer.
+
+### Inspecting the session a run executed in
+
+Each run also records the OpenCode session id it actually executed in, as `runSessionId`. Ask the agent things like:
+
+- *"Export the session for that failing run."*
+- *"What tool calls did yesterday's 9am run make?"*
+- *"Show me the full transcript of run `<id>`."*
+
+The agent resolves the `runSessionId` from the run record and exports the session via the local `opencode` CLI. For **chat-bound** schedules, each tick gets its own distinct session (aborted but preserved in OpenCode history). For **session-bound** schedules, every tick shares the pinned session — the export will include your own chat messages interleaved with every scheduled exchange, so the agent filters by message creation time.
+
+If `runSessionId` is null for a run, that run was finalized before a session was acquired (cancelled before pickup, skipped by overlap policy, or failed during session creation) — only `output` / `error` text is available.
 
 ## Managing schedules
 
@@ -96,9 +111,22 @@ Default is silent-on-failure (failures recorded but not shown in chat). Set to t
 
 ### maxRuntimeMs
 
-Cap how long the ephemeral agent gets before the run is finalized as `silent`. Default 15 minutes. Useful for fast checks where a hang would be noise:
+Cap how long the agent gets before the run is finalized as `silent`. Default 15 minutes. Useful for fast checks where a hang would be noise:
 
 *"Quick ping every minute — give up after 10 seconds."* → `maxRuntimeMs: 10000`.
+
+### sessionId
+
+Pin this schedule to a specific OpenCode session id. Every tick sends the prompt into the same session, so context carries across runs. Omitted by default (a fresh ephemeral session each tick).
+
+*"Run this check every hour **in the same session we've been debugging in**."* → `sessionId: "<that session's id>"`.
+
+Telegram delivery behavior differs:
+
+- **Pinned session is chat-mapped** (usually the case when you bind to "this session" from Telegram): replies are auto-forwarded to Telegram by the normal session-to-chat pipeline — exactly like any other reply in that session.
+- **Pinned session is external** (e.g. created outside Telegram via the `opencode` CLI): no auto-forwarding. The prompt must explicitly call the `send_message` tool if you want a Telegram ping.
+
+Use the [`opencode-sessions`](/docs/bot/skills#opencode-sessions) skill to discover valid session ids. *"List my recent OpenCode sessions."* or *"What was that session where I was working on invoices?"* will surface candidates.
 
 ## Cron reference
 
@@ -118,7 +146,7 @@ All expressions are interpreted in the schedule's timezone (default `UTC`).
 
 ## Prompt wording tips
 
-When you describe a task, the agent turns your words into the schedule's prompt. The prompt runs in a fresh ephemeral session each time — it doesn't carry any memory of your chat. A few things that help:
+When you describe a task, the agent turns your words into the schedule's prompt. For **chat-bound** schedules, the prompt runs in a fresh ephemeral session each time — it doesn't carry any memory of your chat. For **session-bound** schedules, the prompt is appended to the pinned session and can reference session state ("continue the analysis we started"), but should still be defensive because the session may be edited or truncated between ticks. A few things that help:
 
 **For tasks that often have nothing to report**, include the silent-contract. The agent does this automatically when you say things like "only tell me if …" or "check silently":
 
@@ -154,9 +182,9 @@ The agent uses these tools behind the scenes. You don't call them directly, but 
 
 | Tool | Purpose |
 |---|---|
-| `queue_schedule_create` | create a schedule |
-| `queue_schedule_list` | list schedules (filter by session or enabled flag) |
-| `queue_schedule_update` | change any field |
+| `queue_schedule_create` | create a schedule (optional `sessionId` pins it to a specific OpenCode session) |
+| `queue_schedule_list` | list schedules (filter by `enabled` flag; always scoped to caller chat/thread) |
+| `queue_schedule_update` | change any field, including rebinding / unbinding `sessionId` |
 | `queue_schedule_delete` | remove permanently (cascade-deletes run history) |
 | `queue_schedule_enable` / `_disable` | resume / pause without losing history |
 | `queue_schedule_trigger` | fire immediately, ignoring cron and overlap; returns the new `runId` directly |
@@ -165,8 +193,8 @@ The agent uses these tools behind the scenes. You don't call them directly, but 
 
 | Tool | Purpose |
 |---|---|
-| `queue_runs` | list runs with filters (`scheduleId`, `sessionId`, `status`, `trigger`, `since`, `until`, `limit`, `offset`) |
-| `queue_run_get` | fetch one run by id, full output / error |
+| `queue_runs` | list runs with filters (`scheduleId`, `runSessionId`, `status`, `trigger`, `since`, `until`, `limit`, `offset`) |
+| `queue_run_get` | fetch one run by id, full `output` / `error`, and the `runSessionId` for inspecting the run's OpenCode session |
 | `queue_run_cancel` | abort an in-flight run |
 
 ### Meta

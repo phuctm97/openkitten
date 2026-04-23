@@ -6,12 +6,55 @@ import * as clack from "@clack/prompts";
 import boxen from "boxen";
 import { defineCommand } from "citty";
 import { builtinCommands } from "~/lib/builtin-commands";
+import { Database } from "~/lib/database";
 import { getUserId } from "~/lib/get-user-id";
 import { grammySetCommands } from "~/lib/grammy-set-commands";
 import { listCommandFiles } from "~/lib/list-command-files";
 import { OpencodeConfig } from "~/lib/opencode-config";
 import { Profile } from "~/lib/profile";
+import * as schema from "~/lib/schema";
 import { TelegramConfig } from "~/lib/telegram-config";
+
+interface UpdateSourceResult {
+  readonly skipped: "dirty" | "non_main" | null;
+  readonly pulled: boolean;
+  readonly changed: boolean;
+}
+
+function pickRestartMessage(result: UpdateSourceResult): string {
+  if (result.skipped === "dirty") {
+    return "⚠️ Upgrade skipped: working tree has uncommitted changes";
+  }
+  if (result.skipped === "non_main") {
+    return "⚠️ Upgrade skipped: not on main branch";
+  }
+  if (result.pulled && !result.changed) {
+    return "ℹ️ OpenKitten is already on the latest version";
+  }
+  return "✅ OpenKitten upgraded";
+}
+
+function writeRestartNotifications(
+  profile: Profile,
+  result: UpdateSourceResult,
+): void {
+  using database = Database.create(profile);
+  const sessions = database.query.session
+    .findMany({ columns: { chatId: true, threadId: true } })
+    .sync();
+  if (sessions.length === 0) return;
+  const message = pickRestartMessage(result);
+  for (const row of sessions) {
+    database
+      .insert(schema.restartNotification)
+      .values({
+        chatId: row.chatId,
+        threadId: row.threadId,
+        message,
+      })
+      .run();
+  }
+}
 
 const repoDir = resolve(import.meta.dirname, "../../..");
 const botDir = resolve(import.meta.dirname, "..");
@@ -45,24 +88,38 @@ async function runTask(
   }
 }
 
-async function updateSource(): Promise<void> {
+async function updateSource(): Promise<UpdateSourceResult> {
   const branch = (
     await Bun.$`git rev-parse --abbrev-ref HEAD`.cwd(repoDir).text()
   ).trim();
   const status = (
     await Bun.$`git status --porcelain`.cwd(repoDir).text()
   ).trim();
+  let skipped: "dirty" | "non_main" | null = null;
+  let pulled = false;
+  let changed = false;
   if (branch !== "main") {
     clack.log.warn(`Skipped pull\n${styleText("dim", "Non-main branch")}`);
+    skipped = "non_main";
   } else if (status !== "") {
     clack.log.warn(`Skipped pull\n${styleText("dim", "Dirty worktree")}`);
+    skipped = "dirty";
   } else {
+    const beforeHead = (
+      await Bun.$`git rev-parse HEAD`.cwd(repoDir).text()
+    ).trim();
     await runTask("Pulling changes", "Pulled changes", ["git", "pull"]);
+    const afterHead = (
+      await Bun.$`git rev-parse HEAD`.cwd(repoDir).text()
+    ).trim();
+    pulled = true;
+    changed = beforeHead !== afterHead;
   }
   await runTask("Installing dependencies", "Installed dependencies", [
     "bun",
     "install",
   ]);
+  return { skipped, pulled, changed };
 }
 
 async function installLinux(profile: Profile): Promise<void> {
@@ -200,6 +257,11 @@ export const up = defineCommand({
       alias: ["y"],
       description: "Skip optional config actions.",
     },
+    "notify-restart": {
+      type: "boolean",
+      description:
+        "Write a per-session restart notification reflecting the pull outcome. Used internally by the Telegram /upgrade tool.",
+    },
   },
   run: async ({ args }) => {
     Bun.env.OPENKITTEN_ENABLE_UPGRADE = "1";
@@ -207,9 +269,12 @@ export const up = defineCommand({
       `${boxen(styleText("bold", "Source"), { padding: 1 })}\n`,
     );
     clack.intro("Update");
-    await updateSource();
+    const updateResult = await updateSource();
     clack.outro("Processed update");
     const profile = await Profile.create();
+    if (args["notify-restart"]) {
+      writeRestartNotifications(profile, updateResult);
+    }
     const telegramConfig = await TelegramConfig.create(profile, {
       skipActions: args.yes,
     });

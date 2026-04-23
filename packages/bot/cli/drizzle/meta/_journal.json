@@ -15,6 +15,13 @@
       "when": 1777000000000,
       "tag": "0001_schedule_chat_thread",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1776932377865,
+      "tag": "0002_lucky_kinsey_walden",
+      "breakpoints": true
     }
   ]
 }

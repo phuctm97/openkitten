@@ -35,6 +35,7 @@ function makeTask(overrides?: Partial<Scheduler.Task>): Scheduler.Task {
     overlap: "queue",
     notifyOnFailure: false,
     maxRuntimeMs: null,
+    sessionId: null,
     createdAt: 1,
     updatedAt: 1,
     ...overrides,
@@ -45,7 +46,7 @@ function makeRun(overrides?: Partial<Scheduler.Run>): Scheduler.Run {
   return {
     id: "run-1",
     scheduleId: "task-1",
-    sessionId: "sess-1",
+    runSessionId: "run-sess-1",
     queueJobId: "job-1",
     trigger: "cron",
     status: "reported",
@@ -245,6 +246,49 @@ describe("registerScheduleTools", () => {
     );
   });
 
+  test("queue_schedule_create forwards sessionId for session-bound schedules", async () => {
+    mockCreate.mockResolvedValue(makeTask({ sessionId: "opencode-sess-7" }));
+    const tools = setup();
+    await tools.get("queue_schedule_create")?.handler({
+      ...rawMetadataArg,
+      cron: "0 * * * *",
+      description: "d",
+      prompt: "p",
+      sessionId: "opencode-sess-7",
+    });
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "opencode-sess-7" }),
+    );
+  });
+
+  test("queue_schedule_update forwards a new sessionId to rebind the schedule", async () => {
+    mockUpdate.mockResolvedValue(makeTask({ sessionId: "opencode-sess-9" }));
+    const tools = setup();
+    await tools.get("queue_schedule_update")?.handler({
+      ...rawMetadataArg,
+      id: "00000000-0000-0000-0000-000000000000",
+      sessionId: "opencode-sess-9",
+    });
+    expect(mockUpdate).toHaveBeenCalledWith(
+      "00000000-0000-0000-0000-000000000000",
+      { sessionId: "opencode-sess-9" },
+    );
+  });
+
+  test("queue_schedule_update accepts null sessionId to unbind a schedule", async () => {
+    mockUpdate.mockResolvedValue(makeTask());
+    const tools = setup();
+    await tools.get("queue_schedule_update")?.handler({
+      ...rawMetadataArg,
+      id: "00000000-0000-0000-0000-000000000000",
+      sessionId: null,
+    });
+    expect(mockUpdate).toHaveBeenCalledWith(
+      "00000000-0000-0000-0000-000000000000",
+      { sessionId: null },
+    );
+  });
+
   test("queue_schedule_list returns filtered tasks", async () => {
     mockList.mockReturnValue([makeTask({ description: "Alpha" })]);
     const tools = setup();
@@ -388,6 +432,7 @@ describe("registerScheduleTools", () => {
     await tools.get("queue_runs")?.handler({
       ...rawMetadataArg,
       scheduleId: "task-1",
+      runSessionId: "opencode-sess-7",
       status: "reported",
       trigger: "cron",
       since: 1000,
@@ -397,6 +442,7 @@ describe("registerScheduleTools", () => {
     });
     expect(mockListRuns).toHaveBeenCalledWith({
       scheduleId: "task-1",
+      runSessionId: "opencode-sess-7",
       status: "reported",
       trigger: "cron",
       since: 1000,
@@ -461,6 +507,55 @@ describe("registerScheduleTools", () => {
       id: "run-1",
     })) as { content: { text: string }[] };
     expect(result.content[0]?.text).toContain("fail-msg");
+  });
+
+  test("queue_run_get surfaces runSessionId so the agent can export the run's session", async () => {
+    mockGetRun.mockReturnValueOnce(
+      makeRun({ runSessionId: "opencode-run-abc" }),
+    );
+    const tools = setup();
+    const result = (await tools.get("queue_run_get")?.handler({
+      ...rawMetadataArg,
+      id: "run-1",
+    })) as {
+      content: { text: string }[];
+      structuredContent: Scheduler.Run;
+    };
+    expect(result.structuredContent.runSessionId).toBe("opencode-run-abc");
+    expect(result.content[0]?.text).toContain("opencode-run-abc");
+  });
+
+  test("queue_run_get omits runSessionId line when the run never acquired a session", async () => {
+    mockGetRun.mockReturnValueOnce(
+      makeRun({ runSessionId: null, status: "cancelled", output: null }),
+    );
+    const tools = setup();
+    const result = (await tools.get("queue_run_get")?.handler({
+      ...rawMetadataArg,
+      id: "run-1",
+    })) as { content: { text: string }[] };
+    expect(result.content[0]?.text).not.toContain("Ran in session");
+  });
+
+  test("queue_runs shows runSessionId inline for each run that acquired one", async () => {
+    mockListRuns.mockReturnValue([
+      makeRun({ runSessionId: "opencode-run-A", finishedAt: 1500 }),
+      makeRun({
+        id: "run-2",
+        runSessionId: null,
+        output: null,
+        finishedAt: 1500,
+      }),
+    ]);
+    const tools = setup();
+    const result = (await tools.get("queue_runs")?.handler(rawMetadataArg)) as {
+      content: { text: string }[];
+    };
+    expect(result.content[0]?.text).toContain("runSession=opencode-run-A");
+    const lines = result.content[0]?.text.split("\n") ?? [];
+    expect(lines.find((line) => line.includes("run-2"))).not.toContain(
+      "runSession=",
+    );
   });
 
   test("queue_run_cancel calls scheduler.cancelRun", async () => {

@@ -1,8 +1,9 @@
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { BotAPIServer } from "~/lib/bot-api-server";
+import { logger } from "~/lib/logger";
 import type { Profile } from "~/lib/profile";
 
 const BOT_TOKEN = "123456789:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi";
@@ -73,4 +74,19 @@ test("returns 404 for non-rpc path", async () => {
 test("dispose stops the server", async () => {
   const api = await BotAPIServer.create(profile, BOT_TOKEN);
   api[Symbol.dispose]();
+});
+
+test("dispose logs a warning when the config file is already gone", async () => {
+  const api = await BotAPIServer.create(profile, BOT_TOKEN);
+  const configPath = join(profile.xdgState, "openkitten", "bot-api.json");
+  await unlink(configPath);
+  const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+  api[Symbol.dispose]();
+  await vi.waitFor(() => {
+    expect(warn).toHaveBeenCalledWith(
+      "Failed to delete bot API config",
+      expect.any(Error),
+    );
+  });
+  warn.mockRestore();
 });

@@ -145,6 +145,7 @@ export class Scheduler implements Disposable {
         overlap,
         notifyOnFailure: input.notifyOnFailure ?? false,
         maxRuntimeMs: input.maxRuntimeMs ?? null,
+        sessionId: input.sessionId ?? null,
       })
       .run();
     try {
@@ -201,6 +202,7 @@ export class Scheduler implements Disposable {
       ...(input.maxRuntimeMs !== undefined && {
         maxRuntimeMs: input.maxRuntimeMs,
       }),
+      ...(input.sessionId !== undefined && { sessionId: input.sessionId }),
     };
     const cronChanged =
       next.cron !== existing.cron || next.timezone !== existing.timezone;
@@ -214,6 +216,7 @@ export class Scheduler implements Disposable {
         overlap: next.overlap,
         notifyOnFailure: next.notifyOnFailure,
         maxRuntimeMs: next.maxRuntimeMs,
+        sessionId: next.sessionId,
       })
       .where(eq(scheduleTable.id, id))
       .run();
@@ -322,7 +325,6 @@ export class Scheduler implements Disposable {
       .values({
         id: runId,
         scheduleId: existing.id,
-        sessionId: this.#resolveSessionId(existing),
         trigger: "manual",
         status: "pending",
         startedAt: new Date(),
@@ -355,8 +357,8 @@ export class Scheduler implements Disposable {
     const conditions = [];
     if (filter.scheduleId !== undefined)
       conditions.push(eq(scheduleRunTable.scheduleId, filter.scheduleId));
-    if (filter.sessionId !== undefined)
-      conditions.push(eq(scheduleRunTable.sessionId, filter.sessionId));
+    if (filter.runSessionId !== undefined)
+      conditions.push(eq(scheduleRunTable.runSessionId, filter.runSessionId));
     if (filter.status !== undefined)
       conditions.push(eq(scheduleRunTable.status, filter.status));
     if (filter.trigger !== undefined)
@@ -421,6 +423,9 @@ export class Scheduler implements Disposable {
   }
 
   #resolveSessionId(row: ScheduleRow): string | null {
+    if (row.sessionId) {
+      return this.#existingSessions.check(row.sessionId) ? row.sessionId : null;
+    }
     const location = {
       chatId: row.chatId,
       threadId: row.threadId || undefined,
@@ -442,6 +447,7 @@ export class Scheduler implements Disposable {
       overlap: parseOverlap(row.overlap),
       notifyOnFailure: row.notifyOnFailure,
       maxRuntimeMs: row.maxRuntimeMs,
+      sessionId: row.sessionId,
       createdAt: row.createdAt.getTime(),
       updatedAt: row.updatedAt.getTime(),
     };
@@ -451,7 +457,7 @@ export class Scheduler implements Disposable {
     return {
       id: row.id,
       scheduleId: row.scheduleId,
-      sessionId: row.sessionId,
+      runSessionId: row.runSessionId,
       queueJobId: row.queueJobId,
       trigger: parseRunTrigger(row.trigger),
       status: parseRunStatus(row.status),
@@ -535,7 +541,6 @@ export class Scheduler implements Disposable {
         .values({
           id: randomUUID(),
           scheduleId: row.id,
-          sessionId: this.#resolveSessionId(row),
           queueJobId,
           trigger: "cron",
           status: "skipped",
@@ -648,7 +653,6 @@ export class Scheduler implements Disposable {
             .values({
               id: runId,
               scheduleId: scheduleRow.id,
-              sessionId: this.#resolveSessionId(scheduleRow),
               queueJobId: job.id,
               trigger: isManualTrigger ? "manual" : "cron",
               status: "running",
@@ -690,24 +694,36 @@ export class Scheduler implements Disposable {
       ? { message_thread_id: scheduleRow.threadId }
       : {};
     const signal = this.#queue.getSignal(job.id);
+    const boundSessionId = scheduleRow.sessionId;
     let ephemeralId: string | undefined;
     try {
-      const created = await this.#opencodeClient.session.create(
-        {},
-        { throwOnError: true },
-      );
-      ephemeralId = created.data.id;
+      let targetSessionId: string;
+      if (boundSessionId) {
+        targetSessionId = boundSessionId;
+      } else {
+        const created = await this.#opencodeClient.session.create(
+          {},
+          { throwOnError: true },
+        );
+        ephemeralId = created.data.id;
+        targetSessionId = ephemeralId;
+      }
+      this.#database
+        .update(scheduleRunTable)
+        .set({ runSessionId: targetSessionId })
+        .where(eq(scheduleRunTable.id, runId))
+        .run();
       if (signal?.aborted) {
         this.#finalizeRun(runId, "cancelled", null, null);
         return;
       }
-      const userSessionId = this.#resolveSessionId(scheduleRow);
-      const agent = userSessionId
-        ? getSessionAgent(this.#database, userSessionId)
+      const agentLookupId = this.#resolveSessionId(scheduleRow);
+      const agent = agentLookupId
+        ? getSessionAgent(this.#database, agentLookupId)
         : undefined;
       await this.#opencodeClient.session.promptAsync(
         {
-          sessionID: ephemeralId,
+          sessionID: targetSessionId,
           ...(agent && { agent }),
           parts: [
             { type: "text", text: `${promptPrefix}${scheduleRow.prompt}` },
@@ -715,7 +731,11 @@ export class Scheduler implements Disposable {
         },
         { throwOnError: true },
       );
-      const text = await this.#waitForText(ephemeralId, scheduleRow, signal);
+      const text = await this.#waitForText(
+        targetSessionId,
+        scheduleRow,
+        signal,
+      );
       if (signal?.aborted) {
         this.#finalizeRun(runId, "cancelled", text, null);
         return;
@@ -724,7 +744,9 @@ export class Scheduler implements Disposable {
         this.#finalizeRun(runId, "silent", text, null);
         return;
       }
-      await this.#bot.api.sendMessage(scheduleRow.chatId, text, sendOptions);
+      if (!boundSessionId) {
+        await this.#bot.api.sendMessage(scheduleRow.chatId, text, sendOptions);
+      }
       this.#finalizeRun(runId, "reported", text, null);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -988,6 +1010,7 @@ export namespace Scheduler {
     readonly overlap?: Overlap;
     readonly notifyOnFailure?: boolean;
     readonly maxRuntimeMs?: number;
+    readonly sessionId?: string;
   }
 
   export interface UpdateInput {
@@ -998,6 +1021,7 @@ export namespace Scheduler {
     readonly overlap?: Overlap;
     readonly notifyOnFailure?: boolean;
     readonly maxRuntimeMs?: number | null;
+    readonly sessionId?: string | null;
   }
 
   export interface ListFilter {
@@ -1008,7 +1032,7 @@ export namespace Scheduler {
 
   export interface RunFilter {
     readonly scheduleId?: string;
-    readonly sessionId?: string;
+    readonly runSessionId?: string;
     readonly status?: RunStatus;
     readonly trigger?: RunTrigger;
     readonly since?: number;
@@ -1037,6 +1061,7 @@ export namespace Scheduler {
     readonly overlap: Overlap;
     readonly notifyOnFailure: boolean;
     readonly maxRuntimeMs: number | null;
+    readonly sessionId: string | null;
     readonly createdAt: number;
     readonly updatedAt: number;
   }
@@ -1044,7 +1069,7 @@ export namespace Scheduler {
   export interface Run {
     readonly id: string;
     readonly scheduleId: string;
-    readonly sessionId: string | null;
+    readonly runSessionId: string | null;
     readonly queueJobId: string | null;
     readonly trigger: RunTrigger;
     readonly status: RunStatus;

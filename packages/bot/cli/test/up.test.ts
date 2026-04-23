@@ -19,6 +19,19 @@ vi.mock("~/lib/list-command-files", () => ({
   listCommandFiles: vi.fn(async () => []),
 }));
 
+const { mockDatabaseCreate, mockDatabaseInsertValues, mockDatabaseSessions } =
+  vi.hoisted(() => ({
+    mockDatabaseCreate: vi.fn(),
+    mockDatabaseInsertValues: vi.fn(),
+    mockDatabaseSessions: [] as { chatId: number; threadId: number }[],
+  }));
+
+vi.mock("~/lib/database", () => ({
+  Database: {
+    create: mockDatabaseCreate,
+  },
+}));
+
 vi.mock("node:fs/promises", () => ({
   mkdir: vi.fn(),
 }));
@@ -104,6 +117,19 @@ beforeEach(() => {
   });
   delete Bun.env.OPENKITTEN_PROFILE;
   delete Bun.env.OPENKITTEN_ENABLE_UPGRADE;
+  mockDatabaseSessions.length = 0;
+  mockDatabaseInsertValues.mockReset();
+  mockDatabaseInsertValues.mockReturnValue({ run: vi.fn() });
+  mockDatabaseCreate.mockReset();
+  mockDatabaseCreate.mockImplementation(() => ({
+    query: {
+      session: {
+        findMany: () => ({ sync: () => [...mockDatabaseSessions] }),
+      },
+    },
+    insert: () => ({ values: mockDatabaseInsertValues }),
+    [Symbol.dispose]: vi.fn(),
+  }));
 });
 
 afterEach(() => {
@@ -175,6 +201,8 @@ test("installs on darwin with default profile", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")))
     .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
@@ -202,6 +230,8 @@ test("installs on darwin with custom profile", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")))
     .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
@@ -220,6 +250,8 @@ test("restarts on darwin when already running", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")))
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(1)))
@@ -239,6 +271,8 @@ test("proceeds after darwin bootout timeout", async () => {
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")))
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
@@ -400,6 +434,110 @@ test("pushes builtin commands plus listCommandFiles output to Telegram", async (
       { command: "weather", description: "Check the weather" },
     ]),
   );
+});
+
+test("--notify-restart writes '✅ OpenKitten upgraded' when git pull changes HEAD", async () => {
+  mockDatabaseSessions.push(
+    { chatId: 100, threadId: 0 },
+    { chatId: 200, threadId: 7 },
+  );
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: ["--yes", "--notify-restart"] });
+  expect(mockDatabaseInsertValues).toHaveBeenNthCalledWith(1, {
+    chatId: 100,
+    threadId: 0,
+    message: "✅ OpenKitten upgraded",
+  });
+  expect(mockDatabaseInsertValues).toHaveBeenNthCalledWith(2, {
+    chatId: 200,
+    threadId: 7,
+    message: "✅ OpenKitten upgraded",
+  });
+});
+
+test("--notify-restart writes 'already on the latest version' when git pull finds nothing new", async () => {
+  mockDatabaseSessions.push({ chatId: 300, threadId: 0 });
+  const sameSha = "abc123\n";
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0, sameSha)))
+    .mockReturnValueOnce(chainable(shellResult(0, sameSha)))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: ["--yes", "--notify-restart"] });
+  expect(mockDatabaseInsertValues).toHaveBeenCalledWith({
+    chatId: 300,
+    threadId: 0,
+    message: "ℹ️ OpenKitten is already on the latest version",
+  });
+});
+
+test("--notify-restart writes 'upgrade skipped: dirty' when the working tree is dirty", async () => {
+  mockDatabaseSessions.push({ chatId: 400, threadId: 0 });
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, " M file.ts\n")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: ["--yes", "--notify-restart"] });
+  expect(mockDatabaseInsertValues).toHaveBeenCalledWith({
+    chatId: 400,
+    threadId: 0,
+    message: "⚠️ Upgrade skipped: working tree has uncommitted changes",
+  });
+});
+
+test("--notify-restart writes 'upgrade skipped: non-main' when not on main", async () => {
+  mockDatabaseSessions.push({ chatId: 500, threadId: 0 });
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "feature\n")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: ["--yes", "--notify-restart"] });
+  expect(mockDatabaseInsertValues).toHaveBeenCalledWith({
+    chatId: 500,
+    threadId: 0,
+    message: "⚠️ Upgrade skipped: not on main branch",
+  });
+});
+
+test("--notify-restart writes nothing when no sessions exist", async () => {
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: ["--yes", "--notify-restart"] });
+  expect(mockDatabaseInsertValues).not.toHaveBeenCalled();
+});
+
+test("without --notify-restart, the database is not opened and no notifications are written", async () => {
+  mockDatabaseSessions.push({ chatId: 600, threadId: 0 });
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")))
+    .mockReturnValueOnce(chainable(shellResult(1)))
+    .mockReturnValueOnce(chainable(shellResult(0)))
+    .mockReturnValueOnce(chainable(shellResult(0)));
+  await runCommand(up, { rawArgs: ["--yes"] });
+  expect(mockDatabaseCreate).not.toHaveBeenCalled();
+  expect(mockDatabaseInsertValues).not.toHaveBeenCalled();
 });
 
 test("pushes only builtin commands when commands dir is empty", async () => {
