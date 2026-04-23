@@ -1,52 +1,6 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { upgradeOpenkitten } from "~/lib/upgrade-openkitten";
 
-interface SpawnScript {
-  readonly match: readonly string[];
-  readonly stdout?: string;
-  readonly stderr?: string;
-  readonly exitCode?: number;
-}
-
-function encode(text: string): Uint8Array {
-  return new TextEncoder().encode(text);
-}
-
-function streamFor(text: string): ReadableStream<Uint8Array> {
-  return new ReadableStream({
-    start(controller) {
-      if (text) controller.enqueue(encode(text));
-      controller.close();
-    },
-  });
-}
-
-function cmdMatches(cmd: readonly string[], match: readonly string[]): boolean {
-  if (cmd.length !== match.length) return false;
-  return cmd.every((part, i) => part === match[i]);
-}
-
-function mockSpawn(scripts: readonly SpawnScript[]): ReturnType<typeof vi.fn> {
-  const queue = [...scripts];
-  return vi.fn((cmd: readonly string[]) => {
-    const script = queue.shift();
-    if (!script) {
-      throw new Error(`Unexpected spawn (queue empty): ${cmd.join(" ")}`);
-    }
-    if (!cmdMatches(cmd, script.match)) {
-      throw new Error(
-        `Unexpected spawn: got ${cmd.join(" ")}, expected ${script.match.join(" ")}`,
-      );
-    }
-    return {
-      stdout: streamFor(script.stdout ?? ""),
-      stderr: streamFor(script.stderr ?? ""),
-      exited: Promise.resolve(script.exitCode ?? 0),
-      unref: vi.fn(),
-    };
-  });
-}
-
 function mockDatabase(
   sessions: readonly { chatId: number; threadId: number }[] = [],
 ) {
@@ -68,115 +22,45 @@ function mockBot() {
 }
 
 const originalSpawn = Bun.spawn;
-const originalPlatform = process.platform;
-const originalGetUid = process.getuid;
 
 beforeEach(() => {
-  Bun.env["OPENKITTEN_SERVICE_MANAGED"] = "1";
-  Bun.env["OPENKITTEN_PROFILE"] = "default";
-  Object.defineProperty(process, "getuid", {
-    value: () => 1000,
-    configurable: true,
-  });
+  Bun.env["OPENKITTEN_ENABLE_UPGRADE"] = "1";
 });
 
 afterEach(() => {
   Object.assign(Bun, { spawn: originalSpawn });
-  Object.defineProperty(process, "platform", {
-    value: originalPlatform,
-    configurable: true,
-  });
-  Object.defineProperty(process, "getuid", {
-    value: originalGetUid,
-    configurable: true,
-  });
-  delete Bun.env["OPENKITTEN_SERVICE_MANAGED"];
-  delete Bun.env["OPENKITTEN_PROFILE"];
+  delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
 });
 
-test("throws when branch is not main", async () => {
-  Object.assign(Bun, {
-    spawn: mockSpawn([
-      { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "dev\n" },
-    ]),
-  });
-  const { bot } = mockBot();
-  const { database } = mockDatabase();
-  await expect(
-    upgradeOpenkitten({ bot: bot as never, database: database as never }),
-  ).rejects.toMatchObject({
-    name: "UpgradeOpenkittenError",
-    message: expect.stringContaining("non-main branch: dev"),
-  });
-});
-
-test("throws when worktree is dirty", async () => {
-  Object.assign(Bun, {
-    spawn: mockSpawn([
-      { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
-      { match: ["git", "status", "--porcelain"], stdout: " M file.ts\n" },
-    ]),
-  });
-  const { bot } = mockBot();
-  const { database } = mockDatabase();
-  await expect(
-    upgradeOpenkitten({ bot: bot as never, database: database as never }),
-  ).rejects.toMatchObject({
-    name: "UpgradeOpenkittenError",
-    message: expect.stringContaining("dirty worktree"),
-  });
-});
-
-test("returns up-to-date when HEAD matches origin/main", async () => {
-  Object.assign(Bun, {
-    spawn: mockSpawn([
-      { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
-      { match: ["git", "status", "--porcelain"], stdout: "" },
-      { match: ["git", "fetch", "origin", "main"], stdout: "" },
-      { match: ["git", "rev-parse", "HEAD"], stdout: `${"a".repeat(40)}\n` },
-      {
-        match: ["git", "rev-parse", "origin/main"],
-        stdout: `${"a".repeat(40)}\n`,
-      },
-    ]),
-  });
+test("throws when OPENKITTEN_ENABLE_UPGRADE is not set", async () => {
+  delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
+  const spawn = vi.fn();
+  Object.assign(Bun, { spawn });
   const { bot, sendMessage } = mockBot();
-  const { database } = mockDatabase();
-  const result = await upgradeOpenkitten({
-    bot: bot as never,
-    database: database as never,
+  const { database, insertValues } = mockDatabase([
+    { chatId: 100, threadId: 0 },
+  ]);
+  await expect(
+    upgradeOpenkitten({ bot: bot as never, database: database as never }),
+  ).rejects.toMatchObject({
+    name: "UpgradeOpenkittenError",
+    message: expect.stringContaining("Upgrade is disabled"),
   });
-  expect(result).toEqual({ kind: "up-to-date", sha: "aaaaaaa" });
+  expect(spawn).not.toHaveBeenCalled();
   expect(sendMessage).not.toHaveBeenCalled();
+  expect(insertValues).not.toHaveBeenCalled();
 });
 
-test("pulls, installs, notifies sessions, and returns restarting", async () => {
-  Object.defineProperty(process, "platform", {
-    value: "darwin",
-    configurable: true,
-  });
-  const previous = "1".repeat(40);
-  const upstream = "2".repeat(40);
-  const next = "2".repeat(40);
-  Object.assign(Bun, {
-    spawn: mockSpawn([
-      { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
-      { match: ["git", "status", "--porcelain"], stdout: "" },
-      { match: ["git", "fetch", "origin", "main"], stdout: "" },
-      { match: ["git", "rev-parse", "HEAD"], stdout: `${previous}\n` },
-      { match: ["git", "rev-parse", "origin/main"], stdout: `${upstream}\n` },
-      { match: ["git", "pull", "--ff-only", "origin", "main"], stdout: "" },
-      { match: ["bun", "install"], stdout: "" },
-      { match: ["git", "rev-parse", "HEAD"], stdout: `${next}\n` },
-      {
-        match: [
-          "sh",
-          "-c",
-          "sleep 2 && launchctl kickstart -k gui/1000/com.openkitten.profiles.default",
-        ],
-      },
-    ]),
-  });
+test("notifies sessions and spawns `bun . up --yes` detached", async () => {
+  const unref = vi.fn();
+  const spawn = vi.fn(() => ({
+    stdin: null,
+    stdout: null,
+    stderr: null,
+    exited: Promise.resolve(0),
+    unref,
+  }));
+  Object.assign(Bun, { spawn });
   const { bot, sendMessage } = mockBot();
   const { database, insertValues } = mockDatabase([
     { chatId: 100, threadId: 0 },
@@ -186,11 +70,7 @@ test("pulls, installs, notifies sessions, and returns restarting", async () => {
     bot: bot as never,
     database: database as never,
   });
-  expect(result).toEqual({
-    kind: "restarting",
-    previousSha: "1111111",
-    nextSha: "2222222",
-  });
+  expect(result).toEqual({ kind: "restarting" });
   expect(sendMessage).toHaveBeenNthCalledWith(
     1,
     100,
@@ -206,40 +86,36 @@ test("pulls, installs, notifies sessions, and returns restarting", async () => {
   expect(insertValues).toHaveBeenNthCalledWith(1, {
     chatId: 100,
     threadId: 0,
-    message: "✅ Upgraded 1111111 → 2222222",
+    message: "✅ OpenKitten upgraded",
   });
   expect(insertValues).toHaveBeenNthCalledWith(2, {
     chatId: 200,
     threadId: 7,
-    message: "✅ Upgraded 1111111 → 2222222",
+    message: "✅ OpenKitten upgraded",
   });
+  expect(spawn).toHaveBeenCalledWith(
+    [process.execPath, process.argv[1], "up", "--yes"],
+    expect.objectContaining({
+      cwd: process.cwd(),
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      detached: true,
+    }),
+  );
+  expect(unref).toHaveBeenCalled();
 });
 
 test("skips restart notification when sendMessage fails", async () => {
-  Object.defineProperty(process, "platform", {
-    value: "darwin",
-    configurable: true,
-  });
-  const previous = "1".repeat(40);
-  const next = "3".repeat(40);
+  const unref = vi.fn();
   Object.assign(Bun, {
-    spawn: mockSpawn([
-      { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
-      { match: ["git", "status", "--porcelain"], stdout: "" },
-      { match: ["git", "fetch", "origin", "main"], stdout: "" },
-      { match: ["git", "rev-parse", "HEAD"], stdout: `${previous}\n` },
-      { match: ["git", "rev-parse", "origin/main"], stdout: `${next}\n` },
-      { match: ["git", "pull", "--ff-only", "origin", "main"], stdout: "" },
-      { match: ["bun", "install"], stdout: "" },
-      { match: ["git", "rev-parse", "HEAD"], stdout: `${next}\n` },
-      {
-        match: [
-          "sh",
-          "-c",
-          "sleep 2 && launchctl kickstart -k gui/1000/com.openkitten.profiles.default",
-        ],
-      },
-    ]),
+    spawn: vi.fn(() => ({
+      stdin: null,
+      stdout: null,
+      stderr: null,
+      exited: Promise.resolve(0),
+      unref,
+    })),
   });
   const { bot, sendMessage } = mockBot();
   sendMessage.mockRejectedValueOnce(new Error("blocked"));
@@ -256,269 +132,6 @@ test("skips restart notification when sendMessage fails", async () => {
   expect(insertValues).toHaveBeenCalledWith({
     chatId: 200,
     threadId: 0,
-    message: "✅ Upgraded 1111111 → 3333333",
+    message: "✅ OpenKitten upgraded",
   });
-});
-
-test("wraps non-zero git exit into UpgradeOpenkittenError with stderr", async () => {
-  Object.assign(Bun, {
-    spawn: mockSpawn([
-      { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
-      { match: ["git", "status", "--porcelain"], stdout: "" },
-      {
-        match: ["git", "fetch", "origin", "main"],
-        stderr: "fatal: offline\n",
-        exitCode: 128,
-      },
-    ]),
-  });
-  const { bot } = mockBot();
-  const { database } = mockDatabase();
-  await expect(
-    upgradeOpenkitten({ bot: bot as never, database: database as never }),
-  ).rejects.toMatchObject({
-    name: "UpgradeOpenkittenError",
-    message: expect.stringContaining("fatal: offline"),
-  });
-});
-
-test("falls back to stdout when stderr is empty on failure", async () => {
-  Object.assign(Bun, {
-    spawn: mockSpawn([
-      { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
-      { match: ["git", "status", "--porcelain"], stdout: "" },
-      {
-        match: ["git", "fetch", "origin", "main"],
-        stdout: "something happened\n",
-        stderr: "",
-        exitCode: 1,
-      },
-    ]),
-  });
-  const { bot } = mockBot();
-  const { database } = mockDatabase();
-  await expect(
-    upgradeOpenkitten({ bot: bot as never, database: database as never }),
-  ).rejects.toMatchObject({
-    name: "UpgradeOpenkittenError",
-    message: expect.stringContaining("something happened"),
-  });
-});
-
-test("wraps non-zero exit with no output into UpgradeOpenkittenError with exit code", async () => {
-  Object.assign(Bun, {
-    spawn: mockSpawn([
-      { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
-      { match: ["git", "status", "--porcelain"], stdout: "" },
-      { match: ["git", "fetch", "origin", "main"], exitCode: 1 },
-    ]),
-  });
-  const { bot } = mockBot();
-  const { database } = mockDatabase();
-  await expect(
-    upgradeOpenkitten({ bot: bot as never, database: database as never }),
-  ).rejects.toMatchObject({
-    name: "UpgradeOpenkittenError",
-    message: expect.stringContaining("exited with code 1"),
-  });
-});
-
-test("spawns detached respawner when not service-managed", async () => {
-  delete Bun.env["OPENKITTEN_SERVICE_MANAGED"];
-  const previous = "1".repeat(40);
-  const next = "2".repeat(40);
-  const unref = vi.fn();
-  const spawn = vi.fn((cmd: readonly string[]) => {
-    if (cmd[0] === process.execPath) {
-      return { stdout: null, stderr: null, exited: Promise.resolve(0), unref };
-    }
-    const script = spawnQueue.shift();
-    if (!script || !cmdMatches(cmd, script.match)) {
-      throw new Error(`Unexpected spawn: ${cmd.join(" ")}`);
-    }
-    return {
-      stdout: streamFor(script.stdout ?? ""),
-      stderr: streamFor(script.stderr ?? ""),
-      exited: Promise.resolve(script.exitCode ?? 0),
-      unref: vi.fn(),
-    };
-  });
-  const spawnQueue: SpawnScript[] = [
-    { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
-    { match: ["git", "status", "--porcelain"], stdout: "" },
-    { match: ["git", "fetch", "origin", "main"], stdout: "" },
-    { match: ["git", "rev-parse", "HEAD"], stdout: `${previous}\n` },
-    { match: ["git", "rev-parse", "origin/main"], stdout: `${next}\n` },
-    { match: ["git", "pull", "--ff-only", "origin", "main"], stdout: "" },
-    { match: ["bun", "install"], stdout: "" },
-    { match: ["git", "rev-parse", "HEAD"], stdout: `${next}\n` },
-  ];
-  Object.assign(Bun, { spawn });
-  const { bot } = mockBot();
-  const { database } = mockDatabase([{ chatId: 100, threadId: 0 }]);
-  const result = await upgradeOpenkitten({
-    bot: bot as never,
-    database: database as never,
-  });
-  expect(result.kind).toBe("restarting");
-  expect(spawn).toHaveBeenCalledWith(
-    [process.execPath, process.argv[1], "serve", "--yes"],
-    expect.objectContaining({
-      cwd: process.cwd(),
-      stdin: "ignore",
-      stdout: "inherit",
-      stderr: "inherit",
-    }),
-  );
-  expect(unref).toHaveBeenCalled();
-});
-
-function setPlatform(value: NodeJS.Platform): void {
-  Object.defineProperty(process, "platform", { value, configurable: true });
-}
-
-function runServiceManagedRespawn(
-  platform: NodeJS.Platform,
-): ReturnType<typeof vi.fn> {
-  setPlatform(platform);
-  const previous = "1".repeat(40);
-  const next = "2".repeat(40);
-  const unref = vi.fn();
-  const scripts: SpawnScript[] = [
-    { match: ["git", "rev-parse", "--abbrev-ref", "HEAD"], stdout: "main\n" },
-    { match: ["git", "status", "--porcelain"], stdout: "" },
-    { match: ["git", "fetch", "origin", "main"], stdout: "" },
-    { match: ["git", "rev-parse", "HEAD"], stdout: `${previous}\n` },
-    { match: ["git", "rev-parse", "origin/main"], stdout: `${next}\n` },
-    { match: ["git", "pull", "--ff-only", "origin", "main"], stdout: "" },
-    { match: ["bun", "install"], stdout: "" },
-    { match: ["git", "rev-parse", "HEAD"], stdout: `${next}\n` },
-  ];
-  const spawn = vi.fn((cmd: readonly string[]) => {
-    if (cmd[0] === "sh" || cmd[0] === "cmd") {
-      return { stdout: null, stderr: null, exited: Promise.resolve(0), unref };
-    }
-    const script = scripts.shift();
-    if (!script || !cmdMatches(cmd, script.match)) {
-      throw new Error(`Unexpected spawn: ${cmd.join(" ")}`);
-    }
-    return {
-      stdout: streamFor(script.stdout ?? ""),
-      stderr: streamFor(script.stderr ?? ""),
-      exited: Promise.resolve(script.exitCode ?? 0),
-      unref: vi.fn(),
-    };
-  });
-  Object.assign(Bun, { spawn });
-  return spawn;
-}
-
-test("spawns launchctl kickstart on darwin when service-managed", async () => {
-  const spawn = runServiceManagedRespawn("darwin");
-  const { bot } = mockBot();
-  const { database } = mockDatabase([{ chatId: 100, threadId: 0 }]);
-  const result = await upgradeOpenkitten({
-    bot: bot as never,
-    database: database as never,
-  });
-  expect(result.kind).toBe("restarting");
-  expect(spawn).toHaveBeenCalledWith(
-    [
-      "sh",
-      "-c",
-      "sleep 2 && launchctl kickstart -k gui/1000/com.openkitten.profiles.default",
-    ],
-    expect.objectContaining({
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-      detached: true,
-    }),
-  );
-});
-
-test("spawns systemctl restart on linux when service-managed", async () => {
-  const spawn = runServiceManagedRespawn("linux");
-  const { bot } = mockBot();
-  const { database } = mockDatabase([{ chatId: 100, threadId: 0 }]);
-  const result = await upgradeOpenkitten({
-    bot: bot as never,
-    database: database as never,
-  });
-  expect(result.kind).toBe("restarting");
-  expect(spawn).toHaveBeenCalledWith(
-    [
-      "sh",
-      "-c",
-      "sleep 2 && systemctl --user restart openkitten-default-profile",
-    ],
-    expect.objectContaining({
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-      detached: true,
-    }),
-  );
-});
-
-test("spawns schtasks end/run on win32 when service-managed", async () => {
-  const spawn = runServiceManagedRespawn("win32");
-  const { bot } = mockBot();
-  const { database } = mockDatabase([{ chatId: 100, threadId: 0 }]);
-  const result = await upgradeOpenkitten({
-    bot: bot as never,
-    database: database as never,
-  });
-  expect(result.kind).toBe("restarting");
-  expect(spawn).toHaveBeenCalledWith(
-    [
-      "cmd",
-      "/C",
-      'timeout /T 2 /NOBREAK > NUL && schtasks /End /TN "\\OpenKitten\\Profiles\\default" & schtasks /Run /TN "\\OpenKitten\\Profiles\\default"',
-    ],
-    expect.objectContaining({
-      stdin: "ignore",
-      stdout: "ignore",
-      stderr: "ignore",
-      detached: true,
-    }),
-  );
-});
-
-test("throws when service-managed without OPENKITTEN_PROFILE", async () => {
-  delete Bun.env["OPENKITTEN_PROFILE"];
-  const spawn = mockSpawn([]);
-  Object.assign(Bun, { spawn });
-  const { bot, sendMessage } = mockBot();
-  const { database, insertValues } = mockDatabase([
-    { chatId: 100, threadId: 0 },
-  ]);
-  await expect(
-    upgradeOpenkitten({ bot: bot as never, database: database as never }),
-  ).rejects.toMatchObject({
-    name: "UpgradeOpenkittenError",
-    message: expect.stringContaining("OPENKITTEN_PROFILE must be set"),
-  });
-  expect(spawn).not.toHaveBeenCalled();
-  expect(sendMessage).not.toHaveBeenCalled();
-  expect(insertValues).not.toHaveBeenCalled();
-});
-
-test("throws when service-managed on unsupported platform", async () => {
-  setPlatform("freebsd");
-  const spawn = mockSpawn([]);
-  Object.assign(Bun, { spawn });
-  const { bot, sendMessage } = mockBot();
-  const { database, insertValues } = mockDatabase([
-    { chatId: 100, threadId: 0 },
-  ]);
-  await expect(
-    upgradeOpenkitten({ bot: bot as never, database: database as never }),
-  ).rejects.toMatchObject({
-    name: "UpgradeOpenkittenError",
-    message: expect.stringContaining("freebsd is not supported"),
-  });
-  expect(spawn).not.toHaveBeenCalled();
-  expect(sendMessage).not.toHaveBeenCalled();
-  expect(insertValues).not.toHaveBeenCalled();
 });
