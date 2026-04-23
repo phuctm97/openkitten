@@ -86,10 +86,11 @@ vi.mock("bunqueue/client", () => ({
   },
 }));
 
-const mockGetSessionAgent = vi.fn<() => string | undefined>();
+const mockGetSessionAgent = vi.fn<(sessionId: string) => string | undefined>();
 
 vi.mock("~/lib/get-session-agent", () => ({
-  getSessionAgent: () => mockGetSessionAgent(),
+  getSessionAgent: (_database: unknown, sessionId: string) =>
+    mockGetSessionAgent(sessionId),
 }));
 
 let database: Database;
@@ -108,6 +109,7 @@ let opencodeClient: {
 let existingSessions: {
   get: ReturnType<typeof vi.fn>;
   find: ReturnType<typeof vi.fn>;
+  check: ReturnType<typeof vi.fn>;
   unreachableLocations: { chatId: number; threadId: number }[];
 };
 let scheduler: Scheduler;
@@ -140,6 +142,7 @@ beforeEach(async () => {
   existingSessions = {
     get: vi.fn().mockReturnValue({ chatId: 123, threadId: undefined }),
     find: vi.fn().mockReturnValue(userSessionId),
+    check: vi.fn().mockImplementation((id: string) => id === userSessionId),
     unreachableLocations: [],
   };
   mockGetSessionAgent.mockReturnValue(undefined);
@@ -662,7 +665,6 @@ test("delete() cancels in-flight run without queueJobId", async () => {
     .values({
       id: "run-noJob",
       scheduleId: task.id,
-      sessionId: userSessionId,
       trigger: "manual",
       status: "pending",
       startedAt: new Date(),
@@ -686,7 +688,6 @@ test("delete() cancels in-flight runs", async () => {
     .values({
       id: "run-inflight",
       scheduleId: task.id,
-      sessionId: userSessionId,
       queueJobId: "job-active",
       trigger: "cron",
       status: "running",
@@ -725,7 +726,6 @@ test("deleteByChat removes all schedules for chat/thread and unregisters enabled
     .values({
       id: "run-active-A",
       scheduleId: taskA.id,
-      sessionId: userSessionId,
       queueJobId: "job-active",
       trigger: "cron",
       status: "running",
@@ -871,7 +871,6 @@ test("listRuns() returns runs filtered by scheduleId", async () => {
     .values({
       id: "run-1",
       scheduleId: "sched-1",
-      sessionId: userSessionId,
       trigger: "cron",
       status: "reported",
       startedAt: now,
@@ -885,7 +884,7 @@ test("listRuns() returns runs filtered by scheduleId", async () => {
   expect(runs[0]?.output).toBe("hi");
 });
 
-test("listRuns() filters by session, status, trigger, and time range", async () => {
+test("listRuns() filters by runSession, status, trigger, and time range", async () => {
   const now = Date.now();
   database
     .insert(scheduleTable)
@@ -913,7 +912,7 @@ test("listRuns() filters by session, status, trigger, and time range", async () 
       .values({
         id: r.id,
         scheduleId: "sched-1",
-        sessionId: userSessionId,
+        runSessionId: userSessionId,
         trigger: r.trigger,
         status: r.status,
         startedAt: new Date(r.startedAt),
@@ -922,7 +921,7 @@ test("listRuns() filters by session, status, trigger, and time range", async () 
   }
   expect(scheduler.listRuns({ status: "failed" })).toHaveLength(1);
   expect(scheduler.listRuns({ trigger: "manual" })).toHaveLength(1);
-  expect(scheduler.listRuns({ sessionId: userSessionId })).toHaveLength(3);
+  expect(scheduler.listRuns({ runSessionId: userSessionId })).toHaveLength(3);
   expect(
     scheduler.listRuns({ since: now - 5000, until: now + 500 }),
   ).toHaveLength(1);
@@ -945,7 +944,6 @@ test("listRuns() ignores out-of-range since/until values", async () => {
     .values({
       id: "r-in-range",
       scheduleId: "sched-range",
-      sessionId: userSessionId,
       trigger: "cron",
       status: "reported",
       startedAt: new Date(now),
@@ -986,7 +984,6 @@ test("listRuns() respects limit and offset", async () => {
       .values({
         id: `r-${i}`,
         scheduleId: "sched-1",
-        sessionId: userSessionId,
         trigger: "cron",
         status: "silent",
         startedAt: new Date(Date.now() + i * 1000),
@@ -1013,7 +1010,6 @@ test("getRun() returns a run by id", async () => {
     .values({
       id: "run-1",
       scheduleId: "sched-1",
-      sessionId: userSessionId,
       trigger: "cron",
       status: "reported",
       startedAt: new Date(),
@@ -1044,7 +1040,6 @@ test("cancelRun() cancels running run and calls bunqueue.cancel", async () => {
     .values({
       id: "run-live",
       scheduleId: "sched-1",
-      sessionId: userSessionId,
       queueJobId: "job-live",
       trigger: "cron",
       status: "running",
@@ -1072,7 +1067,6 @@ test("cancelRun() cancels pending run without queueJobId", async () => {
     .values({
       id: "run-pending",
       scheduleId: "sched-1",
-      sessionId: userSessionId,
       trigger: "manual",
       status: "pending",
       startedAt: new Date(),
@@ -1104,7 +1098,6 @@ test("cancelRun() throws RunNotCancellableError on terminal status", async () =>
     .values({
       id: "run-done",
       scheduleId: "sched-1",
-      sessionId: userSessionId,
       trigger: "cron",
       status: "reported",
       startedAt: new Date(),
@@ -1207,6 +1200,153 @@ test("processor accepts manual trigger even when disabled", async () => {
   await firePromise;
   expect(opencodeClient.session.create).toHaveBeenCalled();
   expect(bot.api.sendMessage).toHaveBeenCalled();
+});
+
+test("create() with sessionId stores it on the task", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    sessionId: userSessionId,
+  });
+  expect(task.sessionId).toBe(userSessionId);
+});
+
+test("update() can rebind a schedule to a different sessionId", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const updated = await scheduler.update(task.id, {
+    sessionId: userSessionId,
+  });
+  expect(updated.sessionId).toBe(userSessionId);
+});
+
+test("update({ sessionId: null }) converts session-bound back to chat-bound", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    sessionId: userSessionId,
+  });
+  const updated = await scheduler.update(task.id, { sessionId: null });
+  expect(updated.sessionId).toBeNull();
+});
+
+test("session-bound run prompts into the pinned session without creating or aborting an ephemeral session", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    sessionId: userSessionId,
+  });
+  mockAssistantText("session update");
+  opencodeClient.session.create.mockClear();
+  opencodeClient.session.abort.mockClear();
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(opencodeClient.session.create).not.toHaveBeenCalled();
+  expect(opencodeClient.session.abort).not.toHaveBeenCalled();
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({ sessionID: userSessionId }),
+    expect.any(Object),
+  );
+});
+
+test("session-bound run records reported output but does not post to Telegram", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    sessionId: userSessionId,
+  });
+  mockAssistantText("session update");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(bot.api.sendMessage).not.toHaveBeenCalled();
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.output).toBe("session update");
+});
+
+test("chat-bound run records runSessionId as the ephemeral session id for post-hoc inspection", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAssistantText("x");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.runSessionId).toBe(ephemeralSessionId);
+});
+
+test("session-bound run records runSessionId as the pinned local session id", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    sessionId: userSessionId,
+  });
+  mockAssistantText("x");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.runSessionId).toBe(userSessionId);
+});
+
+test("session-bound run with external pin records the external id as runSessionId for inspection", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    sessionId: "external-session-xyz",
+  });
+  mockAssistantText("x");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.runSessionId).toBe("external-session-xyz");
+});
+
+test("run cancelled before session acquisition leaves runSessionId null", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAdd.mockResolvedValueOnce({ id: "cancel-before-session" });
+  const { runId } = await scheduler.trigger(task.id);
+  await scheduler.cancelRun(runId);
+  const run = scheduler.getRun(runId);
+  expect(run.status).toBe("cancelled");
+  expect(run.runSessionId).toBeNull();
 });
 
 test("reported run posts to Telegram and records output", async () => {
@@ -1436,7 +1576,7 @@ test("failed run logs when notification delivery also fails", async () => {
   expect((caught as Error).message).toBe("x");
 });
 
-test("execution proceeds with null sessionId when no user session exists", async () => {
+test("execution proceeds and reports when no chat session is mapped (agent override is simply skipped)", async () => {
   const task = await scheduler.create({
     chatId: 123,
     cron: "0 * * * *",
@@ -1452,7 +1592,6 @@ test("execution proceeds with null sessionId when no user session exists", async
   expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "delivered", {});
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.status).toBe("reported");
-  expect(runs[0]?.sessionId).toBeNull();
 });
 
 test("execution aborts ephemeral session in finally even on success", async () => {
@@ -1519,10 +1658,71 @@ test("agent from session is passed to ephemeral prompt", async () => {
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
+  expect(mockGetSessionAgent).toHaveBeenCalledWith(userSessionId);
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     expect.objectContaining({ agent: "custom-agent" }),
     { throwOnError: true },
   );
+});
+
+test("chat-bound run looks up agent by chat session, not by the ephemeral run session", async () => {
+  mockGetSessionAgent.mockImplementation((id) =>
+    id === userSessionId ? "chat-agent" : undefined,
+  );
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({ agent: "chat-agent" }),
+    { throwOnError: true },
+  );
+});
+
+test("session-bound run looks up agent by the pinned session id", async () => {
+  mockGetSessionAgent.mockImplementation((id) =>
+    id === userSessionId ? "pinned-agent" : undefined,
+  );
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    sessionId: userSessionId,
+  });
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  expect(mockGetSessionAgent).toHaveBeenCalledWith(userSessionId);
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
+    expect.objectContaining({ agent: "pinned-agent" }),
+    { throwOnError: true },
+  );
+});
+
+test("session-bound run with external session id passes no agent override", async () => {
+  mockGetSessionAgent.mockReturnValue("should-not-appear");
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    sessionId: "external-session-xyz",
+  });
+  mockAssistantText("x");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const promptCall = opencodeClient.session.promptAsync.mock.calls.at(-1);
+  expect(promptCall?.[0]).not.toHaveProperty("agent");
 });
 
 test("once-task disables the schedule after a cron fire", async () => {
@@ -1582,7 +1782,6 @@ test("overlap=skip records skipped run when another is running", async () => {
     .values({
       id: "run-active",
       scheduleId: task.id,
-      sessionId: userSessionId,
       queueJobId: "job-active",
       trigger: "cron",
       status: "running",
@@ -1626,7 +1825,6 @@ test("overlap=cancel_previous with null queueJobId just updates status", async (
     .values({
       id: "run-nokey",
       scheduleId: task.id,
-      sessionId: userSessionId,
       trigger: "cron",
       status: "running",
       startedAt: new Date(),
@@ -1656,7 +1854,6 @@ test("pending run status is parseable via getRun", async () => {
     .values({
       id: "run-pending",
       scheduleId: "sched-p",
-      sessionId: userSessionId,
       trigger: "manual",
       status: "pending",
       startedAt: new Date(),
@@ -1679,7 +1876,6 @@ test("overlap=cancel_previous cancels prior running run and proceeds", async () 
     .values({
       id: "run-prev",
       scheduleId: task.id,
-      sessionId: userSessionId,
       queueJobId: "job-prev",
       trigger: "cron",
       status: "running",
@@ -1708,7 +1904,6 @@ test("overlap=queue runs both without cancellation", async () => {
     .values({
       id: "run-prev",
       scheduleId: task.id,
-      sessionId: userSessionId,
       queueJobId: "job-prev",
       trigger: "cron",
       status: "running",
@@ -1736,7 +1931,6 @@ test("manual trigger ignores overlap policy", async () => {
     .values({
       id: "run-active",
       scheduleId: task.id,
-      sessionId: userSessionId,
       trigger: "cron",
       status: "running",
       startedAt: new Date(),
@@ -1807,7 +2001,6 @@ test("retention trims run records beyond the cap", async () => {
       .values({
         id: `seed-${i}`,
         scheduleId: task.id,
-        sessionId: userSessionId,
         trigger: "cron",
         status: "silent",
         startedAt: new Date(baseTime + i * 1000),
@@ -2049,7 +2242,6 @@ test("#recover finalizes stuck runs as failed with bot restart", async () => {
     .values({
       id: "run-stuck",
       scheduleId: "sched-recover",
-      sessionId: userSessionId,
       trigger: "cron",
       status: "running",
       startedAt: new Date(Date.now() - 60_000),
@@ -2198,7 +2390,6 @@ test("orphan reconciler marks running run failed when bunqueue job is gone", asy
     .values({
       id: "run-orphan",
       scheduleId: "sched-orphan",
-      sessionId: userSessionId,
       queueJobId: "gone-job",
       trigger: "manual",
       status: "running",
@@ -2232,7 +2423,6 @@ test("orphan reconciler also rescues pending run whose bunqueue job is gone", as
     .values({
       id: "run-orphan-pending",
       scheduleId: "sched-orphan-pending",
-      sessionId: userSessionId,
       queueJobId: "vanished-job",
       trigger: "manual",
       status: "pending",
@@ -2265,7 +2455,6 @@ test("orphan reconciler skips rows with null queueJobId", async () => {
     .values({
       id: "run-no-job",
       scheduleId: "sched-null",
-      sessionId: userSessionId,
       trigger: "manual",
       status: "pending",
       startedAt: new Date(),
@@ -2294,7 +2483,6 @@ test("orphan reconciler leaves running run alone when job is still present", asy
     .values({
       id: "run-live",
       scheduleId: "sched-live",
-      sessionId: userSessionId,
       queueJobId: "live-job",
       trigger: "manual",
       status: "running",
@@ -2323,7 +2511,6 @@ test("orphan reconciliation errors are logged and do not stop the interval", asy
     .values({
       id: "run-boom",
       scheduleId: "sched-boom",
-      sessionId: userSessionId,
       queueJobId: "boom-job",
       trigger: "manual",
       status: "running",
@@ -2357,7 +2544,6 @@ test("dispose stops the reconcile interval", async () => {
     .values({
       id: "run-after-dispose",
       scheduleId: "sched-after-dispose",
-      sessionId: userSessionId,
       queueJobId: "any-job",
       trigger: "manual",
       status: "running",
@@ -2434,7 +2620,6 @@ test("parseRunStatus throws on unknown status via getRun()", async () => {
     .values({
       id: "bad-run",
       scheduleId: "sched-bad",
-      sessionId: userSessionId,
       trigger: "cron",
       status: "bogus",
       startedAt: new Date(),
@@ -2459,7 +2644,6 @@ test("parseRunTrigger throws on unknown trigger via getRun()", async () => {
     .values({
       id: "bad-trigger-run",
       scheduleId: "sched-bad2",
-      sessionId: userSessionId,
       trigger: "webhook",
       status: "reported",
       startedAt: new Date(),

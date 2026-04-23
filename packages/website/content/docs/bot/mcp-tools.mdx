@@ -27,6 +27,25 @@ send_file(path: string)
 
 > Never use `send_file` to re-send something the user already uploaded — that file is already visible in the chat.
 
+### `send_message`
+
+Send a plain text message to the user via Telegram, outside the normal assistant-reply channel.
+
+```
+send_message(text: string)
+```
+
+- Delivered to the chat (and forum thread) that owns the current OpenCode session.
+- Same trust model as `send_file`: destination is derived from the caller's session — the agent cannot target arbitrary chats.
+- Throws if the caller's session isn't mapped to a Telegram chat.
+
+Typical callers:
+
+- A **session-bound scheduled run** whose pinned session isn't mapped to any Telegram chat (no normal reply forwarding) but still wants to ping the user.
+- A prompt that wants to post a terse standalone summary distinct from its full assistant reply (e.g. "done" after a verbose multi-step task).
+
+Most of the time you don't need this — assistant replies from session-mapped sessions already land on Telegram via the normal pipeline.
+
 ### `reload_commands`
 
 Reload custom `/slash` command markdown files from `$OPENCODE_CONFIG_DIR/commands/` without restarting.
@@ -54,23 +73,23 @@ The current agent response is interrupted by design — the restart is the whole
 
 ## Schedule tools
 
-Schedules fire on a cron pattern, execute in an isolated ephemeral OpenCode session, and either deliver their result to Telegram or stay silent. See [Schedules](/docs/bot/schedules) for the full end-user guide.
+Schedules fire on a cron pattern. Two modes: **chat-bound** (each tick runs in a fresh isolated OpenCode session whose reply is auto-delivered to Telegram) and **session-bound** (set via the `sessionId` input — each tick continues the same pinned session). See [Schedules](/docs/bot/schedules) for the full end-user guide.
 
 ### Schedule lifecycle
 
-- `queue_schedule_create` — create a schedule. Inputs: `cron`, `description`, `prompt`, optional `once`, `timezone`, `overlap` (`queue` | `skip` | `cancel_previous`), `notifyOnFailure`, `maxRuntimeMs`.
-- `queue_schedule_list` — list schedules. Optional filters: `sessionId`, `enabled`.
-- `queue_schedule_update` — patch any subset of `description`, `prompt`, `cron`, `timezone`, `overlap`, `notifyOnFailure`, `maxRuntimeMs`. Cron/timezone changes re-register atomically.
+- `queue_schedule_create` — create a schedule. Inputs: `cron`, `description`, `prompt`, optional `once`, `timezone`, `overlap` (`queue` | `skip` | `cancel_previous`), `notifyOnFailure`, `maxRuntimeMs`, `sessionId` (pin to a specific OpenCode session).
+- `queue_schedule_list` — list schedules for the caller's chat/thread. Optional filter: `enabled`.
+- `queue_schedule_update` — patch any subset of `description`, `prompt`, `cron`, `timezone`, `overlap`, `notifyOnFailure`, `maxRuntimeMs`, `sessionId`. Pass `sessionId: null` to convert a session-bound schedule back to chat-bound. Cron/timezone changes re-register atomically.
 - `queue_schedule_enable` / `queue_schedule_disable` — pause and resume without deleting history.
 - `queue_schedule_delete` — permanent removal. Cascade-deletes all run history.
 - `queue_schedule_trigger` — fire immediately, bypassing cron, `enabled`, and `overlap`. Pre-creates the run row with `status: 'pending'` and returns its `runId` (plus `queueJobId` and `enqueuedAt`). Poll the result with `queue_run_get({ id: runId })`.
 
 ### Run history
 
-Every execution (reported, silent, failed, cancelled, skipped) is persisted in the `schedule_run` table with a dedicated UUID.
+Every execution (reported, silent, failed, cancelled, skipped) is persisted in the `schedule_run` table with a dedicated UUID. Each row carries `runSessionId` — the OpenCode session the prompt actually executed in — for post-hoc inspection.
 
-- `queue_runs` — list runs. Filters: `scheduleId`, `sessionId`, `status`, `trigger` (`cron` | `manual`), `since`, `until`, `limit` (default 50), `offset`.
-- `queue_run_get` — fetch a single run by its id, including full `output` or `error`.
+- `queue_runs` — list runs. Filters: `scheduleId`, `runSessionId`, `status`, `trigger` (`cron` | `manual`), `since`, `until`, `limit` (default 50), `offset`.
+- `queue_run_get` — fetch a single run by its id, including full `output` or `error`, and `runSessionId` so an agent can export the session via the local `opencode` CLI to trace tool calls and reasoning.
 - `queue_run_cancel` — abort an in-flight run. Only works on `pending` or `running` runs.
 
 Run statuses: `pending` → `running` → one of `reported`, `silent`, `failed`, `cancelled`, `skipped`.

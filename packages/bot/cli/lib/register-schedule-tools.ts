@@ -30,6 +30,7 @@ const scheduleTaskSchema = zod.object({
   overlap: overlapSchema,
   notifyOnFailure: zod.boolean(),
   maxRuntimeMs: zod.number().nullable(),
+  sessionId: zod.string().nullable(),
   createdAt: zod.number(),
   updatedAt: zod.number(),
 });
@@ -37,7 +38,7 @@ const scheduleTaskSchema = zod.object({
 const runRecordSchema = zod.object({
   id: zod.string(),
   scheduleId: zod.string(),
-  sessionId: zod.string().nullable(),
+  runSessionId: zod.string().nullable(),
   queueJobId: zod.string().nullable(),
   trigger: runTriggerSchema,
   status: runStatusSchema,
@@ -74,9 +75,9 @@ const scheduleCreateInputSchema = zod.looseObject({
     .describe(
       [
         "The instruction the AI agent will execute each time the schedule fires.",
-        "Runs in a fresh ephemeral session — write as a self-contained instruction.",
-        "If the task finds nothing worth reporting, it stays silent: no Telegram message, no session noise — only a 'silent' run record for history tracing.",
-        "Describe the check or query, e.g. 'Check if any bank transaction emails arrived since the last run. If any, list them concisely with amount/merchant. If none, do not report anything.'",
+        "When sessionId is omitted (chat-bound): runs in a fresh ephemeral session — write as a self-contained instruction. The final text response is delivered to the caller's Telegram chat unless the prompt emits [NO_REPORT], in which case the run stays silent and only a 'silent' run record is kept.",
+        "When sessionId is set (session-bound): the prompt is appended to the pinned OpenCode session. If that session is mapped to a Telegram chat (the usual case when the user bound the schedule to their own chat session), the assistant's reply is forwarded to Telegram automatically by the same pipeline that delivers normal chat replies. If it's an external session (not mapped to any chat), no Telegram delivery happens unless the prompt explicitly calls the openkitten_send_message tool.",
+        "Example (chat-bound): 'Check if any bank transaction emails arrived since the last run. If any, list them concisely with amount/merchant. If none, respond with exactly [NO_REPORT].'",
       ].join(" "),
     ),
   once: zod
@@ -115,7 +116,20 @@ const scheduleCreateInputSchema = zod.looseObject({
     .min(1000)
     .optional()
     .describe(
-      "Maximum time in milliseconds the ephemeral session is allowed to run before the run is finalized as silent. Default: 900000 (15 minutes).",
+      "Maximum time in milliseconds the session is allowed to run before the run is finalized as silent. Default: 900000 (15 minutes).",
+    ),
+  sessionId: zod
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      [
+        "OpenCode session id to pin this schedule to. When set, every cron tick sends the prompt into THIS session instead of a fresh ephemeral one — so context carries across runs.",
+        "Telegram delivery for session-bound runs piggybacks on the normal session-to-chat pipeline: if the pinned session is mapped to a Telegram chat, replies go to Telegram automatically. If the pinned session is external (not mapped to any chat), the prompt must call the openkitten_send_message tool to notify the user.",
+        "Use the opencode-sessions skill to discover session ids before passing one here.",
+        "Omit this field for the default chat-bound behavior (fresh ephemeral session per tick, reply auto-posted to the caller's chat).",
+      ].join(" "),
     ),
 });
 
@@ -138,6 +152,15 @@ const scheduleUpdateInputSchema = zod.looseObject({
   overlap: overlapSchema.optional(),
   notifyOnFailure: zod.boolean().optional(),
   maxRuntimeMs: zod.number().int().min(1000).nullable().optional(),
+  sessionId: zod
+    .string()
+    .trim()
+    .min(1)
+    .nullable()
+    .optional()
+    .describe(
+      "Change the pinned OpenCode session id. Pass null to convert a session-bound schedule back to chat-bound (ephemeral per tick).",
+    ),
 });
 
 const scheduleListInputSchema = zod.looseObject({
@@ -146,6 +169,14 @@ const scheduleListInputSchema = zod.looseObject({
 
 const runListInputSchema = zod.looseObject({
   scheduleId: zod.string().trim().uuid().optional(),
+  runSessionId: zod
+    .string()
+    .trim()
+    .min(1)
+    .optional()
+    .describe(
+      "Filter runs whose prompt executed in this OpenCode session id. For session-bound schedules this is the pinned session id (all ticks share it); for chat-bound schedules each tick has its own ephemeral session id.",
+    ),
   status: runStatusSchema.optional(),
   trigger: runTriggerSchema.optional(),
   since: zod.number().int().min(0).optional(),
@@ -220,7 +251,7 @@ export function registerScheduleTools(
     "queue_schedule_create",
     {
       description:
-        "Create a scheduled task bound to the current chat (and thread, if applicable). Runs in an ephemeral OpenCode session on each cron tick. If the run produces meaningful output, it's delivered to the chat. If the instruction finds nothing worth reporting, the run stays silent — only a 'silent' run record is kept for history tracing via queue_runs.",
+        "Create a scheduled task. Default (chat-bound): each cron tick runs in a fresh ephemeral OpenCode session; meaningful output is auto-delivered to the calling chat, and a [NO_REPORT] marker keeps the run silent (still recorded for history via queue_runs). With sessionId set (session-bound): each tick sends the prompt into the pinned session so context carries across runs; Telegram delivery piggybacks on the normal session-to-chat pipeline when the pinned session is chat-mapped, and falls back to the openkitten_send_message tool for sessions not mapped to any chat.",
       inputSchema: scheduleCreateInputSchema,
       outputSchema: scheduleTaskSchema,
     },
@@ -241,6 +272,7 @@ export function registerScheduleTools(
         ...(args.maxRuntimeMs !== undefined && {
           maxRuntimeMs: args.maxRuntimeMs,
         }),
+        ...(args.sessionId !== undefined && { sessionId: args.sessionId }),
       });
       return {
         content: [
@@ -309,6 +341,7 @@ export function registerScheduleTools(
         ...(args.maxRuntimeMs !== undefined && {
           maxRuntimeMs: args.maxRuntimeMs,
         }),
+        ...(args.sessionId !== undefined && { sessionId: args.sessionId }),
       });
       return {
         content: [
@@ -408,7 +441,7 @@ export function registerScheduleTools(
     "queue_runs",
     {
       description:
-        "List scheduled run records with optional filters. Each run has its own UUID, a status (pending, running, reported, silent, failed, cancelled, skipped), and either output text (on 'reported') or error text (on 'failed'). Filter by scheduleId to scope to one task; otherwise all runs are returned. Use this to trace what scheduled tasks have done, even across bot restarts.",
+        "List scheduled run records with optional filters. Each run has its own UUID, a status (pending, running, reported, silent, failed, cancelled, skipped), and either output text (on 'reported') or error text (on 'failed'). Each reported/silent/failed run also carries a runSessionId — the OpenCode session where the prompt actually executed — so you can `$OPENKITTEN_OPENCODE_BIN export <runSessionId>` to trace exactly what happened. Filter by scheduleId to scope to one task; otherwise all runs are returned. Use this to trace what scheduled tasks have done, even across bot restarts.",
       inputSchema: runListInputSchema,
       outputSchema: zod.object({ runs: zod.array(runRecordSchema) }),
     },
@@ -416,6 +449,9 @@ export function registerScheduleTools(
       ctx.getMetadata(args);
       const runs = ctx.scheduler.listRuns({
         ...(args.scheduleId !== undefined && { scheduleId: args.scheduleId }),
+        ...(args.runSessionId !== undefined && {
+          runSessionId: args.runSessionId,
+        }),
         ...(args.status !== undefined && { status: args.status }),
         ...(args.trigger !== undefined && { trigger: args.trigger }),
         ...(args.since !== undefined && { since: args.since }),
@@ -429,7 +465,7 @@ export function registerScheduleTools(
           : `${runs.length} run(s):\n${runs
               .map(
                 (r) =>
-                  `- [${r.id}] ${r.status} (${r.trigger}) schedule=${r.scheduleId} ${new Date(r.startedAt).toISOString()}${r.finishedAt ? ` → ${new Date(r.finishedAt).toISOString()} (${r.finishedAt - r.startedAt}ms)` : " running"}${r.output ? ` | output: ${r.output.slice(0, 200)}` : ""}${r.error ? ` | error: ${r.error}` : ""}`,
+                  `- [${r.id}] ${r.status} (${r.trigger}) schedule=${r.scheduleId} ${new Date(r.startedAt).toISOString()}${r.finishedAt ? ` → ${new Date(r.finishedAt).toISOString()} (${r.finishedAt - r.startedAt}ms)` : " running"}${r.runSessionId ? ` | runSession=${r.runSessionId}` : ""}${r.output ? ` | output: ${r.output.slice(0, 200)}` : ""}${r.error ? ` | error: ${r.error}` : ""}`,
               )
               .join("\n")}`;
       return {
@@ -443,7 +479,7 @@ export function registerScheduleTools(
     "queue_run_get",
     {
       description:
-        "Fetch full details of a single scheduled run by its UUID, including the complete output or error text.",
+        "Fetch full details of a single scheduled run by its UUID, including the complete output or error text, and the runSessionId (the OpenCode session the prompt executed in — use it with the opencode-sessions skill to inspect tool calls, reasoning, and intermediate state).",
       inputSchema: runIdInputSchema,
       outputSchema: runRecordSchema,
     },
@@ -454,7 +490,7 @@ export function registerScheduleTools(
         content: [
           {
             type: "text",
-            text: `Run ${run.id}: ${run.status} (${run.trigger})${run.output ? `\nOutput:\n${run.output}` : ""}${run.error ? `\nError: ${run.error}` : ""}`,
+            text: `Run ${run.id}: ${run.status} (${run.trigger})${run.runSessionId ? `\nRan in session: ${run.runSessionId}` : ""}${run.output ? `\nOutput:\n${run.output}` : ""}${run.error ? `\nError: ${run.error}` : ""}`,
           },
         ],
         structuredContent: { ...run },
@@ -466,7 +502,7 @@ export function registerScheduleTools(
     "queue_run_cancel",
     {
       description:
-        "Cancel an in-flight scheduled run. The ephemeral session is aborted and the run is recorded as 'cancelled'. Only works on runs in 'pending' or 'running' status.",
+        "Cancel an in-flight scheduled run. For chat-bound runs the underlying ephemeral OpenCode session is aborted; for session-bound runs the pinned session is left alone and only the run record is marked 'cancelled'. Only works on runs in 'pending' or 'running' status.",
       inputSchema: runIdInputSchema,
       outputSchema: runRecordSchema,
     },

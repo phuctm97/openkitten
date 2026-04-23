@@ -61,6 +61,7 @@ export const schedule = sqliteTable(
       .notNull()
       .default(false),
     maxRuntimeMs: integer("max_runtime_ms"),
+    sessionId: text("session_id"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .default(sql`(unixepoch() * 1000)`),
@@ -84,10 +85,7 @@ export const scheduleRun = sqliteTable(
         onDelete: "cascade",
         onUpdate: "cascade",
       }),
-    sessionId: text("session_id").references(() => session.id, {
-      onDelete: "set null",
-      onUpdate: "cascade",
-    }),
+    runSessionId: text("run_session_id"),
     queueJobId: text("queue_job_id"),
     trigger: text().notNull(),
     status: text().notNull(),
@@ -105,7 +103,6 @@ export const scheduleRun = sqliteTable(
   },
   (table) => [
     index("schedule_run_schedule_id_idx").on(table.scheduleId),
-    index("schedule_run_session_id_idx").on(table.sessionId),
     index("schedule_run_status_started_at_idx").on(
       table.status,
       table.startedAt,
@@ -125,7 +122,6 @@ export const restartNotification = sqliteTable("restart_notification", {
 
 export const sessionRelations = relations(session, ({ many }) => ({
   messages: many(message),
-  scheduleRuns: many(scheduleRun),
 }));
 
 export const messageRelations = relations(message, ({ one }) => ({
@@ -143,9 +139,5 @@ export const scheduleRunRelations = relations(scheduleRun, ({ one }) => ({
   schedule: one(schedule, {
     fields: [scheduleRun.scheduleId],
     references: [schedule.id],
-  }),
-  session: one(session, {
-    fields: [scheduleRun.sessionId],
-    references: [session.id],
   }),
 }));

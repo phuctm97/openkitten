@@ -43,6 +43,21 @@ const sendFileOutputSchema = zod.object({
   kind: attachmentKindSchema,
 });
 
+const sendMessageInputSchema = zod.looseObject({
+  text: zod
+    .string()
+    .trim()
+    .min(1)
+    .describe(
+      "Plain text to send to the user on Telegram. Delivered to the chat (and thread) that owns the current OpenCode session.",
+    ),
+});
+
+const sendMessageOutputSchema = zod.object({
+  chatId: zod.number(),
+  threadId: zod.number().optional(),
+});
+
 type OpenkittenMetadata = zod.output<typeof openkittenMetadataSchema>;
 
 type SendFileInput = zod.output<typeof sendFileInputSchema>;
@@ -52,6 +67,15 @@ type SendFileOutput = zod.output<typeof sendFileOutputSchema>;
 type SendFileResult = CallToolResult & {
   readonly content: TextContent[];
   readonly structuredContent: SendFileOutput;
+};
+
+type SendMessageInput = zod.output<typeof sendMessageInputSchema>;
+
+type SendMessageOutput = zod.output<typeof sendMessageOutputSchema>;
+
+type SendMessageResult = CallToolResult & {
+  readonly content: TextContent[];
+  readonly structuredContent: SendMessageOutput;
 };
 
 export class McpServer implements Disposable {
@@ -119,6 +143,16 @@ export class McpServer implements Disposable {
         outputSchema: sendFileOutputSchema,
       },
       async (args) => this.#sendFile(args),
+    );
+    server.registerTool(
+      "send_message",
+      {
+        description:
+          "Send a plain text message to the user on Telegram. Delivered to the chat (and thread) that owns the current OpenCode session. Useful when you want to post a terse standalone notification distinct from your full assistant reply — e.g., from a session-bound scheduled run whose pinned session isn't mapped to a Telegram chat (where normal reply forwarding doesn't apply), or when you want to ping the user with a summary separate from the verbose session transcript.",
+        inputSchema: sendMessageInputSchema,
+        outputSchema: sendMessageOutputSchema,
+      },
+      async (args) => this.#sendMessage(args),
     );
     if (this.#reloadConfigOptions) {
       const options = this.#reloadConfigOptions;
@@ -240,6 +274,30 @@ export class McpServer implements Disposable {
       structuredContent: {
         name,
         kind,
+      },
+    };
+  }
+
+  async #sendMessage(args: SendMessageInput): Promise<SendMessageResult> {
+    const metadata = this.#getMetadata(args);
+    const location = this.#existingSessions.get(metadata.sessionID);
+    if (!location) {
+      throw new Error(`Session not found: ${metadata.sessionID}`);
+    }
+    const sendOptions = {
+      ...(location.threadId && { message_thread_id: location.threadId }),
+    };
+    await this.#bot.api.sendMessage(location.chatId, args.text, sendOptions);
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Sent message to chat ${location.chatId}${location.threadId ? `/${location.threadId}` : ""}.`,
+        },
+      ],
+      structuredContent: {
+        chatId: location.chatId,
+        ...(location.threadId !== undefined && { threadId: location.threadId }),
       },
     };
   }

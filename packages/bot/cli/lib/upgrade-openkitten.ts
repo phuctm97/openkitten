@@ -3,7 +3,6 @@ import invariant from "tiny-invariant";
 import type { Database } from "~/lib/database";
 import { isUpgradeEnabled } from "~/lib/is-upgrade-enabled";
 import { logger } from "~/lib/logger";
-import * as schema from "~/lib/schema";
 import { UpgradeOpenkittenError } from "~/lib/upgrade-openkitten-error";
 import type { UpgradeOpenkittenOptions } from "~/lib/upgrade-openkitten-options";
 import type { UpgradeOpenkittenResult } from "~/lib/upgrade-openkitten-result";
@@ -27,16 +26,7 @@ async function notifySessions(bot: Bot, database: Database): Promise<void> {
         chatId: row.chatId,
         error,
       });
-      continue;
     }
-    database
-      .insert(schema.restartNotification)
-      .values({
-        chatId: row.chatId,
-        threadId: row.threadId,
-        message: "✅ OpenKitten upgraded",
-      })
-      .run();
   }
 }
 
@@ -53,14 +43,17 @@ export async function upgradeOpenkitten(
 
   const entry = process.argv[1];
   invariant(entry, "process.argv[1] must be the entry script path");
-  const child = Bun.spawn([process.execPath, entry, "up", "--yes"], {
-    cwd: process.cwd(),
-    env: process.env,
-    stdin: "ignore",
-    stdout: "ignore",
-    stderr: "ignore",
-    detached: true,
-  });
+  const child = Bun.spawn(
+    [process.execPath, entry, "up", "--yes", "--notify-restart"],
+    {
+      cwd: process.cwd(),
+      env: process.env,
+      stdin: "ignore",
+      stdout: "ignore",
+      stderr: "ignore",
+      detached: true,
+    },
+  );
   child.unref();
 
   return { kind: "restarting" };

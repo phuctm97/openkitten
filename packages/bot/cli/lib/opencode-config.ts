@@ -222,6 +222,7 @@ export namespace OpencodeConfig {
         XDG_STATE_HOME: profile.xdgState,
         XDG_CACHE_HOME: profile.xdgCache,
         OPENCODE_CONFIG_DIR: configDir,
+        OPENKITTEN_OPENCODE_BIN: bin,
         OPENKITTEN_OPENCODE_DIR: configDir,
         OPENCODE_CONFIG_CONTENT: JSON.stringify({
           autoupdate: false,
