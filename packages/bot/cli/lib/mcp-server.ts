@@ -14,6 +14,7 @@ import type { Database } from "~/lib/database";
 import type { ExistingSessions } from "~/lib/existing-sessions";
 import { getAttachmentKind } from "~/lib/get-attachment-kind";
 import { getAttachmentName } from "~/lib/get-attachment-name";
+import { isUpgradeEnabled } from "~/lib/is-upgrade-enabled";
 import { logger } from "~/lib/logger";
 import { registerScheduleTools } from "~/lib/register-schedule-tools";
 import { reloadOpencodeConfig } from "~/lib/reload-opencode-config";
@@ -153,15 +154,17 @@ export class McpServer implements Disposable {
       },
       async (args) => this.#reloadExtensions(args),
     );
-    server.registerTool(
-      "upgrade_openkitten",
-      {
-        description:
-          "Pull the latest OpenKitten code from main, run `bun install`, and restart the bot. Refuses on non-main branches or dirty worktrees. The current response will be interrupted. Each active chat receives a '⏳ Upgrading OpenKitten…' message before the restart and a '✅ Upgraded <previous-sha> → <new-sha>' message after the new process boots.",
-        inputSchema: zod.looseObject({}),
-      },
-      async () => this.#upgradeOpenkitten(),
-    );
+    if (isUpgradeEnabled()) {
+      server.registerTool(
+        "upgrade_openkitten",
+        {
+          description:
+            "Re-run `bun . up` to pull the latest OpenKitten code, reinstall dependencies, and restart the bot. The current response will be interrupted. Each active chat receives a '⏳ Upgrading OpenKitten…' message before the restart and a '✅ OpenKitten upgraded' message after the new process boots.",
+          inputSchema: zod.looseObject({}),
+        },
+        async () => this.#upgradeOpenkitten(),
+      );
+    }
     registerScheduleTools(server, {
       scheduler: this.#scheduler,
       existingSessions: this.#existingSessions,
@@ -278,25 +281,13 @@ export class McpServer implements Disposable {
   }
 
   async #upgradeOpenkitten(): Promise<CallToolResult> {
-    const result = await upgradeOpenkitten({
+    await upgradeOpenkitten({
       bot: this.#bot,
       database: this.#database,
     });
-    if (result.kind === "up-to-date") {
-      return {
-        content: [
-          { type: "text", text: `Already up to date (${result.sha}).` },
-        ],
-      };
-    }
     setTimeout(() => this.#shutdown.trigger("upgrade"), 500);
     return {
-      content: [
-        {
-          type: "text",
-          text: `Upgrading from ${result.previousSha} to ${result.nextSha}. Restarting…`,
-        },
-      ],
+      content: [{ type: "text", text: "Upgrading OpenKitten. Restarting…" }],
     };
   }
 

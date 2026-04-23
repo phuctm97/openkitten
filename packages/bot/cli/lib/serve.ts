@@ -67,7 +67,7 @@ export const serve = defineCommand({
       const commandsDir = join(profile.dir, ".opencode", "commands");
       const customCommands = await listCommandFiles(commandsDir);
       await grammyResetCommands(telegramConfig.botToken, [
-        ...builtinCommands,
+        ...builtinCommands(),
         ...customCommands,
       ]);
       using shutdown = Shutdown.create();

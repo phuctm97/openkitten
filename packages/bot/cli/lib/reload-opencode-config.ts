@@ -11,11 +11,9 @@ export async function reloadOpencodeConfig(options: {
 
   const customCommands = await listCommandFiles(options.commandsDir);
 
-  await grammySetCommands(options.botToken, [
-    ...builtinCommands,
-    ...customCommands,
-  ]);
+  const builtins = builtinCommands();
+  await grammySetCommands(options.botToken, [...builtins, ...customCommands]);
   logger.info("Refreshed Telegram command menu", {
-    total: builtinCommands.length + customCommands.length,
+    total: builtins.length + customCommands.length,
   });
 }

@@ -103,12 +103,14 @@ beforeEach(() => {
     writable: true,
   });
   delete Bun.env["OPENKITTEN_PROFILE"];
+  delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
 });
 
 afterEach(() => {
   Object.assign(Bun, { $: originalShell });
   Object.defineProperty(process, "platform", { value: originalPlatform });
   Object.defineProperty(process, "getuid", { value: originalGetuid });
+  delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
 });
 
 test("installs on linux", async () => {
@@ -127,6 +129,10 @@ test("installs on linux", async () => {
   expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
     "/mock-home/.config/systemd/user/openkitten-default-profile.service",
     expect.stringContaining(`WorkingDirectory=${botDir}`),
+  );
+  expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
+    "/mock-home/.config/systemd/user/openkitten-default-profile.service",
+    expect.stringContaining("Environment=OPENKITTEN_ENABLE_UPGRADE=1"),
   );
 });
 
@@ -178,6 +184,10 @@ test("installs on darwin with default profile", async () => {
     expect.stringContaining(
       `<key>WorkingDirectory</key>\n  <string>${botDir}</string>`,
     ),
+  );
+  expect(vi.mocked(Bun.write)).toHaveBeenCalledWith(
+    "/mock-home/Library/LaunchAgents/com.openkitten.profiles.default.plist",
+    expect.stringContaining("<key>OPENKITTEN_ENABLE_UPGRADE</key>"),
   );
   const clack = await import("@clack/prompts");
   const spinnerInstance = vi.mocked(clack.spinner).mock.results[0]
@@ -259,6 +269,9 @@ test("installs on win32", async () => {
     "Next steps",
   );
   expect(shellMock.mock.lastCall?.[2]).toContain(`cd /D \\"${botDir}\\"`);
+  expect(shellMock.mock.lastCall?.[2]).toContain(
+    "set OPENKITTEN_ENABLE_UPGRADE=1",
+  );
 });
 
 test("skips pull but installs when not on main branch", async () => {

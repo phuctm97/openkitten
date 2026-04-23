@@ -105,6 +105,7 @@ describe("McpServer", () => {
   const tempDirs: string[] = [];
 
   beforeEach(() => {
+    Bun.env["OPENKITTEN_ENABLE_UPGRADE"] = "1";
     mockStop.mockClear();
     mockTimeout.mockClear();
     mockConnect.mockClear();
@@ -137,6 +138,7 @@ describe("McpServer", () => {
   });
 
   afterEach(async () => {
+    delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
     await Promise.all(
       tempDirs
         .splice(0)
@@ -699,11 +701,7 @@ describe("McpServer", () => {
   });
 
   test("upgrade_openkitten returns restarting text and triggers shutdown", async () => {
-    mockUpgradeOpenkitten.mockResolvedValue({
-      kind: "restarting",
-      previousSha: "aaaaaaa",
-      nextSha: "bbbbbbb",
-    });
+    mockUpgradeOpenkitten.mockResolvedValue({ kind: "restarting" });
     using _server = await McpServer.create(
       bot,
       mockDatabase,
@@ -730,23 +728,15 @@ describe("McpServer", () => {
       database: mockDatabase,
     });
     expect(result).toEqual({
-      content: [
-        {
-          type: "text",
-          text: "Upgrading from aaaaaaa to bbbbbbb. Restarting…",
-        },
-      ],
+      content: [{ type: "text", text: "Upgrading OpenKitten. Restarting…" }],
     });
     await vi.waitFor(() => {
       expect(mockTrigger).toHaveBeenCalledWith("upgrade");
     });
   });
 
-  test("upgrade_openkitten returns up-to-date text without shutdown", async () => {
-    mockUpgradeOpenkitten.mockResolvedValue({
-      kind: "up-to-date",
-      sha: "aaaaaaa",
-    });
+  test("does not register upgrade_openkitten when OPENKITTEN_ENABLE_UPGRADE is unset", async () => {
+    delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
     using _server = await McpServer.create(
       bot,
       mockDatabase,
@@ -764,14 +754,7 @@ describe("McpServer", () => {
     const tool = registeredTools.find(
       (entry) => entry.name === "upgrade_openkitten",
     );
-    if (!tool) throw new Error("upgrade_openkitten tool was not registered");
-
-    const result = await tool.handler({});
-
-    expect(result).toEqual({
-      content: [{ type: "text", text: "Already up to date (aaaaaaa)." }],
-    });
-    expect(mockTrigger).not.toHaveBeenCalled();
+    expect(tool).toBeUndefined();
   });
 
   test("reload_commands tool reloads config and returns confirmation", async () => {

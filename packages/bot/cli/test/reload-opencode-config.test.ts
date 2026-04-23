@@ -40,7 +40,7 @@ test("registers only builtins when commands dir is empty", async () => {
   await callReload(tempDir);
   const { token, commands } = await getFirstCall();
   expect(token).toBe("test-token");
-  expect(commands).toEqual([...builtinCommands]);
+  expect(commands).toEqual([...builtinCommands()]);
 });
 
 test("parses descriptions from frontmatter in .md files", async () => {
@@ -83,8 +83,9 @@ test("sorts custom commands alphabetically", async () => {
   await writeFile(join(tempDir, "alpha.md"), "---\ndescription: A\n---\n");
   await callReload(tempDir);
   const { commands } = await getFirstCall();
+  const builtins = builtinCommands();
   const customNames = commands
-    .filter((c) => !builtinCommands.some((b) => b.command === c.command))
+    .filter((c) => !builtins.some((b) => b.command === c.command))
     .map((c) => c.command);
   expect(customNames).toEqual(["alpha", "zebra"]);
 });
@@ -92,5 +93,5 @@ test("sorts custom commands alphabetically", async () => {
 test("falls back to empty when directory does not exist", async () => {
   await callReload(join(tempDir, "nonexistent"));
   const { commands } = await getFirstCall();
-  expect(commands).toEqual([...builtinCommands]);
+  expect(commands).toEqual([...builtinCommands()]);
 });

@@ -77,6 +77,7 @@ After=network.target
 Environment=NODE_ENV=production
 Environment=OPENKITTEN_PROFILE=${profile.name}
 Environment=OPENKITTEN_SERVICE_MANAGED=1
+Environment=OPENKITTEN_ENABLE_UPGRADE=1
 ExecStart=${process.execPath} . serve --yes
 WorkingDirectory=${botDir}
 Restart=always
@@ -124,6 +125,8 @@ async function installDarwin(profile: Profile): Promise<void> {
     <key>OPENKITTEN_PROFILE</key>
     <string>${profile.name}</string>
     <key>OPENKITTEN_SERVICE_MANAGED</key>
+    <string>1</string>
+    <key>OPENKITTEN_ENABLE_UPGRADE</key>
     <string>1</string>
   </dict>
   <key>ProgramArguments</key>
@@ -180,7 +183,7 @@ async function installWin32(profile: Profile): Promise<void> {
   const s = clack.spinner();
   s.start("Updating service");
   await mkdir(logsDir, { recursive: true });
-  const tr = `cmd /C "cd /D \\"${botDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && set OPENKITTEN_SERVICE_MANAGED=1 && \\"${process.execPath}\\" . serve --yes >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
+  const tr = `cmd /C "cd /D \\"${botDir}\\" && set NODE_ENV=production && set OPENKITTEN_PROFILE=${profile.name} && set OPENKITTEN_SERVICE_MANAGED=1 && set OPENKITTEN_ENABLE_UPGRADE=1 && \\"${process.execPath}\\" . serve --yes >> \\"${logsDir}\\stdout.log\\" 2>> \\"${logsDir}\\stderr.log\\""`;
   await Bun.$`schtasks /Create /SC ONLOGON /TN ${taskName} /TR ${tr} /F`;
   s.stop("Updated service");
   clack.note(
@@ -199,6 +202,7 @@ export const up = defineCommand({
     },
   },
   run: async ({ args }) => {
+    Bun.env["OPENKITTEN_ENABLE_UPGRADE"] = "1";
     process.stderr.write(
       `${boxen(styleText("bold", "Source"), { padding: 1 })}\n`,
     );
@@ -214,7 +218,7 @@ export const up = defineCommand({
       join(profile.dir, ".opencode", "commands"),
     );
     await grammySetCommands(telegramConfig.botToken, [
-      ...builtinCommands,
+      ...builtinCommands(),
       ...customCommands,
     ]);
     process.stderr.write(
