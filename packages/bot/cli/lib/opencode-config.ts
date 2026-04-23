@@ -177,7 +177,7 @@ export namespace OpencodeConfig {
           {
             permission: {
               external_directory: {
-                [`${normalizePathPattern(configDir)}/*`]: "allow",
+                [`${normalizePathPattern(profile.dir)}/**`]: "allow",
               },
             },
           },
