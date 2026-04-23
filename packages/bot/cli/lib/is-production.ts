@@ -1,1 +1,1 @@
-export const isProduction = Bun.env["NODE_ENV"] === "production";
+export const isProduction = Bun.env.NODE_ENV === "production";

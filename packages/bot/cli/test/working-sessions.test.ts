@@ -112,7 +112,7 @@ test("fires change hook when session stops working", async () => {
 test("beforeRemove releases cached sessions", async () => {
   const { existingSessions, working } = setup();
   await working.update(statusEvent("sess-1", { type: "busy" }));
-  await existingSessions.hooks["beforeRemove"]?.({
+  await existingSessions.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 42,
     threadId: undefined,
@@ -124,7 +124,7 @@ test("beforeRemove does nothing for uncached sessions", async () => {
   const { existingSessions, working } = setup();
   const onChange = vi.fn();
   working.hook("change", onChange);
-  await existingSessions.hooks["beforeRemove"]?.({
+  await existingSessions.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 42,
     threadId: undefined,
@@ -177,7 +177,7 @@ test("lock clears locked state when fn throws", async () => {
 test("dispose unhooks beforeRemove", async () => {
   const { existingSessions, working } = setup();
   working[Symbol.dispose]();
-  expect(existingSessions.hooks["beforeRemove"]).toBeUndefined();
+  expect(existingSessions.hooks.beforeRemove).toBeUndefined();
 });
 
 test("change hook errors bubble up from update", async () => {
@@ -197,7 +197,7 @@ test("change hook errors bubble up from beforeRemove", async () => {
     throw new Error("hook failed");
   });
   await expect(
-    existingSessions.hooks["beforeRemove"]?.({
+    existingSessions.hooks.beforeRemove?.({
       sessionId: "sess-1",
       chatId: 42,
       threadId: undefined,

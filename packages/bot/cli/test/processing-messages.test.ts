@@ -950,7 +950,7 @@ test("beforeRemove clears streaming state", async () => {
   } as never);
   expect(pm.streaming("sess-1")).toBeDefined();
 
-  es.hooks["beforeRemove"]?.({
+  es.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -1490,7 +1490,7 @@ test("initialized skips streaming state when session disappears before sync comm
 test("dispose unhooks beforeRemove", async () => {
   const { es, pm } = await setup();
   pm[Symbol.dispose]();
-  expect(es.hooks["beforeRemove"]).toBeUndefined();
+  expect(es.hooks.beforeRemove).toBeUndefined();
 });
 
 test("update unclaims on delivery failure and allows retry", async () => {

@@ -64,7 +64,7 @@ test("passes the website theme through to sonner", () => {
     "--normal-border": "var(--border)",
     "--border-radius": "var(--radius)",
   });
-  expect(props?.icons?.["loading"]?.props.className).toContain("animate-spin");
+  expect(props?.icons?.loading?.props.className).toContain("animate-spin");
 });
 
 test("falls back to the system theme when next-themes has no value", () => {

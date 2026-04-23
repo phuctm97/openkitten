@@ -15,7 +15,7 @@ const logLevels = {
 type LogLevel = keyof typeof logLevels;
 
 function getMinLevel(): number {
-  const env = Bun.env["OPENKITTEN_LOG_LEVEL"];
+  const env = Bun.env.OPENKITTEN_LOG_LEVEL;
   if (env === undefined) return logLevels.silly;
   const level = logLevels[env as LogLevel];
   if (level === undefined)

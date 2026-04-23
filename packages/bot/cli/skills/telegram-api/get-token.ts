@@ -1,7 +1,7 @@
 import { join } from "node:path";
 
 const xdgConfig =
-  Bun.env["XDG_CONFIG_HOME"] ?? join(Bun.env["HOME"] ?? "", ".config");
+  Bun.env.XDG_CONFIG_HOME ?? join(Bun.env.HOME ?? "", ".config");
 const configPath = join(xdgConfig, "openkitten", "telegram.json");
 const file = Bun.file(configPath);
 

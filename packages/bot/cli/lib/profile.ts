@@ -60,7 +60,7 @@ export class Profile {
   }
 
   static async create(): Promise<Profile> {
-    const profile = new Profile(Bun.env["OPENKITTEN_PROFILE"] || "default");
+    const profile = new Profile(Bun.env.OPENKITTEN_PROFILE || "default");
     await profile.#prepare();
     return profile;
   }

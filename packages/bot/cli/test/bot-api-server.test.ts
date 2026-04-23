@@ -22,14 +22,14 @@ beforeEach(async () => {
     xdgState: join(profileDir, "state"),
     xdgCache: join(profileDir, "cache"),
   } as Profile;
-  originalXdgState = Bun.env["XDG_STATE_HOME"];
-  Bun.env["XDG_STATE_HOME"] = profile.xdgState;
+  originalXdgState = Bun.env.XDG_STATE_HOME;
+  Bun.env.XDG_STATE_HOME = profile.xdgState;
   server = await BotAPIServer.create(profile, BOT_TOKEN);
 });
 
 afterEach(async () => {
   server[Symbol.dispose]();
-  Bun.env["XDG_STATE_HOME"] = originalXdgState;
+  Bun.env.XDG_STATE_HOME = originalXdgState;
   vi.resetModules();
   await rm(profileDir, { recursive: true });
 });

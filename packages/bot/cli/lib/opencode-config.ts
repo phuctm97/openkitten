@@ -214,9 +214,9 @@ export namespace OpencodeConfig {
       bin,
       cwd: profile.workspace,
       env: {
-        HOME: Bun.env["HOME"],
-        PATH: Bun.env["PATH"],
-        NODE_ENV: Bun.env["NODE_ENV"],
+        HOME: Bun.env.HOME,
+        PATH: Bun.env.PATH,
+        NODE_ENV: Bun.env.NODE_ENV,
         XDG_DATA_HOME: profile.xdgData,
         XDG_CONFIG_HOME: profile.xdgConfig,
         XDG_STATE_HOME: profile.xdgState,

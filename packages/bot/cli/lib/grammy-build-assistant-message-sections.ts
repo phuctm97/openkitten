@@ -413,7 +413,7 @@ function isDirectoryRead(part: ToolPart): boolean {
 function extractApplyPatchPaths(
   metadata: ToolMetadata,
 ): readonly (string | undefined)[] {
-  const files = metadata?.["files"];
+  const files = metadata?.files;
   if (!Array.isArray(files)) return [];
 
   return files.map((file) => {
