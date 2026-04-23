@@ -189,7 +189,7 @@ test("restarts on linux when already running", async () => {
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
   const clack = await import("@clack/prompts");
-  const spinnerInstance = vi.mocked(clack.spinner).mock.results[0]
+  const spinnerInstance = vi.mocked(clack.spinner).mock.results.at(-1)
     ?.value as ReturnType<typeof clack.spinner>;
   expect(spinnerInstance.stop).toHaveBeenCalledWith("Updated service");
 });
@@ -218,7 +218,7 @@ test("installs on darwin with default profile", async () => {
     expect.stringContaining("<key>OPENKITTEN_ENABLE_UPGRADE</key>"),
   );
   const clack = await import("@clack/prompts");
-  const spinnerInstance = vi.mocked(clack.spinner).mock.results[0]
+  const spinnerInstance = vi.mocked(clack.spinner).mock.results.at(-1)
     ?.value as ReturnType<typeof clack.spinner>;
   expect(spinnerInstance.stop).toHaveBeenCalledWith("Updated service");
 });
@@ -257,7 +257,7 @@ test("restarts on darwin when already running", async () => {
     .mockReturnValueOnce(chainable(shellResult(1)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: [] });
-  const spinnerInstance = vi.mocked(clack.spinner).mock.results[0]
+  const spinnerInstance = vi.mocked(clack.spinner).mock.results.at(-1)
     ?.value as ReturnType<typeof clack.spinner>;
   expect(spinnerInstance.stop).toHaveBeenCalledWith("Updated service");
 });
@@ -525,7 +525,21 @@ test("--notify-restart writes nothing when no sessions exist", async () => {
   expect(mockDatabaseInsertValues).not.toHaveBeenCalled();
 });
 
-test("without --notify-restart, the database is not opened and no notifications are written", async () => {
+test("applyMigrations surfaces migration failures to the caller and aborts the run", async () => {
+  mockDatabaseCreate.mockImplementationOnce(() => {
+    throw new Error("migration failed: no such column");
+  });
+  shellMock
+    .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "")))
+    .mockReturnValueOnce(chainable(shellResult(0, "abc123\n")))
+    .mockReturnValueOnce(chainable(shellResult(0, "def456\n")));
+  await expect(runCommand(up, { rawArgs: ["--yes"] })).rejects.toThrow(
+    "migration failed: no such column",
+  );
+});
+
+test("bun . up opens the database to apply migrations even without --notify-restart, but writes no notifications", async () => {
   mockDatabaseSessions.push({ chatId: 600, threadId: 0 });
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
@@ -536,7 +550,7 @@ test("without --notify-restart, the database is not opened and no notifications 
     .mockReturnValueOnce(chainable(shellResult(0)))
     .mockReturnValueOnce(chainable(shellResult(0)));
   await runCommand(up, { rawArgs: ["--yes"] });
-  expect(mockDatabaseCreate).not.toHaveBeenCalled();
+  expect(mockDatabaseCreate).toHaveBeenCalled();
   expect(mockDatabaseInsertValues).not.toHaveBeenCalled();
 });
 

@@ -34,6 +34,18 @@ function pickRestartMessage(result: UpdateSourceResult): string {
   return "✅ OpenKitten upgraded";
 }
 
+function applyMigrations(profile: Profile): void {
+  const s = clack.spinner();
+  s.start("Applying database migrations");
+  try {
+    using _ = Database.create(profile);
+    s.stop("Applied database migrations");
+  } catch (error) {
+    s.stop("Database migration failed");
+    throw error;
+  }
+}
+
 function writeRestartNotifications(
   profile: Profile,
   result: UpdateSourceResult,
@@ -272,6 +284,7 @@ export const up = defineCommand({
     const updateResult = await updateSource();
     clack.outro("Processed update");
     const profile = await Profile.create();
+    applyMigrations(profile);
     if (args["notify-restart"]) {
       writeRestartNotifications(profile, updateResult);
     }
