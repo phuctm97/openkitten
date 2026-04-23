@@ -278,7 +278,7 @@ test("returns opencode config dir in env", async () => {
 
 test("injects default runtime OpenCode plugins", async () => {
   const config = await OpencodeConfig.create(profile);
-  const runtimeConfigContent = config.env["OPENCODE_CONFIG_CONTENT"];
+  const runtimeConfigContent = config.env.OPENCODE_CONFIG_CONTENT;
   expect(runtimeConfigContent).toBeDefined();
   if (runtimeConfigContent === undefined) {
     throw new Error("Expected OPENCODE_CONFIG_CONTENT to be defined");

@@ -24,16 +24,16 @@ function mockBot() {
 const originalSpawn = Bun.spawn;
 
 beforeEach(() => {
-  Bun.env["OPENKITTEN_ENABLE_UPGRADE"] = "1";
+  Bun.env.OPENKITTEN_ENABLE_UPGRADE = "1";
 });
 
 afterEach(() => {
   Object.assign(Bun, { spawn: originalSpawn });
-  delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
+  delete Bun.env.OPENKITTEN_ENABLE_UPGRADE;
 });
 
 test("throws when OPENKITTEN_ENABLE_UPGRADE is not set", async () => {
-  delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
+  delete Bun.env.OPENKITTEN_ENABLE_UPGRADE;
   const spawn = vi.fn();
   Object.assign(Bun, { spawn });
   const { bot, sendMessage } = mockBot();

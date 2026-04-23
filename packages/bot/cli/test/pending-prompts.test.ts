@@ -1233,7 +1233,7 @@ test("beforeRemove dismisses and rejects questions and denies permissions", asyn
   );
   await askQuestion(prompts);
   await askPermission(prompts);
-  await existingSessions.hooks["beforeRemove"]?.({
+  await existingSessions.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -1261,7 +1261,7 @@ test("beforeRemove handles multiple questions and permissions", async () => {
   await askQuestion(prompts, { ...questionRequest, id: "q2" });
   await askPermission(prompts, { ...permissionRequest, id: "p1" });
   await askPermission(prompts, { ...permissionRequest, id: "p2" });
-  await existingSessions.hooks["beforeRemove"]?.({
+  await existingSessions.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -1280,7 +1280,7 @@ test("beforeRemove edits telegram when items have message id", async () => {
   );
   await askPermission(prompts);
 
-  await existingSessions.hooks["beforeRemove"]?.({
+  await existingSessions.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -1301,7 +1301,7 @@ test("beforeRemove is no-op for unknown session", async () => {
     client,
     existingSessions,
   );
-  await existingSessions.hooks["beforeRemove"]?.({
+  await existingSessions.hooks.beforeRemove?.({
     sessionId: "unknown",
     chatId: 0,
     threadId: undefined,
@@ -1324,7 +1324,7 @@ test("beforeRemove throws on question reject failure", async () => {
   );
   await askQuestion(prompts);
   await expect(
-    existingSessions.hooks["beforeRemove"]?.({
+    existingSessions.hooks.beforeRemove?.({
       sessionId: "sess-1",
       chatId: 123,
       threadId: undefined,
@@ -1345,7 +1345,7 @@ test("beforeRemove throws on permission reply failure", async () => {
   );
   await askPermission(prompts);
   await expect(
-    existingSessions.hooks["beforeRemove"]?.({
+    existingSessions.hooks.beforeRemove?.({
       sessionId: "sess-1",
       chatId: 123,
       threadId: undefined,
@@ -1367,7 +1367,7 @@ test("beforeRemove throws question reject not found error", async () => {
   );
   await askQuestion(prompts);
   await expect(
-    existingSessions.hooks["beforeRemove"]?.({
+    existingSessions.hooks.beforeRemove?.({
       sessionId: "sess-1",
       chatId: 123,
       threadId: undefined,
@@ -1389,7 +1389,7 @@ test("beforeRemove throws permission reply not found error", async () => {
   );
   await askPermission(prompts);
   await expect(
-    existingSessions.hooks["beforeRemove"]?.({
+    existingSessions.hooks.beforeRemove?.({
       sessionId: "sess-1",
       chatId: 123,
       threadId: undefined,
@@ -1411,7 +1411,7 @@ test("beforeRemove throws on grammy non-gone error", async () => {
   await askPermission(prompts);
 
   await expect(
-    existingSessions.hooks["beforeRemove"]?.({
+    existingSessions.hooks.beforeRemove?.({
       sessionId: "sess-1",
       chatId: 123,
       threadId: undefined,
@@ -1443,7 +1443,7 @@ test("beforeRemove throws grammy gone error", async () => {
   await askPermission(prompts);
 
   await expect(
-    existingSessions.hooks["beforeRemove"]?.({
+    existingSessions.hooks.beforeRemove?.({
       sessionId: "sess-1",
       chatId: 123,
       threadId: undefined,
@@ -1643,7 +1643,7 @@ test("beforeRemove hook dismisses session", async () => {
   );
   await askPermission(prompts);
   expect(prompts.check("sess-1")).toBe(true);
-  await existingSessions.hooks["beforeRemove"]?.({
+  await existingSessions.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -1660,7 +1660,7 @@ test("dispose unhooks beforeRemove", async () => {
     existingSessions,
   );
   await prompts[Symbol.asyncDispose]();
-  expect(existingSessions.hooks["beforeRemove"]).toBeUndefined();
+  expect(existingSessions.hooks.beforeRemove).toBeUndefined();
 });
 
 test("multiple asked events surface flush failures", async () => {
@@ -2244,7 +2244,7 @@ test("beforeRemove fires change hook with pending=false", async () => {
   prompts.hook("change", onChange);
   await askPermission(prompts);
   onChange.mockClear();
-  await existingSessions.hooks["beforeRemove"]?.({
+  await existingSessions.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -2265,7 +2265,7 @@ test("beforeRemove does not fire change hook for unknown session", async () => {
   );
   const onChange = vi.fn();
   prompts.hook("change", onChange);
-  await existingSessions.hooks["beforeRemove"]?.({
+  await existingSessions.hooks.beforeRemove?.({
     sessionId: "unknown",
     chatId: 0,
     threadId: undefined,
@@ -2347,7 +2347,7 @@ test("change hook errors bubble up from beforeRemove", async () => {
     throw new Error("hook failed");
   });
   await expect(
-    existingSessions.hooks["beforeRemove"]?.({
+    existingSessions.hooks.beforeRemove?.({
       sessionId: "sess-1",
       chatId: 123,
       threadId: undefined,

@@ -105,7 +105,7 @@ describe("McpServer", () => {
   const tempDirs: string[] = [];
 
   beforeEach(() => {
-    Bun.env["OPENKITTEN_ENABLE_UPGRADE"] = "1";
+    Bun.env.OPENKITTEN_ENABLE_UPGRADE = "1";
     mockStop.mockClear();
     mockTimeout.mockClear();
     mockConnect.mockClear();
@@ -138,7 +138,7 @@ describe("McpServer", () => {
   });
 
   afterEach(async () => {
-    delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
+    delete Bun.env.OPENKITTEN_ENABLE_UPGRADE;
     await Promise.all(
       tempDirs
         .splice(0)
@@ -736,7 +736,7 @@ describe("McpServer", () => {
   });
 
   test("does not register upgrade_openkitten when OPENKITTEN_ENABLE_UPGRADE is unset", async () => {
-    delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
+    delete Bun.env.OPENKITTEN_ENABLE_UPGRADE;
     using _server = await McpServer.create(
       bot,
       mockDatabase,

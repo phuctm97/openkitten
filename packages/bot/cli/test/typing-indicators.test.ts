@@ -124,7 +124,7 @@ test("working session change starts typing when no prompt is pending", async () 
     "sess-1": { chatId: 123, threadId: undefined },
   });
   ws.workingIds.add("sess-1");
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
   expect(mockSendChatAction).toHaveBeenCalledWith(123, "typing", {});
   expect(indicators.check("sess-1")).toBe(true);
 });
@@ -136,7 +136,7 @@ test("working session change does not start typing while prompt is pending", asy
     new Set(["sess-1"]),
   );
   ws.workingIds.add("sess-1");
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
   expect(mockSendChatAction).not.toHaveBeenCalled();
   expect(indicators.check("sess-1")).toBe(false);
 });
@@ -148,7 +148,7 @@ test("pending prompt cleared starts typing for working session", async () => {
     new Set(["sess-1"]),
   );
   pp.pendingIds.delete("sess-1");
-  await pp.hooks["change"]?.({ sessionId: "sess-1", pending: false });
+  await pp.hooks.change?.({ sessionId: "sess-1", pending: false });
   expect(mockSendChatAction).toHaveBeenCalledWith(123, "typing", {});
   expect(indicators.check("sess-1")).toBe(true);
 });
@@ -158,9 +158,9 @@ test("stops typing when session stops working", async () => {
     { "sess-1": { chatId: 123, threadId: undefined } },
     new Set(["sess-1"]),
   );
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
   ws.workingIds.delete("sess-1");
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: false });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: false });
   expect(indicators.check("sess-1")).toBe(false);
   await vi.advanceTimersByTimeAsync(4_000);
   expect(mockSendChatAction).toHaveBeenCalledTimes(1);
@@ -171,9 +171,9 @@ test("stops typing when a prompt becomes pending", async () => {
     { "sess-1": { chatId: 123, threadId: undefined } },
     new Set(["sess-1"]),
   );
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
   pp.pendingIds.add("sess-1");
-  await pp.hooks["change"]?.({ sessionId: "sess-1", pending: true });
+  await pp.hooks.change?.({ sessionId: "sess-1", pending: true });
   expect(indicators.check("sess-1")).toBe(false);
 });
 
@@ -182,7 +182,7 @@ test("passes thread id when present", async () => {
     { "sess-1": { chatId: 456, threadId: 789 } },
     new Set(["sess-1"]),
   );
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
   expect(mockSendChatAction).toHaveBeenCalledWith(456, "typing", {
     message_thread_id: 789,
   });
@@ -193,8 +193,8 @@ test("starting twice is idempotent", async () => {
     { "sess-1": { chatId: 123, threadId: undefined } },
     new Set(["sess-1"]),
   );
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
   expect(mockSendChatAction).toHaveBeenCalledTimes(1);
 });
 
@@ -207,7 +207,7 @@ test("start bubbles up initial send failures", async () => {
     new Set(["sess-1"]),
   );
   await expect(
-    ws.hooks["change"]?.({ sessionId: "sess-1", working: true }),
+    ws.hooks.change?.({ sessionId: "sess-1", working: true }),
   ).rejects.toThrow("send failed");
 });
 
@@ -216,7 +216,7 @@ test("sends typing action every four seconds while active", async () => {
     { "sess-1": { chatId: 123, threadId: undefined } },
     new Set(["sess-1"]),
   );
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
   await vi.advanceTimersByTimeAsync(8_000);
   expect(mockSendChatAction).toHaveBeenCalledTimes(3);
 });
@@ -232,7 +232,7 @@ test("interval failures are tracked and trigger shutdown", async () => {
     { "sess-1": { chatId: 123, threadId: undefined } },
     new Set(["sess-1"]),
   );
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
   await vi.advanceTimersByTimeAsync(4_000);
   expect(fp.track).toHaveBeenCalledOnce();
   const tracked = (fp.track as MockFn).mock.calls[0]?.[0] as Promise<void>;
@@ -260,8 +260,8 @@ test("queued interval callback ignores removed sessions", async () => {
     "sess-1": { chatId: 123, threadId: undefined },
   };
   const { es, ws, fp, shutdown } = setup(map, new Set(["sess-1"]));
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
-  es.hooks["beforeRemove"]?.({
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
+  es.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -284,8 +284,8 @@ test("beforeRemove prevents further interval sends after typing has started", as
     "sess-1": { chatId: 123, threadId: undefined },
   };
   const { es, ws, indicators, shutdown } = setup(map, new Set(["sess-1"]));
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
-  es.hooks["beforeRemove"]?.({
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
+  es.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -302,8 +302,8 @@ test("beforeRemove stops typing", async () => {
     { "sess-1": { chatId: 123, threadId: undefined } },
     new Set(["sess-1"]),
   );
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
-  es.hooks["beforeRemove"]?.({
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
+  es.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -320,11 +320,11 @@ test("beforeRemove during initial send prevents the interval from starting", asy
     { "sess-1": { chatId: 123, threadId: undefined } },
     new Set(["sess-1"]),
   );
-  const startPromise = ws.hooks["change"]?.({
+  const startPromise = ws.hooks.change?.({
     sessionId: "sess-1",
     working: true,
   });
-  es.hooks["beforeRemove"]?.({
+  es.hooks.beforeRemove?.({
     sessionId: "sess-1",
     chatId: 123,
     threadId: undefined,
@@ -341,11 +341,11 @@ test("dispose unhooks and clears active timers", async () => {
     { "sess-1": { chatId: 123, threadId: undefined } },
     new Set(["sess-1"]),
   );
-  await ws.hooks["change"]?.({ sessionId: "sess-1", working: true });
+  await ws.hooks.change?.({ sessionId: "sess-1", working: true });
   indicators[Symbol.dispose]();
-  expect(es.hooks["beforeRemove"]).toBeUndefined();
-  expect(ws.hooks["change"]).toBeUndefined();
-  expect(pp.hooks["change"]).toBeUndefined();
+  expect(es.hooks.beforeRemove).toBeUndefined();
+  expect(ws.hooks.change).toBeUndefined();
+  expect(pp.hooks.change).toBeUndefined();
   const countAfterDispose = mockSendChatAction.mock.calls.length;
   await vi.advanceTimersByTimeAsync(4_000);
   expect(mockSendChatAction).toHaveBeenCalledTimes(countAfterDispose);

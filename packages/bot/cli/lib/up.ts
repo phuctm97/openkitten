@@ -179,7 +179,7 @@ async function installDarwin(profile: Profile): Promise<void> {
 
 async function installWin32(profile: Profile): Promise<void> {
   const taskName = `\\OpenKitten\\Profiles\\${profile.name}`;
-  const logsDir = `${Bun.env["LOCALAPPDATA"]}\\OpenKitten\\Profiles\\${profile.name}\\Logs`;
+  const logsDir = `${Bun.env.LOCALAPPDATA}\\OpenKitten\\Profiles\\${profile.name}\\Logs`;
   const s = clack.spinner();
   s.start("Updating service");
   await mkdir(logsDir, { recursive: true });
@@ -202,7 +202,7 @@ export const up = defineCommand({
     },
   },
   run: async ({ args }) => {
-    Bun.env["OPENKITTEN_ENABLE_UPGRADE"] = "1";
+    Bun.env.OPENKITTEN_ENABLE_UPGRADE = "1";
     process.stderr.write(
       `${boxen(styleText("bold", "Source"), { padding: 1 })}\n`,
     );

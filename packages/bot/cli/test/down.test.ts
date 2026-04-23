@@ -61,7 +61,7 @@ beforeEach(() => {
     value: () => 1000,
     writable: true,
   });
-  delete Bun.env["OPENKITTEN_PROFILE"];
+  delete Bun.env.OPENKITTEN_PROFILE;
   confirmMock.mockResolvedValue(true);
 });
 
@@ -107,7 +107,7 @@ test("uninstalls on darwin with default profile", async () => {
 test("uninstalls on darwin with custom profile", async () => {
   Object.defineProperty(process, "platform", { value: "darwin" });
   Object.defineProperty(process, "getuid", { value: () => 501 });
-  Bun.env["OPENKITTEN_PROFILE"] = "work";
+  Bun.env.OPENKITTEN_PROFILE = "work";
   const { rm } = await import("node:fs/promises");
   await runCommand(down, { rawArgs: [] });
   expect(vi.mocked(rm)).toHaveBeenCalledWith(
@@ -119,7 +119,7 @@ test("uninstalls on darwin with custom profile", async () => {
 test("uninstalls on win32", async () => {
   Object.defineProperty(process, "platform", { value: "win32" });
   Object.defineProperty(process, "getuid", { value: undefined });
-  Bun.env["LOCALAPPDATA"] = "C:\\MockLocal";
+  Bun.env.LOCALAPPDATA = "C:\\MockLocal";
   const { rm } = await import("node:fs/promises");
   await runCommand(down, { rawArgs: [] });
   expect(vi.mocked(rm)).toHaveBeenCalledWith(

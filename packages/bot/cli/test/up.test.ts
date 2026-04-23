@@ -102,15 +102,15 @@ beforeEach(() => {
     value: () => 1000,
     writable: true,
   });
-  delete Bun.env["OPENKITTEN_PROFILE"];
-  delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
+  delete Bun.env.OPENKITTEN_PROFILE;
+  delete Bun.env.OPENKITTEN_ENABLE_UPGRADE;
 });
 
 afterEach(() => {
   Object.assign(Bun, { $: originalShell });
   Object.defineProperty(process, "platform", { value: originalPlatform });
   Object.defineProperty(process, "getuid", { value: originalGetuid });
-  delete Bun.env["OPENKITTEN_ENABLE_UPGRADE"];
+  delete Bun.env.OPENKITTEN_ENABLE_UPGRADE;
 });
 
 test("installs on linux", async () => {
@@ -198,7 +198,7 @@ test("installs on darwin with default profile", async () => {
 test("installs on darwin with custom profile", async () => {
   Object.defineProperty(process, "platform", { value: "darwin" });
   Object.defineProperty(process, "getuid", { value: () => 501 });
-  Bun.env["OPENKITTEN_PROFILE"] = "work";
+  Bun.env.OPENKITTEN_PROFILE = "work";
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
     .mockReturnValueOnce(chainable(shellResult(0, "")))
@@ -252,7 +252,7 @@ test("proceeds after darwin bootout timeout", async () => {
 
 test("installs on win32", async () => {
   Object.defineProperty(process, "platform", { value: "win32" });
-  Bun.env["LOCALAPPDATA"] = "C:\\MockLocal";
+  Bun.env.LOCALAPPDATA = "C:\\MockLocal";
   const { mkdir } = await import("node:fs/promises");
   shellMock
     .mockReturnValueOnce(chainable(shellResult(0, "main\n")))
