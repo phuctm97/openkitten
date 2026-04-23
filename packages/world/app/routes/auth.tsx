@@ -1,5 +1,69 @@
+import { data, replace } from "react-router";
 import { AuthRouter } from "~/components/auth/auth-router";
+import { authClient } from "~/lib/auth-client";
+import { queryClient } from "~/lib/query-client";
 import type { Route } from "./+types/auth";
+
+const authPaths = new Set([
+  "sign-up",
+  "sign-in",
+  "sign-out",
+  "reset-password",
+  "forgot-password",
+  "magic-link",
+]);
+
+function pathResolver(request: Request) {
+  const requestURL = new URL(request.url);
+  const redirectTo = requestURL.searchParams.get("redirectTo");
+
+  if (!redirectTo) {
+    return "/";
+  }
+
+  const redirectURL = new URL(redirectTo, requestURL.origin);
+
+  if (redirectURL.origin !== requestURL.origin) {
+    return "/";
+  }
+
+  return `${redirectURL.pathname}${redirectURL.search}${redirectURL.hash}`;
+}
+
+export async function clientLoader({
+  params,
+  request,
+}: Route.ClientLoaderArgs) {
+  const path = params.path ?? "";
+
+  if (!authPaths.has(path)) {
+    throw data(null, {
+      status: 404,
+      statusText: "Not Found",
+    });
+  }
+
+  const session = await queryClient.fetchQuery({
+    queryKey: ["auth", "getSession", null],
+    queryFn: ({ signal }) =>
+      authClient.getSession({
+        fetchOptions: {
+          signal,
+          throw: true,
+        },
+      }),
+  });
+
+  if (session && path !== "sign-out") {
+    throw replace(pathResolver(request));
+  }
+
+  if (!session && path === "sign-out") {
+    throw replace("/auth/sign-in");
+  }
+
+  return null;
+}
 
 export default function Component({ params }: Route.ComponentProps) {
   return (

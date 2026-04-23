@@ -107,7 +107,6 @@ test("allows protected routes to load when a session exists", async () => {
   await queryOptions.queryFn({ signal });
 
   expect(authenticatedLayoutMocks.authClient.getSession).toHaveBeenCalledWith({
-    query: undefined,
     fetchOptions: {
       signal,
       throw: true,
