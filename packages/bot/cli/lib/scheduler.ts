@@ -423,6 +423,35 @@ export class Scheduler implements Disposable {
     return this.#queue;
   }
 
+  async #findOurUserMessageId(
+    sessionId: string,
+    promptText: string,
+    submittedAt: number,
+    signal: AbortSignal | null,
+  ): Promise<string | null> {
+    const deadline = Date.now() + noReplyGraceMs;
+    while (Date.now() < deadline) {
+      if (signal?.aborted) return null;
+      const { data: messages } = await this.#opencodeClient.session.messages(
+        { sessionID: sessionId },
+        { throwOnError: true },
+      );
+      for (const msg of messages) {
+        if (msg.info.role !== "user") continue;
+        const created = msg.info.time?.created ?? 0;
+        if (created < submittedAt) continue;
+        const text = msg.parts
+          .filter((part) => part.type === "text")
+          .map((part) => part.text)
+          .join("");
+        if (text !== promptText) continue;
+        return msg.info.id;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return null;
+  }
+
   async #assertSessionExists(sessionId: string): Promise<void> {
     try {
       await this.#opencodeClient.session.get(
@@ -732,18 +761,27 @@ export class Scheduler implements Disposable {
         return;
       }
       const agent = getSessionAgent(this.#database, targetSessionId);
-      const promptMessageId = `msg_${randomUUID().replace(/-/g, "")}`;
+      const promptText = `${promptPrefix}${scheduleRow.prompt}`;
+      const submittedAt = Date.now();
       await this.#opencodeClient.session.promptAsync(
         {
           sessionID: targetSessionId,
-          messageID: promptMessageId,
           ...(agent && { agent }),
-          parts: [
-            { type: "text", text: `${promptPrefix}${scheduleRow.prompt}` },
-          ],
+          parts: [{ type: "text", text: promptText }],
         },
         { throwOnError: true },
       );
+      const promptMessageId = await this.#findOurUserMessageId(
+        targetSessionId,
+        promptText,
+        submittedAt,
+        signal,
+      );
+      if (!promptMessageId) {
+        throw new Error(
+          "Scheduled prompt's user message did not appear in session after promptAsync",
+        );
+      }
       const text = await this.#waitForText(
         targetSessionId,
         promptMessageId,
@@ -868,17 +906,22 @@ export class Scheduler implements Disposable {
       { sessionID: sessionId },
       { throwOnError: true },
     );
+    let lastCompletedText: string | null = null;
+    let hasMatchingAssistant = false;
     for (const msg of messages) {
       if (msg.info.role !== "assistant") continue;
       if (msg.info.parentID !== promptMessageId) continue;
+      hasMatchingAssistant = true;
+      if (!msg.info.time?.completed) return "busy";
       const text = msg.parts
         .filter((part) => part.type === "text")
         .map((part) => part.text)
         .join("");
-      if (text) return text;
-      return "idle";
+      if (text) lastCompletedText = text;
     }
-    return "no-reply";
+    if (!hasMatchingAssistant) return "no-reply";
+    if (lastCompletedText) return lastCompletedText;
+    return "idle";
   }
 
   async #reconcileOrphans(): Promise<void> {

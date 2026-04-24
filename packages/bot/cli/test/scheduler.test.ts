@@ -136,16 +136,11 @@ beforeEach(async () => {
       status: vi.fn().mockResolvedValue({
         data: { [ephemeralSessionId]: { type: "idle" } },
       }),
-      messages: vi.fn().mockImplementation(() =>
-        Promise.resolve({
-          data: [
-            {
-              info: { role: "assistant", parentID: lastPromptMessageId() },
-              parts: [{ type: "text", text: "[NO_REPORT]" }],
-            },
-          ],
-        }),
-      ),
+      messages: vi
+        .fn()
+        .mockImplementation(() =>
+          Promise.resolve(makeUserAndAssistant("[NO_REPORT]")),
+        ),
       get: vi
         .fn()
         .mockImplementation(({ sessionID }: { sessionID: string }) =>
@@ -237,22 +232,60 @@ async function fireManual(
   });
 }
 
-function lastPromptMessageId(): string {
+function lastPromptText(): string {
   const lastCall = opencodeClient.session.promptAsync.mock.calls.at(-1);
-  const body = lastCall?.[0] as { messageID?: string } | undefined;
-  return body?.messageID ?? "msg_unknown";
+  const body = lastCall?.[0] as
+    | { parts?: readonly { text?: string }[] }
+    | undefined;
+  return body?.parts?.[0]?.text ?? "";
+}
+
+function userMsgIdForLastPrompt(): string {
+  const promptCount = opencodeClient.session.promptAsync.mock.calls.length;
+  return `msg_user_for_prompt_${promptCount}`;
+}
+
+function makeUserAndAssistant(text: string): {
+  data: readonly unknown[];
+} {
+  const userMsgId = userMsgIdForLastPrompt();
+  const now = Date.now();
+  return {
+    data: [
+      {
+        info: { id: userMsgId, role: "user", time: { created: now } },
+        parts: [{ type: "text", text: lastPromptText() }],
+      },
+      {
+        info: {
+          role: "assistant",
+          parentID: userMsgId,
+          time: { created: now, completed: now },
+        },
+        parts: [{ type: "text", text }],
+      },
+    ],
+  };
 }
 
 function mockAssistantText(text: string): void {
-  opencodeClient.session.messages.mockImplementationOnce(() =>
-    Promise.resolve({
-      data: [
-        {
-          info: { role: "assistant", parentID: lastPromptMessageId() },
-          parts: [{ type: "text", text }],
-        },
-      ],
-    }),
+  const targetPromptCount =
+    opencodeClient.session.promptAsync.mock.calls.length + 1;
+  const prevImplementation =
+    opencodeClient.session.messages.getMockImplementation();
+  opencodeClient.session.messages.mockImplementation(
+    async (...args: unknown[]) => {
+      const currentPromptCount =
+        opencodeClient.session.promptAsync.mock.calls.length;
+      if (currentPromptCount === targetPromptCount) {
+        return makeUserAndAssistant(text);
+      }
+      if (typeof prevImplementation === "function") {
+        const fn = prevImplementation as (...a: unknown[]) => Promise<unknown>;
+        return await fn(...args);
+      }
+      return { data: [] };
+    },
   );
 }
 
@@ -1506,16 +1539,25 @@ test("silent run finalizes when assistant produces no final text", async () => {
     prompt: "p",
     once: false,
   });
-  opencodeClient.session.messages.mockImplementationOnce(() =>
-    Promise.resolve({
+  opencodeClient.session.messages.mockImplementation(() => {
+    const userMsgId = userMsgIdForLastPrompt();
+    return Promise.resolve({
       data: [
         {
-          info: { role: "assistant", parentID: lastPromptMessageId() },
+          info: { id: userMsgId, role: "user", time: { created: Date.now() } },
+          parts: [{ type: "text", text: lastPromptText() }],
+        },
+        {
+          info: {
+            role: "assistant",
+            parentID: userMsgId,
+            time: { created: Date.now(), completed: Date.now() },
+          },
           parts: [{ type: "tool", id: "t1", tool: "bash", state: "done" }],
         },
       ],
-    }),
-  );
+    });
+  });
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
@@ -1586,7 +1628,7 @@ test("text containing the deprecated [NO_REPORT] marker is reported as regular o
   expect(runs[0]?.output).toBe("[NO_REPORT]");
 });
 
-test("poll ignores assistant replies whose parentID does not match the scheduler's prompt (concurrent user-message isolation)", async () => {
+test("poll ignores assistant replies whose parentID does not match the scheduler's user message (concurrent user-message isolation)", async () => {
   const task = await scheduler.create({
     chatId: 123,
     cron: "0 * * * *",
@@ -1594,20 +1636,41 @@ test("poll ignores assistant replies whose parentID does not match the scheduler
     prompt: "p",
     once: false,
   });
-  opencodeClient.session.messages.mockImplementationOnce(() =>
-    Promise.resolve({
+  opencodeClient.session.messages.mockImplementation(() => {
+    const userMsgId = userMsgIdForLastPrompt();
+    return Promise.resolve({
       data: [
         {
-          info: { role: "assistant", parentID: "msg_some_user_message" },
+          info: {
+            id: "msg_unrelated_user",
+            role: "user",
+            time: { created: Date.now() - 1000 },
+          },
+          parts: [{ type: "text", text: "concurrent user input" }],
+        },
+        {
+          info: {
+            role: "assistant",
+            parentID: "msg_unrelated_user",
+            time: { created: Date.now() - 900, completed: Date.now() - 900 },
+          },
           parts: [{ type: "text", text: "USER_INJECTED_REPLY" }],
         },
         {
-          info: { role: "assistant", parentID: lastPromptMessageId() },
+          info: { id: userMsgId, role: "user", time: { created: Date.now() } },
+          parts: [{ type: "text", text: lastPromptText() }],
+        },
+        {
+          info: {
+            role: "assistant",
+            parentID: userMsgId,
+            time: { created: Date.now(), completed: Date.now() },
+          },
           parts: [{ type: "text", text: "SCHEDULED_REPLY" }],
         },
       ],
-    }),
-  );
+    });
+  });
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
@@ -1628,26 +1691,8 @@ test("consecutive chat-bound runs resolve the current session fresh each time", 
     .mockResolvedValueOnce("ses_first")
     .mockResolvedValueOnce("ses_second");
   opencodeClient.session.messages
-    .mockImplementationOnce(() =>
-      Promise.resolve({
-        data: [
-          {
-            info: { role: "assistant", parentID: lastPromptMessageId() },
-            parts: [{ type: "text", text: "A1" }],
-          },
-        ],
-      }),
-    )
-    .mockImplementationOnce(() =>
-      Promise.resolve({
-        data: [
-          {
-            info: { role: "assistant", parentID: lastPromptMessageId() },
-            parts: [{ type: "text", text: "A2" }],
-          },
-        ],
-      }),
-    );
+    .mockImplementationOnce(() => Promise.resolve(makeUserAndAssistant("A1")))
+    .mockImplementationOnce(() => Promise.resolve(makeUserAndAssistant("A2")));
   const first = fireCron(task.id, "job-1");
   await advanceForExecution();
   await first;
@@ -2135,26 +2180,8 @@ test("per-chat lock serializes concurrent runs in the same chat", async () => {
     once: false,
   });
   opencodeClient.session.messages
-    .mockImplementationOnce(() =>
-      Promise.resolve({
-        data: [
-          {
-            info: { role: "assistant", parentID: lastPromptMessageId() },
-            parts: [{ type: "text", text: "A" }],
-          },
-        ],
-      }),
-    )
-    .mockImplementationOnce(() =>
-      Promise.resolve({
-        data: [
-          {
-            info: { role: "assistant", parentID: lastPromptMessageId() },
-            parts: [{ type: "text", text: "B" }],
-          },
-        ],
-      }),
-    );
+    .mockImplementationOnce(() => Promise.resolve(makeUserAndAssistant("A")))
+    .mockImplementationOnce(() => Promise.resolve(makeUserAndAssistant("B")));
   const firePromiseA = fireCron(taskA.id, "job-a");
   const firePromiseB = fireCron(taskB.id, "job-b");
   await vi.advanceTimersByTimeAsync(2000);
@@ -2198,20 +2225,78 @@ test("retention trims run records beyond the cap", async () => {
   expect(runs.length).toBeLessThanOrEqual(500);
 });
 
-test("#waitForText breaks when session is idle and has no assistant text", async () => {
-  opencodeClient.session.status.mockResolvedValueOnce({
+test("poll treats incomplete assistant turn (no time.completed) as busy and keeps polling", async () => {
+  let callCount = 0;
+  opencodeClient.session.status.mockResolvedValue({
     data: { [ephemeralSessionId]: { type: "idle" } },
   });
-  opencodeClient.session.messages.mockImplementationOnce(() =>
-    Promise.resolve({
+  opencodeClient.session.messages.mockImplementation(() => {
+    callCount += 1;
+    const userMsgId = userMsgIdForLastPrompt();
+    const now = Date.now();
+    const assistantInfo =
+      callCount < 3
+        ? { role: "assistant", parentID: userMsgId, time: { created: now } }
+        : {
+            role: "assistant",
+            parentID: userMsgId,
+            time: { created: now, completed: now },
+          };
+    const assistantParts =
+      callCount < 3
+        ? [{ type: "tool", id: "t1", tool: "bash", state: "running" }]
+        : [{ type: "text", text: "finally-done" }];
+    return Promise.resolve({
       data: [
         {
-          info: { role: "assistant", parentID: lastPromptMessageId() },
+          info: { id: userMsgId, role: "user", time: { created: now } },
+          parts: [{ type: "text", text: lastPromptText() }],
+        },
+        { info: assistantInfo, parts: assistantParts },
+      ],
+    });
+  });
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const firePromise = fireCron(task.id);
+  for (let i = 0; i < 5; i++) {
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.output).toBe("finally-done");
+});
+
+test("#waitForText breaks when session is idle and has no assistant text", async () => {
+  opencodeClient.session.status.mockResolvedValue({
+    data: { [ephemeralSessionId]: { type: "idle" } },
+  });
+  opencodeClient.session.messages.mockImplementation(() => {
+    const userMsgId = userMsgIdForLastPrompt();
+    return Promise.resolve({
+      data: [
+        {
+          info: { id: userMsgId, role: "user", time: { created: Date.now() } },
+          parts: [{ type: "text", text: lastPromptText() }],
+        },
+        {
+          info: {
+            role: "assistant",
+            parentID: userMsgId,
+            time: { created: Date.now(), completed: Date.now() },
+          },
           parts: [{ type: "tool", id: "t1", tool: "bash", state: "done" }],
         },
       ],
-    }),
-  );
+    });
+  });
   const task = await scheduler.create({
     chatId: 123,
     cron: "0 * * * *",
@@ -2227,17 +2312,150 @@ test("#waitForText breaks when session is idle and has no assistant text", async
   expect(bot.api.sendMessage).not.toHaveBeenCalled();
 });
 
+test("user-message detection ignores messages with mismatched text and missing timestamps", async () => {
+  opencodeClient.session.messages.mockImplementation(() => {
+    const userMsgId = userMsgIdForLastPrompt();
+    return Promise.resolve({
+      data: [
+        {
+          info: { id: "msg_other", role: "user" },
+          parts: [{ type: "text", text: "someone else's message" }],
+        },
+        {
+          info: {
+            id: "msg_other_with_time",
+            role: "user",
+            time: { created: Date.now() },
+          },
+          parts: [{ type: "text", text: "a different prompt entirely" }],
+        },
+        {
+          info: {
+            id: userMsgId,
+            role: "user",
+            time: { created: Date.now() },
+          },
+          parts: [{ type: "text", text: lastPromptText() }],
+        },
+        {
+          info: {
+            role: "assistant",
+            parentID: userMsgId,
+            time: { created: Date.now(), completed: Date.now() },
+          },
+          parts: [{ type: "text", text: "hello" }],
+        },
+      ],
+    });
+  });
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.output).toBe("hello");
+});
+
+test("user-message detection aborts when signal fires before detection succeeds", async () => {
+  opencodeClient.session.messages.mockImplementation(async () => {
+    for (const [, controller] of abortSignals) controller.abort();
+    return { data: [] };
+  });
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  let caught: unknown;
+  const firePromise = fireCron(task.id, "abort-in-find").catch((e) => {
+    caught = e;
+  });
+  for (let i = 0; i < 5; i++) {
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  await firePromise;
+  expect(caught).toBeInstanceOf(Error);
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("failed");
+});
+
+test("run fails deterministically when promptAsync succeeds but the user message never appears", async () => {
+  opencodeClient.session.messages.mockResolvedValue({ data: [] });
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  let caught: unknown;
+  const firePromise = fireCron(task.id).catch((e) => {
+    caught = e;
+  });
+  for (let i = 0; i < 25; i++) {
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  await firePromise;
+  expect((caught as Error).message).toContain("user message did not appear");
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("failed");
+  expect(runs[0]?.error).toContain("user message did not appear");
+});
+
+test("promptAsync user message appearing late is still picked up after retries", async () => {
+  let messagesCalls = 0;
+  opencodeClient.session.messages.mockImplementation(() => {
+    messagesCalls += 1;
+    if (messagesCalls < 2) return Promise.resolve({ data: [] });
+    return Promise.resolve(makeUserAndAssistant("late"));
+  });
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const firePromise = fireCron(task.id);
+  for (let i = 0; i < 10; i++) {
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  for (let i = 0; i < 5; i++) {
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.output).toBe("late");
+});
+
 test("run fails deterministically when promptAsync succeeds but OpenCode never creates an assistant reply", async () => {
   opencodeClient.session.status.mockResolvedValue({
     data: { [ephemeralSessionId]: { type: "idle" } },
   });
-  opencodeClient.session.messages.mockResolvedValue({
-    data: [
-      {
-        info: { role: "user", id: "msg_user_only" },
-        parts: [{ type: "text", text: "hi" }],
-      },
-    ],
+  opencodeClient.session.messages.mockImplementation(() => {
+    const userMsgId = userMsgIdForLastPrompt();
+    return Promise.resolve({
+      data: [
+        {
+          info: { id: userMsgId, role: "user", time: { created: Date.now() } },
+          parts: [{ type: "text", text: lastPromptText() }],
+        },
+      ],
+    });
   });
   const task = await scheduler.create({
     chatId: 123,
@@ -2307,8 +2525,16 @@ test("#waitForText aborts on signal before sleep in subsequent iterations", asyn
 
 test("#waitForText returns null when max attempts exhausted with no text", async () => {
   opencodeClient.session.status.mockResolvedValue({ data: {} });
-  opencodeClient.session.messages.mockResolvedValue({
-    data: [{ info: { role: "user" }, parts: [] }],
+  opencodeClient.session.messages.mockImplementation(() => {
+    const userMsgId = userMsgIdForLastPrompt();
+    return Promise.resolve({
+      data: [
+        {
+          info: { id: userMsgId, role: "user", time: { created: Date.now() } },
+          parts: [{ type: "text", text: lastPromptText() }],
+        },
+      ],
+    });
   });
   const task = await scheduler.create({
     chatId: 123,
@@ -2334,15 +2560,8 @@ test("#waitForText continues after a busy status", async () => {
     .mockResolvedValueOnce({
       data: { [ephemeralSessionId]: { type: "idle" } },
     });
-  opencodeClient.session.messages.mockImplementationOnce(() =>
-    Promise.resolve({
-      data: [
-        {
-          info: { role: "assistant", parentID: lastPromptMessageId() },
-          parts: [{ type: "text", text: "yo" }],
-        },
-      ],
-    }),
+  opencodeClient.session.messages.mockImplementation(() =>
+    Promise.resolve(makeUserAndAssistant("yo")),
   );
   const task = await scheduler.create({
     chatId: 123,
@@ -2412,23 +2631,19 @@ test("execution records cancelled when signal fires during polling", async () =>
     prompt: "p",
     once: false,
   });
-  opencodeClient.session.messages.mockImplementationOnce(async () => {
-    for (const [, controller] of abortSignals) controller.abort();
-    return {
-      data: [
-        {
-          info: { role: "assistant", parentID: lastPromptMessageId() },
-          parts: [{ type: "text", text: "hi" }],
-        },
-      ],
-    };
+  let messagesCallCount = 0;
+  opencodeClient.session.messages.mockImplementation(async () => {
+    messagesCallCount += 1;
+    if (messagesCallCount >= 2) {
+      for (const [, controller] of abortSignals) controller.abort();
+    }
+    return makeUserAndAssistant("hi");
   });
   const firePromise = fireCron(task.id, "abort-mid");
   await advanceForExecution();
   await firePromise;
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.status).toBe("cancelled");
-  expect(runs[0]?.output).toBe("hi");
   expect(bot.api.sendMessage).not.toHaveBeenCalled();
 });
 
