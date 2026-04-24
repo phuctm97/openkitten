@@ -12,14 +12,17 @@ import {
 } from "react-email";
 import {
   backgroundColor,
+  borderColor,
+  cardColor,
   fontFamily,
   footerColor,
-  mutedTextColor,
+  foregroundColor,
+  mutedForegroundColor,
   primaryColor,
-  primaryShadowColor,
-  surfaceBorderColor,
-  surfaceColor,
-  textColor,
+  primaryForegroundColor,
+  radiusLg,
+  radiusMd,
+  shadowColor,
 } from "~/lib/emails/theme";
 import { iconURL } from "~/lib/icon-url";
 import { websiteURL } from "~/lib/website-url";
@@ -116,18 +119,18 @@ const logoText = {
   fontFamily,
   fontSize: "20px",
   fontWeight: "600" as const,
-  letterSpacing: "0.02em",
+  letterSpacing: "0",
   color: primaryColor,
   margin: "0",
   display: "inline-block",
 };
 
 const card = {
-  backgroundColor: surfaceColor,
-  borderRadius: "20px",
+  backgroundColor: cardColor,
+  borderRadius: radiusLg,
   padding: "32px 16px",
-  border: `1px solid ${surfaceBorderColor}`,
-  boxShadow: `0 14px 36px -24px ${primaryShadowColor}`,
+  border: `1px solid ${borderColor}`,
+  boxShadow: `0 14px 36px -24px ${shadowColor}`,
 };
 
 const cardContent = {
@@ -137,16 +140,16 @@ const cardContent = {
 
 const heading = {
   fontFamily,
-  color: textColor,
+  color: foregroundColor,
   fontSize: "28px",
   fontWeight: "700" as const,
-  letterSpacing: "-0.02em",
+  letterSpacing: "0",
   margin: "0 0 16px",
   textAlign: "center" as const,
 };
 
 const subheading = {
-  color: mutedTextColor,
+  color: mutedForegroundColor,
   fontSize: "16px",
   lineHeight: "24px",
   margin: "0 0 32px",
@@ -154,7 +157,7 @@ const subheading = {
 };
 
 const centeredParagraph = {
-  color: textColor,
+  color: foregroundColor,
   fontSize: "15px",
   lineHeight: "24px",
   margin: "0 0 24px",
@@ -168,11 +171,11 @@ const buttonContainer = {
 
 const button = {
   backgroundColor: primaryColor,
-  borderRadius: "12px",
-  color: "#ffffff",
+  borderRadius: radiusMd,
+  color: primaryForegroundColor,
   fontSize: "16px",
   fontWeight: "600" as const,
-  boxShadow: `0 10px 24px -18px ${primaryShadowColor}`,
+  boxShadow: `0 10px 24px -18px ${shadowColor}`,
   textDecoration: "none",
   textAlign: "center" as const,
   padding: "12px 32px",
@@ -182,7 +185,7 @@ const button = {
 };
 
 const footerText = {
-  color: mutedTextColor,
+  color: mutedForegroundColor,
   fontSize: "14px",
   lineHeight: "20px",
   margin: "24px auto 32px auto",

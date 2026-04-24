@@ -12,6 +12,11 @@ it("renders the password reset template with a custom URL", async () => {
   expect(normalizedHTML).toContain("reset your password for your");
   expect(normalizedHTML).toContain(resetURL);
   expect(normalizedHTML).toContain("Reset password");
+  expect(normalizedHTML).toContain("background-color:#ffffff");
+  expect(normalizedHTML).toContain("color:#18181b");
+  expect(normalizedHTML).toContain("border:1px solid #e4e4e7");
+  expect(normalizedHTML).toContain("border-radius:8px");
+  expect(normalizedHTML).toContain("color:#fafafa");
 });
 
 it("falls back to the website URL in the password reset template", async () => {
