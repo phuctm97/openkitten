@@ -12,6 +12,11 @@ it("renders the email verification template with a custom URL", async () => {
   expect(normalizedHTML).toContain("Welcome to OpenKitten!");
   expect(normalizedHTML).toContain(verificationURL);
   expect(normalizedHTML).toContain("OpenKitten");
+  expect(normalizedHTML).toContain("background-color:#ffffff");
+  expect(normalizedHTML).toContain("color:#18181b");
+  expect(normalizedHTML).toContain("border:1px solid #e4e4e7");
+  expect(normalizedHTML).toContain("border-radius:10px");
+  expect(normalizedHTML).toContain("color:#71717a");
 });
 
 it("falls back to the website URL in the email verification template", async () => {

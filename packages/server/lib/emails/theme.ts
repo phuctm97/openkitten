@@ -1,10 +1,13 @@
-export const primaryColor = "#ba6836";
-export const primaryShadowColor = "#8d4f28";
-export const surfaceColor = "#fffdf9";
-export const surfaceBorderColor = "#e8dccd";
-export const backgroundColor = "#f6f1e8";
-export const textColor = "#2d241e";
-export const mutedTextColor = "#7a6659";
-export const footerColor = "#a28c7d";
+export const backgroundColor = "#ffffff";
+export const borderColor = "#e4e4e7";
+export const cardColor = "#ffffff";
 export const fontFamily =
-  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  '"Manrope", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+export const foregroundColor = "#09090b";
+export const footerColor = "#a1a1aa";
+export const mutedForegroundColor = "#71717a";
+export const primaryColor = "#18181b";
+export const primaryForegroundColor = "#fafafa";
+export const radiusLg = "10px";
+export const radiusMd = "8px";
+export const shadowColor = "rgba(9, 9, 11, 0.08)";
