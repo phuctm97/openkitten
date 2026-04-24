@@ -289,6 +289,57 @@ describe("registerScheduleTools", () => {
     );
   });
 
+  test("queue_schedule_create input schema rejects non-ses_ sessionId values", () => {
+    const tools = setup();
+    const config = tools.get("queue_schedule_create")?.config as {
+      inputSchema: { safeParse: (value: unknown) => { success: boolean } };
+    };
+    const base = {
+      cron: "0 * * * *",
+      description: "d",
+      prompt: "p",
+      once: false,
+    };
+    expect(
+      config.inputSchema.safeParse({ ...base, sessionId: ".__OMIT__" }).success,
+    ).toBe(false);
+    expect(
+      config.inputSchema.safeParse({ ...base, sessionId: "none" }).success,
+    ).toBe(false);
+    expect(
+      config.inputSchema.safeParse({ ...base, sessionId: "" }).success,
+    ).toBe(false);
+    expect(
+      config.inputSchema.safeParse({ ...base, sessionId: "ses_abc123" })
+        .success,
+    ).toBe(true);
+    expect(config.inputSchema.safeParse(base).success).toBe(true);
+  });
+
+  test("queue_schedule_update input schema rejects non-ses_ sessionId values but allows null", () => {
+    const tools = setup();
+    const config = tools.get("queue_schedule_update")?.config as {
+      inputSchema: { safeParse: (value: unknown) => { success: boolean } };
+    };
+    const base = { id: "00000000-0000-0000-0000-000000000000" };
+    expect(
+      config.inputSchema.safeParse({ ...base, sessionId: ".__OMIT__" }).success,
+    ).toBe(false);
+    expect(
+      config.inputSchema.safeParse({ ...base, sessionId: "placeholder" })
+        .success,
+    ).toBe(false);
+    expect(
+      config.inputSchema.safeParse({ ...base, sessionId: null }).success,
+    ).toBe(true);
+    expect(
+      config.inputSchema.safeParse({
+        ...base,
+        sessionId: "ses_245b9c1f2ffey2EnwnQ9TxuF87",
+      }).success,
+    ).toBe(true);
+  });
+
   test("queue_schedule_list returns filtered tasks", async () => {
     mockList.mockReturnValue([makeTask({ description: "Alpha" })]);
     const tools = setup();

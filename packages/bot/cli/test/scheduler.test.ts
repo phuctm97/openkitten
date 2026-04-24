@@ -1,6 +1,7 @@
 import { eq } from "drizzle-orm";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { Database } from "~/lib/database";
+import { logger } from "~/lib/logger";
 import { Scheduler } from "~/lib/scheduler";
 import {
   scheduleRun as scheduleRunTable,
@@ -9,6 +10,7 @@ import {
 } from "~/lib/schema";
 
 let capturedProcessor: ((job: unknown) => Promise<unknown>) | undefined;
+let capturedErrorListener: ((error: unknown) => void) | undefined;
 const cronRegistry: Array<{ id: string; name: string; next: number }> = [];
 const abortSignals = new Map<string, AbortController>();
 
@@ -44,7 +46,11 @@ const mockListCrons = vi
   .fn()
   .mockImplementation(() => Promise.resolve([...cronRegistry]));
 const mockClose = vi.fn().mockResolvedValue(undefined);
-const mockOn = vi.fn();
+const mockOn = vi
+  .fn()
+  .mockImplementation((event: string, listener: (error: unknown) => void) => {
+    if (event === "error") capturedErrorListener = listener;
+  });
 const mockGetJobsAsync = vi.fn().mockResolvedValue([]);
 const mockGetJob = vi
   .fn()
@@ -104,6 +110,7 @@ let opencodeClient: {
     abort: ReturnType<typeof vi.fn>;
     status: ReturnType<typeof vi.fn>;
     messages: ReturnType<typeof vi.fn>;
+    get: ReturnType<typeof vi.fn>;
   };
 };
 let existingSessions: {
@@ -129,20 +136,41 @@ beforeEach(async () => {
       status: vi.fn().mockResolvedValue({
         data: { [ephemeralSessionId]: { type: "idle" } },
       }),
-      messages: vi.fn().mockResolvedValue({
-        data: [
-          {
-            info: { role: "assistant" },
-            parts: [{ type: "text", text: "[NO_REPORT]" }],
-          },
-        ],
-      }),
+      messages: vi.fn().mockImplementation(() =>
+        Promise.resolve({
+          data: [
+            {
+              info: { role: "assistant", parentID: lastPromptMessageId() },
+              parts: [{ type: "text", text: "[NO_REPORT]" }],
+            },
+          ],
+        }),
+      ),
+      get: vi
+        .fn()
+        .mockImplementation(({ sessionID }: { sessionID: string }) =>
+          Promise.resolve({ data: { id: sessionID } }),
+        ),
     },
   };
   existingSessions = {
     get: vi.fn().mockReturnValue({ chatId: 123, threadId: undefined }),
-    find: vi.fn().mockReturnValue(userSessionId),
-    check: vi.fn().mockImplementation((id: string) => id === userSessionId),
+    find: vi
+      .fn()
+      .mockImplementation(
+        (
+          _location: { chatId: number; threadId?: number },
+          options?: { createIfNotFound?: boolean },
+        ) =>
+          options?.createIfNotFound
+            ? Promise.resolve(ephemeralSessionId)
+            : ephemeralSessionId,
+      ),
+    check: vi
+      .fn()
+      .mockImplementation(
+        (id: string) => id === userSessionId || id === ephemeralSessionId,
+      ),
     unreachableLocations: [],
   };
   mockGetSessionAgent.mockReturnValue(undefined);
@@ -209,16 +237,65 @@ async function fireManual(
   });
 }
 
+function lastPromptMessageId(): string {
+  const lastCall = opencodeClient.session.promptAsync.mock.calls.at(-1);
+  const body = lastCall?.[0] as { messageID?: string } | undefined;
+  return body?.messageID ?? "msg_unknown";
+}
+
 function mockAssistantText(text: string): void {
-  opencodeClient.session.messages.mockResolvedValueOnce({
-    data: [{ info: { role: "assistant" }, parts: [{ type: "text", text }] }],
-  });
+  opencodeClient.session.messages.mockImplementationOnce(() =>
+    Promise.resolve({
+      data: [
+        {
+          info: { role: "assistant", parentID: lastPromptMessageId() },
+          parts: [{ type: "text", text }],
+        },
+      ],
+    }),
+  );
 }
 
 async function advanceForExecution(): Promise<void> {
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(0);
 }
+
+test("queue error listener suppresses benign lock-token errors", () => {
+  const loggerError = vi.spyOn(logger, "error").mockImplementation(() => {});
+  if (!capturedErrorListener) throw new Error("error listener not captured");
+  const benignFail = Object.assign(
+    new Error("Invalid or expired lock token for job abc-123"),
+    { context: "fail" },
+  );
+  const benignAck = Object.assign(
+    new Error("Invalid or expired lock token for job abc-123"),
+    { context: "ack-stale" },
+  );
+  capturedErrorListener(benignFail);
+  capturedErrorListener(benignAck);
+  expect(loggerError).not.toHaveBeenCalled();
+});
+
+test("queue error listener still logs unrelated errors", () => {
+  const loggerError = vi.spyOn(logger, "error").mockImplementation(() => {});
+  if (!capturedErrorListener) throw new Error("error listener not captured");
+  const pullError = Object.assign(new Error("connection refused"), {
+    context: "pull",
+  });
+  const differentLockContext = Object.assign(
+    new Error("Invalid or expired lock token for job abc-123"),
+    { context: "heartbeat" },
+  );
+  const lockTokenNoContext = new Error(
+    "Invalid or expired lock token for job abc-123",
+  );
+  capturedErrorListener(pullError);
+  capturedErrorListener(differentLockContext);
+  capturedErrorListener(lockTokenNoContext);
+  capturedErrorListener("not-an-error-value");
+  expect(loggerError).toHaveBeenCalledTimes(4);
+});
 
 test("create() returns a task with all fields populated", async () => {
   const task = await scheduler.create({
@@ -1198,8 +1275,10 @@ test("processor accepts manual trigger even when disabled", async () => {
   const firePromise = fireManual(task.id);
   await advanceForExecution();
   await firePromise;
-  expect(opencodeClient.session.create).toHaveBeenCalled();
-  expect(bot.api.sendMessage).toHaveBeenCalled();
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalled();
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.output).toBe("report");
 });
 
 test("create() with sessionId stores it on the task", async () => {
@@ -1239,6 +1318,58 @@ test("update({ sessionId: null }) converts session-bound back to chat-bound", as
   });
   const updated = await scheduler.update(task.id, { sessionId: null });
   expect(updated.sessionId).toBeNull();
+});
+
+test("create() throws InvalidSessionError when sessionId does not exist in OpenCode", async () => {
+  opencodeClient.session.get.mockRejectedValueOnce(new Error("not found"));
+  await expect(
+    scheduler.create({
+      chatId: 123,
+      cron: "0 * * * *",
+      description: "d",
+      prompt: "p",
+      once: false,
+      sessionId: "ses_invalidshouldomit",
+    }),
+  ).rejects.toMatchObject({
+    name: "InvalidSessionError",
+    sessionId: "ses_invalidshouldomit",
+  });
+  const schedules = scheduler.list();
+  expect(schedules).toHaveLength(0);
+});
+
+test("update() throws InvalidSessionError when new sessionId does not exist in OpenCode", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.get.mockRejectedValueOnce(new Error("not found"));
+  await expect(
+    scheduler.update(task.id, { sessionId: "ses_bogus" }),
+  ).rejects.toMatchObject({
+    name: "InvalidSessionError",
+    sessionId: "ses_bogus",
+  });
+  const reloaded = scheduler.get(task.id);
+  expect(reloaded.sessionId).toBeNull();
+});
+
+test("update({ sessionId: null }) skips the OpenCode session-existence check", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+    sessionId: userSessionId,
+  });
+  opencodeClient.session.get.mockClear();
+  await scheduler.update(task.id, { sessionId: null });
+  expect(opencodeClient.session.get).not.toHaveBeenCalled();
 });
 
 test("session-bound run prompts into the pinned session without creating or aborting an ephemeral session", async () => {
@@ -1349,7 +1480,7 @@ test("run cancelled before session acquisition leaves runSessionId null", async 
   expect(run.runSessionId).toBeNull();
 });
 
-test("reported run posts to Telegram and records output", async () => {
+test("reported run records output and does not post directly to Telegram", async () => {
   const task = await scheduler.create({
     chatId: 123,
     cron: "0 * * * *",
@@ -1361,19 +1492,27 @@ test("reported run posts to Telegram and records output", async () => {
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
-  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "Important report", {});
+  expect(bot.api.sendMessage).not.toHaveBeenCalled();
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.status).toBe("reported");
   expect(runs[0]?.output).toBe("Important report");
 });
 
-test("silent run with NO_REPORT marker sends nothing to Telegram", async () => {
+test("silent run finalizes when assistant produces no final text", async () => {
   const task = await scheduler.create({
     chatId: 123,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
     once: false,
+  });
+  opencodeClient.session.messages.mockResolvedValueOnce({
+    data: [
+      {
+        info: { role: "assistant" },
+        parts: [{ type: "tool", id: "t1", tool: "bash", state: "done" }],
+      },
+    ],
   });
   const firePromise = fireCron(task.id);
   await advanceForExecution();
@@ -1381,49 +1520,10 @@ test("silent run with NO_REPORT marker sends nothing to Telegram", async () => {
   expect(bot.api.sendMessage).not.toHaveBeenCalled();
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.status).toBe("silent");
+  expect(runs[0]?.output).toBeNull();
 });
 
-test("text containing NO_REPORT mid-sentence is reported, not silent", async () => {
-  const task = await scheduler.create({
-    chatId: 123,
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-  mockAssistantText(
-    "The marker [NO_REPORT] is a convention — here's the result.",
-  );
-  const firePromise = fireCron(task.id);
-  await advanceForExecution();
-  await firePromise;
-  expect(bot.api.sendMessage).toHaveBeenCalledWith(
-    123,
-    "The marker [NO_REPORT] is a convention — here's the result.",
-    {},
-  );
-  const runs = scheduler.listRuns({ scheduleId: task.id });
-  expect(runs[0]?.status).toBe("reported");
-});
-
-test("NO_REPORT with trailing whitespace still counts as silent", async () => {
-  const task = await scheduler.create({
-    chatId: 123,
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-  });
-  mockAssistantText("  [NO_REPORT]\n");
-  const firePromise = fireCron(task.id);
-  await advanceForExecution();
-  await firePromise;
-  expect(bot.api.sendMessage).not.toHaveBeenCalled();
-  const runs = scheduler.listRuns({ scheduleId: task.id });
-  expect(runs[0]?.status).toBe("silent");
-});
-
-test("run with thread delivers to message_thread_id", async () => {
+test("chat-bound run targets the current chat session resolved by chat+thread", async () => {
   const task = await scheduler.create({
     chatId: 456,
     threadId: 42,
@@ -1436,9 +1536,11 @@ test("run with thread delivers to message_thread_id", async () => {
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
-  expect(bot.api.sendMessage).toHaveBeenCalledWith(456, "Thread report", {
-    message_thread_id: 42,
-  });
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 456, threadId: 42 },
+    { createIfNotFound: true },
+  );
+  expect(bot.api.sendMessage).not.toHaveBeenCalled();
 });
 
 test("failed run records error and does not notify by default", async () => {
@@ -1463,6 +1565,96 @@ test("failed run records error and does not notify by default", async () => {
   expect(runs[0]?.status).toBe("failed");
   expect(runs[0]?.error).toBe("AI down");
   expect(bot.api.sendMessage).not.toHaveBeenCalled();
+});
+
+test("text containing the deprecated [NO_REPORT] marker is reported as regular output", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  mockAssistantText("[NO_REPORT]");
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.output).toBe("[NO_REPORT]");
+});
+
+test("poll ignores assistant replies whose parentID does not match the scheduler's prompt (concurrent user-message isolation)", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.messages.mockImplementationOnce(() =>
+    Promise.resolve({
+      data: [
+        {
+          info: { role: "assistant", parentID: "msg_some_user_message" },
+          parts: [{ type: "text", text: "USER_INJECTED_REPLY" }],
+        },
+        {
+          info: { role: "assistant", parentID: lastPromptMessageId() },
+          parts: [{ type: "text", text: "SCHEDULED_REPLY" }],
+        },
+      ],
+    }),
+  );
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.output).toBe("SCHEDULED_REPLY");
+  expect(runs[0]?.status).toBe("reported");
+});
+
+test("consecutive chat-bound runs resolve the current session fresh each time", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  existingSessions.find
+    .mockResolvedValueOnce("ses_first")
+    .mockResolvedValueOnce("ses_second");
+  opencodeClient.session.messages
+    .mockImplementationOnce(() =>
+      Promise.resolve({
+        data: [
+          {
+            info: { role: "assistant", parentID: lastPromptMessageId() },
+            parts: [{ type: "text", text: "A1" }],
+          },
+        ],
+      }),
+    )
+    .mockImplementationOnce(() =>
+      Promise.resolve({
+        data: [
+          {
+            info: { role: "assistant", parentID: lastPromptMessageId() },
+            parts: [{ type: "text", text: "A2" }],
+          },
+        ],
+      }),
+    );
+  const first = fireCron(task.id, "job-1");
+  await advanceForExecution();
+  await first;
+  const second = fireCron(task.id, "job-2");
+  await advanceForExecution();
+  await second;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  const sessions = runs.map((r) => r.runSessionId).sort();
+  expect(sessions).toEqual(["ses_first", "ses_second"]);
 });
 
 test("failed run with notifyOnFailure and thread sends to thread", async () => {
@@ -1512,7 +1704,7 @@ test("failed run with notifyOnFailure sends Telegram alert", async () => {
   );
 });
 
-test("failed run when session.create throws skips ephemeral abort", async () => {
+test("failed run when chat session cannot be resolved is recorded as failed", async () => {
   const task = await scheduler.create({
     chatId: 123,
     cron: "0 * * * *",
@@ -1520,10 +1712,7 @@ test("failed run when session.create throws skips ephemeral abort", async () => 
     prompt: "p",
     once: false,
   });
-  opencodeClient.session.create.mockRejectedValueOnce(
-    new Error("create failed"),
-  );
-  opencodeClient.session.abort.mockClear();
+  existingSessions.find.mockRejectedValueOnce(new Error("create failed"));
   let caught: unknown;
   const firePromise = fireCron(task.id).catch((e) => {
     caught = e;
@@ -1531,9 +1720,9 @@ test("failed run when session.create throws skips ephemeral abort", async () => 
   await advanceForExecution();
   await firePromise;
   expect((caught as Error).message).toBe("create failed");
-  expect(opencodeClient.session.abort).not.toHaveBeenCalled();
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.status).toBe("failed");
+  expect(runs[0]?.runSessionId).toBeNull();
 });
 
 test("failed run records non-Error string exceptions", async () => {
@@ -1576,25 +1765,28 @@ test("failed run logs when notification delivery also fails", async () => {
   expect((caught as Error).message).toBe("x");
 });
 
-test("execution proceeds and reports when no chat session is mapped (agent override is simply skipped)", async () => {
+test("chat-bound run auto-creates a chat session when none exists yet", async () => {
   const task = await scheduler.create({
-    chatId: 123,
+    chatId: 999,
     cron: "0 * * * *",
     description: "d",
     prompt: "p",
     once: false,
   });
-  existingSessions.find.mockReturnValue(undefined);
   mockAssistantText("delivered");
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
-  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "delivered", {});
+  expect(existingSessions.find).toHaveBeenCalledWith(
+    { chatId: 999, threadId: undefined },
+    { createIfNotFound: true },
+  );
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.runSessionId).toBe(ephemeralSessionId);
 });
 
-test("execution aborts ephemeral session in finally even on success", async () => {
+test("chat-bound run never calls session.abort (session belongs to the user)", async () => {
   const task = await scheduler.create({
     chatId: 123,
     cron: "0 * * * *",
@@ -1606,9 +1798,7 @@ test("execution aborts ephemeral session in finally even on success", async () =
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
-  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
-    sessionID: ephemeralSessionId,
-  });
+  expect(opencodeClient.session.abort).not.toHaveBeenCalled();
 });
 
 test("processor returns without awaiting ephemeral session abort", async () => {
@@ -1665,9 +1855,9 @@ test("agent from session is passed to ephemeral prompt", async () => {
   );
 });
 
-test("chat-bound run looks up agent by chat session, not by the ephemeral run session", async () => {
+test("chat-bound run looks up agent by the target chat session id", async () => {
   mockGetSessionAgent.mockImplementation((id) =>
-    id === userSessionId ? "chat-agent" : undefined,
+    id === ephemeralSessionId ? "chat-agent" : undefined,
   );
   const task = await scheduler.create({
     chatId: 123,
@@ -1679,6 +1869,7 @@ test("chat-bound run looks up agent by chat session, not by the ephemeral run se
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
+  expect(mockGetSessionAgent).toHaveBeenCalledWith(ephemeralSessionId);
   expect(opencodeClient.session.promptAsync).toHaveBeenCalledWith(
     expect.objectContaining({ agent: "chat-agent" }),
     { throwOnError: true },
@@ -1705,24 +1896,6 @@ test("session-bound run looks up agent by the pinned session id", async () => {
     expect.objectContaining({ agent: "pinned-agent" }),
     { throwOnError: true },
   );
-});
-
-test("session-bound run with external session id passes no agent override", async () => {
-  mockGetSessionAgent.mockReturnValue("should-not-appear");
-  const task = await scheduler.create({
-    chatId: 123,
-    cron: "0 * * * *",
-    description: "d",
-    prompt: "p",
-    once: false,
-    sessionId: "external-session-xyz",
-  });
-  mockAssistantText("x");
-  const firePromise = fireCron(task.id);
-  await advanceForExecution();
-  await firePromise;
-  const promptCall = opencodeClient.session.promptAsync.mock.calls.at(-1);
-  expect(promptCall?.[0]).not.toHaveProperty("agent");
 });
 
 test("once-task disables the schedule after a cron fire", async () => {
@@ -1808,7 +1981,8 @@ test("overlap=skip proceeds when nothing is running", async () => {
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
-  expect(bot.api.sendMessage).toHaveBeenCalled();
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
 });
 
 test("overlap=cancel_previous with null queueJobId just updates status", async () => {
@@ -1940,7 +2114,7 @@ test("manual trigger ignores overlap policy", async () => {
   const firePromise = fireManual(task.id);
   await advanceForExecution();
   await firePromise;
-  expect(opencodeClient.session.create).toHaveBeenCalled();
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalled();
 });
 
 test("per-chat lock serializes concurrent runs in the same chat", async () => {
@@ -1958,9 +2132,6 @@ test("per-chat lock serializes concurrent runs in the same chat", async () => {
     prompt: "pB",
     once: false,
   });
-  opencodeClient.session.create
-    .mockResolvedValueOnce({ data: { id: "eph-a" } })
-    .mockResolvedValueOnce({ data: { id: "eph-b" } });
   opencodeClient.session.messages
     .mockResolvedValueOnce({
       data: [
@@ -1972,9 +2143,6 @@ test("per-chat lock serializes concurrent runs in the same chat", async () => {
         { info: { role: "assistant" }, parts: [{ type: "text", text: "B" }] },
       ],
     });
-  opencodeClient.session.status.mockResolvedValue({
-    data: { "eph-a": { type: "idle" }, "eph-b": { type: "idle" } },
-  });
   const firePromiseA = fireCron(taskA.id, "job-a");
   const firePromiseB = fireCron(taskB.id, "job-b");
   await vi.advanceTimersByTimeAsync(2000);
@@ -1983,7 +2151,7 @@ test("per-chat lock serializes concurrent runs in the same chat", async () => {
   await vi.advanceTimersByTimeAsync(0);
   await firePromiseA;
   await firePromiseB;
-  expect(opencodeClient.session.create).toHaveBeenCalledTimes(2);
+  expect(opencodeClient.session.promptAsync).toHaveBeenCalledTimes(2);
 });
 
 test("retention trims run records beyond the cap", async () => {
@@ -2022,14 +2190,16 @@ test("#waitForText breaks when session is idle and has no assistant text", async
   opencodeClient.session.status.mockResolvedValueOnce({
     data: { [ephemeralSessionId]: { type: "idle" } },
   });
-  opencodeClient.session.messages.mockResolvedValueOnce({
-    data: [
-      {
-        info: { role: "assistant" },
-        parts: [{ type: "tool", id: "t1", tool: "bash", state: "done" }],
-      },
-    ],
-  });
+  opencodeClient.session.messages.mockImplementationOnce(() =>
+    Promise.resolve({
+      data: [
+        {
+          info: { role: "assistant", parentID: lastPromptMessageId() },
+          parts: [{ type: "tool", id: "t1", tool: "bash", state: "done" }],
+        },
+      ],
+    }),
+  );
   const task = await scheduler.create({
     chatId: 123,
     cron: "0 * * * *",
@@ -2115,11 +2285,16 @@ test("#waitForText continues after a busy status", async () => {
     .mockResolvedValueOnce({
       data: { [ephemeralSessionId]: { type: "idle" } },
     });
-  opencodeClient.session.messages.mockResolvedValueOnce({
-    data: [
-      { info: { role: "assistant" }, parts: [{ type: "text", text: "yo" }] },
-    ],
-  });
+  opencodeClient.session.messages.mockImplementationOnce(() =>
+    Promise.resolve({
+      data: [
+        {
+          info: { role: "assistant", parentID: lastPromptMessageId() },
+          parts: [{ type: "text", text: "yo" }],
+        },
+      ],
+    }),
+  );
   const task = await scheduler.create({
     chatId: 123,
     cron: "0 * * * *",
@@ -2133,7 +2308,8 @@ test("#waitForText continues after a busy status", async () => {
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(0);
   await firePromise;
-  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "yo", {});
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.output).toBe("yo");
 });
 
 test("#waitForText recovers from a poll error and retries", async () => {
@@ -2152,7 +2328,8 @@ test("#waitForText recovers from a poll error and retries", async () => {
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(0);
   await firePromise;
-  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "recovered", {});
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.output).toBe("recovered");
 });
 
 test("#waitForText recovers from a hung status call (poll timeout)", async () => {
@@ -2174,7 +2351,8 @@ test("#waitForText recovers from a hung status call (poll timeout)", async () =>
   await vi.advanceTimersByTimeAsync(2000);
   await vi.advanceTimersByTimeAsync(0);
   await firePromise;
-  expect(bot.api.sendMessage).toHaveBeenCalledWith(123, "after-timeout", {});
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.output).toBe("after-timeout");
 });
 
 test("execution records cancelled when signal fires during polling", async () => {
@@ -2189,7 +2367,10 @@ test("execution records cancelled when signal fires during polling", async () =>
     for (const [, controller] of abortSignals) controller.abort();
     return {
       data: [
-        { info: { role: "assistant" }, parts: [{ type: "text", text: "hi" }] },
+        {
+          info: { role: "assistant", parentID: lastPromptMessageId() },
+          parts: [{ type: "text", text: "hi" }],
+        },
       ],
     };
   });
@@ -2210,9 +2391,9 @@ test("execution aborts when signal is triggered before prompt", async () => {
     prompt: "p",
     once: false,
   });
-  opencodeClient.session.create.mockImplementationOnce(async () => {
+  existingSessions.find.mockImplementationOnce(async () => {
     for (const [, controller] of abortSignals) controller.abort();
-    return { data: { id: ephemeralSessionId } };
+    return ephemeralSessionId;
   });
   mockAssistantText("hello");
   const firePromise = fireCron(task.id, "abort-job");
@@ -2221,9 +2402,6 @@ test("execution aborts when signal is triggered before prompt", async () => {
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.status).toBe("cancelled");
   expect(opencodeClient.session.promptAsync).not.toHaveBeenCalled();
-  expect(opencodeClient.session.abort).toHaveBeenCalledWith({
-    sessionID: ephemeralSessionId,
-  });
 });
 
 test("#recover finalizes stuck runs as failed with bot restart", async () => {

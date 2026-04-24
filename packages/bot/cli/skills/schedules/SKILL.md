@@ -7,10 +7,10 @@ description: Create, inspect, trigger, update, and clean up scheduled tasks. Use
 
 OpenKitten exposes a scheduler that fires tasks on a cron pattern. Two modes:
 
-- **Chat-bound** (default): each tick runs in a **fresh ephemeral** OpenCode session with no memory of prior runs. The scheduler posts the final text response directly to the caller's Telegram chat (unless the prompt emits `[NO_REPORT]`, in which case the run stays silent).
-- **Session-bound** (when `sessionId` is set): every tick sends the prompt into the **same specific** OpenCode session. Context carries across runs. Telegram delivery piggybacks on the normal session→chat pipeline: if the pinned session is chat-mapped (the usual case when the user binds to their own Telegram session), the assistant reply is forwarded to Telegram automatically exactly like any other session message. For **external** sessions (not mapped to any Telegram chat), the prompt must call `openkitten_send_message` explicitly if the user should be pinged.
+- **Chat-bound** (default, `sessionId` omitted or `null`): each tick sends the prompt into the **caller's currently-active chat session** for that chat+thread — the same session the user is chatting in. A new chat session is auto-created if none exists yet for that chat+thread. The assistant's reply reaches Telegram through the normal session-to-chat pipeline (exactly the same way ordinary chat replies do). **No ephemeral sessions, no direct `bot.api.sendMessage` shortcut, no `[NO_REPORT]` marker.** If the prompt doesn't produce a final assistant text, the run is simply recorded as `silent`.
+- **Session-bound** (`sessionId` set to a real OpenCode session id): every tick sends the prompt into **that specific** pinned session — useful when you want a separate long-lived context (e.g. a research session) that accumulates memory across ticks, distinct from the user's current chat. If the pinned session is chat-mapped, Telegram delivery still piggybacks on the session-to-chat pipeline; if it's external (not chat-mapped), the prompt must call `openkitten_send_message` for the user to see anything on Telegram.
 
-Pick the mode that matches the user's intent. "Every hour, check X" with no memory requirement → chat-bound. "Every hour in the session where we set up Y" → session-bound. Use the `opencode-sessions` skill to discover valid session ids before binding.
+Pick the mode that matches the user's intent. *"Every hour, check X and tell me here"* → chat-bound. *"In the research session where we're debugging Y, every tick keep digging"* → session-bound. Use the `opencode-sessions` skill to discover valid session ids before binding.
 
 This skill covers these MCP tools. **Use them exactly as listed** — do not invent variants:
 
@@ -19,7 +19,7 @@ This skill covers these MCP tools. **Use them exactly as listed** — do not inv
 | `openkitten_queue_server_time` | get the current server time before choosing a cron expression |
 | `openkitten_queue_schedule_create` | create a new recurring or one-time schedule |
 | `openkitten_queue_schedule_list` | list schedules, optionally filtered |
-| `openkitten_queue_schedule_update` | change cron / timezone / prompt / description / overlap / notifyOnFailure / maxRuntimeMs |
+| `openkitten_queue_schedule_update` | change cron / timezone / prompt / description / overlap / notifyOnFailure / maxRuntimeMs / sessionId |
 | `openkitten_queue_schedule_enable` | resume a paused schedule |
 | `openkitten_queue_schedule_disable` | pause without deleting (history preserved) |
 | `openkitten_queue_schedule_delete` | permanently remove; all runs cascade-delete |
@@ -34,9 +34,9 @@ Low-level diagnostic tools (`openkitten_queue_status`, `_list_jobs`, `_list_cron
 
 There are **three distinct layers**. Do not conflate them.
 
-1. **Schedule** — a row in the `schedule` table. Has cron, prompt, enabled flag. Written by `_create`, updated by `_update`, removed by `_delete`.
+1. **Schedule** — a row in the `schedule` table. Has cron, prompt, enabled flag, optional `sessionId`. Written by `_create`, updated by `_update`, removed by `_delete`.
 2. **Queue job** — an internal bunqueue job dispatched on each cron tick. Exists briefly, then is reaped. **Never reference these when answering the user.** The only time you inspect them is for low-level debugging.
-3. **Run** — a row in the `schedule_run` table, one per execution (including silent and skipped). **This is what the user means when they ask about "runs".**
+3. **Run** — a row in the `schedule_run` table, one per execution. **This is what the user means when they ask about "runs".**
 
 > **Never say "I found N queue jobs" to the user.** That's the wrong layer. Always answer questions about history via `openkitten_queue_runs`.
 
@@ -46,13 +46,21 @@ Every run ends in one of these terminal states:
 
 | Status | Meaning | User-visible? |
 |---|---|---|
-| `reported` | produced meaningful text; Telegram message was sent | ✓ yes |
-| `silent` | produced `[NO_REPORT]` marker or no text within `maxRuntimeMs` | ✗ no |
+| `reported` | produced a final assistant text; delivered to Telegram via the session-to-chat pipeline | ✓ yes |
+| `silent` | produced no final text within `maxRuntimeMs` | ✗ no |
 | `failed` | threw an error during execution; `error` field populated | only if `notifyOnFailure: true` on the schedule |
 | `cancelled` | aborted by the user, by `_delete`, or by `overlap: cancel_previous` | ✗ no |
 | `skipped` | `overlap: skip` dropped this tick because another run was active | ✗ no |
 
 Transient states (only seen mid-execution): `pending`, `running`.
+
+## sessionId — one field, three valid shapes
+
+The `sessionId` field on `_create` and `_update` accepts exactly three things:
+
+- **Omit the field** (on create) or pass `null` (on update) → **chat-bound**. The scheduler uses the caller's current chat session at tick time.
+- A real OpenCode session id (format `ses_<alphanumeric>`) → **session-bound**. The scheduler verifies the session exists at create/update time and rejects with `InvalidSessionError` if it doesn't.
+- Anything else (e.g. `.__OMIT__`, `ses_faketoken`, `none`, `""`) → **rejected**. Do not invent placeholder strings. The validation will tell you exactly what to do: *"For a chat-bound schedule pass null — never invent placeholder strings."*
 
 ## Creating a schedule — standard workflow
 
@@ -60,12 +68,11 @@ Transient states (only seen mid-execution): `pending`, `running`.
 2. Ask or infer the **timezone**. If the user said "9am" they almost certainly mean their local time. If you don't know, ask. Defaults to `UTC` if omitted.
 3. Compute the cron expression in that timezone.
 4. Decide the **mode**:
-   - **Chat-bound** (default, `sessionId` omitted): each tick is a stateless check. Auto-forwarded to Telegram.
-   - **Session-bound** (`sessionId` set to an OpenCode session id): each tick continues the same session. See the `opencode-sessions` skill to discover ids. If the pinned session is chat-mapped, Telegram delivery happens automatically. If it's an external session, the prompt must call `openkitten_send_message` for the user to see anything on Telegram.
+   - **Chat-bound** (default, `sessionId` omitted or `null`): the prompt runs in the user's current chat session. Replies flow to Telegram naturally. This is almost always what you want.
+   - **Session-bound** (`sessionId` set): only when the user specifically wants a different, pinned session (typically for accumulating cross-tick context outside the main chat). Look up the session id via the `opencode-sessions` skill.
 5. Decide the **prompt wording**:
-   - **Chat-bound**: the prompt runs in a fresh ephemeral session that knows nothing about the current chat. Write it **self-contained** — no references to "this conversation". If the schedule might often have nothing to report, include the **silent contract**:
-     > *If there is nothing to report, respond with exactly `[NO_REPORT]` and nothing else. Otherwise, reply with a concise summary.*
-   - **Session-bound**: the prompt is appended into an existing conversation, so you may reference session state ("continue checking the metrics we set up") — but remember the session could be edited or truncated by the user between ticks, so be defensive. When the pinned session is chat-mapped, the assistant's reply reaches Telegram automatically via the normal session-to-chat pipeline — you don't need extra tool calls. When the pinned session is external, instruct the prompt to call `openkitten_send_message` for anything that should hit Telegram.
+   - **Chat-bound**: the prompt runs in the user's active conversation. You *can* reference the session's prior context ("continue the analysis we started earlier"), but be aware the user may have truncated or edited the session between ticks — write defensively. For silent-monitor patterns, *just don't produce a final text* when there's nothing to say — do not include a `[NO_REPORT]` instruction (that marker is obsolete and would be posted as literal text).
+   - **Session-bound**: the prompt is appended into a specific pinned session. Same defensive-writing advice. When the pinned session is chat-mapped, the reply reaches Telegram automatically. When it's external, instruct the prompt to call `openkitten_send_message` for anything that should hit Telegram.
 6. Call `openkitten_queue_schedule_create` with `cron`, `description`, `prompt`, and optionally `timezone`, `once`, `overlap`, `notifyOnFailure`, `maxRuntimeMs`, `sessionId`.
 7. Confirm the returned schedule id to the user in one line, and mention the mode ("chat-bound" or "session-bound into `<sessionID>`").
 
@@ -95,7 +102,7 @@ That returns the most recent 5 runs across all statuses. This answers *"the last
 | only the failures | `queue_runs({ scheduleId, status: "failed" })` |
 | anything in the last hour | `queue_runs({ scheduleId, since: <nowMs - 3_600_000> })` |
 | details of one specific run | `queue_run_get({ id: "<runId>" })` |
-| all runs that executed in one OpenCode session (typically all ticks of a session-bound schedule) | `queue_runs({ runSessionId: "<sid>" })` |
+| all runs that executed in one OpenCode session | `queue_runs({ runSessionId: "<sid>" })` |
 
 When the tool returns an empty list, say so plainly: *"No runs yet."* Do not speculate about why.
 
@@ -115,11 +122,11 @@ Each `schedule_run` row carries a `runSessionId` — the OpenCode session id whe
 
 **Mode-specific notes:**
 
-- **Chat-bound runs**: each tick spins up a fresh ephemeral OpenCode session, runs the prompt, then aborts it. The session persists in OpenCode history after abort (abort stops in-flight work; it doesn't delete), so `runSessionId` stays export-able indefinitely. Each chat-bound run has its own distinct `runSessionId`.
-- **Session-bound runs with a chat-mapped pinned session**: every tick's `runSessionId` is the same — the pinned session id. The export will include your user-chat history interleaved with all scheduled runs (same session). Narrow with `jq` by creation time if you need only the scheduled exchange.
-- **Session-bound runs with an external pinned session**: same shape as above, `runSessionId` equals `schedule.sessionId`, except the session isn't mapped to a Telegram chat.
+- **Chat-bound runs**: `runSessionId` equals the user's chat session for that chat+thread at tick time. Usually this is *stable across ticks* (the session persists across the user's conversation), so all chat-bound runs of the same schedule often share the same `runSessionId`. The export will interleave scheduled-task exchanges with the user's ordinary chat history — narrow with `jq` by time window if you only want the scheduled portion.
+- **Session-bound runs with a chat-mapped pinned session**: same shape — every tick's `runSessionId` is the same pinned session. The export interleaves user chat and scheduled exchanges.
+- **Session-bound runs with an external pinned session**: `runSessionId` equals `schedule.sessionId`. The session isn't mapped to a Telegram chat, so the export contains only the scheduled exchanges (and any out-of-band edits).
 
-**When `runSessionId` is null:** the run was finalized before a session was acquired — e.g., cancelled before pickup, skipped by overlap policy, or failed during the `session.create` call itself. In that case you have only `output` / `error` text; there's no session to export.
+**When `runSessionId` is null:** the run was finalized before a session was acquired — cancelled before pickup, skipped by overlap policy, or the session-resolution step itself failed. You have only `output` / `error`; there's no session to export.
 
 **Don't:** feed the raw `opencode export` output into your reply. It's large, noisy, and often contains sensitive file data. Always narrow with `jq` first.
 
@@ -138,6 +145,8 @@ Each `schedule_run` row carries a `runSessionId` — the OpenCode session id whe
 If a schedule already exists and the user wants to change it — cron, prompt, timezone, overlap, anything — call `openkitten_queue_schedule_update`. Do not `_delete` + `_create`. Deleting loses all history.
 
 The cron and timezone are updated atomically: an in-flight run at the moment of the change will still finish with the old prompt; the next tick uses the new one.
+
+Use `_update({ sessionId: "ses_..." })` to rebind an existing schedule to a specific pinned session, or `_update({ sessionId: null })` to revert to chat-bound.
 
 ## Manual trigger semantics
 
@@ -169,7 +178,7 @@ Poll it a few seconds after triggering — you'll see the status transition from
 
 ## Overlap policy
 
-Controls what happens when a cron tick fires while a previous run is still executing:
+Controls what happens when a cron tick fires while a previous run is still executing (applies only to cron-driven ticks — manual triggers always proceed):
 
 | Value | Behavior | When to pick |
 |---|---|---|
@@ -179,7 +188,7 @@ Controls what happens when a cron tick fires while a previous run is still execu
 
 ## Failure behavior
 
-By default, failures are silent in Telegram but recorded as `failed` runs with an `error` column. To get alerts, set `notifyOnFailure: true` on the schedule — then a failure will send `⚠️ Scheduled task "..." failed: ...` to the chat. Use `notifyOnFailure: true` only for critical schedules where a silent failure is dangerous.
+By default, failures are silent in Telegram but recorded as `failed` runs with an `error` column. To get alerts, set `notifyOnFailure: true` on the schedule — then a failure will send `⚠️ Scheduled task "..." failed: ...` to the chat (this *does* go out via `bot.api.sendMessage` because it's an admin-level bot notification, not session output). Use `notifyOnFailure: true` only for critical schedules where a silent failure is dangerous.
 
 If the bot restarts mid-run, the stuck row is finalized as `failed` with `error: "bot restart"`. This is normal; the next cron tick runs fresh.
 
@@ -203,15 +212,16 @@ If behavior looks off, check in this order:
 - ❌ **Setting `once: true` for a recurring schedule.** Once-tasks fire exactly once.
 - ❌ **Picking a one-minute-future test cron.** Creation delay can cause a miss; use 2+ minutes.
 - ❌ **Creating many test schedules without cleaning up.** Delete them when done.
-- ❌ **Writing prompts that refer to "this conversation" or "you"** *in chat-bound schedules*. Each run is a fresh session. (Session-bound prompts *can* reference prior session state, but must still be defensive — the user may edit or truncate the session between ticks.)
-- ❌ **Assuming session-bound runs always need `openkitten_send_message` to reach Telegram.** If the pinned session is chat-mapped, replies are auto-forwarded by the normal session-to-chat pipeline. You only need `openkitten_send_message` for **external** sessions (not mapped to any chat) or when you want to post a separate standalone summary distinct from the verbose session reply.
-- ⚠️ **Binding to a session the user is actively chatting in.** The scheduler polls the session for the latest assistant reply after submitting its prompt. If the user sends a message in the same session before the scheduled prompt finishes, the scheduler may capture text from the wrong exchange. For predictable behavior, prefer binding to a session that is quiescent between ticks — or accept that concurrent user activity may produce noisy run outputs.
+- ❌ **Writing `[NO_REPORT]` in prompts.** That marker is **obsolete**. Posting it from a prompt will deliver the literal string "[NO_REPORT]" as a chat message. For silent-monitor schedules, instruct the model to *just produce no final text when there's nothing to say* — the run will be recorded as `silent` automatically.
+- ❌ **Inventing sentinel strings like `.__OMIT__` or `ses_faketoken` for `sessionId`.** The validation rejects them. For chat-bound, omit the field (or pass `null` on update).
+- ❌ **Describing chat-bound as "ephemeral per tick".** That was the old model. The new model runs each tick in the caller's current chat session. (Leftover doc fragments saying "fresh ephemeral" are stale.)
+- ⚠️ **Chat-bound schedules fire into the user's active session.** If the user is mid-conversation when the tick fires, the scheduled prompt gets appended after the current exchange. OpenCode serializes per-session so there's no data race, but the scheduled and user messages interleave. For schedules whose output is noisy or long, consider session-binding to a separate session to keep the main chat clean.
 
 ## Minimal prompt templates
 
-**Silent monitor** — only notify when something happens:
+**Silent monitor** — only notify when something happens (no marker needed):
 ```
-Check <condition>. If nothing to report, respond with exactly [NO_REPORT]. Otherwise, reply with a one-paragraph summary of what you found.
+Check <condition>. If nothing to report, produce no final response. If something needs attention, reply with a one-paragraph summary of what you found.
 ```
 
 **Recurring reminder** — always speaks:
@@ -224,5 +234,5 @@ Use `once: true` on create. Prompt as recurring reminder.
 
 **Silent expense check** (domain-specific example):
 ```
-Check Gmail for new bank-transaction emails since the last run. If none, respond with exactly [NO_REPORT]. Otherwise, list each transaction (date, merchant, amount) and ask the user to classify as shared or personal.
+Check Gmail for new bank-transaction emails since the last run. If none, respond with no final text. Otherwise, list each transaction (date, merchant, amount) and ask the user to classify as shared or personal.
 ```

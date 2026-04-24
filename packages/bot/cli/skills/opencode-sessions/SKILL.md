@@ -23,8 +23,8 @@ An **OpenCode session** is a persistent, multi-turn conversation with its own me
 
 Sessions are distinct from Telegram chats:
 
-- A **chat-bound schedule** creates a *fresh* ephemeral session on every cron tick. No memory across runs.
-- A **session-bound schedule** targets a specific, long-lived session. Each tick adds a new user message to that session; the assistant's reply is persisted in the session's history.
+- A **chat-bound schedule** runs each tick in the caller's **current chat session** (the same session the user is chatting in). It's not pinned: if the user replaces their session, the next tick picks up the new one. Memory DOES persist across ticks, interleaved with the user's own conversation.
+- A **session-bound schedule** targets a specific, *pinned* long-lived session (often distinct from the user's main chat). Each tick appends into that exact session.
 
 When the user asks to "monitor X in the same thread we've been discussing" or "run it in the session where we set up Y", that's a session-bound schedule — and you need a session id to create it. This skill is how you find that id.
 
@@ -96,7 +96,7 @@ That's rarely needed when you're just picking an id for a schedule — but it ex
 
 Each `schedule_run` record (from `openkitten_queue_runs` or `openkitten_queue_run_get`) has a `runSessionId` — the OpenCode session the prompt actually ran in. Use the same `export` / `jq` recipes above on that id to retrace what the run did (tool calls, reasoning, intermediate assistant messages).
 
-See the **"Inspecting what happened inside a run's session"** section in the `schedules` skill for the end-to-end workflow and the mode-specific gotchas (chat-bound runs get their own ephemeral session each tick; session-bound runs all share the pinned session, so you may need to filter by message creation time).
+See the **"Inspecting what happened inside a run's session"** section in the `schedules` skill for the end-to-end workflow and the mode-specific gotchas (chat-bound runs share the caller's current chat session — their export interleaves user chat and scheduled exchanges, so filter by message creation time if you only want one tick).
 
 ## Picking a session to bind a schedule to
 

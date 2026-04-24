@@ -17,6 +17,11 @@ const runStatusSchema = zod.enum([
 
 const runTriggerSchema = zod.enum(["cron", "manual"]);
 
+const sessionIdPattern = /^ses_[A-Za-z0-9]+$/;
+
+const sessionIdInvalidMessage =
+  "Must be a valid OpenCode session id (e.g. ses_abc123). For a chat-bound schedule pass null — never invent placeholder strings like '.__OMIT__' or 'ses_faketoken'.";
+
 const scheduleTaskSchema = zod.object({
   id: zod.string(),
   chatId: zod.number(),
@@ -75,9 +80,9 @@ const scheduleCreateInputSchema = zod.looseObject({
     .describe(
       [
         "The instruction the AI agent will execute each time the schedule fires.",
-        "When sessionId is omitted (chat-bound): runs in a fresh ephemeral session — write as a self-contained instruction. The final text response is delivered to the caller's Telegram chat unless the prompt emits [NO_REPORT], in which case the run stays silent and only a 'silent' run record is kept.",
-        "When sessionId is set (session-bound): the prompt is appended to the pinned OpenCode session. If that session is mapped to a Telegram chat (the usual case when the user bound the schedule to their own chat session), the assistant's reply is forwarded to Telegram automatically by the same pipeline that delivers normal chat replies. If it's an external session (not mapped to any chat), no Telegram delivery happens unless the prompt explicitly calls the openkitten_send_message tool.",
-        "Example (chat-bound): 'Check if any bank transaction emails arrived since the last run. If any, list them concisely with amount/merchant. If none, respond with exactly [NO_REPORT].'",
+        "When sessionId is omitted or null (chat-bound): the prompt is appended to the caller's CURRENT chat session (creating one for chat+thread if none exists yet). The assistant's reply flows to Telegram through the normal session-to-chat pipeline — no special delivery or silent-marker handling needed. If the assistant has nothing to say, simply produce no final text and the run is finalized as 'silent'.",
+        "When sessionId is set (session-bound): the prompt is appended to the pinned OpenCode session. If that session is mapped to a Telegram chat, the reply is forwarded via the session-to-chat pipeline automatically. For external sessions (not chat-mapped), the prompt must call the openkitten_send_message tool to notify the user.",
+        "Example: 'Check if any bank transaction emails arrived since the last run. If any, list them concisely with amount/merchant. Otherwise say nothing.'",
       ].join(" "),
     ),
   once: zod
@@ -121,14 +126,16 @@ const scheduleCreateInputSchema = zod.looseObject({
   sessionId: zod
     .string()
     .trim()
-    .min(1)
+    .regex(sessionIdPattern, sessionIdInvalidMessage)
+    .nullable()
     .optional()
     .describe(
       [
-        "OpenCode session id to pin this schedule to. When set, every cron tick sends the prompt into THIS session instead of a fresh ephemeral one — so context carries across runs.",
-        "Telegram delivery for session-bound runs piggybacks on the normal session-to-chat pipeline: if the pinned session is mapped to a Telegram chat, replies go to Telegram automatically. If the pinned session is external (not mapped to any chat), the prompt must call the openkitten_send_message tool to notify the user.",
+        "OpenCode session id to pin this schedule to. Must match the format ses_<alphanumeric> and the session must actually exist — placeholders like '.__OMIT__', 'ses_faketoken', or any made-up id are rejected.",
+        "When set, every cron tick sends the prompt into THIS exact session instead of the caller's currently-active chat session.",
+        "Telegram delivery for session-bound runs piggybacks on the normal session-to-chat pipeline: if the pinned session is mapped to a Telegram chat, replies go to Telegram automatically. If the pinned session is external (not chat-mapped), the prompt must call the openkitten_send_message tool to notify the user.",
         "Use the opencode-sessions skill to discover session ids before passing one here.",
-        "Omit this field for the default chat-bound behavior (fresh ephemeral session per tick, reply auto-posted to the caller's chat).",
+        "For the default chat-bound behavior (prompt goes into the caller's current chat session, replies flow naturally through the session pipeline), pass null or omit the field entirely. Never invent a sentinel string.",
       ].join(" "),
     ),
 });
@@ -155,11 +162,11 @@ const scheduleUpdateInputSchema = zod.looseObject({
   sessionId: zod
     .string()
     .trim()
-    .min(1)
+    .regex(sessionIdPattern, sessionIdInvalidMessage)
     .nullable()
     .optional()
     .describe(
-      "Change the pinned OpenCode session id. Pass null to convert a session-bound schedule back to chat-bound (ephemeral per tick).",
+      "Change the pinned OpenCode session id (must match ses_<alphanumeric>). Pass null to convert a session-bound schedule back to chat-bound (runs in the caller's current chat session). Do not pass placeholder strings.",
     ),
 });
 
@@ -175,7 +182,7 @@ const runListInputSchema = zod.looseObject({
     .min(1)
     .optional()
     .describe(
-      "Filter runs whose prompt executed in this OpenCode session id. For session-bound schedules this is the pinned session id (all ticks share it); for chat-bound schedules each tick has its own ephemeral session id.",
+      "Filter runs whose prompt executed in this OpenCode session id. For session-bound schedules this is the pinned session id (all ticks share it); for chat-bound schedules it is the caller's chat session at tick time (usually stable across ticks).",
     ),
   status: runStatusSchema.optional(),
   trigger: runTriggerSchema.optional(),
@@ -251,7 +258,7 @@ export function registerScheduleTools(
     "queue_schedule_create",
     {
       description:
-        "Create a scheduled task. Default (chat-bound): each cron tick runs in a fresh ephemeral OpenCode session; meaningful output is auto-delivered to the calling chat, and a [NO_REPORT] marker keeps the run silent (still recorded for history via queue_runs). With sessionId set (session-bound): each tick sends the prompt into the pinned session so context carries across runs; Telegram delivery piggybacks on the normal session-to-chat pipeline when the pinned session is chat-mapped, and falls back to the openkitten_send_message tool for sessions not mapped to any chat.",
+        "Create a scheduled task. Default (chat-bound): each cron tick appends the prompt to the caller's currently-active chat session (creating one if needed); replies flow to Telegram through the normal session-to-chat pipeline, and runs with no final assistant text are recorded as 'silent'. With sessionId set (session-bound): each tick sends the prompt into the exact pinned session so a specific context carries across runs; Telegram delivery piggybacks on the normal session-to-chat pipeline when the pinned session is chat-mapped, and falls back to the openkitten_send_message tool for sessions not mapped to any chat.",
       inputSchema: scheduleCreateInputSchema,
       outputSchema: scheduleTaskSchema,
     },
@@ -272,7 +279,7 @@ export function registerScheduleTools(
         ...(args.maxRuntimeMs !== undefined && {
           maxRuntimeMs: args.maxRuntimeMs,
         }),
-        ...(args.sessionId !== undefined && { sessionId: args.sessionId }),
+        ...(args.sessionId != null && { sessionId: args.sessionId }),
       });
       return {
         content: [
@@ -502,7 +509,7 @@ export function registerScheduleTools(
     "queue_run_cancel",
     {
       description:
-        "Cancel an in-flight scheduled run. For chat-bound runs the underlying ephemeral OpenCode session is aborted; for session-bound runs the pinned session is left alone and only the run record is marked 'cancelled'. Only works on runs in 'pending' or 'running' status.",
+        "Cancel an in-flight scheduled run. The underlying OpenCode session is left alone (it belongs to the user, not the schedule); only the run record is marked 'cancelled' and the worker's abort signal is tripped. Only works on runs in 'pending' or 'running' status.",
       inputSchema: runIdInputSchema,
       outputSchema: runRecordSchema,
     },
