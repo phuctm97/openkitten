@@ -13,9 +13,7 @@ import {
   schedule as scheduleTable,
 } from "~/lib/schema";
 
-const noReportMarker = "[NO_REPORT]";
-
-const promptPrefix = `[Scheduled Task] You MUST end with a final text response after using any tools. If there is nothing meaningful to report to the user, respond with exactly: ${noReportMarker}\nOtherwise, provide a concise report for the user.\n\n`;
+const promptPrefix = `[Scheduled Task] After any tool work, end with a concise, natural message for the user. If there is nothing meaningful to report, it is fine to end with no final text (the run will be recorded as silent).\n\n`;
 
 const defaultMaxRuntimeMs = 15 * 60 * 1000;
 
@@ -85,6 +83,13 @@ function chatLockKey(chatId: number, threadId: number): string {
   return `${chatId}:${threadId}`;
 }
 
+function isBenignLockTokenError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  if (!error.message.startsWith("Invalid or expired lock token")) return false;
+  if (!("context" in error)) return false;
+  return error.context === "fail" || error.context === "ack-stale";
+}
+
 export class Scheduler implements Disposable {
   readonly #bot: Bot;
   readonly #database: Database;
@@ -117,6 +122,7 @@ export class Scheduler implements Disposable {
       },
     });
     this.#queue.on("error", (error) => {
+      if (isBenignLockTokenError(error)) return;
       logger.error("Scheduler queue error", error);
     });
     this.#reconcileInterval = setInterval(() => {
@@ -127,6 +133,9 @@ export class Scheduler implements Disposable {
   }
 
   async create(input: Scheduler.CreateInput): Promise<Scheduler.Task> {
+    if (input.sessionId !== undefined) {
+      await this.#assertSessionExists(input.sessionId);
+    }
     const id = randomUUID();
     const timezone = input.timezone ?? "UTC";
     const overlap = input.overlap ?? "queue";
@@ -186,6 +195,9 @@ export class Scheduler implements Disposable {
     id: string,
     input: Scheduler.UpdateInput,
   ): Promise<Scheduler.Task> {
+    if (input.sessionId !== undefined && input.sessionId !== null) {
+      await this.#assertSessionExists(input.sessionId);
+    }
     const existing = this.#findSchedule(id);
     const next: ScheduleRow = {
       ...existing,
@@ -406,6 +418,17 @@ export class Scheduler implements Disposable {
     return this.#queue;
   }
 
+  async #assertSessionExists(sessionId: string): Promise<void> {
+    try {
+      await this.#opencodeClient.session.get(
+        { sessionID: sessionId },
+        { throwOnError: true },
+      );
+    } catch {
+      throw new Scheduler.InvalidSessionError(sessionId);
+    }
+  }
+
   #findSchedule(id: string): ScheduleRow {
     const row = this.#database.query.schedule
       .findFirst({ where: eq(scheduleTable.id, id) })
@@ -420,17 +443,6 @@ export class Scheduler implements Disposable {
       .sync();
     if (!row) throw new Scheduler.RunNotFoundError(id);
     return row;
-  }
-
-  #resolveSessionId(row: ScheduleRow): string | null {
-    if (row.sessionId) {
-      return this.#existingSessions.check(row.sessionId) ? row.sessionId : null;
-    }
-    const location = {
-      chatId: row.chatId,
-      threadId: row.threadId || undefined,
-    };
-    return this.#existingSessions.find(location) ?? null;
   }
 
   #toTask(row: ScheduleRow): Scheduler.Task {
@@ -695,19 +707,16 @@ export class Scheduler implements Disposable {
       : {};
     const signal = this.#queue.getSignal(job.id);
     const boundSessionId = scheduleRow.sessionId;
-    let ephemeralId: string | undefined;
     try {
-      let targetSessionId: string;
-      if (boundSessionId) {
-        targetSessionId = boundSessionId;
-      } else {
-        const created = await this.#opencodeClient.session.create(
-          {},
-          { throwOnError: true },
-        );
-        ephemeralId = created.data.id;
-        targetSessionId = ephemeralId;
-      }
+      const targetSessionId =
+        boundSessionId ??
+        (await this.#existingSessions.find(
+          {
+            chatId: scheduleRow.chatId,
+            threadId: scheduleRow.threadId || undefined,
+          },
+          { createIfNotFound: true },
+        ));
       this.#database
         .update(scheduleRunTable)
         .set({ runSessionId: targetSessionId })
@@ -717,13 +726,12 @@ export class Scheduler implements Disposable {
         this.#finalizeRun(runId, "cancelled", null, null);
         return;
       }
-      const agentLookupId = this.#resolveSessionId(scheduleRow);
-      const agent = agentLookupId
-        ? getSessionAgent(this.#database, agentLookupId)
-        : undefined;
+      const agent = getSessionAgent(this.#database, targetSessionId);
+      const promptMessageId = `msg_${randomUUID().replace(/-/g, "")}`;
       await this.#opencodeClient.session.promptAsync(
         {
           sessionID: targetSessionId,
+          messageID: promptMessageId,
           ...(agent && { agent }),
           parts: [
             { type: "text", text: `${promptPrefix}${scheduleRow.prompt}` },
@@ -733,6 +741,7 @@ export class Scheduler implements Disposable {
       );
       const text = await this.#waitForText(
         targetSessionId,
+        promptMessageId,
         scheduleRow,
         signal,
       );
@@ -740,12 +749,9 @@ export class Scheduler implements Disposable {
         this.#finalizeRun(runId, "cancelled", text, null);
         return;
       }
-      if (!text || text.trim() === noReportMarker) {
-        this.#finalizeRun(runId, "silent", text, null);
+      if (!text) {
+        this.#finalizeRun(runId, "silent", null, null);
         return;
-      }
-      if (!boundSessionId) {
-        await this.#bot.api.sendMessage(scheduleRow.chatId, text, sendOptions);
       }
       this.#finalizeRun(runId, "reported", text, null);
     } catch (error) {
@@ -767,16 +773,6 @@ export class Scheduler implements Disposable {
           });
       }
       throw error;
-    } finally {
-      if (ephemeralId) {
-        this.#opencodeClient.session
-          .abort({ sessionID: ephemeralId })
-          .catch((error) => {
-            logger.warn("Failed to abort ephemeral session", error, {
-              ephemeralId,
-            });
-          });
-      }
     }
   }
 
@@ -800,6 +796,7 @@ export class Scheduler implements Disposable {
 
   async #waitForText(
     sessionId: string,
+    promptMessageId: string,
     scheduleRow: ScheduleRow,
     signal: AbortSignal | null,
   ): Promise<string | null> {
@@ -810,7 +807,11 @@ export class Scheduler implements Disposable {
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       if (signal?.aborted) return null;
       try {
-        const result = await this.#pollOnce(sessionId, pollTimeoutMs);
+        const result = await this.#pollOnce(
+          sessionId,
+          promptMessageId,
+          pollTimeoutMs,
+        );
         if (result === "busy") continue;
         if (result === "idle") break;
         if (result) return result;
@@ -826,11 +827,12 @@ export class Scheduler implements Disposable {
 
   async #pollOnce(
     sessionId: string,
+    promptMessageId: string,
     timeoutMs: number,
   ): Promise<string | "busy" | "idle" | null> {
     let timer: Timer | undefined;
     const result = await Promise.race([
-      this.#pollSession(sessionId),
+      this.#pollSession(sessionId, promptMessageId),
       new Promise<typeof pollTimeoutSymbol>((resolve) => {
         timer = setTimeout(resolve, timeoutMs, pollTimeoutSymbol);
       }),
@@ -842,6 +844,7 @@ export class Scheduler implements Disposable {
 
   async #pollSession(
     sessionId: string,
+    promptMessageId: string,
   ): Promise<string | "busy" | "idle" | null> {
     const { data: statuses } = await this.#opencodeClient.session.status(
       {},
@@ -853,8 +856,9 @@ export class Scheduler implements Disposable {
       { sessionID: sessionId },
       { throwOnError: true },
     );
-    for (const msg of [...messages].reverse()) {
+    for (const msg of messages) {
       if (msg.info.role !== "assistant") continue;
+      if (msg.info.parentID !== promptMessageId) continue;
       const text = msg.parts
         .filter((part) => part.type === "text")
         .map((part) => part.text)
@@ -961,6 +965,18 @@ export class Scheduler implements Disposable {
         super(`Scheduled run ${id} is not cancellable (status: ${status})`);
         this.id = id;
         this.status = status;
+      }
+    };
+
+  static readonly InvalidSessionError =
+    class InvalidSessionError extends Error {
+      readonly sessionId: string;
+      constructor(sessionId: string) {
+        super(
+          `OpenCode session not found: ${sessionId}. For a chat-bound schedule pass null — never invent placeholder strings.`,
+        );
+        this.name = "InvalidSessionError";
+        this.sessionId = sessionId;
       }
     };
 
