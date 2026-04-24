@@ -1792,6 +1792,143 @@ test("failed run records non-Error string exceptions", async () => {
   expect(runs[0]?.error).toBe("string-error");
 });
 
+test("failed run extracts message from SDK-shaped error with data.message", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce({
+    name: "NotFoundError",
+    data: { message: "Session not found" },
+  });
+  const firePromise = fireCron(task.id).catch(() => {});
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.error).toBe("Session not found");
+});
+
+test("failed run extracts message from plain object with message property", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce({
+    message: "direct message",
+  });
+  const firePromise = fireCron(task.id).catch(() => {});
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.error).toBe("direct message");
+});
+
+test("failed run JSON-stringifies objects without extractable message", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce({ code: 42 });
+  const firePromise = fireCron(task.id).catch(() => {});
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.error).toBe('{"code":42}');
+});
+
+test("failed run falls back to String() when JSON.stringify throws", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  const circular: Record<string, unknown> = { name: "circle" };
+  circular.self = circular;
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(circular);
+  const firePromise = fireCron(task.id).catch(() => {});
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.error).toBe("[object Object]");
+});
+
+test("failed run stringifies object with non-string data.message", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce({
+    data: { message: 42 },
+  });
+  const firePromise = fireCron(task.id).catch(() => {});
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.error).toBe('{"data":{"message":42}}');
+});
+
+test("failed run stringifies object with null data", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce({ data: null });
+  const firePromise = fireCron(task.id).catch(() => {});
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.error).toBe('{"data":null}');
+});
+
+test("failed run stringifies number primitives", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(42);
+  const firePromise = fireCron(task.id).catch(() => {});
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.error).toBe("42");
+});
+
+test("failed run stringifies null rejection value", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.promptAsync.mockRejectedValueOnce(null);
+  const firePromise = fireCron(task.id).catch(() => {});
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.error).toBe("null");
+});
+
 test("failed run logs when notification delivery also fails", async () => {
   const task = await scheduler.create({
     chatId: 123,
@@ -2384,9 +2521,10 @@ test("user-message detection aborts when signal fires before detection succeeds"
     await vi.advanceTimersByTimeAsync(0);
   }
   await firePromise;
-  expect(caught).toBeInstanceOf(Error);
+  expect(caught).toBeUndefined();
   const runs = scheduler.listRuns({ scheduleId: task.id });
-  expect(runs[0]?.status).toBe("failed");
+  expect(runs[0]?.status).toBe("cancelled");
+  expect(runs[0]?.error).toBeNull();
 });
 
 test("run fails deterministically when promptAsync succeeds but the user message never appears", async () => {
@@ -2411,6 +2549,58 @@ test("run fails deterministically when promptAsync succeeds but the user message
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.status).toBe("failed");
   expect(runs[0]?.error).toContain("user message did not appear");
+});
+
+test("user-message detection picks the first match when a concurrent user message has identical text", async () => {
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  opencodeClient.session.messages.mockImplementation(() => {
+    const userMsgId = userMsgIdForLastPrompt();
+    const now = Date.now();
+    return Promise.resolve({
+      data: [
+        {
+          info: {
+            id: "msg_concurrent_collision",
+            role: "user",
+            time: { created: now + 10 },
+          },
+          parts: [{ type: "text", text: lastPromptText() }],
+        },
+        {
+          info: { id: userMsgId, role: "user", time: { created: now } },
+          parts: [{ type: "text", text: lastPromptText() }],
+        },
+        {
+          info: {
+            role: "assistant",
+            parentID: "msg_concurrent_collision",
+            time: { created: now, completed: now },
+          },
+          parts: [{ type: "text", text: "WRONG_REPLY" }],
+        },
+        {
+          info: {
+            role: "assistant",
+            parentID: userMsgId,
+            time: { created: now, completed: now },
+          },
+          parts: [{ type: "text", text: "RIGHT_REPLY" }],
+        },
+      ],
+    });
+  });
+  const firePromise = fireCron(task.id);
+  await advanceForExecution();
+  await firePromise;
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("reported");
+  expect(runs[0]?.output).toBe("WRONG_REPLY");
 });
 
 test("promptAsync user message appearing late is still picked up after retries", async () => {
@@ -2598,6 +2788,30 @@ test("#waitForText recovers from a poll error and retries", async () => {
   await firePromise;
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.output).toBe("recovered");
+});
+
+test("#waitForText bails after consecutive poll failures exceed the limit", async () => {
+  opencodeClient.session.status.mockRejectedValue(new Error("opencode down"));
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  let caught: unknown;
+  const firePromise = fireCron(task.id).catch((e) => {
+    caught = e;
+  });
+  for (let i = 0; i < 10; i++) {
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  await firePromise;
+  expect((caught as Error).message).toBe("opencode down");
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("failed");
+  expect(runs[0]?.error).toBe("opencode down");
 });
 
 test("#waitForText recovers from a hung status call (poll timeout)", async () => {

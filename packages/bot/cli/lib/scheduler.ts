@@ -21,10 +21,14 @@ const pollIntervalMs = 2000;
 
 const pollTimeoutMs = 30_000;
 
+const userMessageDiscoveryTimeoutMs = 20_000;
+
 const noReplyGraceMs = 20_000;
 
 const noReplyErrorMessage =
   "OpenCode did not produce an assistant reply for the scheduled prompt";
+
+const maxConsecutivePollFailures = 5;
 
 const maxRunsPerSchedule = 500;
 
@@ -86,6 +90,31 @@ function toValidDate(value: number | undefined): Date | null {
 
 function chatLockKey(chatId: number, threadId: number): string {
   return `${chatId}:${threadId}`;
+}
+
+function extractErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (typeof error === "object" && error !== null) {
+    if (
+      "data" in error &&
+      typeof error.data === "object" &&
+      error.data !== null &&
+      "message" in error.data &&
+      typeof error.data.message === "string"
+    ) {
+      return error.data.message;
+    }
+    if ("message" in error && typeof error.message === "string") {
+      return error.message;
+    }
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return String(error);
+    }
+  }
+  return String(error);
 }
 
 function isBenignLockTokenError(error: unknown): boolean {
@@ -429,7 +458,7 @@ export class Scheduler implements Disposable {
     submittedAt: number,
     signal: AbortSignal | null,
   ): Promise<string | null> {
-    const deadline = Date.now() + noReplyGraceMs;
+    const deadline = Date.now() + userMessageDiscoveryTimeoutMs;
     while (Date.now() < deadline) {
       if (signal?.aborted) return null;
       const { data: messages } = await this.#opencodeClient.session.messages(
@@ -777,6 +806,10 @@ export class Scheduler implements Disposable {
         submittedAt,
         signal,
       );
+      if (signal?.aborted) {
+        this.#finalizeRun(runId, "cancelled", null, null);
+        return;
+      }
       if (!promptMessageId) {
         throw new Error(
           "Scheduled prompt's user message did not appear in session after promptAsync",
@@ -798,7 +831,7 @@ export class Scheduler implements Disposable {
       }
       this.#finalizeRun(runId, "reported", text, null);
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
+      const message = extractErrorMessage(error);
       this.#finalizeRun(runId, "failed", null, message);
       if (scheduleRow.notifyOnFailure) {
         await this.#bot.api
@@ -846,6 +879,7 @@ export class Scheduler implements Disposable {
     const maxRuntime = scheduleRow.maxRuntimeMs ?? defaultMaxRuntimeMs;
     const maxAttempts = Math.max(1, Math.ceil(maxRuntime / pollIntervalMs));
     const startMs = Date.now();
+    let consecutiveFailures = 0;
     for (let i = 0; i < maxAttempts; i++) {
       if (signal?.aborted) return null;
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
@@ -857,10 +891,14 @@ export class Scheduler implements Disposable {
           promptMessageId,
           pollTimeoutMs,
         );
+        consecutiveFailures = 0;
       } catch (error) {
+        consecutiveFailures += 1;
+        if (consecutiveFailures >= maxConsecutivePollFailures) throw error;
         logger.warn("Background poll iteration failed, retrying", error, {
           scheduleId: scheduleRow.id,
           attempt: i,
+          consecutiveFailures,
         });
         continue;
       }
@@ -906,7 +944,7 @@ export class Scheduler implements Disposable {
       { sessionID: sessionId },
       { throwOnError: true },
     );
-    let lastCompletedText: string | null = null;
+    let replyText: string | null = null;
     let hasMatchingAssistant = false;
     for (const msg of messages) {
       if (msg.info.role !== "assistant") continue;
@@ -917,10 +955,10 @@ export class Scheduler implements Disposable {
         .filter((part) => part.type === "text")
         .map((part) => part.text)
         .join("");
-      if (text) lastCompletedText = text;
+      if (text) replyText = text;
     }
     if (!hasMatchingAssistant) return "no-reply";
-    if (lastCompletedText) return lastCompletedText;
+    if (replyText) return replyText;
     return "idle";
   }
 
