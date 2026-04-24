@@ -21,6 +21,11 @@ const pollIntervalMs = 2000;
 
 const pollTimeoutMs = 30_000;
 
+const noReplyGraceMs = 20_000;
+
+const noReplyErrorMessage =
+  "OpenCode did not produce an assistant reply for the scheduled prompt";
+
 const maxRunsPerSchedule = 500;
 
 const reconcileIntervalMs = 5 * 60 * 1000;
@@ -802,25 +807,32 @@ export class Scheduler implements Disposable {
   ): Promise<string | null> {
     const maxRuntime = scheduleRow.maxRuntimeMs ?? defaultMaxRuntimeMs;
     const maxAttempts = Math.max(1, Math.ceil(maxRuntime / pollIntervalMs));
+    const startMs = Date.now();
     for (let i = 0; i < maxAttempts; i++) {
       if (signal?.aborted) return null;
       await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
       if (signal?.aborted) return null;
+      let result: string | "busy" | "idle" | "no-reply";
       try {
-        const result = await this.#pollOnce(
+        result = await this.#pollOnce(
           sessionId,
           promptMessageId,
           pollTimeoutMs,
         );
-        if (result === "busy") continue;
-        if (result === "idle") break;
-        if (result) return result;
       } catch (error) {
         logger.warn("Background poll iteration failed, retrying", error, {
           scheduleId: scheduleRow.id,
           attempt: i,
         });
+        continue;
       }
+      if (result === "busy") continue;
+      if (result === "idle") break;
+      if (result === "no-reply") {
+        if (Date.now() - startMs < noReplyGraceMs) continue;
+        throw new Error(noReplyErrorMessage);
+      }
+      return result;
     }
     return null;
   }
@@ -829,7 +841,7 @@ export class Scheduler implements Disposable {
     sessionId: string,
     promptMessageId: string,
     timeoutMs: number,
-  ): Promise<string | "busy" | "idle" | null> {
+  ): Promise<string | "busy" | "idle" | "no-reply"> {
     let timer: Timer | undefined;
     const result = await Promise.race([
       this.#pollSession(sessionId, promptMessageId),
@@ -845,13 +857,13 @@ export class Scheduler implements Disposable {
   async #pollSession(
     sessionId: string,
     promptMessageId: string,
-  ): Promise<string | "busy" | "idle" | null> {
+  ): Promise<string | "busy" | "idle" | "no-reply"> {
     const { data: statuses } = await this.#opencodeClient.session.status(
       {},
       { throwOnError: true },
     );
     const status = statuses[sessionId];
-    if (status && status.type === "busy") return "busy";
+    if (status?.type === "busy") return "busy";
     const { data: messages } = await this.#opencodeClient.session.messages(
       { sessionID: sessionId },
       { throwOnError: true },
@@ -864,9 +876,9 @@ export class Scheduler implements Disposable {
         .map((part) => part.text)
         .join("");
       if (text) return text;
+      return "idle";
     }
-    if (status?.type === "idle") return "idle";
-    return null;
+    return "no-reply";
   }
 
   async #reconcileOrphans(): Promise<void> {

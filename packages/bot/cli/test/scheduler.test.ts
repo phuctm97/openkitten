@@ -1506,14 +1506,16 @@ test("silent run finalizes when assistant produces no final text", async () => {
     prompt: "p",
     once: false,
   });
-  opencodeClient.session.messages.mockResolvedValueOnce({
-    data: [
-      {
-        info: { role: "assistant" },
-        parts: [{ type: "tool", id: "t1", tool: "bash", state: "done" }],
-      },
-    ],
-  });
+  opencodeClient.session.messages.mockImplementationOnce(() =>
+    Promise.resolve({
+      data: [
+        {
+          info: { role: "assistant", parentID: lastPromptMessageId() },
+          parts: [{ type: "tool", id: "t1", tool: "bash", state: "done" }],
+        },
+      ],
+    }),
+  );
   const firePromise = fireCron(task.id);
   await advanceForExecution();
   await firePromise;
@@ -2133,16 +2135,26 @@ test("per-chat lock serializes concurrent runs in the same chat", async () => {
     once: false,
   });
   opencodeClient.session.messages
-    .mockResolvedValueOnce({
-      data: [
-        { info: { role: "assistant" }, parts: [{ type: "text", text: "A" }] },
-      ],
-    })
-    .mockResolvedValueOnce({
-      data: [
-        { info: { role: "assistant" }, parts: [{ type: "text", text: "B" }] },
-      ],
-    });
+    .mockImplementationOnce(() =>
+      Promise.resolve({
+        data: [
+          {
+            info: { role: "assistant", parentID: lastPromptMessageId() },
+            parts: [{ type: "text", text: "A" }],
+          },
+        ],
+      }),
+    )
+    .mockImplementationOnce(() =>
+      Promise.resolve({
+        data: [
+          {
+            info: { role: "assistant", parentID: lastPromptMessageId() },
+            parts: [{ type: "text", text: "B" }],
+          },
+        ],
+      }),
+    );
   const firePromiseA = fireCron(taskA.id, "job-a");
   const firePromiseB = fireCron(taskB.id, "job-b");
   await vi.advanceTimersByTimeAsync(2000);
@@ -2213,6 +2225,43 @@ test("#waitForText breaks when session is idle and has no assistant text", async
   const runs = scheduler.listRuns({ scheduleId: task.id });
   expect(runs[0]?.status).toBe("silent");
   expect(bot.api.sendMessage).not.toHaveBeenCalled();
+});
+
+test("run fails deterministically when promptAsync succeeds but OpenCode never creates an assistant reply", async () => {
+  opencodeClient.session.status.mockResolvedValue({
+    data: { [ephemeralSessionId]: { type: "idle" } },
+  });
+  opencodeClient.session.messages.mockResolvedValue({
+    data: [
+      {
+        info: { role: "user", id: "msg_user_only" },
+        parts: [{ type: "text", text: "hi" }],
+      },
+    ],
+  });
+  const task = await scheduler.create({
+    chatId: 123,
+    cron: "0 * * * *",
+    description: "d",
+    prompt: "p",
+    once: false,
+  });
+  let caught: unknown;
+  const firePromise = fireCron(task.id).catch((e) => {
+    caught = e;
+  });
+  for (let i = 0; i < 15; i++) {
+    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(0);
+  }
+  await firePromise;
+  expect((caught as Error).message).toContain(
+    "did not produce an assistant reply",
+  );
+  const runs = scheduler.listRuns({ scheduleId: task.id });
+  expect(runs[0]?.status).toBe("failed");
+  expect(runs[0]?.error).toContain("did not produce an assistant reply");
+  expect(runs[0]?.finishedAt).not.toBeNull();
 });
 
 test("#waitForText aborts after sleep when signal fires mid-interval", async () => {
