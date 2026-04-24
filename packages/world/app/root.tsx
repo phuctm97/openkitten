@@ -19,6 +19,7 @@ import { ThemeInitializer } from "~/components/theme-initializer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Toaster } from "~/components/ui/sonner";
+import { TooltipProvider } from "~/components/ui/tooltip";
 import { Devtools } from "~/lib/devtools";
 import { hydrationAtom } from "~/lib/hydration-atom";
 import { queryClient } from "~/lib/query-client";
@@ -47,8 +48,10 @@ export function Layout({ children }: PropsWithChildren) {
         <ThemeAnchor />
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            {children}
-            <Toaster />
+            <TooltipProvider>
+              {children}
+              <Toaster />
+            </TooltipProvider>
           </AuthProvider>
           {import.meta.env.DEV && <Devtools />}
         </QueryClientProvider>
