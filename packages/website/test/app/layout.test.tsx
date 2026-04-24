@@ -6,6 +6,13 @@ const { rootProviderSpy } = vi.hoisted(() => ({
   rootProviderSpy: vi.fn(),
 }));
 
+const localModuleMocks = vi.hoisted(() => ({
+  toaster: vi.fn(() => <div data-testid="toaster" />),
+  tooltipProvider: vi.fn((props: { children: ReactNode }) => (
+    <section data-testid="tooltip-provider">{props.children}</section>
+  )),
+}));
+
 vi.mock("fumadocs-ui/provider/next", () => ({
   RootProvider: ({
     children,
@@ -26,6 +33,15 @@ vi.mock("fumadocs-ui/provider/next", () => ({
   },
 }));
 
+vi.mock("~/components/ui/sonner", () => ({
+  Toaster: () => localModuleMocks.toaster(),
+}));
+
+vi.mock("~/components/ui/tooltip", () => ({
+  TooltipProvider: (props: { children: ReactNode }) =>
+    localModuleMocks.tooltipProvider(props),
+}));
+
 import Layout from "~/app/layout";
 
 test("renders the root document shell", () => {
@@ -40,6 +56,8 @@ test("renders the root document shell", () => {
     '<body class="m-0 flex min-h-full flex-col antialiased">',
   );
   expect(markup).toContain('data-testid="root-provider"');
+  expect(markup).toContain('data-testid="tooltip-provider"');
+  expect(markup).toContain('data-testid="toaster"');
   expect(markup).toContain("<span>Kitten</span>");
   expect(rootProviderSpy).toHaveBeenCalledWith({
     theme: {

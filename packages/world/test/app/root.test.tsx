@@ -14,6 +14,9 @@ const localModuleMocks = vi.hoisted(() => ({
   )),
   devtools: vi.fn((): ComponentType => () => null),
   toaster: vi.fn(() => <div data-testid="toaster" />),
+  tooltipProvider: vi.fn((props: { children: ReactNode }) => (
+    <section data-testid="tooltip-provider">{props.children}</section>
+  )),
 }));
 
 const rootMocks = vi.hoisted(() => ({
@@ -55,6 +58,11 @@ vi.mock("~/components/auth/auth-provider", () => ({
 
 vi.mock("~/components/ui/sonner", () => ({
   Toaster: () => localModuleMocks.toaster(),
+}));
+
+vi.mock("~/components/ui/tooltip", () => ({
+  TooltipProvider: (props: { children: ReactNode }) =>
+    localModuleMocks.tooltipProvider(props),
 }));
 
 vi.mock("@tanstack/react-query", async () => {
@@ -167,10 +175,11 @@ test("renders the document shell and shared layout", {
   expect(markup).toContain("document.documentElement.style.colorScheme");
   expect(markup).toContain("right-4 top-4 z-10");
   expect(markup).toContain("toaster");
+  expect(markup).toContain("tooltip-provider");
   expect(markup).toContain("query-client-provider");
   expect(markup).toContain("auth-provider");
   expect(markup).toContain(
-    '<main data-testid="query-client-provider"><section data-testid="auth-provider"><span>Child Content</span><div data-testid="toaster"></div></section>',
+    '<main data-testid="query-client-provider"><section data-testid="auth-provider"><section data-testid="tooltip-provider"><span>Child Content</span><div data-testid="toaster"></div></section></section>',
   );
   expect(markup).toContain("Devtools");
   expect(markup).toContain("Scroll Restoration Placeholder");
