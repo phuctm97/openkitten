@@ -31,6 +31,7 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
 4. Keep generated file structure intact.
    - Generated files are an exception to the repo's normal single-export preference
    - Multiple exports are allowed if the generator created them
+   - Generated comments are allowed; keep them unless they conflict with repo-specific behavior or become misleading after follow-up edits
 
 5. Make only minimal repo-specific follow-up changes.
    - Add missing dependencies to the target package's `package.json`
@@ -50,6 +51,7 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
      - rename generated `packages/world/components/auth/auth.tsx` to `packages/world/components/auth/auth-router.tsx`, and update relevant names such as `Auth` / `AuthProps` to `AuthRouter` / `AuthRouterProps`; alias Better Auth UI's `AuthView` type as `BetterAuthView`
      - keep `packages/world/components/auth/auth-link.tsx` and `packages/world/components/auth/auth-provider.tsx`; adapt them to upstream changes when applicable
    - Add or update tests so coverage stays at 100%
+   - Each generated source file should have its own corresponding test file; do not combine tests for multiple generated source files into one test file
 
 6. Prefer bundled Radix over individual `@radix-ui/*` packages.
    - This repo uses the bundled `radix-ui` package
