@@ -10,7 +10,7 @@ import {
   InputGroupTextarea,
 } from "~/components/ui/input-group";
 
-test("focuses the input when an addon is pressed", () => {
+test("focuses the input when an addon is clicked", () => {
   render(
     <InputGroup>
       <InputGroupAddon>
@@ -22,15 +22,19 @@ test("focuses the input when an addon is pressed", () => {
 
   const input = screen.getByPlaceholderText("House URL");
 
-  fireEvent.pointerDown(screen.getByText("https://"));
+  fireEvent.click(screen.getByText("https://"));
 
   expect(input).toHaveFocus();
-  expect(input.closest('[data-slot="input-group"]')).not.toHaveAttribute(
+  expect(input.closest('[data-slot="input-group"]')).toHaveAttribute(
     "role",
+    "group",
   );
   expect(
     screen.getByText("https://").closest('[data-slot="input-group-addon"]'),
   ).toHaveAttribute("data-align", "inline-start");
+  expect(
+    screen.getByText("https://").closest('[data-slot="input-group-addon"]'),
+  ).toHaveAttribute("role", "group");
 });
 
 test("keeps button presses from stealing focus to the input", () => {
@@ -46,7 +50,7 @@ test("keeps button presses from stealing focus to the input", () => {
   const input = screen.getByPlaceholderText("Search houses");
   const button = screen.getByRole("button", { name: "Go" });
 
-  fireEvent.pointerDown(button);
+  fireEvent.click(button);
 
   expect(input).not.toHaveFocus();
   expect(button).toHaveAttribute("type", "button");

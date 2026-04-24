@@ -73,6 +73,7 @@ function Field({
 }: React.ComponentProps<"div"> & VariantProps<typeof fieldVariants>) {
   return (
     <div
+      role="group"
       data-slot="field"
       data-orientation={orientation}
       className={cn(fieldVariants({ orientation }), className)}
@@ -186,23 +187,20 @@ function FieldError({
       return null;
     }
 
-    const uniqueMessages = [
-      ...new Set(
-        errors.flatMap((error) =>
-          error?.message === undefined ? [] : [error.message],
-        ),
-      ),
+    const uniqueErrors = [
+      ...new Map(errors.map((error) => [error?.message, error])).values(),
     ];
 
-    if (uniqueMessages.length === 1) {
-      return uniqueMessages[0];
+    if (uniqueErrors?.length == 1) {
+      return uniqueErrors[0]?.message;
     }
 
     return (
       <ul className="ml-4 flex list-disc flex-col gap-1">
-        {uniqueMessages.map((message) => (
-          <li key={message}>{message}</li>
-        ))}
+        {uniqueErrors.map(
+          (error, index) =>
+            error?.message && <li key={index}>{error.message}</li>,
+        )}
       </ul>
     );
   }, [children, errors]);
