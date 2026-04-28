@@ -234,7 +234,7 @@ The routing model should support one product with two renderers, not force the t
 ## Suggested Package Layout
 
 This package contains the docs and the web client.
-Backend implementation may live outside `packages/world`, but the delivery model should still be reflected in the client architecture.
+Backend implementation may live outside `packages/world/packages/spa`, but the delivery model should still be reflected in the client architecture.
 
 The package should likely grow toward something like:
 
@@ -245,25 +245,25 @@ The package should likely grow toward something like:
 - `packages/world/drafts/VISUAL_DIRECTION.md`
 - `packages/world/drafts/MVP.md`
 - `packages/world/drafts/IMPLEMENTATION_PLAN.md`
-- `packages/world/package.json`
-- `packages/world/react-router.config.ts`
-- `packages/world/vite.config.ts`
-- `packages/world/vitest.config.ts`
-- `packages/world/app/`
-- `packages/world/app/routes/app/`
-- `packages/world/app/routes/game/`
-- `packages/world/components/`
-- `packages/world/domain/`
-- `packages/world/state/`
-- `packages/world/actions/`
-- `packages/world/selectors/`
-- `packages/world/game/`
-- `packages/world/game/scenes/`
-- `packages/world/game/objects/`
-- `packages/world/game/systems/`
-- `packages/world/fixtures/`
-- `packages/world/assets/`
-- `packages/world/test/`
+- `packages/world/packages/spa/package.json`
+- `packages/world/packages/spa/react-router.config.ts`
+- `packages/world/packages/spa/vite.config.ts`
+- `packages/world/packages/spa/vitest.config.ts`
+- `packages/world/packages/spa/app/`
+- `packages/world/packages/spa/app/routes/app/`
+- `packages/world/packages/spa/app/routes/game/`
+- `packages/world/packages/spa/components/`
+- `packages/world/packages/spa/domain/`
+- `packages/world/packages/spa/state/`
+- `packages/world/packages/spa/actions/`
+- `packages/world/packages/spa/selectors/`
+- `packages/world/packages/spa/game/`
+- `packages/world/packages/spa/game/scenes/`
+- `packages/world/packages/spa/game/objects/`
+- `packages/world/packages/spa/game/systems/`
+- `packages/world/packages/spa/fixtures/`
+- `packages/world/packages/spa/assets/`
+- `packages/world/packages/spa/test/`
 
 The important conceptual split is:
 

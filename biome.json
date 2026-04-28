@@ -15,7 +15,11 @@
   },
   "overrides": [
     {
-      "includes": ["packages/*/components/*/**"],
+      "includes": [
+        "packages/*/components/*/**",
+        "packages/*/*/components/*/**",
+        "packages/*/*/*/components/*/**"
+      ],
       "linter": {
         "enabled": false
       }

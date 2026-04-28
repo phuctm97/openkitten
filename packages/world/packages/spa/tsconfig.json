@@ -1,0 +1,31 @@
+{
+  "include": [
+    "package.json",
+    "3rd-env.d.ts",
+    "node-env.d.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "react-router.config.ts",
+    ".react-router/types",
+    "assets",
+    "hooks",
+    "components",
+    "lib",
+    "app",
+    "test"
+  ],
+  "references": [
+    { "path": "../client/tsconfig.json" },
+    { "path": "../util/tsconfig.json" }
+  ],
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ESNext", "DOM"],
+    "types": ["vite/client"],
+    "outDir": "dist",
+    "paths": {
+      "~/*": ["./*"]
+    },
+    "rootDirs": [".", "./.react-router/types"]
+  }
+}

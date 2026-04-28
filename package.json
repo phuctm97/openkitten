@@ -3,7 +3,8 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "packages/bot/*"
+    "packages/bot/*",
+    "packages/world/packages/*"
   ],
   "scripts": {
     "prepare": "bun prepare.ts",
