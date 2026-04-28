@@ -1,4 +1,8 @@
 export { iconURL } from "./icon-url";
+export { isLive } from "./is-live";
+export { isLocal } from "./is-local";
+export { isMagicLinkEnabled } from "./is-magic-link-enabled";
+export { isPasskeyEnabled } from "./is-passkey-enabled";
 export { serverPort } from "./server-port";
 export { serverURL } from "./server-url";
 export { websitePort } from "./website-port";

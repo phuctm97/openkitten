@@ -2,19 +2,8 @@ import { render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vitest";
 
 const authenticatedLayoutMocks = vi.hoisted(() => ({
-  authClient: {
-    getSession: vi.fn(),
-  },
-  fetchQuery: vi.fn(),
+  authenticate: vi.fn(),
   outlet: vi.fn(() => <div data-testid="protected-route" />),
-  replace: vi.fn((to: string) => {
-    return new Response(null, {
-      headers: {
-        Location: to,
-      },
-      status: 302,
-    });
-  }),
   useAuthenticate: vi.fn(),
 }));
 
@@ -24,17 +13,10 @@ vi.mock("@better-auth-ui/react", () => ({
 
 vi.mock("react-router", () => ({
   Outlet: () => authenticatedLayoutMocks.outlet(),
-  replace: authenticatedLayoutMocks.replace,
 }));
 
-vi.mock("~/lib/auth-client", () => ({
-  authClient: authenticatedLayoutMocks.authClient,
-}));
-
-vi.mock("~/lib/query-client", () => ({
-  queryClient: {
-    fetchQuery: authenticatedLayoutMocks.fetchQuery,
-  },
+vi.mock("~/lib/authenticate", () => ({
+  authenticate: authenticatedLayoutMocks.authenticate,
 }));
 
 afterEach(() => {
@@ -74,49 +56,10 @@ test("renders a loading state while authentication redirects or resolves", async
   expect(authenticatedLayoutMocks.outlet).not.toHaveBeenCalled();
 });
 
-test("allows protected routes to load when a session exists", async () => {
-  const session = {
-    user: {
-      id: "user-1",
-    },
-  };
-
-  authenticatedLayoutMocks.fetchQuery.mockResolvedValue(session);
-
-  const { clientLoader } = await import("~/app/layouts/authenticated");
-
-  await expect(
-    clientLoader({
-      request: new Request("https://openkitten.dev/app"),
-    } as never),
-  ).resolves.toBeNull();
-
-  expect(authenticatedLayoutMocks.fetchQuery).toHaveBeenCalledWith({
-    queryFn: expect.any(Function),
-    queryKey: ["auth", "getSession", null],
+test("delegates clientLoader to the authenticate helper", async () => {
+  authenticatedLayoutMocks.authenticate.mockResolvedValue({
+    user: { id: "user-1" },
   });
-
-  const queryOptions = authenticatedLayoutMocks.fetchQuery.mock.calls[0]?.[0];
-
-  if (!queryOptions) {
-    throw new Error("Expected fetchQuery to receive session query options.");
-  }
-
-  const signal = AbortSignal.timeout(1_000);
-
-  await queryOptions.queryFn({ signal });
-
-  expect(authenticatedLayoutMocks.authClient.getSession).toHaveBeenCalledWith({
-    fetchOptions: {
-      signal,
-      throw: true,
-    },
-  });
-  expect(authenticatedLayoutMocks.replace).not.toHaveBeenCalled();
-});
-
-test("redirects protected routes to sign-in when no session exists", async () => {
-  authenticatedLayoutMocks.fetchQuery.mockResolvedValue(null);
 
   const { clientLoader } = await import("~/app/layouts/authenticated");
 
@@ -124,11 +67,25 @@ test("redirects protected routes to sign-in when no session exists", async () =>
     clientLoader({
       request: new Request("https://openkitten.dev/app?tab=home"),
     } as never),
-  ).rejects.toMatchObject({
+  ).resolves.toBeNull();
+
+  expect(authenticatedLayoutMocks.authenticate).toHaveBeenCalledWith(
+    "https://openkitten.dev/app?tab=home",
+  );
+});
+
+test("rethrows redirects from the authenticate helper", async () => {
+  const redirectResponse = new Response(null, {
+    headers: { Location: "/auth/sign-in" },
     status: 302,
   });
+  authenticatedLayoutMocks.authenticate.mockRejectedValue(redirectResponse);
 
-  expect(authenticatedLayoutMocks.replace).toHaveBeenCalledWith(
-    "/auth/sign-in?redirectTo=%2Fapp%3Ftab%3Dhome",
-  );
+  const { clientLoader } = await import("~/app/layouts/authenticated");
+
+  await expect(
+    clientLoader({
+      request: new Request("https://openkitten.dev/app"),
+    } as never),
+  ).rejects.toBe(redirectResponse);
 });

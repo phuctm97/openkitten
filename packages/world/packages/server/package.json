@@ -5,13 +5,15 @@
   "type": "module",
   "main": "lib/main.ts",
   "scripts": {
-    "dev": "bun --watch --no-clear-screen .",
+    "dev": "bun --env-file=../../../../.env.local --watch --no-clear-screen .",
     "test": "bun --bun vitest run"
   },
   "dependencies": {
+    "@better-auth/passkey": "^1.6.9",
     "@openkitten/world-contract": "workspace:*",
     "@openkitten/world-util": "workspace:*",
     "@orpc/server": "^1.14.0",
+    "@simplewebauthn/server": "^13.3.0",
     "better-auth": "^1.6.9",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.15",

@@ -116,7 +116,7 @@ test("submits a basic sign-up form and navigates directly on success", {
   expect(screen.queryByLabelText("Confirm password")).toBeNull();
 });
 
-test("routes verified-email sign-ups back to sign-in", async () => {
+test("toasts and routes verified-email sign-ups through the auth-callback", async () => {
   mockReactPacer();
   const toast = mockSonnerToast();
   const mocks = setupBetterAuthUiMocks({
@@ -140,7 +140,7 @@ test("routes verified-email sign-ups back to sign-in", async () => {
   mocks.captured.signUpEmail?.onSuccess?.();
 
   expect(toast.toastSuccess).toHaveBeenCalledWith("Verify your email");
-  expect(mocks.auth.navigate).toHaveBeenCalledWith({ to: "/auth/sign-in" });
+  expect(mocks.auth.navigate).toHaveBeenCalledWith({ to: "/play" });
 });
 
 test("clears password fields when confirmation fails or the API returns an error", async () => {

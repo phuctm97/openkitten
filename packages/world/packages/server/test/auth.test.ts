@@ -10,7 +10,9 @@ const authMocks = vi.hoisted(() => ({
     database,
     config,
   })),
-  isProduction: false,
+  isLive: false,
+  isMagicLinkEnabled: true,
+  isPasskeyEnabled: true,
   pgDatabase: {
     query: {
       user: {
@@ -30,11 +32,22 @@ vi.mock("better-auth", () => ({ betterAuth: authMocks.betterAuth }));
 vi.mock("better-auth/adapters/drizzle", () => ({
   drizzleAdapter: authMocks.drizzleAdapter,
 }));
-vi.mock("~/lib/is-production", () => ({
-  get isProduction() {
-    return authMocks.isProduction;
-  },
-}));
+vi.mock("@openkitten/world-util", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@openkitten/world-util")>();
+  return {
+    ...actual,
+    get isLive() {
+      return authMocks.isLive;
+    },
+    get isMagicLinkEnabled() {
+      return authMocks.isMagicLinkEnabled;
+    },
+    get isPasskeyEnabled() {
+      return authMocks.isPasskeyEnabled;
+    },
+  };
+});
 vi.mock("~/lib/pg-database", () => ({ pgDatabase: authMocks.pgDatabase }));
 vi.mock("~/lib/redis", () => ({ redis: authMocks.redis }));
 vi.mock("~/lib/send-react-email", () => ({
@@ -52,7 +65,9 @@ const authUser = {
 };
 
 beforeEach(() => {
-  authMocks.isProduction = false;
+  authMocks.isLive = false;
+  authMocks.isMagicLinkEnabled = true;
+  authMocks.isPasskeyEnabled = true;
   authMocks.betterAuth.mockClear();
   authMocks.drizzleAdapter.mockClear();
   authMocks.pgDatabase.query.user.findFirst.mockClear();
@@ -80,6 +95,10 @@ it("uses the database and fallback auth URLs", {
   expect(auth.options.basePath).toBe("/auth");
   expect(auth.options.advanced).toStrictEqual({
     cookiePrefix: "openkitten_auth",
+    defaultCookieAttributes: {
+      sameSite: "lax",
+      secure: false,
+    },
   });
   expect(auth.options.trustedOrigins).toStrictEqual([
     serverURL,
@@ -126,7 +145,7 @@ it("uses the database and fallback auth URLs", {
 });
 
 it("uses the runtime database and sends auth emails", async () => {
-  authMocks.isProduction = true;
+  authMocks.isLive = true;
   authMocks.redis.get.mockResolvedValueOnce(null);
 
   const { auth } = await import("~/lib/auth");
@@ -137,6 +156,13 @@ it("uses the runtime database and sends auth emails", async () => {
     worldURL,
     websiteURL,
   ]);
+  expect(auth.options.advanced).toStrictEqual({
+    cookiePrefix: "openkitten_auth",
+    defaultCookieAttributes: {
+      sameSite: "lax",
+      secure: true,
+    },
+  });
   expect(auth.options.emailVerification.sendOnSignUp).toBe(true);
   await expect(auth.options.databaseHooks.user.create.before?.()).resolves.toBe(
     undefined,
@@ -148,7 +174,22 @@ it("uses the runtime database and sends auth emails", async () => {
 
   await auth.options.emailVerification.sendVerificationEmail?.({
     user: authUser,
-    url: `${serverURL}/auth/verify`,
+    url: `${serverURL}/auth/verify?token=abc`,
+    token: "verify-token",
+  });
+  await auth.options.emailVerification.sendVerificationEmail?.({
+    user: authUser,
+    url: `${serverURL}/auth/verify?token=abc&callbackURL=${encodeURIComponent(`${worldURL}/profile`)}`,
+    token: "verify-token",
+  });
+  await auth.options.emailVerification.sendVerificationEmail?.({
+    user: authUser,
+    url: `${serverURL}/auth/verify?token=abc&callbackURL=${encodeURIComponent("https://evil.example/steal")}`,
+    token: "verify-token",
+  });
+  await auth.options.emailVerification.sendVerificationEmail?.({
+    user: authUser,
+    url: `${serverURL}/auth/verify?token=abc&callbackURL=not-a-url`,
     token: "verify-token",
   });
   await auth.options.emailAndPassword.sendResetPassword?.({
@@ -156,17 +197,70 @@ it("uses the runtime database and sends auth emails", async () => {
     url: `${serverURL}/auth/reset-password`,
     token: "reset-token",
   });
+  type MagicLinkPlugin = {
+    id: string;
+    options?: {
+      sendMagicLink?: (data: {
+        email: string;
+        url: string;
+        token: string;
+      }) => Promise<void> | void;
+    };
+  };
+  const magicLinkPlugin = (auth.options.plugins ?? []).find(
+    (plugin: { id: string }) => plugin.id === "magic-link",
+  ) as MagicLinkPlugin | undefined;
+  await magicLinkPlugin?.options?.sendMagicLink?.({
+    email: "user@example.com",
+    url: `${serverURL}/auth/magic-link?token=abc`,
+    token: "magic-token",
+  });
 
   expect(authMocks.sendReactEmail).toHaveBeenNthCalledWith(1, {
     to: "user@example.com",
     subject: "Verify your email - OpenKitten",
     element: expect.objectContaining({
       props: {
-        url: `${serverURL}/auth/verify`,
+        url: `${serverURL}/auth/verify?token=abc&callbackURL=${encodeURIComponent(
+          `${worldURL}/auth-callback`,
+        )}`,
       },
     }),
   });
   expect(authMocks.sendReactEmail).toHaveBeenNthCalledWith(2, {
+    to: "user@example.com",
+    subject: "Verify your email - OpenKitten",
+    element: expect.objectContaining({
+      props: {
+        url: `${serverURL}/auth/verify?token=abc&callbackURL=${encodeURIComponent(
+          `${worldURL}/profile`,
+        )}`,
+      },
+    }),
+  });
+  expect(authMocks.sendReactEmail).toHaveBeenNthCalledWith(3, {
+    to: "user@example.com",
+    subject: "Verify your email - OpenKitten",
+    element: expect.objectContaining({
+      props: {
+        url: `${serverURL}/auth/verify?token=abc&callbackURL=${encodeURIComponent(
+          `${worldURL}/auth-callback`,
+        )}`,
+      },
+    }),
+  });
+  expect(authMocks.sendReactEmail).toHaveBeenNthCalledWith(4, {
+    to: "user@example.com",
+    subject: "Verify your email - OpenKitten",
+    element: expect.objectContaining({
+      props: {
+        url: `${serverURL}/auth/verify?token=abc&callbackURL=${encodeURIComponent(
+          `${worldURL}/auth-callback`,
+        )}`,
+      },
+    }),
+  });
+  expect(authMocks.sendReactEmail).toHaveBeenNthCalledWith(5, {
     to: "user@example.com",
     subject: "Reset your password - OpenKitten",
     element: expect.objectContaining({
@@ -175,4 +269,62 @@ it("uses the runtime database and sends auth emails", async () => {
       },
     }),
   });
+  expect(authMocks.sendReactEmail).toHaveBeenNthCalledWith(6, {
+    to: "user@example.com",
+    subject: "Sign in to OpenKitten",
+    element: expect.objectContaining({
+      props: {
+        url: `${serverURL}/auth/magic-link?token=abc&callbackURL=${encodeURIComponent(
+          `${worldURL}/auth-callback`,
+        )}`,
+      },
+    }),
+  });
+});
+
+it("registers magic-link, passkey, and social-provider plugins", async () => {
+  authMocks.isLive = true;
+  vi.stubEnv("GOOGLE_CLIENT_ID", "google-id");
+  vi.stubEnv("GOOGLE_CLIENT_SECRET", "google-secret");
+  vi.stubEnv("GITHUB_CLIENT_ID", "github-id");
+  vi.stubEnv("GITHUB_CLIENT_SECRET", "github-secret");
+
+  const { auth } = await import("~/lib/auth");
+
+  const pluginIds = (auth.options.plugins ?? []).map((plugin) => plugin.id);
+  expect(pluginIds).toContain("magic-link");
+  expect(pluginIds).toContain("passkey");
+  expect(auth.options.socialProviders).toStrictEqual({
+    google: {
+      clientId: "google-id",
+      clientSecret: "google-secret",
+    },
+    github: {
+      clientId: "github-id",
+      clientSecret: "github-secret",
+    },
+  });
+});
+
+it("omits social providers when env vars are not set", async () => {
+  vi.stubEnv("GOOGLE_CLIENT_ID", "");
+  vi.stubEnv("GOOGLE_CLIENT_SECRET", "");
+  vi.stubEnv("GITHUB_CLIENT_ID", "");
+  vi.stubEnv("GITHUB_CLIENT_SECRET", "");
+
+  const { auth } = await import("~/lib/auth");
+
+  expect(auth.options.socialProviders).toStrictEqual({});
+});
+
+it("omits magic-link and passkey plugins when their env vars are disabled", async () => {
+  authMocks.isMagicLinkEnabled = false;
+  authMocks.isPasskeyEnabled = false;
+
+  const { auth } = await import("~/lib/auth");
+
+  const pluginIds = (auth.options.plugins ?? []).map((plugin) => plugin.id);
+  expect(pluginIds).not.toContain("magic-link");
+  expect(pluginIds).not.toContain("passkey");
+  expect(auth.options.plugins).toStrictEqual([]);
 });

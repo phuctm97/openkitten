@@ -11,9 +11,11 @@ const schemaKeys = [
   "session",
   "account",
   "verification",
+  "passkey",
   "userRelations",
   "sessionRelations",
   "accountRelations",
+  "passkeyRelations",
 ];
 
 afterEach(() => {

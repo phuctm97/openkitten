@@ -36,6 +36,7 @@ test("submits a reset request and manages field errors", async () => {
 
   expect(mocks.requestPasswordReset).toHaveBeenCalledWith({
     email: "kitten@openkitten.dev",
+    redirectTo: "http://localhost:41238/auth/reset-password",
   });
   expect(screen.getByRole("link", { name: "Sign in" })).toHaveAttribute(
     "href",
