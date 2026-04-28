@@ -1,6 +1,6 @@
 ---
 name: shadcn-ui
-description: Use when adding or updating shadcn/ui or compatible registry components in packages/world or packages/website, including preset apply flows and repo-specific integration patterns.
+description: Use when adding or updating shadcn/ui or compatible registry components in packages/world/packages/spa or packages/website, including preset apply flows and repo-specific integration patterns.
 ---
 
 # shadcn/ui
@@ -9,12 +9,12 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
 
 1. Generate from the target package with the installed CLI.
    - Supported targets:
-     - `packages/world` for the React Router app
+     - `packages/world/packages/spa` for the React Router app
      - `packages/website` for the Next.js app
    - Use `bun --cwd <target> --bun shadcn add ...`
    - Immediately after each `shadcn add`, run `bun --bun biome check --write <generated-files>` before reviewing or hand-editing the generated output
    - Examples:
-     - `bun --cwd packages/world --bun shadcn add button badge separator -o -y`
+     - `bun --cwd packages/world/packages/spa --bun shadcn add button badge separator -o -y`
      - `bun --cwd packages/website --bun shadcn add button badge separator -o -y`
      - `bun --cwd <target> --bun shadcn add button badge separator -o -y`
      - `bun --cwd <target> --bun shadcn add @kibo-ui/theme-switcher -o -y`
@@ -37,19 +37,19 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
    - Add missing dependencies to the target package's `package.json`
    - If follow-up edits touch generated files again, rerun `bun --bun biome check --write` on the touched files
    - Respect the package's `components.json` settings instead of normalizing across apps
-   - `packages/world/components.json` has `rsc: false`, so remove generated `use client` directives there
+   - `packages/world/packages/spa/components.json` has `rsc: false`, so remove generated `use client` directives there
    - `packages/website/components.json` has `rsc: true`, so keep client directives when the generator adds them
-   - When refreshing `packages/world/components/ui/sidebar.tsx`, keep sidebar state persistence in `localStorage` rather than cookies because `packages/world` is an SPA; use the storage key `openkitten-sidebar-open`
-   - If `add` changes theme providers, toggles, or helpers in `packages/world`, remove any `next-themes` assumptions and reconnect them to existing theme primitives.
-   - When refreshing `@better-auth-ui/*` components in `packages/world`, keep these intentional follow-up changes:
-     - `packages/world` prefers app-level global error handling in `packages/world/lib/query-client.ts`
+   - When refreshing `packages/world/packages/spa/components/ui/sidebar.tsx`, keep sidebar state persistence in `localStorage` rather than cookies because `packages/world/packages/spa` is an SPA; use the storage key `openkitten-sidebar-open`
+   - If `add` changes theme providers, toggles, or helpers in `packages/world/packages/spa`, remove any `next-themes` assumptions and reconnect them to existing theme primitives.
+   - When refreshing `@better-auth-ui/*` components in `packages/world/packages/spa`, keep these intentional follow-up changes:
+     - `packages/world/packages/spa` prefers app-level global error handling in `packages/world/packages/spa/lib/query-client.ts`
      - inspect any generated auth provider, error toaster, or similar global auth wrapper/effect that installs query or mutation error handlers
-     - if the generated code is only duplicating the existing app-level query/mutation error setup, remove or simplify it in favor of `packages/world/lib/query-client.ts`
+     - if the generated code is only duplicating the existing app-level query/mutation error setup, remove or simplify it in favor of `packages/world/packages/spa/lib/query-client.ts`
      - if upstream changes that code in a meaningfully different way, do not blindly remove it; compare the behavior, preserve the intentional difference when appropriate, and report the difference clearly
-     - keep shared error formatting/toasting in `packages/world/lib/format-error.ts` and `packages/world/lib/toast-error.ts`
+     - keep shared error formatting/toasting in `packages/world/packages/spa/lib/format-error.ts` and `packages/world/packages/spa/lib/toast-error.ts`
      - when generated auth components need to surface unknown error objects, prefer `formatError(...)` for inline text and `toastError(...)` for toast-only paths instead of re-implementing error-shape handling locally
-     - rename generated `packages/world/components/auth/auth.tsx` to `packages/world/components/auth/auth-router.tsx`, and update relevant names such as `Auth` / `AuthProps` to `AuthRouter` / `AuthRouterProps`; alias Better Auth UI's `AuthView` type as `BetterAuthView`
-     - keep `packages/world/components/auth/auth-link.tsx` and `packages/world/components/auth/auth-provider.tsx`; adapt them to upstream changes when applicable
+     - rename generated `packages/world/packages/spa/components/auth/auth.tsx` to `packages/world/packages/spa/components/auth/auth-router.tsx`, and update relevant names such as `Auth` / `AuthProps` to `AuthRouter` / `AuthRouterProps`; alias Better Auth UI's `AuthView` type as `BetterAuthView`
+     - keep `packages/world/packages/spa/components/auth/auth-link.tsx` and `packages/world/packages/spa/components/auth/auth-provider.tsx`; adapt them to upstream changes when applicable
    - Add or update tests so coverage stays at 100%
    - Each generated source file should have its own corresponding test file; do not combine tests for multiple generated source files into one test file
 
@@ -63,7 +63,7 @@ description: Use when adding or updating shadcn/ui or compatible registry compon
    - Keep generated code as close to upstream as possible
    - Examples of acceptable adaptations:
      - use project-native types such as `Theme` from `~/lib/theme`
-     - replace `next-themes`-based theme helpers with existing theme primitives in `packages/world`
+     - replace `next-themes`-based theme helpers with existing theme primitives in `packages/world/packages/spa`
 
 ## Applying Presets
 
@@ -72,7 +72,7 @@ When the user gives a shadcn preset ID or asks to re-apply a preset, treat that 
 Assume preset-driven diffs are usually intentional. The preset may differ from the last one applied, or the shadcn CLI itself may have changed what it generates since the previous run.
 
 1. Run the preset in both targets.
-   - `bun --cwd packages/world --bun shadcn apply --preset <preset> -y`
+   - `bun --cwd packages/world/packages/spa --bun shadcn apply --preset <preset> -y`
    - `bun --cwd packages/website --bun shadcn apply --preset <preset> -y`
 
 2. Reformat the regenerated files immediately.
@@ -82,8 +82,8 @@ Assume preset-driven diffs are usually intentional. The preset may differ from t
    - Prefer `@fontsource-variable/*` over `next/font/*`.
    - If `apply` injects `next/font/google` into `packages/website/app/layout.tsx`, remove it and keep the repo's simpler layout shell.
    - If the preset introduces a new font, wire it through `@fontsource-variable/*` imports in CSS instead of `next/font/*`, and add the matching package to the app package's `devDependencies`.
-   - If `apply` changes theme providers, toggles, or helpers in `packages/world`, remove any `next-themes` assumptions and reconnect them to existing theme primitives.
-   - In `packages/world/app/entry.client.css` and `packages/website/app/styles.css`, keep `--font-sans` and `--font-heading` as literal font values. Do not leave `--font-sans: var(--font-sans)` or `--font-heading: var(--font-sans)`.
+   - If `apply` changes theme providers, toggles, or helpers in `packages/world/packages/spa`, remove any `next-themes` assumptions and reconnect them to existing theme primitives.
+   - In `packages/world/packages/spa/app/entry.client.css` and `packages/website/app/styles.css`, keep `--font-sans` and `--font-heading` as literal font values. Do not leave `--font-sans: var(--font-sans)` or `--font-heading: var(--font-sans)`.
    - Keep font imports and `--font-*` declarations ordered as `sans`, `heading`, `mono`.
    - Keep generated component files formatted with Biome and aligned with repo lint rules.
 

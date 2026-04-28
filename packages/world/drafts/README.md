@@ -89,7 +89,7 @@ Recommended reading order:
 
 ## Commands
 
-Run these from `packages/world`:
+Run these from `packages/world/packages/spa`:
 
 - `bun run dev` starts the local browser client
 - `bun run build` creates the production build
