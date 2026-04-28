@@ -12,4 +12,5 @@ export default [
     route("game", "routes/game.tsx"),
   ]),
   route("auth/:path", "routes/auth.tsx"),
+  route("auth-callback", "routes/auth-callback.tsx"),
 ] satisfies RouteConfig;

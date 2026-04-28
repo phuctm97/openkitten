@@ -1,6 +1,10 @@
 import { expect, test } from "vitest";
 import {
   iconURL,
+  isLive,
+  isLocal,
+  isMagicLinkEnabled,
+  isPasskeyEnabled,
   serverPort,
   serverURL,
   websitePort,
@@ -17,4 +21,9 @@ test("re-exports every world-util constant", () => {
   expect(websitePort).toBe(41239);
   expect(websiteURL).toBe("http://localhost:41239");
   expect(iconURL).toBe("http://localhost:41239/icon.png");
+  expect(typeof isLocal).toBe("boolean");
+  expect(typeof isLive).toBe("boolean");
+  expect(isLive).toBe(!isLocal);
+  expect(typeof isMagicLinkEnabled).toBe("boolean");
+  expect(typeof isPasskeyEnabled).toBe("boolean");
 });

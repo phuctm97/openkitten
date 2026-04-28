@@ -1,4 +1,5 @@
 import { useAuth, useRequestPasswordReset } from "@better-auth-ui/react";
+import { worldURL } from "@openkitten/world-util";
 import { type SyntheticEvent, useState } from "react";
 import { toast } from "sonner";
 
@@ -38,7 +39,10 @@ export function ForgotPassword({ className }: ForgotPasswordProps) {
   function handleSubmit(e: SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    requestPasswordReset({ email: formData.get("email") as string });
+    requestPasswordReset({
+      email: formData.get("email") as string,
+      redirectTo: `${worldURL}/auth/reset-password`,
+    });
   }
 
   const [fieldErrors, setFieldErrors] = useState<{

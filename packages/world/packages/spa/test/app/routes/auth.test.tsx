@@ -3,16 +3,13 @@ import { afterEach, expect, test, vi } from "vitest";
 import type { Route } from "~/.react-router/types/app/routes/+types/auth";
 
 const authRouteMocks = vi.hoisted(() => ({
-  authClient: {
-    getSession: vi.fn(),
-  },
   authRouter: vi.fn((props: { path: string }) => (
     <div data-path={props.path}>Auth Router</div>
   )),
   data: vi.fn((body: string, init: ResponseInit) => {
     return new Response(body, init);
   }),
-  fetchQuery: vi.fn(),
+  getSession: vi.fn(),
   replace: vi.fn((to: string) => {
     return new Response(null, {
       headers: {
@@ -21,10 +18,21 @@ const authRouteMocks = vi.hoisted(() => ({
       status: 302,
     });
   }),
+  retrieveCallback: vi.fn(() => ""),
+  verifyEmail: vi.fn((props: { className?: string }) => (
+    <div data-testid="verify-email" data-class={props.className}>
+      Verify Email
+    </div>
+  )),
 }));
 
 vi.mock("~/components/auth/auth-router", () => ({
   AuthRouter: (props: { path: string }) => authRouteMocks.authRouter(props),
+}));
+
+vi.mock("~/components/auth/verify-email", () => ({
+  VerifyEmail: (props: { className?: string }) =>
+    authRouteMocks.verifyEmail(props),
 }));
 
 vi.mock("react-router", () => ({
@@ -32,19 +40,18 @@ vi.mock("react-router", () => ({
   replace: authRouteMocks.replace,
 }));
 
-vi.mock("~/lib/auth-client", () => ({
-  authClient: authRouteMocks.authClient,
+vi.mock("~/lib/get-session", () => ({
+  getSession: authRouteMocks.getSession,
 }));
 
-vi.mock("~/lib/query-client", () => ({
-  queryClient: {
-    fetchQuery: authRouteMocks.fetchQuery,
-  },
+vi.mock("~/lib/retrieve-callback", () => ({
+  retrieveCallback: authRouteMocks.retrieveCallback,
 }));
 
 afterEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
+  authRouteMocks.retrieveCallback.mockReturnValue("");
 });
 
 test("renders the auth route for the current auth path", async () => {
@@ -102,7 +109,7 @@ test("throws 404 for an invalid auth view", async () => {
     statusText: "Not Found",
   });
 
-  expect(authRouteMocks.fetchQuery).not.toHaveBeenCalled();
+  expect(authRouteMocks.getSession).not.toHaveBeenCalled();
 });
 
 test("throws 404 when the auth path is missing", async () => {
@@ -118,11 +125,11 @@ test("throws 404 when the auth path is missing", async () => {
     statusText: "Not Found",
   });
 
-  expect(authRouteMocks.fetchQuery).not.toHaveBeenCalled();
+  expect(authRouteMocks.getSession).not.toHaveBeenCalled();
 });
 
 test("loads public auth views when signed out", async () => {
-  authRouteMocks.fetchQuery.mockResolvedValue(null);
+  authRouteMocks.getSession.mockResolvedValue(null);
 
   const { clientLoader } = await import("~/app/routes/auth");
 
@@ -133,32 +140,12 @@ test("loads public auth views when signed out", async () => {
     } as never),
   ).resolves.toBeNull();
 
-  expect(authRouteMocks.fetchQuery).toHaveBeenCalledWith({
-    queryFn: expect.any(Function),
-    queryKey: ["auth", "getSession", null],
-  });
-
-  const queryOptions = authRouteMocks.fetchQuery.mock.calls[0]?.[0];
-
-  if (!queryOptions) {
-    throw new Error("Expected fetchQuery to receive session query options.");
-  }
-
-  const signal = AbortSignal.timeout(1_000);
-
-  await queryOptions.queryFn({ signal });
-
-  expect(authRouteMocks.authClient.getSession).toHaveBeenCalledWith({
-    fetchOptions: {
-      signal,
-      throw: true,
-    },
-  });
+  expect(authRouteMocks.getSession).toHaveBeenCalledTimes(1);
   expect(authRouteMocks.replace).not.toHaveBeenCalled();
 });
 
 test("redirects signed-out sign-out requests back to sign-in", async () => {
-  authRouteMocks.fetchQuery.mockResolvedValue(null);
+  authRouteMocks.getSession.mockResolvedValue(null);
 
   const { clientLoader } = await import("~/app/routes/auth");
 
@@ -175,7 +162,7 @@ test("redirects signed-out sign-out requests back to sign-in", async () => {
 });
 
 test("lets signed-in users reach sign-out", async () => {
-  authRouteMocks.fetchQuery.mockResolvedValue({
+  authRouteMocks.getSession.mockResolvedValue({
     user: {
       id: "user-1",
     },
@@ -194,7 +181,7 @@ test("lets signed-in users reach sign-out", async () => {
 });
 
 test("redirects signed-in auth views to the requested destination", async () => {
-  authRouteMocks.fetchQuery.mockResolvedValue({
+  authRouteMocks.getSession.mockResolvedValue({
     user: {
       id: "user-1",
     },
@@ -217,7 +204,7 @@ test("redirects signed-in auth views to the requested destination", async () => 
 });
 
 test("redirects signed-in auth views to requested auth destinations", async () => {
-  authRouteMocks.fetchQuery.mockResolvedValue({
+  authRouteMocks.getSession.mockResolvedValue({
     user: {
       id: "user-1",
     },
@@ -239,8 +226,28 @@ test("redirects signed-in auth views to requested auth destinations", async () =
   expect(authRouteMocks.replace).toHaveBeenCalledWith("/auth/sign-out");
 });
 
+test("falls back to the stored callback when no redirectTo is in the URL", async () => {
+  authRouteMocks.getSession.mockResolvedValue({
+    user: { id: "user-1" },
+  });
+  authRouteMocks.retrieveCallback.mockReturnValue("/play?room=42");
+
+  const { clientLoader } = await import("~/app/routes/auth");
+
+  await expect(
+    clientLoader({
+      params: { path: "sign-in" },
+      request: new Request("https://openkitten.dev/auth/sign-in"),
+    } as never),
+  ).rejects.toMatchObject({
+    status: 302,
+  });
+
+  expect(authRouteMocks.replace).toHaveBeenCalledWith("/play?room=42");
+});
+
 test("redirects signed-in auth views home when no safe destination exists", async () => {
-  authRouteMocks.fetchQuery.mockResolvedValue({
+  authRouteMocks.getSession.mockResolvedValue({
     user: {
       id: "user-1",
     },
@@ -270,4 +277,71 @@ test("redirects signed-in auth views home when no safe destination exists", asyn
 
   expect(authRouteMocks.replace).toHaveBeenCalledWith("/");
   expect(authRouteMocks.replace).toHaveBeenCalledTimes(2);
+});
+
+test("renders verify-email and respects its loader branches", async () => {
+  authRouteMocks.getSession.mockResolvedValue({
+    user: { id: "user-1", emailVerified: false },
+  });
+
+  const { clientLoader, default: Component } = await import(
+    "~/app/routes/auth"
+  );
+
+  await expect(
+    clientLoader({
+      params: { path: "verify-email" },
+      request: new Request("https://openkitten.dev/auth/verify-email"),
+    } as never),
+  ).resolves.toBeNull();
+
+  authRouteMocks.getSession.mockResolvedValue(null);
+  await expect(
+    clientLoader({
+      params: { path: "verify-email" },
+      request: new Request("https://openkitten.dev/auth/verify-email"),
+    } as never),
+  ).rejects.toMatchObject({ status: 302 });
+  expect(authRouteMocks.replace).toHaveBeenCalledWith("/auth/sign-in");
+
+  authRouteMocks.getSession.mockResolvedValue({
+    user: { id: "user-1", emailVerified: true },
+  });
+  await expect(
+    clientLoader({
+      params: { path: "verify-email" },
+      request: new Request("https://openkitten.dev/auth/verify-email"),
+    } as never),
+  ).rejects.toMatchObject({ status: 302 });
+  expect(authRouteMocks.replace).toHaveBeenCalledWith("/");
+
+  const componentProps = {
+    loaderData: null,
+    matches: [
+      {
+        id: "root",
+        params: { path: "verify-email" },
+        pathname: "/auth/verify-email",
+        data: undefined,
+        loaderData: undefined,
+        handle: undefined,
+      },
+      {
+        id: "routes/auth",
+        params: { path: "verify-email" },
+        pathname: "/auth/verify-email",
+        data: null,
+        loaderData: null,
+        handle: undefined,
+      },
+    ],
+    params: { path: "verify-email" },
+  } satisfies Route.ComponentProps;
+
+  render(<Component {...componentProps} />);
+
+  expect(screen.getByTestId("verify-email")).toHaveAttribute(
+    "data-class",
+    "relative z-10",
+  );
 });

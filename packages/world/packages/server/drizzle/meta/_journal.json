@@ -15,6 +15,13 @@
       "when": 1776153216982,
       "tag": "0001_luxuriant_robbie_robertson",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1777392527955,
+      "tag": "0002_conscious_maestro",
+      "breakpoints": true
     }
   ]
 }

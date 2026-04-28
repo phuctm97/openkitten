@@ -63,6 +63,7 @@ type SetupBetterAuthUiMocksResult = {
   resetPassword: MockFunction;
   resetUsernameAvailability: MockFunction;
   sendVerificationEmail: MockFunction;
+  session: SessionState;
   signInEmail: MockFunction;
   signInMagicLink: MockFunction;
   signInPasskey: MockFunction;
@@ -72,10 +73,21 @@ type SetupBetterAuthUiMocksResult = {
   signUpEmail: MockFunction;
 };
 
+type SessionState = {
+  data: {
+    user: {
+      email: string;
+      emailVerified: boolean;
+      id: string;
+    };
+  } | null;
+};
+
 type HookPendingState = Partial<
   Record<
     | "requestPasswordReset"
     | "resetPassword"
+    | "sendVerificationEmail"
     | "signInEmail"
     | "signInMagicLink"
     | "signInPasskey"
@@ -176,6 +188,7 @@ type SetupOptions = {
   auth?: Partial<AuthState>;
   pending?: HookPendingState;
   providerIcons?: Record<string, (props: SVGProps<SVGSVGElement>) => ReactNode>;
+  session?: SessionState;
   username?: UsernameState;
 };
 
@@ -341,9 +354,12 @@ export function setupBetterAuthUiMocks(
   const checkUsernameAvailability = vi.fn();
   const resetUsernameAvailability = vi.fn();
 
+  const session: SessionState = options.session ?? { data: null };
+
   vi.doMock("@better-auth-ui/react", () => ({
     providerIcons,
     useAuth: () => auth,
+    useSession: () => session,
     useIsUsernameAvailable: () => ({
       data: options.username?.data,
       error: options.username?.error,
@@ -375,6 +391,7 @@ export function setupBetterAuthUiMocks(
 
       return {
         mutate: sendVerificationEmail,
+        isPending: options.pending?.sendVerificationEmail ?? false,
       };
     },
     useSignInEmail: (config: CapturedOptions["signInEmail"]) => {
@@ -453,6 +470,7 @@ export function setupBetterAuthUiMocks(
     resetPassword,
     resetUsernameAvailability,
     sendVerificationEmail,
+    session,
     signInEmail,
     signInMagicLink,
     signInPasskey,

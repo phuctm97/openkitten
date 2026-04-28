@@ -10,6 +10,8 @@ import {
   account,
   accountRelations,
   house,
+  passkey,
+  passkeyRelations,
   session,
   sessionRelations,
   user,
@@ -34,17 +36,21 @@ it("defines the Better Auth postgres tables", () => {
   const sessionColumns = getTableColumns(session);
   const accountColumns = getTableColumns(account);
   const verificationColumns = getTableColumns(verification);
+  const passkeyColumns = getTableColumns(passkey);
   const sessionConfig = getTableConfig(session);
   const accountConfig = getTableConfig(account);
   const verificationConfig = getTableConfig(verification);
+  const passkeyConfig = getTableConfig(passkey);
   const relationalConfig = extractTablesRelationalConfig(
     {
       user,
       session,
       account,
+      passkey,
       userRelations,
       sessionRelations,
       accountRelations,
+      passkeyRelations,
     },
     createTableRelationsHelpers,
   );
@@ -106,12 +112,31 @@ it("defines the Better Auth postgres tables", () => {
   expect(accountConfig.foreignKeys).toHaveLength(1);
   expect(accountConfig.foreignKeys[0]?.reference()).toBeDefined();
   expect(verificationConfig.indexes).toHaveLength(1);
+  expect(getTableName(passkey)).toBe("passkey");
+  expect(Object.keys(passkeyColumns)).toStrictEqual([
+    "id",
+    "name",
+    "publicKey",
+    "userId",
+    "credentialID",
+    "counter",
+    "deviceType",
+    "backedUp",
+    "transports",
+    "createdAt",
+    "aaguid",
+  ]);
+  expect(passkeyConfig.indexes).toHaveLength(2);
+  expect(passkeyConfig.foreignKeys).toHaveLength(1);
+  expect(passkeyConfig.foreignKeys[0]?.reference()).toBeDefined();
   expect(Object.keys(relationalConfig.tables)).toStrictEqual([
     "user",
     "session",
     "account",
+    "passkey",
   ]);
   expect(userRelations).toBeDefined();
   expect(sessionRelations).toBeDefined();
   expect(accountRelations).toBeDefined();
+  expect(passkeyRelations).toBeDefined();
 });

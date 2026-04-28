@@ -1,7 +1,8 @@
 import { data, replace } from "react-router";
 import { AuthRouter } from "~/components/auth/auth-router";
-import { authClient } from "~/lib/auth-client";
-import { queryClient } from "~/lib/query-client";
+import { VerifyEmail } from "~/components/auth/verify-email";
+import { getSession } from "~/lib/get-session";
+import { retrieveCallback } from "~/lib/retrieve-callback";
 import type { Route } from "./+types/auth";
 
 const authPaths = new Set([
@@ -11,23 +12,26 @@ const authPaths = new Set([
   "reset-password",
   "forgot-password",
   "magic-link",
+  "verify-email",
 ]);
 
 function pathResolver(request: Request) {
   const requestURL = new URL(request.url);
   const redirectTo = requestURL.searchParams.get("redirectTo");
 
-  if (!redirectTo) {
-    return "/";
+  if (redirectTo) {
+    const redirectURL = new URL(redirectTo, requestURL.origin);
+    if (redirectURL.origin === requestURL.origin) {
+      return `${redirectURL.pathname}${redirectURL.search}${redirectURL.hash}`;
+    }
   }
 
-  const redirectURL = new URL(redirectTo, requestURL.origin);
-
-  if (redirectURL.origin !== requestURL.origin) {
-    return "/";
+  const stored = retrieveCallback();
+  if (stored) {
+    return stored;
   }
 
-  return `${redirectURL.pathname}${redirectURL.search}${redirectURL.hash}`;
+  return "/";
 }
 
 export async function clientLoader({
@@ -43,16 +47,17 @@ export async function clientLoader({
     });
   }
 
-  const session = await queryClient.fetchQuery({
-    queryKey: ["auth", "getSession", null],
-    queryFn: ({ signal }) =>
-      authClient.getSession({
-        fetchOptions: {
-          signal,
-          throw: true,
-        },
-      }),
-  });
+  const session = await getSession();
+
+  if (path === "verify-email") {
+    if (!session) {
+      throw replace("/auth/sign-in");
+    }
+    if (session.user.emailVerified) {
+      throw replace(pathResolver(request));
+    }
+    return null;
+  }
 
   if (session && path !== "sign-out") {
     throw replace(pathResolver(request));
@@ -76,7 +81,11 @@ export default function Component({ params }: Route.ComponentProps) {
         <div className="absolute left-[-8rem] top-[-6rem] size-80 rounded-full bg-primary/8 blur-3xl" />
         <div className="absolute bottom-[-8rem] right-[-6rem] size-96 rounded-full bg-accent/60 blur-3xl" />
       </div>
-      <AuthRouter className="relative z-10" path={params.path} />
+      {params.path === "verify-email" ? (
+        <VerifyEmail className="relative z-10" />
+      ) : (
+        <AuthRouter className="relative z-10" path={params.path} />
+      )}
     </main>
   );
 }

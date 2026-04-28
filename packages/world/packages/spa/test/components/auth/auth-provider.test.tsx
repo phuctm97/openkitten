@@ -45,7 +45,9 @@ test("connects Better Auth UI to world auth, routing, links, and query client", 
   const { AuthLink } = await import("~/components/auth/auth-link");
   const { authClient } = await import("~/lib/auth-client");
   const { queryClient } = await import("~/lib/query-client");
-  const { worldURL } = await import("@openkitten/world-util");
+  const { isMagicLinkEnabled, isPasskeyEnabled, worldURL } = await import(
+    "@openkitten/world-util"
+  );
 
   render(
     <AuthProvider>
@@ -60,12 +62,20 @@ test("connects Better Auth UI to world auth, routing, links, and query client", 
     Link: unknown;
     navigate: (options: { to: string; replace?: boolean }) => void;
     queryClient: unknown;
+    magicLink: boolean;
+    passkey: boolean;
+    redirectTo: string;
+    socialProviders: string[];
   };
 
   expect(providerProps.authClient).toBe(authClient);
   expect(providerProps.baseURL).toBe(worldURL);
   expect(providerProps.Link).toBe(AuthLink);
   expect(providerProps.queryClient).toBe(queryClient);
+  expect(providerProps.redirectTo).toBe("/auth-callback");
+  expect(providerProps.magicLink).toBe(isMagicLinkEnabled);
+  expect(providerProps.passkey).toBe(isPasskeyEnabled);
+  expect(providerProps.socialProviders).toStrictEqual(["google", "github"]);
 
   providerProps.navigate({ to: "/auth/sign-in", replace: true });
 

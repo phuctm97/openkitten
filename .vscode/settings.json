@@ -13,6 +13,7 @@
     "**/*.db-shm": true,
     "**/dist": true,
     "**/coverage": true,
-    "**/.vendor": true
+    "**/.vendor": true,
+    "**/.react-router": true
   }
 }
