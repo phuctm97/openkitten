@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createStore, Provider } from "jotai";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { closestForm } from "~/test/lib/closest-form";
 
 function firstOrFail<T>(items: T[]): T {
   const [head] = items;
@@ -156,7 +157,7 @@ test("opens confirm dialog and deletes after correct slug", async () => {
   expect(screen.getAllByText("Delete house").length).toBeGreaterThan(0);
   const confirmInput = screen.getByLabelText("House slug") as HTMLInputElement;
   fireEvent.change(confirmInput, { target: { value: "acme" } });
-  fireEvent.submit(confirmInput.closest("form")!);
+  fireEvent.submit(closestForm(confirmInput));
 
   await waitFor(() => {
     expect(authClientMock.organization.delete).toHaveBeenCalledWith({
@@ -184,7 +185,7 @@ test("shows mismatch error when slug does not match", async () => {
   );
   const confirmInput = screen.getByLabelText("House slug") as HTMLInputElement;
   fireEvent.change(confirmInput, { target: { value: "wrong" } });
-  fireEvent.submit(confirmInput.closest("form")!);
+  fireEvent.submit(closestForm(confirmInput));
 
   expect(screen.getByText("Slug does not match")).toBeInTheDocument();
   expect(authClientMock.organization.delete).not.toHaveBeenCalled();
@@ -198,7 +199,7 @@ test("clears slug error and clears confirm input when dialog closes", async () =
   const confirmInput = screen.getByLabelText("House slug") as HTMLInputElement;
 
   fireEvent.change(confirmInput, { target: { value: "wrong" } });
-  fireEvent.submit(confirmInput.closest("form")!);
+  fireEvent.submit(closestForm(confirmInput));
   expect(screen.getByText("Slug does not match")).toBeInTheDocument();
 
   fireEvent.change(confirmInput, { target: { value: "another" } });
@@ -227,7 +228,7 @@ test("dialog onOpenChange forwards open=true without state reset", async () => {
   fireEvent.change(screen.getByLabelText("House slug"), {
     target: { value: "wrong" },
   });
-  fireEvent.submit(screen.getByLabelText("House slug").closest("form")!);
+  fireEvent.submit(closestForm(screen.getByLabelText("House slug")));
 
   expect(screen.getByText("Slug does not match")).toBeInTheDocument();
   fireEvent.click(screen.getByTestId("dialog-open-true"));
@@ -243,7 +244,7 @@ test("toasts error when deletion fails", async () => {
   fireEvent.change(screen.getByLabelText("House slug"), {
     target: { value: "acme" },
   });
-  fireEvent.submit(screen.getByLabelText("House slug").closest("form")!);
+  fireEvent.submit(closestForm(screen.getByLabelText("House slug")));
 
   await waitFor(() => {
     expect(toastErrorMock).toHaveBeenCalledWith(expect.any(Error));
