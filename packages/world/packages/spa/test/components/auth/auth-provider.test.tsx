@@ -6,9 +6,7 @@ const betterAuthMocks = vi.hoisted(() => ({
   authProvider: vi.fn(),
 }));
 
-const routerMocks = vi.hoisted(() => ({
-  navigate: vi.fn(),
-}));
+const navigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("react-router", async () => {
   const react = await vi.importActual<typeof import("react")>("react");
@@ -20,7 +18,14 @@ vi.mock("react-router", async () => {
       ...props
     }: ComponentProps<"a"> & { children: ReactNode; to: string }) =>
       react.createElement("a", { ...props, href: to }, children),
-    useNavigate: () => routerMocks.navigate,
+  };
+});
+
+vi.mock("jotai", async () => {
+  const actual = await vi.importActual<typeof import("jotai")>("jotai");
+  return {
+    ...actual,
+    useSetAtom: () => navigateMock,
   };
 });
 
@@ -79,7 +84,7 @@ test("connects Better Auth UI to world auth, routing, links, and query client", 
 
   providerProps.navigate({ to: "/auth/sign-in", replace: true });
 
-  expect(routerMocks.navigate).toHaveBeenCalledWith("/auth/sign-in", {
+  expect(navigateMock).toHaveBeenCalledWith("/auth/sign-in", {
     replace: true,
   });
 });

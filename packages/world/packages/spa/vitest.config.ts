@@ -14,7 +14,7 @@ export default defineConfig({
         "lib/**/*.{ts,tsx}",
         "app/**/*.{ts,tsx}",
       ],
-      exclude: ["app/routes.ts"],
+      exclude: ["app/routes.ts", "test/**"],
       thresholds: {
         statements: 100,
         branches: 100,

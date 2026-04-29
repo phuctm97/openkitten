@@ -11,6 +11,7 @@ import {
 } from "react-router";
 import type { Route } from "~/.react-router/types/app/+types/root";
 import { AuthProvider } from "~/components/auth/auth-provider";
+import { AuthSessionConnector } from "~/components/auth-session-connector";
 import { JotaiConnector } from "~/components/jotai-connector";
 import { LoadingState } from "~/components/loading-state";
 import { ThemeAnchor } from "~/components/theme-anchor";
@@ -47,6 +48,7 @@ export function Layout({ children }: PropsWithChildren) {
         <ThemeConnector />
         <ThemeAnchor />
         <QueryClientProvider client={queryClient}>
+          <AuthSessionConnector />
           <AuthProvider>
             <TooltipProvider>
               {children}

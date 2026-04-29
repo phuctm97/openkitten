@@ -6,16 +6,21 @@ const defaultConnectionString =
 const originalBunArgv = [...Bun.argv];
 
 const schemaKeys = [
-  "house",
+  "workspace",
   "user",
-  "session",
   "account",
   "verification",
   "passkey",
+  "house",
+  "house_member",
+  "house_invitation",
   "userRelations",
-  "sessionRelations",
   "accountRelations",
   "passkeyRelations",
+  "houseRelations",
+  "house_memberRelations",
+  "house_invitationRelations",
+  "workspaceRelations",
 ];
 
 afterEach(() => {

@@ -7,22 +7,23 @@ import {
   isPasskeyEnabled,
   worldURL,
 } from "@openkitten/world-util";
+import { useSetAtom } from "jotai";
 import type { PropsWithChildren } from "react";
 import { useCallback } from "react";
-import { useNavigate } from "react-router";
 import { authClient } from "~/lib/auth-client";
+import { navigateAtom } from "~/lib/navigate-atom";
 import { queryClient } from "~/lib/query-client";
 import { AuthLink } from "./auth-link";
 
 const socialProviders = ["google", "github"] as const;
 
 export function AuthProvider({ children }: PropsWithChildren) {
-  const routerNavigate = useNavigate();
+  const navigate = useSetAtom(navigateAtom);
   const authNavigate = useCallback<BetterAuthProviderProps["navigate"]>(
     ({ to, replace }) => {
-      routerNavigate(to, { replace });
+      void navigate(to, { replace });
     },
-    [routerNavigate],
+    [navigate],
   );
 
   return (
@@ -35,6 +36,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       redirectTo="/auth-callback"
       magicLink={isMagicLinkEnabled}
       passkey={isPasskeyEnabled}
+      multiSession={false}
       socialProviders={[...socialProviders]}
     >
       {children}

@@ -13,7 +13,12 @@ hono.use(
     credentials: true,
     origin: auth.options.trustedOrigins,
     exposeHeaders: ["content-type", "content-length", "cache-control"],
-    allowHeaders: ["content-type", "content-length", "user-agent"],
+    allowHeaders: [
+      "content-type",
+      "content-length",
+      "user-agent",
+      "x-active-organization-id",
+    ],
     allowMethods: ["GET", "POST"],
     maxAge: 600,
   }),
