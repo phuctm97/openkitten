@@ -1,8 +1,15 @@
 import { expect, test } from "vitest";
-import { contract, publicContract, userContract, userSchema } from "~/lib/main";
+import {
+  contract,
+  publicContract,
+  userContract,
+  userSchema,
+  workspaceContract,
+} from "~/lib/main";
 
 test("re-exports the merged contract", () => {
   expect(contract.me).toBeDefined();
+  expect(contract.workspace.sync).toBeDefined();
 });
 
 test("re-exports the public contract", () => {
@@ -11,6 +18,10 @@ test("re-exports the public contract", () => {
 
 test("re-exports the user contract", () => {
   expect(userContract.me).toBeDefined();
+});
+
+test("re-exports the workspace contract", () => {
+  expect(workspaceContract.sync).toBeDefined();
 });
 
 test("re-exports the user schema", () => {

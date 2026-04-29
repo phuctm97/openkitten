@@ -6,6 +6,7 @@ test("exposes tanstack-query helpers for each contract procedure", () => {
 
   expect(query.me).toBeDefined();
   expect(typeof query.me.queryOptions).toBe("function");
+  expect(query.workspace.sync).toBeDefined();
 });
 
 test("query options expose a typed query key derived from the procedure path", () => {
@@ -14,4 +15,11 @@ test("query options expose a typed query key derived from the procedure path", (
 
   expect(options.queryKey).toBeDefined();
   expect(Array.isArray(options.queryKey)).toBe(true);
+});
+
+test("forwards options through to the underlying client", () => {
+  const query = createWorldQuery("http://localhost:1234", {
+    getActiveOrganizationId: () => "org_99",
+  });
+  expect(query.me).toBeDefined();
 });

@@ -6,7 +6,9 @@
   "main": "lib/main.ts",
   "scripts": {
     "dev": "bun --env-file=../../../../.env.local --watch --no-clear-screen .",
-    "test": "bun --bun vitest run"
+    "test": "bun --bun vitest run",
+    "auth:generate": "bun run --env-file=../../../../.env.local --bun -- bunx @better-auth/cli@latest generate --config lib/auth.tsx --output lib/schema/auth.ts -y",
+    "drizzle:generate": "bun --bun drizzle-kit generate"
   },
   "dependencies": {
     "@better-auth/passkey": "^1.6.9",

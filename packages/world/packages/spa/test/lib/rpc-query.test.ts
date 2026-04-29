@@ -18,10 +18,15 @@ beforeEach(() => {
   vi.resetModules();
 });
 
-it("creates the world query utils with the local server URL", async () => {
+it("creates the world query utils with the local server URL and an active organization id resolver", async () => {
   const { rpcQuery } = await import("~/lib/rpc-query");
 
   expect(rpcQuery).toBe(mocks.queryUtils);
   expect(mocks.createWorldQuery).toHaveBeenCalledTimes(1);
-  expect(mocks.createWorldQuery).toHaveBeenCalledWith("http://localhost:41237");
+  expect(mocks.createWorldQuery).toHaveBeenCalledWith(
+    "http://localhost:41237",
+    {
+      getActiveOrganizationId: expect.any(Function),
+    },
+  );
 });
