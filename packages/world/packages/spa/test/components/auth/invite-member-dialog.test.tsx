@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { closestForm } from "~/test/lib/closest-form";
 
 const authClientMock = vi.hoisted(() => ({
   organization: { inviteMember: vi.fn() },
@@ -156,7 +157,7 @@ test("submits invite, shows pending spinner, and resets on success", async () =>
     target: { value: " teammate@openkitten.dev " },
   });
   fireEvent.click(screen.getByTestId("select-set-admin"));
-  fireEvent.submit(screen.getByLabelText("Email").closest("form")!);
+  fireEvent.submit(closestForm(screen.getByLabelText("Email")));
 
   await waitFor(() => {
     expect(authClientMock.organization.inviteMember).toHaveBeenCalledWith({
@@ -182,14 +183,14 @@ test("submits invite, shows pending spinner, and resets on success", async () =>
 test("shows email-required error and does not submit", async () => {
   renderDialog();
 
-  fireEvent.submit(screen.getByLabelText("Email").closest("form")!);
+  fireEvent.submit(closestForm(screen.getByLabelText("Email")));
   expect(screen.getByText("Email is required")).toBeInTheDocument();
   expect(authClientMock.organization.inviteMember).not.toHaveBeenCalled();
 });
 
 test("typing email clears the email error", async () => {
   renderDialog();
-  fireEvent.submit(screen.getByLabelText("Email").closest("form")!);
+  fireEvent.submit(closestForm(screen.getByLabelText("Email")));
   expect(screen.getByText("Email is required")).toBeInTheDocument();
 
   fireEvent.change(screen.getByLabelText("Email"), {
@@ -212,7 +213,7 @@ test("ignores invalid role values from select", async () => {
   fireEvent.change(screen.getByLabelText("Email"), {
     target: { value: "user@example.com" },
   });
-  fireEvent.submit(screen.getByLabelText("Email").closest("form")!);
+  fireEvent.submit(closestForm(screen.getByLabelText("Email")));
 
   await waitFor(() => {
     expect(authClientMock.organization.inviteMember).toHaveBeenCalledWith({
@@ -243,7 +244,7 @@ test("toasts error when invite fails", async () => {
   fireEvent.change(screen.getByLabelText("Email"), {
     target: { value: "user@example.com" },
   });
-  fireEvent.submit(screen.getByLabelText("Email").closest("form")!);
+  fireEvent.submit(closestForm(screen.getByLabelText("Email")));
 
   await waitFor(() => {
     expect(toastErrorMock).toHaveBeenCalledWith(expect.any(Error));

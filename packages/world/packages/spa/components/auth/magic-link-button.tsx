@@ -3,7 +3,7 @@ import type { AuthView } from "@better-auth-ui/react/core";
 import { Lock, Mail } from "lucide-react";
 
 import { Button } from "~/components/ui/button";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 
 export type MagicLinkButtonProps = {
   isPending: boolean;

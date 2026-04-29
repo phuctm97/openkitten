@@ -7,8 +7,11 @@ import { afterEach, expect, test, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
   workspaceData: undefined as unknown,
-  workspaceIsLoading: false,
+  workspaceIsPending: false,
   workspaceIsError: false,
+  workspaceIsRefetching: false,
+  workspaceError: undefined as unknown,
+  workspaceRefetch: vi.fn(),
 }));
 
 vi.mock("~/lib/authenticate", () => ({
@@ -21,14 +24,17 @@ vi.mock("@tanstack/react-query", async (importOriginal) => {
     ...actual,
     useQuery: () => ({
       data: mocks.workspaceData,
-      isLoading: mocks.workspaceIsLoading,
+      isPending: mocks.workspaceIsPending,
       isError: mocks.workspaceIsError,
+      error: mocks.workspaceError,
+      isRefetching: mocks.workspaceIsRefetching,
+      refetch: mocks.workspaceRefetch,
     }),
   };
 });
 
-vi.mock("~/lib/rpc-query", () => ({
-  rpcQuery: {
+vi.mock("~/lib/orpc-utils", () => ({
+  orpcUtils: {
     workspace: {
       sync: { queryOptions: () => ({ queryKey: ["workspace", "sync"] }) },
     },
@@ -43,8 +49,10 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
   mocks.workspaceData = undefined;
-  mocks.workspaceIsLoading = false;
+  mocks.workspaceIsPending = false;
   mocks.workspaceIsError = false;
+  mocks.workspaceIsRefetching = false;
+  mocks.workspaceError = undefined;
 });
 
 function renderRoute(initialPath: string, ChildComponent?: () => ReactNode) {
@@ -103,8 +111,8 @@ test("clientLoader redirects /workspace/ (with trailing slash) to /workspace/mem
   ).rejects.toMatchObject({ status: 302 });
 });
 
-test("renders a spinner while the workspace query is loading", async () => {
-  mocks.workspaceIsLoading = true;
+test("renders a spinner while the workspace query is pending", async () => {
+  mocks.workspaceIsPending = true;
   await renderRoute("/workspace/members");
   expect(screen.getByRole("status")).toBeInTheDocument();
 });
@@ -145,15 +153,19 @@ test("renders the outlet for a non-personal house with the house name and switch
   expect(screen.getByTestId("child")).toBeInTheDocument();
 });
 
-test("renders an error alert when the workspace query fails", async () => {
+test("renders the QueryErrorAlert when the workspace query fails", async () => {
   mocks.workspaceIsError = true;
+  mocks.workspaceError = new Error("network down");
   await renderRoute("/workspace/members");
   expect(screen.getByText("Couldn't load this house")).toBeInTheDocument();
+  expect(screen.getByText("network down")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
 });
 
-test("renders an error alert when no data is available and the query is not loading", async () => {
-  mocks.workspaceData = undefined;
-  mocks.workspaceIsLoading = false;
+test("retry button on the workspace alert calls refetch", async () => {
+  mocks.workspaceIsError = true;
+  mocks.workspaceError = new Error("flaky");
   await renderRoute("/workspace/members");
-  expect(screen.getByText("Couldn't load this house")).toBeInTheDocument();
+  screen.getByRole("button", { name: /retry/i }).click();
+  expect(mocks.workspaceRefetch).toHaveBeenCalledTimes(1);
 });

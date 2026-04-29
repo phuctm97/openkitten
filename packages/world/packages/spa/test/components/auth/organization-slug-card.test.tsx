@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { closestForm } from "~/test/lib/closest-form";
 
 const authClientMock = vi.hoisted(() => ({
   organization: {
@@ -81,7 +82,7 @@ test("seeds slug from organization, submits update, shows pending spinner", asyn
   expect(input.value).toBe("acme");
 
   fireEvent.change(input, { target: { value: "  acme-corp  " } });
-  fireEvent.submit(input.closest("form")!);
+  fireEvent.submit(closestForm(input));
 
   await waitFor(() => {
     expect(authClientMock.organization.update).toHaveBeenCalledWith({
@@ -107,7 +108,7 @@ test("shows slug-required error when submitting empty slug", async () => {
   const input = screen.getByLabelText("Slug") as HTMLInputElement;
 
   fireEvent.change(input, { target: { value: "   " } });
-  fireEvent.submit(input.closest("form")!);
+  fireEvent.submit(closestForm(input));
 
   expect(screen.getByText("Slug is required")).toBeInTheDocument();
   expect(authClientMock.organization.update).not.toHaveBeenCalled();
@@ -118,7 +119,7 @@ test("typing clears error after validation failure", async () => {
   const input = screen.getByLabelText("Slug") as HTMLInputElement;
 
   fireEvent.change(input, { target: { value: "" } });
-  fireEvent.submit(input.closest("form")!);
+  fireEvent.submit(closestForm(input));
   expect(screen.getByText("Slug is required")).toBeInTheDocument();
 
   fireEvent.change(input, { target: { value: "x" } });
@@ -129,7 +130,7 @@ test("toasts error when update fails", async () => {
   authClientMock.organization.update.mockRejectedValueOnce(new Error("nope"));
   renderCard("org_1", { slug: "acme" });
 
-  fireEvent.submit(screen.getByLabelText("Slug").closest("form")!);
+  fireEvent.submit(closestForm(screen.getByLabelText("Slug")));
 
   await waitFor(() => {
     expect(toastErrorMock).toHaveBeenCalledWith(expect.any(Error));

@@ -2,7 +2,7 @@ import { useAuth, useSignInPasskey } from "@better-auth-ui/react";
 import { Fingerprint } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Spinner } from "~/components/ui/spinner";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 
 export type PasskeyButtonProps = {
   isPending: boolean;

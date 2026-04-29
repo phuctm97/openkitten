@@ -19,7 +19,7 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { useIsMobile } from "~/hooks/use-mobile";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 
 const SIDEBAR_STORAGE_KEY = "openkitten-sidebar-open";
 const SIDEBAR_WIDTH = "16rem";

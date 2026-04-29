@@ -12,8 +12,8 @@ import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { FieldDescription } from "~/components/ui/field";
 import { Spinner } from "~/components/ui/spinner";
+import { cn } from "~/lib/cn";
 import { toastError } from "~/lib/toast-error";
-import { cn } from "~/lib/utils";
 
 export type VerifyEmailProps = {
   className?: string;

@@ -7,7 +7,7 @@ import {
 } from "@better-auth-ui/react";
 import { Card, CardContent } from "~/components/ui/card";
 import { Separator } from "~/components/ui/separator";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 import { ManageAccount } from "./manage-account";
 
 export type ManageAccountsProps = {

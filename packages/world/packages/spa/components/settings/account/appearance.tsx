@@ -16,7 +16,7 @@ import {
 } from "~/components/ui/field";
 import { Label } from "~/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 
 export type AppearanceProps = {
   className?: string;

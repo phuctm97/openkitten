@@ -2,7 +2,7 @@ import { useAuth, useListSessions, useSession } from "@better-auth-ui/react";
 import { Card, CardContent } from "~/components/ui/card";
 import { Separator } from "~/components/ui/separator";
 import { Skeleton } from "~/components/ui/skeleton";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 import { ActiveSession } from "./active-session";
 
 export type ActiveSessionsProps = {

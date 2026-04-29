@@ -3,11 +3,10 @@
 import { useAuth, useAuthenticate } from "@better-auth-ui/react";
 import type { SettingsView } from "@better-auth-ui/react/core";
 import { useMemo } from "react";
-
+import { AccountSettings } from "~/components/settings/account/account-settings";
+import { SecuritySettings } from "~/components/settings/security/security-settings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { cn } from "~/lib/utils";
-import { AccountSettings } from "./account/account-settings";
-import { SecuritySettings } from "./security/security-settings";
+import { cn } from "~/lib/cn";
 
 export type SettingsProps = {
   className?: string;

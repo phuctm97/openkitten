@@ -1,11 +1,12 @@
 import { queryOptions } from "@tanstack/react-query";
 import { authClient } from "~/lib/auth-client";
+import { orgQueryKeys } from "~/lib/org-query-keys";
 
 export function getFullOrganizationQueryOptions(
   organizationId: string | undefined,
 ) {
   return queryOptions({
-    queryKey: ["organizations", "full", organizationId ?? null] as const,
+    queryKey: [...orgQueryKeys.full, organizationId ?? null] as const,
     enabled: !!organizationId,
     queryFn: ({ signal }) => {
       if (!organizationId) {

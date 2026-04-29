@@ -8,6 +8,10 @@
     ".": {
       "import": "./lib/main.ts",
       "types": "./lib/main.ts"
+    },
+    "./router/*": {
+      "import": "./lib/router/*.ts",
+      "types": "./lib/router/*.ts"
     }
   },
   "scripts": {

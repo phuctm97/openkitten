@@ -1,7 +1,7 @@
 import { useAuthenticate } from "@better-auth-ui/react";
 import { Outlet } from "react-router";
-import { LoadingState } from "~/components/loading-state";
 import { authenticate } from "~/lib/authenticate";
+import { LoadingState } from "~/lib/loading-state";
 import type { Route } from "./+types/authenticated";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {

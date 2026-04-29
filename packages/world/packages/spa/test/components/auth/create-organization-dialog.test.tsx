@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { closestForm } from "~/test/lib/closest-form";
 
 const authClientMock = vi.hoisted(() => ({
   organization: { create: vi.fn() },
@@ -110,7 +111,7 @@ test("auto-generates slug from name and submits valid input on success", async (
   fireEvent.change(nameInput, { target: { value: "  Acme Co!  " } });
   expect((slugInput as HTMLInputElement).value).toBe("acme-co");
 
-  fireEvent.submit(nameInput.closest("form")!);
+  fireEvent.submit(closestForm(nameInput));
 
   await waitFor(() => {
     expect(authClientMock.organization.create).toHaveBeenCalledWith({
@@ -135,7 +136,7 @@ test("auto-generates slug from name and submits valid input on success", async (
 test("shows validation errors for empty name and slug", async () => {
   renderDialog();
 
-  const form = screen.getByLabelText("Name").closest("form")!;
+  const form = closestForm(screen.getByLabelText("Name"));
   fireEvent.submit(form);
 
   expect(screen.getByText("Name is required")).toBeInTheDocument();
@@ -147,7 +148,7 @@ test("clears validation error when user types in name and slug", async () => {
   renderDialog();
   const nameInput = screen.getByLabelText("Name") as HTMLInputElement;
   const slugInput = screen.getByLabelText("Slug") as HTMLInputElement;
-  const form = nameInput.closest("form")!;
+  const form = closestForm(nameInput);
 
   fireEvent.submit(form);
   expect(screen.getByText("Name is required")).toBeInTheDocument();
@@ -204,7 +205,7 @@ test("toasts error when creation fails", async () => {
   fireEvent.change(screen.getByLabelText("Slug"), {
     target: { value: "acme" },
   });
-  fireEvent.submit(screen.getByLabelText("Name").closest("form")!);
+  fireEvent.submit(closestForm(screen.getByLabelText("Name")));
 
   await waitFor(() => {
     expect(toastErrorMock).toHaveBeenCalledWith(expect.any(Error));
@@ -215,7 +216,7 @@ test("slugify trims, lowercases, and slices to 48 chars", async () => {
   authClientMock.organization.create.mockResolvedValueOnce({ data: {} });
   renderDialog();
 
-  const long = "A".repeat(60) + " trailing!!!";
+  const long = `${"A".repeat(60)} trailing!!!`;
   fireEvent.change(screen.getByLabelText("Name"), { target: { value: long } });
   const slugInput = screen.getByLabelText("Slug") as HTMLInputElement;
 

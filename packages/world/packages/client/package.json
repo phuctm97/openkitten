@@ -16,8 +16,7 @@
   "dependencies": {
     "@openkitten/world-contract": "workspace:*",
     "@orpc/client": "^1.14.0",
-    "@orpc/contract": "^1.14.0",
-    "@orpc/tanstack-query": "^1.14.0"
+    "@orpc/contract": "^1.14.0"
   },
   "devDependencies": {
     "@vitest/coverage-istanbul": "^4.1.5",

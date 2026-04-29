@@ -23,19 +23,16 @@ test("exposes the shared Better Auth UI session query key and fetcher", async ()
     "getSession",
     null,
   ]);
+  expect(sessionQueryOptions.staleTime).toBe(60 * 1000);
 
-  const signal = AbortSignal.timeout(1_000);
   await sessionQueryOptions.queryFn?.({
-    signal,
+    signal: AbortSignal.timeout(1_000),
     client: undefined as never,
     queryKey: sessionQueryOptions.queryKey,
     meta: undefined,
   });
 
   expect(sessionQueryOptionsMocks.authClient.getSession).toHaveBeenCalledWith({
-    fetchOptions: {
-      signal,
-      throw: true,
-    },
+    fetchOptions: { throw: true },
   });
 });

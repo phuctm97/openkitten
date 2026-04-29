@@ -1,15 +1,17 @@
 import { useQuery } from "@tanstack/react-query";
 import { HomeIcon } from "lucide-react";
 import { Link } from "react-router";
-
 import { OrganizationSwitcher } from "~/components/auth/organization-switcher";
 import { Button } from "~/components/ui/button";
+import { Spinner } from "~/components/ui/spinner";
 import { UserButton } from "~/components/user/user-button";
-import { rpcQuery } from "~/lib/rpc-query";
+import { orpcUtils } from "~/lib/orpc-utils";
+import { QueryErrorAlert } from "~/lib/query-error-alert";
 
 export default function Component() {
-  const { data } = useQuery(rpcQuery.workspace.sync.queryOptions());
-  const showHouseSettingsCta = data ? !data.workspace.isPersonal : false;
+  const { data, isPending, isError, error, isRefetching, refetch } = useQuery(
+    orpcUtils.workspace.sync.queryOptions(),
+  );
 
   return (
     <main className="grid min-h-screen place-items-center bg-background px-6">
@@ -18,27 +20,43 @@ export default function Component() {
           OpenKitten
         </h1>
 
-        <OrganizationSwitcher className="w-full" />
+        {isPending ? (
+          <Spinner className="size-6" />
+        ) : isError ? (
+          <QueryErrorAlert
+            error={error}
+            isRefetching={isRefetching}
+            onRetry={() => {
+              void refetch();
+            }}
+            title="Couldn't load this house"
+            className="w-full"
+          />
+        ) : (
+          <>
+            <OrganizationSwitcher className="w-full" />
 
-        <nav aria-label="Home destinations" className="flex gap-4">
-          <Link className="underline underline-offset-4" to="/app">
-            Go to /app
-          </Link>
-          <Link className="underline underline-offset-4" to="/game">
-            Go to /game
-          </Link>
-        </nav>
+            <nav aria-label="Home destinations" className="flex gap-4">
+              <Link className="underline underline-offset-4" to="/app">
+                Go to /app
+              </Link>
+              <Link className="underline underline-offset-4" to="/game">
+                Go to /game
+              </Link>
+            </nav>
 
-        {showHouseSettingsCta && (
-          <Button asChild variant="outline" className="w-full">
-            <Link to="/workspace/settings">
-              <HomeIcon className="size-4" />
-              House settings
-            </Link>
-          </Button>
+            {!data.workspace.isPersonal && (
+              <Button asChild variant="outline" className="w-full">
+                <Link to="/workspace/settings">
+                  <HomeIcon className="size-4" />
+                  House settings
+                </Link>
+              </Button>
+            )}
+
+            <UserButton />
+          </>
         )}
-
-        <UserButton />
       </div>
     </main>
   );

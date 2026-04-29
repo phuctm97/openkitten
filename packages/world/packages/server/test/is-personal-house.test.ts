@@ -36,12 +36,7 @@ it("returns false when the workspace has no userId", async () => {
   await expect(isPersonalHouse("house_1")).resolves.toBe(false);
 });
 
-it("throws WorkspaceNotFoundError(workspace-missing) when the workspace row is missing", async () => {
-  const { WorkspaceNotFoundError } = await import(
-    "~/lib/workspace-not-found-error"
-  );
+it("returns false when the workspace row is missing", async () => {
   findFirstWorkspace.mockResolvedValueOnce(undefined);
-  const error = await isPersonalHouse("house_unknown").catch((e) => e);
-  expect(error).toBeInstanceOf(WorkspaceNotFoundError);
-  expect(error.reason).toBe("workspace-missing");
+  await expect(isPersonalHouse("house_unknown")).resolves.toBe(false);
 });

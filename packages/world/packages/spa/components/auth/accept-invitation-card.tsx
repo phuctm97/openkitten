@@ -13,11 +13,11 @@ import {
 } from "~/components/ui/card";
 import { Spinner } from "~/components/ui/spinner";
 import { authClient } from "~/lib/auth-client";
+import { cn } from "~/lib/cn";
 import { getInvitationQueryOptions } from "~/lib/get-invitation-query-options";
 import { navigateAtom } from "~/lib/navigate-atom";
 import { queryClient } from "~/lib/query-client";
 import { toastError } from "~/lib/toast-error";
-import { cn } from "~/lib/utils";
 
 export interface AcceptInvitationCardProps {
   invitationId: string;

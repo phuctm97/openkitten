@@ -2,7 +2,7 @@
 
 import { useAuth } from "@better-auth-ui/react";
 
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 import { DeleteUser } from "./delete-user";
 
 export type DangerZoneProps = {

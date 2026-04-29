@@ -4,9 +4,9 @@ import {
   useSignInEmail,
   useSignInUsername,
 } from "@better-auth-ui/react";
+import { getErrorMessage } from "@openkitten/world-util";
 import { type SyntheticEvent, useState } from "react";
 import { toast } from "sonner";
-
 import { Button } from "~/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Checkbox } from "~/components/ui/checkbox";
@@ -20,9 +20,8 @@ import {
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
-import { formatError } from "~/lib/format-error";
+import { cn } from "~/lib/cn";
 import { toastError } from "~/lib/toast-error";
-import { cn } from "~/lib/utils";
 import { MagicLinkButton } from "./magic-link-button";
 import { PasskeyButton } from "./passkey-button";
 import { ProviderButtons, type SocialLayout } from "./provider-buttons";
@@ -77,7 +76,7 @@ export function SignIn({
         setPassword("");
 
         if (error.error?.code === "EMAIL_NOT_VERIFIED") {
-          toast.error(formatError(error), {
+          toast.error(getErrorMessage(error), {
             action: {
               label: localization.auth.resend,
               onClick: () =>
