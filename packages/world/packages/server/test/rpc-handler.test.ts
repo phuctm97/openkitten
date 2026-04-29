@@ -9,6 +9,16 @@ vi.mock("~/lib/auth", () => ({
   },
 }));
 
+vi.mock("~/lib/pg-database", () => ({
+  pgDatabase: {
+    query: { house_member: { findFirst: vi.fn() } },
+  },
+}));
+
+vi.mock("~/lib/sync-workspace", () => ({
+  syncWorkspace: vi.fn(),
+}));
+
 const { rpcHandler } = await import("~/lib/rpc-handler");
 
 test("rpcHandler is an RPCHandler instance", () => {
