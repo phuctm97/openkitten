@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { workspace } from "~/lib/router/workspace";
+import { workspace } from "~/lib/router";
 
 test("aggregates the sync procedure under the workspace folder", () => {
   expect(workspace.sync).toBeDefined();

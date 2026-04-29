@@ -1,12 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { InfoIcon } from "lucide-react";
-import { Link, NavLink, Outlet, replace, useLocation } from "react-router";
-import { OrganizationSwitcher } from "~/components/auth/organization-switcher";
+import { Outlet, replace, useLocation, useNavigate } from "react-router";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Spinner } from "~/components/ui/spinner";
+import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { authenticate } from "~/lib/authenticate";
-import { cn } from "~/lib/cn";
 import { orpcUtils } from "~/lib/orpc-utils";
+import { PageBreadcrumb } from "~/lib/page-breadcrumb";
 import { QueryErrorAlert } from "~/lib/query-error-alert";
 import type { Route } from "./+types/workspace";
 
@@ -22,66 +22,61 @@ export async function clientLoader({ request }: Route.ClientLoaderArgs) {
 const tabs = [
   { value: "members", label: "Members", to: "/workspace/members" },
   { value: "settings", label: "Settings", to: "/workspace/settings" },
-];
+] as const;
 
 export default function Component() {
   const { data, isPending, isError, error, isRefetching, refetch } = useQuery(
     orpcUtils.workspace.sync.queryOptions(),
   );
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isPersonal = data?.workspace.isPersonal ?? false;
-  const houseName = data?.house.name;
+  const activeTab = location.pathname.endsWith("/settings")
+    ? "settings"
+    : "members";
 
   return (
-    <main className="mx-auto w-full max-w-4xl px-6 py-10">
-      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm text-muted-foreground">
-            <Link to="/" className="hover:text-foreground">
-              OpenKitten
-            </Link>
-            <span aria-hidden> / </span>House
-          </p>
-          <h1 className="mt-1 font-heading text-3xl text-foreground">
-            {houseName ?? "House"}
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Manage members and settings for this house.
-          </p>
+    <main className="mx-auto w-full max-w-4xl px-4 pt-20 pb-10 sm:px-6 lg:pt-24">
+      <header className="mb-6 flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <PageBreadcrumb
+            items={[{ label: "Home", to: "/" }, { label: "House" }]}
+          />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <h1 className="font-heading text-3xl text-foreground">House</h1>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Manage members and settings for this house.
+              </p>
+            </div>
+          </div>
         </div>
-        <OrganizationSwitcher />
       </header>
 
-      <nav aria-label="House sections" className="mb-6 flex gap-1 border-b">
-        {tabs.map((tab) =>
-          isPersonal ? (
-            <span
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => {
+          const next = tabs.find((t) => t.value === value);
+          if (next) {
+            void navigate(next.to);
+          }
+        }}
+        className="mb-6"
+      >
+        <TabsList className="grid w-full grid-cols-2 sm:w-auto sm:grid-cols-none sm:flex">
+          {tabs.map((tab) => (
+            <TabsTrigger
               key={tab.value}
-              aria-disabled="true"
-              className="cursor-not-allowed border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted-foreground/50"
+              value={tab.value}
+              disabled={isPersonal}
+              className="sm:px-4"
             >
               {tab.label}
-            </span>
-          ) : (
-            <NavLink
-              key={tab.value}
-              to={tab.to}
-              end
-              className={({ isActive }) =>
-                cn(
-                  "border-b-2 px-3 py-2 text-sm font-medium transition-colors",
-                  isActive
-                    ? "border-foreground text-foreground"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
-                )
-              }
-            >
-              {tab.label}
-            </NavLink>
-          ),
-        )}
-      </nav>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
       {isPending ? (
         <div className="flex items-center justify-center py-12">
@@ -101,7 +96,7 @@ export default function Component() {
           <InfoIcon className="size-4" />
           <AlertTitle>Personal house</AlertTitle>
           <AlertDescription>
-            {location.pathname.endsWith("/members")
+            {activeTab === "members"
               ? "Members are only available for collaborative houses. Create a new house from the switcher above to invite teammates."
               : "House settings are only available for collaborative houses. Create a new house from the switcher above to manage settings."}
           </AlertDescription>

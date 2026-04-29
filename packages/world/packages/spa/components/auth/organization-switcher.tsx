@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useSetAtom } from "jotai";
 import { CheckIcon, ChevronsUpDownIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -15,7 +16,7 @@ import { Spinner } from "~/components/ui/spinner";
 import { authClient } from "~/lib/auth-client";
 import { cn } from "~/lib/cn";
 import { listOrganizationsQueryOptions } from "~/lib/list-organizations-query-options";
-import { queryClient } from "~/lib/query-client";
+import { revalidateAtom } from "~/lib/revalidate-atom";
 import { toastError } from "~/lib/toast-error";
 import { CreateOrganizationDialog } from "./create-organization-dialog";
 
@@ -26,6 +27,7 @@ export interface OrganizationSwitcherProps {
 export function OrganizationSwitcher({ className }: OrganizationSwitcherProps) {
   const { data: session } = authClient.useSession();
   const activeOrganizationId = session?.session.activeOrganizationId ?? null;
+  const revalidate = useSetAtom(revalidateAtom);
 
   const { data: organizations, isLoading } = useQuery(
     listOrganizationsQueryOptions,
@@ -33,18 +35,12 @@ export function OrganizationSwitcher({ className }: OrganizationSwitcherProps) {
 
   const { mutate: setActiveOrganization, isPending } = useMutation({
     mutationKey: ["active-organization", "setActive"] as const,
-    mutationFn: (organizationId: string | null) =>
-      authClient.organization.setActive({
+    mutationFn: async (organizationId: string | null) => {
+      await authClient.organization.setActive({
         organizationId,
         fetchOptions: { throw: true },
-      }),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["organizations"] }),
-        queryClient.invalidateQueries({
-          predicate: (query) => query.queryKey[0] === "@orpc",
-        }),
-      ]);
+      });
+      await revalidate();
     },
     onError: (error) => {
       toastError(error);
@@ -86,6 +82,7 @@ export function OrganizationSwitcher({ className }: OrganizationSwitcherProps) {
           {organizations?.map((org) => (
             <DropdownMenuItem
               key={org.id}
+              disabled={isPending}
               onSelect={() => setActiveOrganization(org.id)}
               className="justify-between"
             >

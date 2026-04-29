@@ -1,1 +1,1 @@
-export * as workspace from "./sync";
+export * from "./sync";

@@ -89,6 +89,33 @@ test("output schema rejects when activeMember is missing", () => {
   expect(() => def.outputSchema?.parse(rest)).toThrow();
 });
 
+test("output schema accepts an invitation with a null role", () => {
+  const def = sync["~orpc"];
+  const result: unknown = def.outputSchema?.parse({
+    ...sampleWorkspace,
+    invitations: [
+      {
+        id: "i_1",
+        email: "teammate@example.com",
+        role: null,
+        status: "pending",
+        expiresAt: new Date("2026-05-28T00:00:00Z"),
+      },
+    ],
+  });
+  expect(result).toMatchObject({ invitations: [{ role: null }] });
+});
+
+test("output schema rejects when activeMember.id is missing", () => {
+  const def = sync["~orpc"];
+  expect(() =>
+    def.outputSchema?.parse({
+      ...sampleWorkspace,
+      activeMember: { role: "owner", createdAt: new Date() },
+    }),
+  ).toThrow();
+});
+
 test("output schema rejects when a member is missing required user fields", () => {
   const def = sync["~orpc"];
   expect(() =>

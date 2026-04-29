@@ -7,6 +7,13 @@ const originalBunArgv = [...Bun.argv];
 
 const schemaKeys = [
   "workspace",
+  "cat",
+  "goal",
+  "thread",
+  "comment",
+  "notice",
+  "memo",
+  "rule",
   "user",
   "account",
   "verification",
@@ -21,6 +28,13 @@ const schemaKeys = [
   "house_memberRelations",
   "house_invitationRelations",
   "workspaceRelations",
+  "catRelations",
+  "goalRelations",
+  "threadRelations",
+  "commentRelations",
+  "noticeRelations",
+  "memoRelations",
+  "ruleRelations",
 ];
 
 afterEach(() => {

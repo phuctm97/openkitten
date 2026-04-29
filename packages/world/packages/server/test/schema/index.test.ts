@@ -9,14 +9,28 @@ import { expect, it } from "vitest";
 import {
   account,
   accountRelations,
+  cat,
+  catRelations,
+  comment,
+  commentRelations,
+  goal,
+  goalRelations,
   house,
   house_invitation,
   house_invitationRelations,
   house_member,
   house_memberRelations,
   houseRelations,
+  memo,
+  memoRelations,
+  notice,
+  noticeRelations,
   passkey,
   passkeyRelations,
+  rule,
+  ruleRelations,
+  thread,
+  threadRelations,
   user,
   userRelations,
   verification,
@@ -161,6 +175,154 @@ it("defines the workspace postgres table", () => {
   expect(workspaceColumns.updatedAt.onUpdateFn?.()).toBeInstanceOf(Date);
 });
 
+it("defines the cat domain table", () => {
+  const columns = getTableColumns(cat);
+  const config = getTableConfig(cat);
+  expect(getTableName(cat)).toBe("cat");
+  expect(Object.keys(columns)).toStrictEqual([
+    "id",
+    "houseId",
+    "name",
+    "slug",
+    "description",
+    "avatar",
+    "mood",
+    "isResting",
+    "createdAt",
+    "updatedAt",
+  ]);
+  expect(config.indexes).toHaveLength(2);
+  expect(config.foreignKeys).toHaveLength(1);
+  expect(config.foreignKeys[0]?.reference()).toBeDefined();
+  expect(columns.updatedAt.onUpdateFn?.()).toBeInstanceOf(Date);
+});
+
+it("defines the goal domain table", () => {
+  const columns = getTableColumns(goal);
+  const config = getTableConfig(goal);
+  expect(getTableName(goal)).toBe("goal");
+  expect(Object.keys(columns)).toStrictEqual([
+    "id",
+    "houseId",
+    "title",
+    "description",
+    "status",
+    "createdAt",
+    "updatedAt",
+    "achievedAt",
+  ]);
+  expect(config.indexes).toHaveLength(2);
+  expect(config.foreignKeys).toHaveLength(1);
+  expect(config.foreignKeys[0]?.reference()).toBeDefined();
+  expect(columns.updatedAt.onUpdateFn?.()).toBeInstanceOf(Date);
+});
+
+it("defines the thread domain table", () => {
+  const columns = getTableColumns(thread);
+  const config = getTableConfig(thread);
+  expect(getTableName(thread)).toBe("thread");
+  expect(Object.keys(columns)).toStrictEqual([
+    "id",
+    "houseId",
+    "title",
+    "summary",
+    "status",
+    "assignedCatId",
+    "goalId",
+    "createdAt",
+    "updatedAt",
+    "closedAt",
+  ]);
+  expect(config.indexes).toHaveLength(4);
+  expect(config.foreignKeys).toHaveLength(3);
+  for (const fk of config.foreignKeys) {
+    expect(fk.reference()).toBeDefined();
+  }
+  expect(columns.updatedAt.onUpdateFn?.()).toBeInstanceOf(Date);
+});
+
+it("defines the comment domain table", () => {
+  const columns = getTableColumns(comment);
+  const config = getTableConfig(comment);
+  expect(getTableName(comment)).toBe("comment");
+  expect(Object.keys(columns)).toStrictEqual([
+    "id",
+    "threadId",
+    "authorUserId",
+    "authorCatId",
+    "body",
+    "createdAt",
+  ]);
+  expect(config.indexes).toHaveLength(2);
+  expect(config.foreignKeys).toHaveLength(3);
+  for (const fk of config.foreignKeys) {
+    expect(fk.reference()).toBeDefined();
+  }
+});
+
+it("defines the notice domain table", () => {
+  const columns = getTableColumns(notice);
+  const config = getTableConfig(notice);
+  expect(getTableName(notice)).toBe("notice");
+  expect(Object.keys(columns)).toStrictEqual([
+    "id",
+    "houseId",
+    "kind",
+    "subject",
+    "body",
+    "threadId",
+    "catId",
+    "readAt",
+    "createdAt",
+  ]);
+  expect(config.indexes).toHaveLength(4);
+  expect(config.foreignKeys).toHaveLength(3);
+  for (const fk of config.foreignKeys) {
+    expect(fk.reference()).toBeDefined();
+  }
+});
+
+it("defines the memo domain table", () => {
+  const columns = getTableColumns(memo);
+  const config = getTableConfig(memo);
+  expect(getTableName(memo)).toBe("memo");
+  expect(Object.keys(columns)).toStrictEqual([
+    "id",
+    "houseId",
+    "authorUserId",
+    "targetCatId",
+    "body",
+    "pinnedAt",
+    "createdAt",
+    "updatedAt",
+  ]);
+  expect(config.indexes).toHaveLength(3);
+  expect(config.foreignKeys).toHaveLength(3);
+  for (const fk of config.foreignKeys) {
+    expect(fk.reference()).toBeDefined();
+  }
+  expect(columns.updatedAt.onUpdateFn?.()).toBeInstanceOf(Date);
+});
+
+it("defines the rule domain table", () => {
+  const columns = getTableColumns(rule);
+  const config = getTableConfig(rule);
+  expect(getTableName(rule)).toBe("rule");
+  expect(Object.keys(columns)).toStrictEqual([
+    "id",
+    "houseId",
+    "title",
+    "body",
+    "enabled",
+    "createdAt",
+    "updatedAt",
+  ]);
+  expect(config.indexes).toHaveLength(2);
+  expect(config.foreignKeys).toHaveLength(1);
+  expect(config.foreignKeys[0]?.reference()).toBeDefined();
+  expect(columns.updatedAt.onUpdateFn?.()).toBeInstanceOf(Date);
+});
+
 it("registers all relational tables", () => {
   const relationalConfig = extractTablesRelationalConfig(
     {
@@ -171,6 +333,13 @@ it("registers all relational tables", () => {
       house_member,
       house_invitation,
       workspace,
+      cat,
+      goal,
+      thread,
+      comment,
+      notice,
+      memo,
+      rule,
       userRelations,
       accountRelations,
       passkeyRelations,
@@ -178,6 +347,13 @@ it("registers all relational tables", () => {
       house_memberRelations,
       house_invitationRelations,
       workspaceRelations,
+      catRelations,
+      goalRelations,
+      threadRelations,
+      commentRelations,
+      noticeRelations,
+      memoRelations,
+      ruleRelations,
     },
     createTableRelationsHelpers,
   );
@@ -190,12 +366,19 @@ it("registers all relational tables", () => {
     "house_member",
     "house_invitation",
     "workspace",
+    "cat",
+    "goal",
+    "thread",
+    "comment",
+    "notice",
+    "memo",
+    "rule",
   ]);
-  expect(userRelations).toBeDefined();
-  expect(accountRelations).toBeDefined();
-  expect(passkeyRelations).toBeDefined();
-  expect(houseRelations).toBeDefined();
-  expect(house_memberRelations).toBeDefined();
-  expect(house_invitationRelations).toBeDefined();
-  expect(workspaceRelations).toBeDefined();
+  expect(catRelations).toBeDefined();
+  expect(goalRelations).toBeDefined();
+  expect(threadRelations).toBeDefined();
+  expect(commentRelations).toBeDefined();
+  expect(noticeRelations).toBeDefined();
+  expect(memoRelations).toBeDefined();
+  expect(ruleRelations).toBeDefined();
 });

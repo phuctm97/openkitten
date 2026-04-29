@@ -34,6 +34,18 @@ vi.mock("~/components/user/user-button", () => ({
   UserButton: () => null,
 }));
 
+vi.mock("~/lib/ambient-house-canvas", () => ({
+  AmbientHouseCanvas: () => null,
+}));
+
+vi.mock("~/lib/app-mode-preview", () => ({
+  AppModePreview: () => null,
+}));
+
+vi.mock("~/lib/house-anchor", () => ({
+  HouseAnchor: () => null,
+}));
+
 vi.mock("~/lib/orpc-utils", () => ({
   orpcUtils: {
     workspace: {
@@ -41,6 +53,45 @@ vi.mock("~/lib/orpc-utils", () => ({
     },
   },
 }));
+
+const baseData = {
+  house: {
+    id: "house-1",
+    name: "Ada's House",
+    slug: "ada-house",
+    logo: null,
+    metadata: null,
+    createdAt: new Date(),
+  },
+  workspace: {
+    id: 1,
+    userId: "user-1",
+    houseId: "house-1",
+    isPersonal: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  },
+  members: [
+    {
+      id: "member-1",
+      userId: "user-1",
+      role: "owner",
+      createdAt: new Date(),
+      user: {
+        id: "user-1",
+        name: "Ada",
+        email: "ada@example.com",
+        image: null,
+      },
+    },
+  ],
+  invitations: [],
+  activeMember: {
+    id: "member-1",
+    role: "owner",
+    createdAt: new Date(),
+  },
+};
 
 afterEach(() => {
   vi.clearAllMocks();
@@ -63,8 +114,8 @@ test("renders a spinner while the workspace query is pending", async () => {
   expect(screen.getByRole("status")).toBeInTheDocument();
 });
 
-test("renders the home route with links to app and game once data has loaded", async () => {
-  mocks.data = { workspace: { isPersonal: true } };
+test("renders the home route with the welcome heading and doorway links", async () => {
+  mocks.data = baseData;
   const { default: Component } = await import("~/app/routes/index");
   render(
     <MemoryRouter>
@@ -72,42 +123,16 @@ test("renders the home route with links to app and game once data has loaded", a
     </MemoryRouter>,
   );
 
-  expect(screen.getByText("OpenKitten")).toBeInTheDocument();
-  expect(screen.getByRole("link", { name: "Go to /app" })).toHaveAttribute(
+  expect(
+    screen.getByRole("heading", { name: /Welcome home, Ada\./ }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: /app mode/i })).toHaveAttribute(
     "href",
     "/app",
   );
-  expect(screen.getByRole("link", { name: "Go to /game" })).toHaveAttribute(
+  expect(screen.getByRole("link", { name: /game mode/i })).toHaveAttribute(
     "href",
     "/game",
-  );
-  expect(screen.getByRole("main")).toHaveClass("grid", "min-h-screen");
-});
-
-test("hides the House settings link for a personal workspace", async () => {
-  mocks.data = { workspace: { isPersonal: true } };
-  const { default: Component } = await import("~/app/routes/index");
-  render(
-    <MemoryRouter>
-      <Component />
-    </MemoryRouter>,
-  );
-  expect(
-    screen.queryByRole("link", { name: /House settings/ }),
-  ).not.toBeInTheDocument();
-});
-
-test("shows the House settings link when the active workspace is not personal", async () => {
-  mocks.data = { workspace: { isPersonal: false } };
-  const { default: Component } = await import("~/app/routes/index");
-  render(
-    <MemoryRouter>
-      <Component />
-    </MemoryRouter>,
-  );
-  expect(screen.getByRole("link", { name: /House settings/ })).toHaveAttribute(
-    "href",
-    "/workspace/settings",
   );
 });
 

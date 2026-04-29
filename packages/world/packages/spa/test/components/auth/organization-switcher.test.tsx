@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { getDefaultStore } from "jotai/vanilla";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { revalidatorAtom } from "~/lib/revalidator-atom";
 
 function lastOrFail<T>(items: T[]): T {
   const tail = items[items.length - 1];
@@ -19,6 +21,8 @@ const authClientMock = vi.hoisted(() => ({
 
 const queryClientMock = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
+  resetQueries: vi.fn(),
+  cancelQueries: vi.fn(),
 }));
 
 const toastErrorMock = vi.hoisted(() => vi.fn());
@@ -128,6 +132,10 @@ beforeEach(() => {
   authClientMock.organization.setActive.mockReset();
   queryClientMock.invalidateQueries.mockReset();
   queryClientMock.invalidateQueries.mockResolvedValue(undefined);
+  queryClientMock.resetQueries.mockReset();
+  queryClientMock.resetQueries.mockResolvedValue(undefined);
+  queryClientMock.cancelQueries.mockReset();
+  queryClientMock.cancelQueries.mockResolvedValue(undefined);
   toastErrorMock.mockReset();
 });
 
@@ -169,6 +177,10 @@ test("renders the active org and switches when an item is selected, showing pend
       resolveSet = resolve;
     }),
   );
+
+  const revalidate = vi.fn(async () => {});
+  getDefaultStore().set(revalidatorAtom, { revalidate, state: "idle" });
+
   setup({
     activeOrganizationId: "org_2",
     orgs: [
@@ -191,28 +203,44 @@ test("renders the active org and switches when an item is selected, showing pend
   resolveSet({ data: {} });
 
   await waitFor(() => {
-    expect(queryClientMock.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["organizations"],
-    });
+    expect(queryClientMock.resetQueries).toHaveBeenCalledWith();
   });
-  expect(queryClientMock.invalidateQueries).toHaveBeenCalledWith({
-    predicate: expect.any(Function),
-  });
-
-  const predicateCall = queryClientMock.invalidateQueries.mock.calls.find(
-    (call) => typeof call[0]?.predicate === "function",
-  );
-  const predicate = predicateCall?.[0]?.predicate as (q: {
-    queryKey: unknown[];
-  }) => boolean;
-  expect(predicate({ queryKey: ["@orpc", "x"] })).toBe(true);
-  expect(predicate({ queryKey: ["other"] })).toBe(false);
+  expect(revalidate).toHaveBeenCalledTimes(1);
 });
 
-test("toasts error when setActive fails", async () => {
+test("toasts error and skips revalidation when setActive fails", async () => {
   authClientMock.organization.setActive.mockRejectedValueOnce(
     new Error("nope"),
   );
+  const revalidate = vi.fn(async () => {});
+  getDefaultStore().set(revalidatorAtom, { revalidate, state: "idle" });
+
+  setup({
+    activeOrganizationId: "org_2",
+    orgs: [
+      { id: "org_1", name: "Acme" },
+      { id: "org_2", name: "Beta" },
+    ],
+  });
+
+  const acmeButtons = screen.getAllByRole("button", { name: "Acme" });
+  fireEvent.click(lastOrFail(acmeButtons));
+
+  await waitFor(() => {
+    expect(toastErrorMock).toHaveBeenCalledWith(expect.any(Error));
+  });
+  expect(revalidate).not.toHaveBeenCalled();
+  expect(queryClientMock.resetQueries).not.toHaveBeenCalled();
+  expect(queryClientMock.cancelQueries).not.toHaveBeenCalled();
+});
+
+test("toasts error when revalidation fails after a successful setActive", async () => {
+  authClientMock.organization.setActive.mockResolvedValueOnce({ data: {} });
+  const revalidate = vi.fn(async () => {
+    throw new Error("loader failed");
+  });
+  getDefaultStore().set(revalidatorAtom, { revalidate, state: "idle" });
+
   setup({
     activeOrganizationId: "org_2",
     orgs: [

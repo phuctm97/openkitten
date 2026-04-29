@@ -42,8 +42,17 @@ const rootMocks = vi.hoisted(() => ({
 vi.mock("react-router", async () => {
   const react = await vi.importActual<typeof import("react")>("react");
 
+  type LinkProps = {
+    to: string;
+    children?: ReactNode;
+    className?: string;
+    "aria-label"?: string;
+  };
+
   return {
     isRouteErrorResponse: rootMocks.isRouteErrorResponse,
+    Link: ({ to, children, ...rest }: LinkProps) =>
+      react.createElement("a", { href: to, ...rest }, children),
     Links: () => react.createElement("meta", { content: "links-placeholder" }),
     Meta: () => react.createElement("meta", { content: "meta-placeholder" }),
     Outlet: () => react.createElement("div", null, "Outlet Placeholder"),
