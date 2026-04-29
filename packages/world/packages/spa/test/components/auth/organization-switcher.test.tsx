@@ -1,7 +1,9 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { getDefaultStore } from "jotai/vanilla";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { revalidatorAtom } from "~/lib/revalidator-atom";
 
 function lastOrFail<T>(items: T[]): T {
   const tail = items[items.length - 1];
@@ -19,6 +21,7 @@ const authClientMock = vi.hoisted(() => ({
 
 const queryClientMock = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
+  resetQueries: vi.fn(),
 }));
 
 const toastErrorMock = vi.hoisted(() => vi.fn());
@@ -128,6 +131,8 @@ beforeEach(() => {
   authClientMock.organization.setActive.mockReset();
   queryClientMock.invalidateQueries.mockReset();
   queryClientMock.invalidateQueries.mockResolvedValue(undefined);
+  queryClientMock.resetQueries.mockReset();
+  queryClientMock.resetQueries.mockResolvedValue(undefined);
   toastErrorMock.mockReset();
 });
 
@@ -169,6 +174,10 @@ test("renders the active org and switches when an item is selected, showing pend
       resolveSet = resolve;
     }),
   );
+
+  const revalidate = vi.fn(async () => {});
+  getDefaultStore().set(revalidatorAtom, { revalidate, state: "idle" });
+
   setup({
     activeOrganizationId: "org_2",
     orgs: [
@@ -191,22 +200,9 @@ test("renders the active org and switches when an item is selected, showing pend
   resolveSet({ data: {} });
 
   await waitFor(() => {
-    expect(queryClientMock.invalidateQueries).toHaveBeenCalledWith({
-      queryKey: ["organizations"],
-    });
+    expect(queryClientMock.resetQueries).toHaveBeenCalledWith();
   });
-  expect(queryClientMock.invalidateQueries).toHaveBeenCalledWith({
-    predicate: expect.any(Function),
-  });
-
-  const predicateCall = queryClientMock.invalidateQueries.mock.calls.find(
-    (call) => typeof call[0]?.predicate === "function",
-  );
-  const predicate = predicateCall?.[0]?.predicate as (q: {
-    queryKey: unknown[];
-  }) => boolean;
-  expect(predicate({ queryKey: ["@orpc", "x"] })).toBe(true);
-  expect(predicate({ queryKey: ["other"] })).toBe(false);
+  expect(revalidate).toHaveBeenCalledTimes(1);
 });
 
 test("toasts error when setActive fails", async () => {

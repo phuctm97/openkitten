@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { fireEvent, render, screen } from "@testing-library/react";
+import type { ComponentProps, ReactNode } from "react";
 import { MemoryRouter, Outlet, Route, Routes } from "react-router";
 import { afterEach, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   authenticate: vi.fn(),
+  navigate: vi.fn(),
   workspaceData: undefined as unknown,
   workspaceIsPending: false,
   workspaceIsError: false,
@@ -17,6 +18,59 @@ const mocks = vi.hoisted(() => ({
 vi.mock("~/lib/authenticate", () => ({
   authenticate: mocks.authenticate,
 }));
+
+vi.mock("react-router", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-router")>();
+  return {
+    ...actual,
+    useNavigate: () => mocks.navigate,
+  };
+});
+
+vi.mock("~/components/ui/tabs", () => {
+  type TabsProps = {
+    value?: string;
+    onValueChange?: (value: string) => void;
+    children?: ReactNode;
+  };
+  function Tabs({ children, value, onValueChange }: TabsProps) {
+    return (
+      <div data-testid="tabs" data-value={value}>
+        {children}
+        <button
+          type="button"
+          data-testid="trigger-members"
+          onClick={() => onValueChange?.("members")}
+        />
+        <button
+          type="button"
+          data-testid="trigger-settings"
+          onClick={() => onValueChange?.("settings")}
+        />
+        <button
+          type="button"
+          data-testid="trigger-unknown"
+          onClick={() => onValueChange?.("unknown")}
+        />
+      </div>
+    );
+  }
+  function TabsList({ children }: { children?: ReactNode }) {
+    return <div data-testid="tabs-list">{children}</div>;
+  }
+  function TabsTrigger({
+    children,
+    value,
+    ...rest
+  }: { value?: string } & ComponentProps<"button">) {
+    return (
+      <button type="button" role="tab" data-value={value} {...rest}>
+        {children}
+      </button>
+    );
+  }
+  return { Tabs, TabsList, TabsTrigger };
+});
 
 vi.mock("@tanstack/react-query", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@tanstack/react-query")>();
@@ -41,10 +95,6 @@ vi.mock("~/lib/orpc-utils", () => ({
   },
 }));
 
-vi.mock("~/components/auth/organization-switcher", () => ({
-  OrganizationSwitcher: () => <div data-testid="switcher" />,
-}));
-
 afterEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
@@ -53,6 +103,7 @@ afterEach(() => {
   mocks.workspaceIsError = false;
   mocks.workspaceIsRefetching = false;
   mocks.workspaceError = undefined;
+  mocks.navigate.mockReset();
 });
 
 function renderRoute(initialPath: string, ChildComponent?: () => ReactNode) {
@@ -142,14 +193,13 @@ test("renders the personal-house alert with the settings message on /workspace/s
   ).toBeInTheDocument();
 });
 
-test("renders the outlet for a non-personal house with the house name and switcher", async () => {
+test("renders the outlet for a non-personal house with the House heading", async () => {
   mocks.workspaceData = {
     workspace: { isPersonal: false },
     house: { id: "house_1", name: "Acme" },
   };
   await renderRoute("/workspace/members", () => <div data-testid="child" />);
-  expect(screen.getByText("Acme")).toBeInTheDocument();
-  expect(screen.getByTestId("switcher")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "House" })).toBeInTheDocument();
   expect(screen.getByTestId("child")).toBeInTheDocument();
 });
 
@@ -168,4 +218,24 @@ test("retry button on the workspace alert calls refetch", async () => {
   await renderRoute("/workspace/members");
   screen.getByRole("button", { name: /retry/i }).click();
   expect(mocks.workspaceRefetch).toHaveBeenCalledTimes(1);
+});
+
+test("clicking the Settings tab calls navigate with /workspace/settings", async () => {
+  mocks.workspaceData = {
+    workspace: { isPersonal: false },
+    house: { id: "house_1", name: "Acme" },
+  };
+  await renderRoute("/workspace/members", () => <div data-testid="child" />);
+  fireEvent.click(screen.getByTestId("trigger-settings"));
+  expect(mocks.navigate).toHaveBeenCalledWith("/workspace/settings");
+});
+
+test("changing tab to an unknown value does not navigate", async () => {
+  mocks.workspaceData = {
+    workspace: { isPersonal: false },
+    house: { id: "house_1", name: "Acme" },
+  };
+  await renderRoute("/workspace/members", () => <div data-testid="child" />);
+  fireEvent.click(screen.getByTestId("trigger-unknown"));
+  expect(mocks.navigate).not.toHaveBeenCalled();
 });

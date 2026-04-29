@@ -18,11 +18,11 @@ import { Toaster } from "~/components/ui/sonner";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { AuthSessionConnector } from "~/lib/auth-session-connector";
 import { Devtools } from "~/lib/devtools";
+import { GlobalSwitcher } from "~/lib/global-switcher";
 import { hydrationAtom } from "~/lib/hydration-atom";
 import { JotaiConnector } from "~/lib/jotai-connector";
 import { LoadingState } from "~/lib/loading-state";
 import { queryClient } from "~/lib/query-client";
-import { ThemeAnchor } from "~/lib/theme-anchor";
 import { ThemeConnector } from "~/lib/theme-connector";
 import { ThemeInitializer } from "~/lib/theme-initializer";
 
@@ -47,7 +47,7 @@ export function Layout({ children }: PropsWithChildren) {
       <body className="m-0 min-h-full antialiased">
         <JotaiConnector />
         <ThemeConnector />
-        <ThemeAnchor />
+        <GlobalSwitcher />
         <QueryClientProvider client={queryClient}>
           <AuthSessionConnector />
           <AuthProvider>

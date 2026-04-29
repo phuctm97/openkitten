@@ -1,5 +1,14 @@
 import { relations } from "drizzle-orm";
-import { workspace } from "./app";
+import {
+  cat,
+  comment,
+  goal,
+  memo,
+  notice,
+  rule,
+  thread,
+  workspace,
+} from "./app";
 import {
   account,
   house,
@@ -18,6 +27,8 @@ export const userRelations = relations(user, ({ one, many }) => ({
     fields: [user.id],
     references: [workspace.userId],
   }),
+  comments: many(comment),
+  memos: many(memo),
 }));
 
 export const accountRelations = relations(account, ({ one }) => ({
@@ -41,6 +52,12 @@ export const houseRelations = relations(house, ({ one, many }) => ({
     fields: [house.id],
     references: [workspace.houseId],
   }),
+  cats: many(cat),
+  goals: many(goal),
+  threads: many(thread),
+  notices: many(notice),
+  memos: many(memo),
+  rules: many(rule),
 }));
 
 export const house_memberRelations = relations(house_member, ({ one }) => ({
@@ -75,6 +92,94 @@ export const workspaceRelations = relations(workspace, ({ one }) => ({
   }),
   house: one(house, {
     fields: [workspace.houseId],
+    references: [house.id],
+  }),
+}));
+
+export const catRelations = relations(cat, ({ one, many }) => ({
+  house: one(house, {
+    fields: [cat.houseId],
+    references: [house.id],
+  }),
+  threads: many(thread),
+  comments: many(comment),
+  memos: many(memo),
+  notices: many(notice),
+}));
+
+export const goalRelations = relations(goal, ({ one, many }) => ({
+  house: one(house, {
+    fields: [goal.houseId],
+    references: [house.id],
+  }),
+  threads: many(thread),
+}));
+
+export const threadRelations = relations(thread, ({ one, many }) => ({
+  house: one(house, {
+    fields: [thread.houseId],
+    references: [house.id],
+  }),
+  assignedCat: one(cat, {
+    fields: [thread.assignedCatId],
+    references: [cat.id],
+  }),
+  goal: one(goal, {
+    fields: [thread.goalId],
+    references: [goal.id],
+  }),
+  comments: many(comment),
+  notices: many(notice),
+}));
+
+export const commentRelations = relations(comment, ({ one }) => ({
+  thread: one(thread, {
+    fields: [comment.threadId],
+    references: [thread.id],
+  }),
+  authorUser: one(user, {
+    fields: [comment.authorUserId],
+    references: [user.id],
+  }),
+  authorCat: one(cat, {
+    fields: [comment.authorCatId],
+    references: [cat.id],
+  }),
+}));
+
+export const noticeRelations = relations(notice, ({ one }) => ({
+  house: one(house, {
+    fields: [notice.houseId],
+    references: [house.id],
+  }),
+  thread: one(thread, {
+    fields: [notice.threadId],
+    references: [thread.id],
+  }),
+  cat: one(cat, {
+    fields: [notice.catId],
+    references: [cat.id],
+  }),
+}));
+
+export const memoRelations = relations(memo, ({ one }) => ({
+  house: one(house, {
+    fields: [memo.houseId],
+    references: [house.id],
+  }),
+  authorUser: one(user, {
+    fields: [memo.authorUserId],
+    references: [user.id],
+  }),
+  targetCat: one(cat, {
+    fields: [memo.targetCatId],
+    references: [cat.id],
+  }),
+}));
+
+export const ruleRelations = relations(rule, ({ one }) => ({
+  house: one(house, {
+    fields: [rule.houseId],
     references: [house.id],
   }),
 }));
