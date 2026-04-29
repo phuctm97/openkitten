@@ -35,12 +35,11 @@ export function OrganizationSwitcher({ className }: OrganizationSwitcherProps) {
 
   const { mutate: setActiveOrganization, isPending } = useMutation({
     mutationKey: ["active-organization", "setActive"] as const,
-    mutationFn: (organizationId: string | null) =>
-      authClient.organization.setActive({
+    mutationFn: async (organizationId: string | null) => {
+      await authClient.organization.setActive({
         organizationId,
         fetchOptions: { throw: true },
-      }),
-    onSuccess: async () => {
+      });
       await revalidate();
     },
     onError: (error) => {
@@ -83,6 +82,7 @@ export function OrganizationSwitcher({ className }: OrganizationSwitcherProps) {
           {organizations?.map((org) => (
             <DropdownMenuItem
               key={org.id}
+              disabled={isPending}
               onSelect={() => setActiveOrganization(org.id)}
               className="justify-between"
             >

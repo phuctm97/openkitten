@@ -1,9 +1,15 @@
 import { call, ORPCError } from "@orpc/server";
 import { beforeEach, expect, it, vi } from "vitest";
 
-const { getSession, requireActiveHouse, generateCatSlug } = vi.hoisted(() => ({
+const {
+  getSession,
+  requireActiveHouse,
+  requireMutatorAccess,
+  generateCatSlug,
+} = vi.hoisted(() => ({
   getSession: vi.fn(),
   requireActiveHouse: vi.fn(),
+  requireMutatorAccess: vi.fn(),
   generateCatSlug: vi.fn(),
 }));
 
@@ -22,6 +28,7 @@ vi.mock("~/lib/auth", () => ({
 }));
 
 vi.mock("~/lib/require-active-house", () => ({ requireActiveHouse }));
+vi.mock("~/lib/require-mutator-access", () => ({ requireMutatorAccess }));
 vi.mock("~/lib/generate-cat-slug", () => ({ generateCatSlug }));
 
 const stubTable = { houseId: "_", id: "_", createdAt: "_" };
@@ -93,6 +100,7 @@ const sampleCat = {
 beforeEach(() => {
   getSession.mockReset();
   requireActiveHouse.mockReset();
+  requireMutatorAccess.mockReset();
   generateCatSlug.mockReset();
   findMany.mockReset();
   findFirst.mockReset();
@@ -101,6 +109,7 @@ beforeEach(() => {
   deleteReturning.mockReset();
   getSession.mockResolvedValue({ user: verifiedUser });
   requireActiveHouse.mockResolvedValue("house-1");
+  requireMutatorAccess.mockResolvedValue("house-1");
 });
 
 it("list returns cats scoped to the active house", async () => {
@@ -201,4 +210,121 @@ it("remove throws NOT_FOUND when the cat is missing", async () => {
   await expect(
     call(remove, { id: "cat-1" }, { context: { headers: new Headers() } }),
   ).rejects.toBeInstanceOf(ORPCError);
+});
+
+it("create rejects when requireMutatorAccess throws (member role)", async () => {
+  requireMutatorAccess.mockRejectedValueOnce(
+    new ORPCError("FORBIDDEN", { message: "Members cannot create cats" }),
+  );
+  await expect(
+    call(create, { name: "Misty" }, { context: { headers: new Headers() } }),
+  ).rejects.toBeInstanceOf(ORPCError);
+  expect(insertReturning).not.toHaveBeenCalled();
+});
+
+it("update rejects when requireMutatorAccess throws", async () => {
+  requireMutatorAccess.mockRejectedValueOnce(
+    new ORPCError("FORBIDDEN", { message: "Members cannot update cats" }),
+  );
+  await expect(
+    call(
+      update,
+      { id: "cat-1", name: "x" },
+      { context: { headers: new Headers() } },
+    ),
+  ).rejects.toBeInstanceOf(ORPCError);
+});
+
+it("remove rejects when requireMutatorAccess throws", async () => {
+  requireMutatorAccess.mockRejectedValueOnce(
+    new ORPCError("FORBIDDEN", { message: "Members cannot remove cats" }),
+  );
+  await expect(
+    call(remove, { id: "cat-1" }, { context: { headers: new Headers() } }),
+  ).rejects.toBeInstanceOf(ORPCError);
+});
+
+it("create persists with the houseId from requireMutatorAccess", async () => {
+  generateCatSlug.mockReturnValueOnce("misty-abcdef");
+  const valuesArg = vi.fn();
+  const insertSpy = vi.fn(() => ({
+    values: (v: unknown) => {
+      valuesArg(v);
+      return { returning: insertReturning };
+    },
+  }));
+  const { pgDatabase } = await import("~/lib/pg-database");
+  vi.spyOn(pgDatabase, "insert").mockImplementationOnce(
+    insertSpy as unknown as typeof pgDatabase.insert,
+  );
+  insertReturning.mockResolvedValueOnce([sampleCat]);
+  await call(
+    create,
+    { name: "Misty", description: "Calm" },
+    { context: { headers: new Headers() } },
+  );
+  expect(valuesArg).toHaveBeenCalledWith(
+    expect.objectContaining({
+      houseId: "house-1",
+      name: "Misty",
+      slug: "misty-abcdef",
+      description: "Calm",
+      mood: "awake",
+    }),
+  );
+});
+
+it("create retries on slug unique-violation and succeeds on the second attempt", async () => {
+  generateCatSlug.mockReturnValueOnce("misty-aaaaaa");
+  generateCatSlug.mockReturnValueOnce("misty-bbbbbb");
+  const conflict = Object.assign(new Error("dup"), {
+    code: "23505",
+    constraint: "cat_house_id_slug_uidx",
+  });
+  insertReturning.mockRejectedValueOnce(conflict);
+  insertReturning.mockResolvedValueOnce([sampleCat]);
+  const result = await call(
+    create,
+    { name: "Misty" },
+    { context: { headers: new Headers() } },
+  );
+  expect(result).toStrictEqual(sampleCat);
+  expect(generateCatSlug).toHaveBeenCalledTimes(2);
+});
+
+it("create rethrows non-unique-violation database errors without retrying", async () => {
+  generateCatSlug.mockReturnValueOnce("misty-aaaaaa");
+  const dbError = Object.assign(new Error("connection lost"), {
+    code: "08006",
+  });
+  insertReturning.mockRejectedValueOnce(dbError);
+  await expect(
+    call(create, { name: "Misty" }, { context: { headers: new Headers() } }),
+  ).rejects.toBe(dbError);
+  expect(generateCatSlug).toHaveBeenCalledTimes(1);
+});
+
+it("create gives up after 5 slug conflicts and throws INTERNAL_SERVER_ERROR", async () => {
+  generateCatSlug.mockReturnValue("misty-xxxxxx");
+  const conflict = Object.assign(new Error("dup"), {
+    code: "23505",
+    constraint: "cat_house_id_slug_uidx",
+  });
+  for (let i = 0; i < 5; i++) {
+    insertReturning.mockRejectedValueOnce(conflict);
+  }
+  await expect(
+    call(create, { name: "Misty" }, { context: { headers: new Headers() } }),
+  ).rejects.toBeInstanceOf(ORPCError);
+});
+
+it("create rethrows a non-object thrown value without retrying", async () => {
+  generateCatSlug.mockReturnValueOnce("misty-aaaaaa");
+  insertReturning.mockImplementationOnce(() => {
+    throw "boom";
+  });
+  await expect(
+    call(create, { name: "Misty" }, { context: { headers: new Headers() } }),
+  ).rejects.toBe("boom");
+  expect(generateCatSlug).toHaveBeenCalledTimes(1);
 });

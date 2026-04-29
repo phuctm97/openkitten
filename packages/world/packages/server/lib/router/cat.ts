@@ -32,28 +32,43 @@ export const get = authContract.cat.get.handler(
 export const create = authContract.cat.create.handler(
   async ({ input, context: { activeUser, activeMember } }) => {
     const houseId = await requireMutatorAccess(activeUser.id, activeMember);
-    const id = Bun.randomUUIDv7();
-    const slug = generateCatSlug(input.name);
-    const [created] = await pgDatabase
-      .insert(cat)
-      .values({
-        id,
-        houseId,
-        name: input.name,
-        slug,
-        description: input.description ?? null,
-        avatar: input.avatar ?? null,
-        mood: input.mood ?? "awake",
-      })
-      .returning();
-    if (!created) {
-      throw new ORPCError("INTERNAL_SERVER_ERROR", {
-        message: "Failed to create cat",
-      });
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        const [created] = await pgDatabase
+          .insert(cat)
+          .values({
+            id: Bun.randomUUIDv7(),
+            houseId,
+            name: input.name,
+            slug: generateCatSlug(input.name),
+            description: input.description ?? null,
+            avatar: input.avatar ?? null,
+            mood: input.mood ?? "awake",
+          })
+          .returning();
+        if (!created) {
+          throw new ORPCError("INTERNAL_SERVER_ERROR", {
+            message: "Failed to create cat",
+          });
+        }
+        return created;
+      } catch (error) {
+        if (isUniqueSlugViolation(error)) continue;
+        throw error;
+      }
     }
-    return created;
+    throw new ORPCError("INTERNAL_SERVER_ERROR", {
+      message: "Failed to create a cat with a unique slug",
+    });
   },
 );
+
+function isUniqueSlugViolation(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: unknown }).code;
+  const constraint = (error as { constraint?: unknown }).constraint;
+  return code === "23505" && constraint === "cat_house_id_slug_uidx";
+}
 
 export const update = authContract.cat.update.handler(
   async ({ input, context: { activeUser, activeMember } }) => {

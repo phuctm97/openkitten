@@ -1,10 +1,13 @@
 import { call, ORPCError } from "@orpc/server";
 import { beforeEach, expect, it, vi } from "vitest";
 
-const { getSession, requireActiveHouse } = vi.hoisted(() => ({
-  getSession: vi.fn(),
-  requireActiveHouse: vi.fn(),
-}));
+const { getSession, requireActiveHouse, requireMutatorAccess } = vi.hoisted(
+  () => ({
+    getSession: vi.fn(),
+    requireActiveHouse: vi.fn(),
+    requireMutatorAccess: vi.fn(),
+  }),
+);
 
 const findMany = vi.fn();
 const findFirst = vi.fn();
@@ -21,6 +24,7 @@ vi.mock("~/lib/auth", () => ({
 }));
 
 vi.mock("~/lib/require-active-house", () => ({ requireActiveHouse }));
+vi.mock("~/lib/require-mutator-access", () => ({ requireMutatorAccess }));
 
 const stubTable = { houseId: "_", id: "_", createdAt: "_" };
 const stubOps = {
@@ -88,6 +92,7 @@ const sampleRule = {
 beforeEach(() => {
   getSession.mockReset();
   requireActiveHouse.mockReset();
+  requireMutatorAccess.mockReset();
   findMany.mockReset();
   findFirst.mockReset();
   insertReturning.mockReset();
@@ -95,6 +100,7 @@ beforeEach(() => {
   deleteReturning.mockReset();
   getSession.mockResolvedValue({ user: verifiedUser });
   requireActiveHouse.mockResolvedValue("house-1");
+  requireMutatorAccess.mockResolvedValue("house-1");
 });
 
 it("list returns rules scoped to the house", async () => {
@@ -184,5 +190,34 @@ it("remove throws NOT_FOUND when the rule is missing", async () => {
   deleteReturning.mockResolvedValueOnce([]);
   await expect(
     call(remove, { id: "x" }, { context: { headers: new Headers() } }),
+  ).rejects.toBeInstanceOf(ORPCError);
+});
+
+it("create rejects when requireMutatorAccess throws", async () => {
+  requireMutatorAccess.mockRejectedValueOnce(new ORPCError("FORBIDDEN"));
+  await expect(
+    call(
+      create,
+      { title: "x", body: "y" },
+      { context: { headers: new Headers() } },
+    ),
+  ).rejects.toBeInstanceOf(ORPCError);
+});
+
+it("update rejects when requireMutatorAccess throws", async () => {
+  requireMutatorAccess.mockRejectedValueOnce(new ORPCError("FORBIDDEN"));
+  await expect(
+    call(
+      update,
+      { id: "r1", title: "x" },
+      { context: { headers: new Headers() } },
+    ),
+  ).rejects.toBeInstanceOf(ORPCError);
+});
+
+it("remove rejects when requireMutatorAccess throws", async () => {
+  requireMutatorAccess.mockRejectedValueOnce(new ORPCError("FORBIDDEN"));
+  await expect(
+    call(remove, { id: "r1" }, { context: { headers: new Headers() } }),
   ).rejects.toBeInstanceOf(ORPCError);
 });

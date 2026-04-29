@@ -4,5 +4,7 @@ import { revalidatorAtom } from "~/lib/revalidator-atom";
 
 export const revalidateAtom = atomWithWriteOnly(async (get) => {
   const revalidator = get(revalidatorAtom);
-  await Promise.all([queryClient.resetQueries(), revalidator.revalidate()]);
+  await queryClient.cancelQueries();
+  await queryClient.resetQueries();
+  await revalidator.revalidate();
 });

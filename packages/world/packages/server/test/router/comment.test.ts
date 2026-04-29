@@ -1,10 +1,13 @@
 import { call, ORPCError } from "@orpc/server";
 import { beforeEach, expect, it, vi } from "vitest";
 
-const { getSession, requireActiveHouse } = vi.hoisted(() => ({
-  getSession: vi.fn(),
-  requireActiveHouse: vi.fn(),
-}));
+const { getSession, requireActiveHouse, requireMutatorAccess } = vi.hoisted(
+  () => ({
+    getSession: vi.fn(),
+    requireActiveHouse: vi.fn(),
+    requireMutatorAccess: vi.fn(),
+  }),
+);
 
 const findManyComments = vi.fn();
 const findFirstThread = vi.fn();
@@ -22,6 +25,7 @@ vi.mock("~/lib/auth", () => ({
 }));
 
 vi.mock("~/lib/require-active-house", () => ({ requireActiveHouse }));
+vi.mock("~/lib/require-mutator-access", () => ({ requireMutatorAccess }));
 
 const stubTable = { threadId: "_", id: "_", createdAt: "_", houseId: "_" };
 const stubOps = {
@@ -92,6 +96,7 @@ const sampleComment = {
 beforeEach(() => {
   getSession.mockReset();
   requireActiveHouse.mockReset();
+  requireMutatorAccess.mockReset();
   findManyComments.mockReset();
   findFirstThread.mockReset();
   findFirstComment.mockReset();
@@ -100,6 +105,7 @@ beforeEach(() => {
   commentDeleteWhere.mockReset();
   getSession.mockResolvedValue({ user: verifiedUser });
   requireActiveHouse.mockResolvedValue("house-1");
+  requireMutatorAccess.mockResolvedValue("house-1");
 });
 
 it("listByThread returns comments after verifying the thread is in the house", async () => {
@@ -186,5 +192,23 @@ it("remove throws NOT_FOUND when the comment's thread is in a different house", 
   });
   await expect(
     call(remove, { id: "comment-1" }, { context: { headers: new Headers() } }),
+  ).rejects.toBeInstanceOf(ORPCError);
+});
+
+it("create rejects when requireMutatorAccess throws", async () => {
+  requireMutatorAccess.mockRejectedValueOnce(new ORPCError("FORBIDDEN"));
+  await expect(
+    call(
+      create,
+      { threadId: "t1", body: "x" },
+      { context: { headers: new Headers() } },
+    ),
+  ).rejects.toBeInstanceOf(ORPCError);
+});
+
+it("remove rejects when requireMutatorAccess throws", async () => {
+  requireMutatorAccess.mockRejectedValueOnce(new ORPCError("FORBIDDEN"));
+  await expect(
+    call(remove, { id: "c1" }, { context: { headers: new Headers() } }),
   ).rejects.toBeInstanceOf(ORPCError);
 });

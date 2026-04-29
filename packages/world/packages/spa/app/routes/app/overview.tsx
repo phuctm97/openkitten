@@ -36,7 +36,7 @@ const todayLabel = new Date().toLocaleDateString(undefined, {
 });
 
 function relativeTime(value: Date) {
-  const diffMs = Date.now() - new Date(value).getTime();
+  const diffMs = Math.max(0, Date.now() - new Date(value).getTime());
   const minutes = Math.round(diffMs / 60000);
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;

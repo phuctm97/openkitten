@@ -22,7 +22,19 @@ export async function requireMutatorAccess(
     where: (table, { eq }) => eq(table.userId, userId),
     columns: { houseId: true },
   });
-  if (personal) return personal.houseId;
+  if (personal) {
+    const personalMember = await pgDatabase.query.house_member.findFirst({
+      where: (table, { and, eq }) =>
+        and(eq(table.userId, userId), eq(table.house_id, personal.houseId)),
+      columns: { role: true },
+    });
+    if (!personalMember || !isMutatorRole(personalMember.role)) {
+      throw new ORPCError("FORBIDDEN", {
+        message: "Only owners and admins can change this house",
+      });
+    }
+    return personal.houseId;
+  }
   const firstMember = await pgDatabase.query.house_member.findFirst({
     where: (table, { eq }) => eq(table.userId, userId),
     columns: { house_id: true, role: true },
