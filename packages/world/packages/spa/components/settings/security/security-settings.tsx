@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@better-auth-ui/react";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 import { ActiveSessions } from "./active-sessions";
 import { ChangePassword } from "./change-password";
 import { DangerZone } from "./danger-zone";

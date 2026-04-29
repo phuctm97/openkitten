@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "main": "lib/main.ts",
+  "exports": {
+    ".": "./lib/main.ts",
+    "./types": "./lib/types.ts"
+  },
   "scripts": {
     "dev": "bun --env-file=../../../../.env.local --watch --no-clear-screen .",
     "test": "bun --bun vitest run",
@@ -19,14 +23,14 @@
     "better-auth": "^1.6.9",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.12.15",
-    "nodemailer": "^8.0.5",
+    "nodemailer": "^8.0.7",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
-    "react-email": "^6.0.0"
+    "react-email": "^6.0.5"
   },
   "devDependencies": {
     "@better-auth/cli": "^1.4.21",
-    "@react-email/ui": "^6.0.0",
+    "@react-email/ui": "^6.0.5",
     "@types/nodemailer": "^8.0.0",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",

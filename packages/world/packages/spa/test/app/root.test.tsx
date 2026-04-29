@@ -17,7 +17,19 @@ const localModuleMocks = vi.hoisted(() => ({
   tooltipProvider: vi.fn((props: { children: ReactNode }) => (
     <section data-testid="tooltip-provider">{props.children}</section>
   )),
+  isLive: false,
 }));
+
+vi.mock("@openkitten/world-util", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@openkitten/world-util")>();
+  return {
+    ...actual,
+    get isLive() {
+      return localModuleMocks.isLive;
+    },
+  };
+});
 
 const rootMocks = vi.hoisted(() => ({
   isRouteErrorResponse: vi.fn(),
@@ -88,6 +100,7 @@ vi.mock("@tanstack/react-query", async () => {
 afterEach(() => {
   vi.clearAllMocks();
   vi.resetModules();
+  localModuleMocks.isLive = false;
 });
 
 const rootComponentProps = {
@@ -156,7 +169,7 @@ test("renders the document shell and shared layout", {
   timeout: 10_000,
 }, async () => {
   setRouterHookMocks();
-  vi.stubEnv("DEV", true);
+  localModuleMocks.isLive = false;
   localModuleMocks.devtools.mockReturnValue(createDevtools());
 
   const { Layout } = await import("~/app/root");
@@ -188,9 +201,9 @@ test("renders the document shell and shared layout", {
   );
 });
 
-test("does not render devtools outside development", async () => {
+test("does not render devtools when isLive is true", async () => {
   setRouterHookMocks();
-  vi.stubEnv("DEV", false);
+  localModuleMocks.isLive = true;
   localModuleMocks.devtools.mockReturnValue(createDevtools());
 
   const { Layout } = await import("~/app/root");

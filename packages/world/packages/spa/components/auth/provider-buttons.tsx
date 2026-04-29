@@ -1,7 +1,7 @@
 import { useAuth } from "@better-auth-ui/react";
 import { useMemo } from "react";
 
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 import { ProviderButton } from "./provider-button";
 
 export type ProviderButtonsProps = {

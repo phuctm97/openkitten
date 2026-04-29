@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
 import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 import { SwitchAccountMenu } from "./switch-account-menu";
 import { UserAvatar } from "./user-avatar";
 import { UserView } from "./user-view";

@@ -1,3 +1,2 @@
-export type { CreateWorldClientOptions } from "./create-world-client";
-export { createWorldClient } from "./create-world-client";
-export { createWorldQuery } from "./create-world-query";
+export type { CreateClientOptions } from "./create-client";
+export { createClient } from "./create-client";

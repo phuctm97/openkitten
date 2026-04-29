@@ -1,3 +1,4 @@
+import { isLive } from "@openkitten/world-util";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { getDefaultStore } from "jotai";
 import type { PropsWithChildren } from "react";
@@ -11,19 +12,19 @@ import {
 } from "react-router";
 import type { Route } from "~/.react-router/types/app/+types/root";
 import { AuthProvider } from "~/components/auth/auth-provider";
-import { AuthSessionConnector } from "~/components/auth-session-connector";
-import { JotaiConnector } from "~/components/jotai-connector";
-import { LoadingState } from "~/components/loading-state";
-import { ThemeAnchor } from "~/components/theme-anchor";
-import { ThemeConnector } from "~/components/theme-connector";
-import { ThemeInitializer } from "~/components/theme-initializer";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Toaster } from "~/components/ui/sonner";
 import { TooltipProvider } from "~/components/ui/tooltip";
+import { AuthSessionConnector } from "~/lib/auth-session-connector";
 import { Devtools } from "~/lib/devtools";
 import { hydrationAtom } from "~/lib/hydration-atom";
+import { JotaiConnector } from "~/lib/jotai-connector";
+import { LoadingState } from "~/lib/loading-state";
 import { queryClient } from "~/lib/query-client";
+import { ThemeAnchor } from "~/lib/theme-anchor";
+import { ThemeConnector } from "~/lib/theme-connector";
+import { ThemeInitializer } from "~/lib/theme-initializer";
 
 export const clientMiddleware: Route.ClientMiddlewareFunction[] = [
   async () => {
@@ -55,7 +56,7 @@ export function Layout({ children }: PropsWithChildren) {
               <Toaster />
             </TooltipProvider>
           </AuthProvider>
-          {import.meta.env.DEV && <Devtools />}
+          {!isLive && <Devtools />}
         </QueryClientProvider>
         <ScrollRestoration />
         <Scripts />

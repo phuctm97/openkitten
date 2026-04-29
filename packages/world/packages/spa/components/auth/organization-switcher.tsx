@@ -13,10 +13,10 @@ import {
 } from "~/components/ui/dropdown-menu";
 import { Spinner } from "~/components/ui/spinner";
 import { authClient } from "~/lib/auth-client";
+import { cn } from "~/lib/cn";
 import { listOrganizationsQueryOptions } from "~/lib/list-organizations-query-options";
 import { queryClient } from "~/lib/query-client";
 import { toastError } from "~/lib/toast-error";
-import { cn } from "~/lib/utils";
 import { CreateOrganizationDialog } from "./create-organization-dialog";
 
 export interface OrganizationSwitcherProps {

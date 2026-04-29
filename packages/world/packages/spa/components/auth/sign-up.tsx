@@ -3,6 +3,7 @@ import {
   useIsUsernameAvailable,
   useSignUpEmail,
 } from "@better-auth-ui/react";
+import { getErrorMessage } from "@openkitten/world-util";
 import { useDebouncer } from "@tanstack/react-pacer";
 import { Check, Eye, EyeOff, X } from "lucide-react";
 import { type SyntheticEvent, useState } from "react";
@@ -23,11 +24,10 @@ import {
   InputGroupButton,
   InputGroupInput,
 } from "~/components/ui/input-group";
+import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
-import { formatError } from "~/lib/format-error";
+import { cn } from "~/lib/cn";
 import { toastError } from "~/lib/toast-error";
-import { cn } from "~/lib/utils";
-import { Label } from "../ui/label";
 import { MagicLinkButton } from "./magic-link-button";
 import { ProviderButtons, type SocialLayout } from "./provider-buttons";
 
@@ -268,7 +268,7 @@ export function SignUp({
 
                     <FieldError>
                       {usernameError
-                        ? formatError(usernameError)
+                        ? getErrorMessage(usernameError)
                         : usernameData?.available === false
                           ? localization.auth.usernameTaken
                           : null}

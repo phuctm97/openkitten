@@ -24,7 +24,7 @@ import {
 import { Label } from "~/components/ui/label";
 import { Skeleton } from "~/components/ui/skeleton";
 import { Spinner } from "~/components/ui/spinner";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
 
 export type ChangePasswordProps = {
   className?: string;

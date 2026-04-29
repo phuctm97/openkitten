@@ -12,9 +12,9 @@ import {
   FieldSeparator,
 } from "~/components/ui/field";
 import { Input } from "~/components/ui/input";
+import { Label } from "~/components/ui/label";
 import { Spinner } from "~/components/ui/spinner";
-import { cn } from "~/lib/utils";
-import { Label } from "../ui/label";
+import { cn } from "~/lib/cn";
 import { MagicLinkButton } from "./magic-link-button";
 import { PasskeyButton } from "./passkey-button";
 import { ProviderButtons, type SocialLayout } from "./provider-buttons";

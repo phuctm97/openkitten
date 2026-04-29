@@ -1,6 +1,6 @@
+import { getErrorMessage } from "@openkitten/world-util";
 import { toast } from "sonner";
-import { formatError } from "~/lib/format-error";
 
 export function toastError(error: unknown) {
-  toast.error(formatError(error));
+  toast.error(getErrorMessage(error));
 }

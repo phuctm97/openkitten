@@ -1,13 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
-import { InfoIcon, TriangleAlertIcon } from "lucide-react";
+import { InfoIcon } from "lucide-react";
 import { Link, NavLink, Outlet, replace, useLocation } from "react-router";
-
 import { OrganizationSwitcher } from "~/components/auth/organization-switcher";
 import { Alert, AlertDescription, AlertTitle } from "~/components/ui/alert";
 import { Spinner } from "~/components/ui/spinner";
 import { authenticate } from "~/lib/authenticate";
-import { rpcQuery } from "~/lib/rpc-query";
-import { cn } from "~/lib/utils";
+import { cn } from "~/lib/cn";
+import { orpcUtils } from "~/lib/orpc-utils";
+import { QueryErrorAlert } from "~/lib/query-error-alert";
 import type { Route } from "./+types/workspace";
 
 export async function clientLoader({ request }: Route.ClientLoaderArgs) {
@@ -25,13 +25,12 @@ const tabs = [
 ];
 
 export default function Component() {
-  const { data, isLoading, isError } = useQuery(
-    rpcQuery.workspace.sync.queryOptions(),
+  const { data, isPending, isError, error, isRefetching, refetch } = useQuery(
+    orpcUtils.workspace.sync.queryOptions(),
   );
   const location = useLocation();
 
-  const isPersonal = data ? data.workspace.isPersonal : false;
-  const houseId = data?.house.id;
+  const isPersonal = data?.workspace.isPersonal ?? false;
   const houseName = data?.house.name;
 
   return (
@@ -84,19 +83,19 @@ export default function Component() {
         )}
       </nav>
 
-      {isLoading ? (
+      {isPending ? (
         <div className="flex items-center justify-center py-12">
           <Spinner />
         </div>
-      ) : isError || !houseId ? (
-        <Alert variant="destructive">
-          <TriangleAlertIcon className="size-4" />
-          <AlertTitle>Couldn't load this house</AlertTitle>
-          <AlertDescription>
-            Something went wrong while loading your house. Try refreshing or
-            switching to another house.
-          </AlertDescription>
-        </Alert>
+      ) : isError ? (
+        <QueryErrorAlert
+          error={error}
+          isRefetching={isRefetching}
+          onRetry={() => {
+            void refetch();
+          }}
+          title="Couldn't load this house"
+        />
       ) : isPersonal ? (
         <Alert>
           <InfoIcon className="size-4" />
@@ -108,7 +107,7 @@ export default function Component() {
           </AlertDescription>
         </Alert>
       ) : (
-        <Outlet context={{ organizationId: houseId } as const} />
+        <Outlet context={{ organizationId: data.house.id } as const} />
       )}
     </main>
   );

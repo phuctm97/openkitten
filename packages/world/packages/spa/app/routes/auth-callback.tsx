@@ -1,7 +1,7 @@
 import { replace } from "react-router";
-import { LoadingState } from "~/components/loading-state";
 import { consumeCallback } from "~/lib/consume-callback";
 import { getSession } from "~/lib/get-session";
+import { LoadingState } from "~/lib/loading-state";
 
 export async function clientLoader() {
   const session = await getSession();

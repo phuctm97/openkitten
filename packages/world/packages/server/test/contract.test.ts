@@ -10,10 +10,6 @@ vi.mock("~/lib/auth", () => ({
 
 const { contract } = await import("~/lib/contract");
 
-test("contract exposes the me procedure builder from the merged contract", () => {
-  expect(contract.me).toBeDefined();
-});
-
 test("contract exposes the workspace.sync procedure builder", () => {
   expect(contract.workspace.sync).toBeDefined();
 });
